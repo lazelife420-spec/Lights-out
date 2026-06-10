@@ -8,17 +8,45 @@
 })(typeof window !== 'undefined' ? window : null, function () {
   const VALID_IDS = ['ClassicFade', 'ExitTheGrid', 'AntiAlgorithm', 'SignalSeverance'];
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // Custom sequence support. Users can create step scripts stored in settings.
+  // ───────────────────────────────────────────────────────────────────────────
+  const CUSTOM_PREFIX = 'custom_';
+  let customSequences = [];  // [{ id, name, description, steps: [{ headline, line, dwellMs }] }]
+
+  function loadCustomSequences(seqs) {
+    customSequences = Array.isArray(seqs) ? seqs.filter(s => s && s.id && s.steps?.length) : [];
+  }
+
+  function getCustomSequences() {
+    return customSequences;
+  }
+
+  function addCustomSequence(seq) {
+    if (!seq || !seq.name || !seq.steps?.length) return null;
+    const id = CUSTOM_PREFIX + Date.now().toString(36);
+    const entry = { id, name: seq.name, description: seq.description || '', steps: seq.steps };
+    customSequences.push(entry);
+    return entry;
+  }
+
+  function removeCustomSequence(id) {
+    customSequences = customSequences.filter(s => s.id !== id);
+  }
+
   function getCatalog() {
-    return [
+    const builtIn = [
       { id: 'ClassicFade', name: 'Classic Fade', description: 'Calm fade before confirm' },
       { id: 'ExitTheGrid', name: 'Exit the Grid', description: 'Cyber unplug finale' },
       { id: 'AntiAlgorithm', name: 'Anti-Algorithm Protocol', description: 'Feed-resist shutdown ritual' },
       { id: 'SignalSeverance', name: 'Signal Severance', description: 'Premium severance checklist' }
     ];
+    return [...builtIn, ...customSequences.map(s => ({ id: s.id, name: s.name, description: s.description, custom: true }))];
   }
 
   function normalizeId(id) {
     if (!id) return 'ClassicFade';
+    if (String(id).startsWith(CUSTOM_PREFIX)) return id;
     const raw = String(id).replace(/\s/g, '').replace(/_/g, '').toLowerCase();
     if (raw === 'classicfade') return 'ClassicFade';
     if (raw === 'exitthegrid') return 'ExitTheGrid';
@@ -28,11 +56,25 @@
   }
 
   function isValidId(id) {
+    if (String(id).startsWith(CUSTOM_PREFIX)) return customSequences.some(s => s.id === id);
     return VALID_IDS.indexOf(normalizeId(id)) !== -1;
   }
 
   function getMeta(sequenceId, dryRun) {
     const id = normalizeId(sequenceId);
+    // Custom sequence.
+    if (String(id).startsWith(CUSTOM_PREFIX)) {
+      const custom = customSequences.find(s => s.id === id);
+      if (custom) {
+        return {
+          id,
+          finalLine: custom.steps[custom.steps.length - 1]?.line || 'Night secured.',
+          sequenceLabel: custom.name.toUpperCase(),
+          cinematicTitle: custom.name.toUpperCase(),
+          stampLine: dryRun ? 'DRY RUN' : 'UNPLUGGED'
+        };
+      }
+    }
     let finalLine;
     switch (id) {
       case 'ExitTheGrid': finalLine = 'You are no longer available to the system.'; break;
@@ -57,6 +99,19 @@
   function getSteps(sequenceId, dryRun) {
     const id = normalizeId(sequenceId);
     const meta = getMeta(id, dryRun);
+    // Custom sequence.
+    if (String(id).startsWith(CUSTOM_PREFIX)) {
+      const custom = customSequences.find(s => s.id === id);
+      if (custom?.steps?.length) {
+        let steps = custom.steps.map(s => ({
+          headline: s.headline || '',
+          line: s.line || '',
+          dwellMs: Number(s.dwellMs) || 1500
+        }));
+        if (dryRun) steps = steps.map(s => ({ ...s, dwellMs: Math.max(400, Math.round(s.dwellMs * 0.35)) }));
+        return steps;
+      }
+    }
     let lines;
     switch (id) {
       case 'ExitTheGrid':
@@ -129,6 +184,10 @@
     getSteps,
     getDurationMs,
     getSoundCatalog,
-    normalizeSoundId
+    normalizeSoundId,
+    loadCustomSequences,
+    getCustomSequences,
+    addCustomSequence,
+    removeCustomSequence
   };
 });

@@ -115,6 +115,7 @@ const fallbackApi = (() => {
     closeWindow: () => {},
     quitApp: () => {},
     toggleMiniMode: () => {},
+    toggleWidget: () => {},
     setWindowOpacity: () => {},
     showNotification: () => {},
     playSound: () => {},
@@ -123,6 +124,14 @@ const fallbackApi = (() => {
     onMiniModeChanged: () => {},
     onPlaySound: () => {},
     onPlayLastLight: () => {},
+    onDimPhaseStarted: () => {},
+    onDimPhaseEnded: () => {},
+    getStreaks: async () => ({ streak: 0, bestStreak: 0, totalNights: 0, achievements: [], weekAvg: '--:--', weekOnTime: 0, weekDays: [] }),
+    getAchievementsCatalog: async () => [],
+    addCustomSequence: async () => null,
+    removeCustomSequence: async () => ({ success: true }),
+    getOpenBrowsers: async () => [],
+    onBrowserWarning: () => {},
     openExternal: url => window.open(url, '_blank', 'noopener'),
     // Profiles fallbacks
     getAllProfiles: async () => [],
@@ -234,6 +243,8 @@ const els = {
   czOpacityVal: document.getElementById('cz-opacity-val'),
   czVolume: document.getElementById('cz-volume'),
   czVolumeVal: document.getElementById('cz-volume-val'),
+  czWarmShift: document.getElementById('cz-warmshift'),
+  czSoundscape: document.getElementById('cz-soundscape'),
   btnResetCustomize: document.getElementById('btn-reset-customize'),
   // Last Light elements
   chkLastLight: document.getElementById('chk-lastlight'),
@@ -251,7 +262,28 @@ const els = {
   warningModalText: document.getElementById('warning-modal-text'),
   warningSnooze: document.getElementById('warning-snooze'),
   warningCancel: document.getElementById('warning-cancel'),
-  warningDismiss: document.getElementById('warning-dismiss')
+  warningDismiss: document.getElementById('warning-dismiss'),
+  // Phase badge
+  badgePhase: document.getElementById('badge-phase'),
+  // Streaks
+  streakCount: document.getElementById('streak-count'),
+  streakBest: document.getElementById('streak-best'),
+  streakTotal: document.getElementById('streak-total'),
+  streakWeekAvg: document.getElementById('streak-weekavg'),
+  streakOnTime: document.getElementById('streak-ontime'),
+  streakWeekBar: document.getElementById('streak-week-bar'),
+  achievementsGrid: document.getElementById('achievements-grid'),
+  // Custom Last Light sequences
+  customSeqList: document.getElementById('custom-seq-list'),
+  btnAddCustomSeq: document.getElementById('btn-add-custom-seq'),
+  customSeqBuilder: document.getElementById('custom-seq-builder'),
+  customSeqName: document.getElementById('custom-seq-name'),
+  customSeqSteps: document.getElementById('custom-seq-steps'),
+  btnAddStep: document.getElementById('btn-add-step'),
+  btnSaveCustomSeq: document.getElementById('btn-save-custom-seq'),
+  btnCancelCustomSeq: document.getElementById('btn-cancel-custom-seq'),
+  // Widget
+  btnWidget: document.getElementById('btn-widget')
 };
 
 const state = {
@@ -290,7 +322,9 @@ const state = {
     theme: 'midnight',
     ringStyle: 'glow',
     opacity: 1,
-    volume: 1
+    volume: 1,
+    warmShift: true,
+    soundscape: 'off'
   },
   // Last Light state
   lastLight: {
@@ -298,6 +332,8 @@ const state = {
     sequence: 'ClassicFade',
     sound: 'Off'
   },
+  // Wind-down phase state
+  phase: 'idle',
   // Profiles state
   profiles: [],
   currentProfileId: null,
@@ -319,6 +355,11 @@ const SoundSystem = {
     if (!this.ctx) {
       this.ctx = new (window.AudioContext || window.webkitAudioContext)();
     }
+  },
+
+  getCtx() {
+    this.init();
+    return this.ctx;
   },
 
   playTone(freq, duration, type = 'sine', volume = 0.25) {
@@ -360,6 +401,160 @@ const SoundSystem = {
   playCancel() {
     this.playTone(440, 0.08, 'sine', 0.16);
     setTimeout(() => this.playTone(349.23, 0.12, 'sine', 0.16), 90);
+  }
+};
+
+// Ambient soundscape engine. Generates continuous rain/white-noise/brown-noise/
+// crickets/ocean audio using the Web Audio API, fading with the timer.
+const Soundscape = {
+  active: false,
+  type: 'off',
+  nodes: null,
+  gain: null,
+  fadeInterval: null,
+
+  start(type) {
+    this.stop();
+    if (!type || type === 'off') return;
+    if (!SoundSystem.enabled) return;
+    this.type = type;
+    this.active = true;
+
+    const ctx = SoundSystem.getCtx();
+    this.gain = ctx.createGain();
+    this.gain.gain.setValueAtTime(0, ctx.currentTime);
+    this.gain.connect(ctx.destination);
+
+    const bufferSize = 2 * ctx.sampleRate;
+    const buffer = ctx.createBuffer(2, bufferSize, ctx.sampleRate);
+
+    switch (type) {
+      case 'rain':
+        this._fillPinkNoise(buffer);
+        break;
+      case 'whitenoise':
+        this._fillWhiteNoise(buffer);
+        break;
+      case 'brownnoise':
+        this._fillBrownNoise(buffer);
+        break;
+      case 'crickets':
+        this._fillCrickets(buffer);
+        break;
+      case 'ocean':
+        this._fillOcean(buffer);
+        break;
+      default:
+        this._fillWhiteNoise(buffer);
+    }
+
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    source.connect(this.gain);
+    source.start();
+    this.nodes = { source };
+
+    // Fade in.
+    this.gain.gain.linearRampToValueAtTime(0.18 * SoundSystem.master, ctx.currentTime + 2);
+  },
+
+  stop() {
+    if (this.fadeInterval) { clearInterval(this.fadeInterval); this.fadeInterval = null; }
+    if (this.nodes?.source) { try { this.nodes.source.stop(); } catch { } }
+    if (this.gain) { try { this.gain.disconnect(); } catch { } }
+    this.nodes = null;
+    this.gain = null;
+    this.active = false;
+    this.type = 'off';
+  },
+
+  fadeToZero(durationSec) {
+    if (!this.gain || !this.active) { this.stop(); return; }
+    const ctx = SoundSystem.getCtx();
+    this.gain.gain.linearRampToValueAtTime(0, ctx.currentTime + durationSec);
+    setTimeout(() => this.stop(), durationSec * 1000 + 200);
+  },
+
+  setVolume(level) {
+    if (!this.gain || !this.active) return;
+    const ctx = SoundSystem.getCtx();
+    this.gain.gain.linearRampToValueAtTime(Math.max(0, level) * SoundSystem.master, ctx.currentTime + 0.5);
+  },
+
+  _fillWhiteNoise(buffer) {
+    for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+      const data = buffer.getChannelData(ch);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    }
+  },
+
+  _fillBrownNoise(buffer) {
+    for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+      const data = buffer.getChannelData(ch);
+      let last = 0;
+      for (let i = 0; i < data.length; i++) {
+        const white = Math.random() * 2 - 1;
+        data[i] = (last + 0.02 * white) / 1.02;
+        last = data[i];
+        data[i] *= 3.5;
+      }
+    }
+  },
+
+  _fillPinkNoise(buffer) {
+    // Voss-McCartney approximation for rain-like sound.
+    for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+      const data = buffer.getChannelData(ch);
+      let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+      for (let i = 0; i < data.length; i++) {
+        const white = Math.random() * 2 - 1;
+        b0 = 0.99886 * b0 + white * 0.0555179;
+        b1 = 0.99332 * b1 + white * 0.0750759;
+        b2 = 0.96900 * b2 + white * 0.1538520;
+        b3 = 0.86650 * b3 + white * 0.3104856;
+        b4 = 0.55000 * b4 + white * 0.5329522;
+        b5 = -0.7616 * b5 - white * 0.0168980;
+        data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
+        b6 = white * 0.115926;
+      }
+    }
+  },
+
+  _fillCrickets(buffer) {
+    // Sparse chirps: short bursts of high-frequency tone with random gaps.
+    const sampleRate = buffer.sampleRate;
+    for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+      const data = buffer.getChannelData(ch);
+      let pos = 0;
+      while (pos < data.length) {
+        const chirpLen = Math.floor(sampleRate * (0.008 + Math.random() * 0.015));
+        const gapLen = Math.floor(sampleRate * (0.05 + Math.random() * 0.2));
+        const freq = 4000 + Math.random() * 2000;
+        for (let i = 0; i < chirpLen && pos < data.length; i++, pos++) {
+          data[pos] = Math.sin(2 * Math.PI * freq * i / sampleRate) * 0.3 * (1 - i / chirpLen);
+        }
+        for (let i = 0; i < gapLen && pos < data.length; i++, pos++) {
+          data[pos] = 0;
+        }
+      }
+    }
+  },
+
+  _fillOcean(buffer) {
+    // Low-frequency filtered noise with slow amplitude modulation.
+    const sampleRate = buffer.sampleRate;
+    for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+      const data = buffer.getChannelData(ch);
+      let last = 0;
+      const modPeriod = sampleRate * 6; // 6-second wave cycle
+      for (let i = 0; i < data.length; i++) {
+        const white = Math.random() * 2 - 1;
+        last = (last + 0.02 * white) / 1.02;
+        const mod = 0.5 + 0.5 * Math.sin(2 * Math.PI * i / modPeriod);
+        data[i] = last * 3.5 * mod;
+      }
+    }
   }
 };
 
@@ -513,6 +708,14 @@ function render() {
   els.badgeConfirm.classList.toggle('active', !state.forceShutdown);
   els.badgeCancel.classList.toggle('active', state.running || state.paused);
 
+  // Phase badge
+  if (els.badgePhase) {
+    const showPhase = state.running && state.phase && state.phase !== 'idle';
+    els.badgePhase.classList.toggle('active', showPhase);
+    els.badgePhase.textContent = showPhase ? state.phase.toUpperCase() : '';
+    els.badgePhase.dataset.phase = state.phase || 'idle';
+  }
+
   els.actionName.textContent = actionLabel();
   els.endTime.textContent = state.running || state.paused ? formatEndTime(state.endsAt) : 'Idle';
 
@@ -629,15 +832,22 @@ function applyTimerPayload(data) {
     state.remainingSeconds = inputSeconds();
     state.totalSeconds = state.remainingSeconds;
     state.endsAt = null;
+    state.phase = 'idle';
     SoundSystem.playComplete();
+    Soundscape.fadeToZero(2);
     hideWarningModal();
+    removeWarmFilter();
+    loadStreaks();
     api.showNotification('Lights Out', state.dryRun ? 'Dry run complete.' : `${actionLabel()} started.`);
     notify(data.message || 'Timer complete', 'success', 5000);
   } else if (data.type === 'cancelled') {
     state.running = false;
     state.paused = false;
     state.endsAt = null;
+    state.phase = 'idle';
+    Soundscape.stop();
     hideWarningModal();
+    removeWarmFilter();
   } else if (data.type === 'warning') {
     SoundSystem.playWarning();
     if (data.message) {
@@ -646,6 +856,14 @@ function applyTimerPayload(data) {
       api.showNotification('Lights Out', data.message);
       showWarningModal(data.message);
     }
+  } else if (data.type === 'phase') {
+    state.phase = data.phase || 'idle';
+    if (data.phase === 'dim') applyWarmFilter();
+    if (data.phase === 'lastlight') Soundscape.fadeToZero(3);
+  } else if (data.type === 'started') {
+    state.phase = 'focus';
+    const sc = state.customization.soundscape || 'off';
+    if (sc !== 'off') Soundscape.start(sc);
   } else if (data.type === 'tick' && state.remainingSeconds <= 10 && state.remainingSeconds > 0) {
     SoundSystem.playTone(800, 0.04, 'sine', 0.08);
   } else if (data.type === 'dryrun') {
@@ -655,6 +873,50 @@ function applyTimerPayload(data) {
   }
 
   render();
+}
+
+async function loadStreaks() {
+  try {
+    const summary = await api.getStreaks();
+    const catalog = await api.getAchievementsCatalog();
+    renderStreaks(summary, catalog);
+  } catch { /* streaks are decorative, never block */ }
+}
+
+function renderStreaks(summary, catalog) {
+  if (!summary) return;
+  if (els.streakCount) els.streakCount.textContent = summary.streak || 0;
+  if (els.streakBest) els.streakBest.textContent = summary.bestStreak || 0;
+  if (els.streakTotal) els.streakTotal.textContent = summary.totalNights || 0;
+  if (els.streakWeekAvg) els.streakWeekAvg.textContent = summary.weekAvg || '--:--';
+  if (els.streakOnTime) els.streakOnTime.textContent = `${summary.weekOnTime || 0}%`;
+
+  // Week bar chart.
+  if (els.streakWeekBar && summary.weekDays?.length) {
+    const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const today = new Date().toISOString().slice(0, 10);
+    els.streakWeekBar.innerHTML = summary.weekDays.map(d => {
+      const [h, m] = (d.bedTime || '23:00').split(':').map(Number);
+      const mins = h * 60 + m;
+      const maxMins = 24 * 60;
+      const pct = Math.min(100, Math.max(8, (mins / maxMins) * 100));
+      const isToday = d.date === today;
+      const dayIdx = new Date(d.date + 'T12:00:00').getDay();
+      return `<div class="week-bar${isToday ? ' today' : ''}" style="height:${pct}%" title="${d.bedTime}"><span class="week-bar-label">${dayLabels[dayIdx]}</span></div>`;
+    }).join('');
+  }
+
+  // Achievements grid.
+  if (els.achievementsGrid && catalog?.length) {
+    const unlocked = summary.achievements || [];
+    els.achievementsGrid.innerHTML = catalog.map(a => {
+      const isUnlocked = unlocked.includes(a.id);
+      return `<div class="achievement-card ${isUnlocked ? 'unlocked' : 'locked'}">
+        <div class="ach-name">${isUnlocked ? a.name : '???'}</div>
+        <div class="ach-desc">${isUnlocked ? a.desc : 'Not yet unlocked'}</div>
+      </div>`;
+    }).join('');
+  }
 }
 
 function toggleMiniMode() {
@@ -690,6 +952,9 @@ function wireEvents() {
   els.btnMinimize.addEventListener('click', () => api.minimizeWindow());
   els.btnClose.addEventListener('click', () => api.closeWindow());
   els.btnMini?.addEventListener('click', toggleMiniMode);
+  els.btnWidget?.addEventListener('click', () => {
+    api.toggleWidget?.();
+  });
 
   els.btnPlus.addEventListener('click', () => {
     els.timerInput.value = inputValue() + 1;
@@ -779,6 +1044,7 @@ function wireEvents() {
       document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById(`tab-${btn.dataset.tab}`)?.classList.add('active');
+      if (btn.dataset.tab === 'streaks') loadStreaks();
     });
   });
 
@@ -1121,6 +1387,9 @@ async function loadInitialData() {
     // Load profiles
     await loadProfiles();
 
+    // Load streaks data
+    loadStreaks();
+
     els.batteryLevel.textContent = systemInfo.battery === 'N/A' ? 'N/A' : `${systemInfo.battery}%`;
     els.powerPlan.textContent = systemInfo.powerPlan || 'Unknown';
 
@@ -1232,7 +1501,7 @@ function hexToRgba(hex, alpha) {
   return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, ${alpha})`;
 }
 
-const CUSTOMIZE_DEFAULTS = { accent: '#5b8cff', theme: 'midnight', ringStyle: 'glow', opacity: 1, volume: 1 };
+const CUSTOMIZE_DEFAULTS = { accent: '#5b8cff', theme: 'midnight', ringStyle: 'glow', opacity: 1, volume: 1, warmShift: true, soundscape: 'off' };
 
 function syncCustomizeUI() {
   const c = state.customization;
@@ -1243,11 +1512,14 @@ function syncCustomizeUI() {
   if (els.czOpacityVal) els.czOpacityVal.textContent = `${Math.round(c.opacity * 100)}%`;
   if (els.czVolume) els.czVolume.value = c.volume;
   if (els.czVolumeVal) els.czVolumeVal.textContent = `${Math.round(c.volume * 100)}%`;
+  if (els.czWarmShift) els.czWarmShift.checked = c.warmShift !== false;
+  if (els.czSoundscape) els.czSoundscape.value = c.soundscape || 'off';
   if (els.czSwatches) {
     els.czSwatches.querySelectorAll('.swatch').forEach(sw => {
       sw.classList.toggle('active', sw.dataset.color.toLowerCase() === c.accent.toLowerCase());
     });
   }
+  renderCustomSequences();
 }
 
 function setupCustomizeHandlers() {
@@ -1285,6 +1557,15 @@ function setupCustomizeHandlers() {
     state.customization = { ...CUSTOMIZE_DEFAULTS };
     applyCustomization(state.customization);
     syncCustomizeUI();
+    Soundscape.stop();
+  });
+  els.czWarmShift?.addEventListener('change', () => {
+    state.customization.warmShift = els.czWarmShift.checked;
+  });
+  els.czSoundscape?.addEventListener('change', () => {
+    state.customization.soundscape = els.czSoundscape.value;
+    if (state.running) Soundscape.start(els.czSoundscape.value);
+    else Soundscape.stop();
   });
 }
 
@@ -1296,6 +1577,19 @@ function showWarningModal(message) {
 
 function hideWarningModal() {
   els.warningModal?.classList.remove('active');
+}
+
+// Warm shift filter: applies a sepia/amber tint to the cockpit UI during the
+// dim phase to simulate a blue-light reduction.  In Electron the main process
+// also enables the Windows Night Light registry key; this CSS filter is the
+// in-app complement.
+function applyWarmFilter() {
+  if (state.customization.warmShift === false) return;
+  document.body.classList.add('warm-shift');
+}
+
+function removeWarmFilter() {
+  document.body.classList.remove('warm-shift');
 }
 
 function setupWarningHandlers() {
@@ -1329,6 +1623,83 @@ function setupLastLightHandlers() {
       sequence: els.selLastLightSequence?.value || 'ClassicFade',
       sound: els.selLastLightSound?.value || 'Off',
       dryRun: true
+    });
+  });
+
+  // Custom sequence builder.
+  els.btnAddCustomSeq?.addEventListener('click', () => {
+    if (els.customSeqBuilder) els.customSeqBuilder.style.display = 'block';
+    if (els.customSeqName) els.customSeqName.value = '';
+    if (els.customSeqSteps) {
+      els.customSeqSteps.innerHTML = makeStepRow();
+    }
+  });
+  els.btnCancelCustomSeq?.addEventListener('click', () => {
+    if (els.customSeqBuilder) els.customSeqBuilder.style.display = 'none';
+  });
+  els.btnAddStep?.addEventListener('click', () => {
+    if (els.customSeqSteps) els.customSeqSteps.insertAdjacentHTML('beforeend', makeStepRow());
+  });
+  els.btnSaveCustomSeq?.addEventListener('click', async () => {
+    const name = els.customSeqName?.value?.trim();
+    if (!name) return;
+    const rows = els.customSeqSteps?.querySelectorAll('.seq-step-row') || [];
+    const steps = [];
+    rows.forEach(row => {
+      const headline = row.querySelector('.seq-headline')?.value?.trim() || '';
+      const line = row.querySelector('.seq-line')?.value?.trim() || '';
+      const dwellMs = parseInt(row.querySelector('.seq-dwell')?.value) || 1500;
+      if (line || headline) steps.push({ headline, line, dwellMs });
+    });
+    if (!steps.length) return;
+    const entry = await api.addCustomSequence({ name, steps });
+    if (entry) {
+      if (els.customSeqBuilder) els.customSeqBuilder.style.display = 'none';
+      renderCustomSequences();
+      // Add to sequence selector.
+      const opt = document.createElement('option');
+      opt.value = entry.id;
+      opt.textContent = entry.name + ' *';
+      els.selLastLightSequence?.appendChild(opt);
+    }
+  });
+}
+
+function makeStepRow() {
+  return `<div class="seq-step-row">
+    <input type="text" placeholder="Headline" class="seq-headline" maxlength="40">
+    <input type="text" placeholder="Line" class="seq-line" maxlength="80">
+    <input type="number" placeholder="ms" class="seq-dwell" value="1500" min="200" max="5000" style="width:60px">
+  </div>`;
+}
+
+async function renderCustomSequences() {
+  if (!els.customSeqList) return;
+  const LL = (typeof window !== 'undefined' && window.LastLight) ? window.LastLight : null;
+  let customs = [];
+  if (LL?.getCustomSequences) customs = LL.getCustomSequences();
+  // In Electron mode, the catalog from IPC includes custom entries.
+  // For preview mode, just use what's in the LL module.
+  if (!customs.length && api.getStreaks) {
+    // Try loading from settings via app-settings.
+    try {
+      const settings = await api.getAppSettings();
+      customs = settings?.lastLight?.customSequences || [];
+    } catch {}
+  }
+  els.customSeqList.innerHTML = customs.length
+    ? customs.map(s => `<div class="custom-seq-item">
+        <span class="seq-item-name">${s.name}</span>
+        <button class="seq-item-delete" data-id="${s.id}" title="Delete">&times;</button>
+      </div>`).join('')
+    : '<span style="color:var(--text-muted);font-size:11px">No custom sequences yet.</span>';
+  els.customSeqList.querySelectorAll('.seq-item-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await api.removeCustomSequence(btn.dataset.id);
+      // Remove from selector too.
+      const opt = els.selLastLightSequence?.querySelector(`option[value="${btn.dataset.id}"]`);
+      if (opt) opt.remove();
+      renderCustomSequences();
     });
   });
 }
@@ -1866,6 +2237,9 @@ api.onPlaySound(soundType => {
   if (SoundSystem[soundType]) SoundSystem[soundType]();
 });
 api.onPlayLastLight(payload => playLastLight(payload));
+api.onBrowserWarning?.(data => {
+  if (data?.message) notify(data.message, 'warning', 8000);
+});
 
 wireEvents();
 setupCustomizeHandlers();

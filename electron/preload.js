@@ -48,6 +48,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onPlayLastLight: (callback) => {
     ipcRenderer.on('play-last-light', (event, payload) => callback(payload));
   },
+
+  // Dim phase events from main
+  onDimPhaseStarted: (callback) => {
+    ipcRenderer.on('dim-phase-started', (event, data) => callback(data));
+  },
+  onDimPhaseEnded: (callback) => {
+    ipcRenderer.on('dim-phase-ended', () => callback());
+  },
   
   // External links
   openExternal: (url) => ipcRenderer.send('open-external', url),
@@ -80,5 +88,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
   calendarTestUrl: (url) => ipcRenderer.invoke('calendar-test-url', url),
   calendarGetUpcoming: (events, from, withinDays, maxCount) => ipcRenderer.invoke('calendar-get-upcoming', events, from, withinDays, maxCount),
   calendarCreateTimer: (evt, action, options) => ipcRenderer.invoke('calendar-create-timer', evt, action, options),
-  calendarFormatTime: (isoString) => ipcRenderer.invoke('calendar-format-time', isoString)
+  calendarFormatTime: (isoString) => ipcRenderer.invoke('calendar-format-time', isoString),
+
+  // Streaks + insights
+  getStreaks: () => ipcRenderer.invoke('get-streaks'),
+  getAchievementsCatalog: () => ipcRenderer.invoke('get-achievements-catalog'),
+
+  // Custom Last Light sequences
+  addCustomSequence: (seq) => ipcRenderer.invoke('add-custom-sequence', seq),
+  removeCustomSequence: (id) => ipcRenderer.invoke('remove-custom-sequence', id),
+
+  // Desktop widget
+  toggleWidget: () => ipcRenderer.send('toggle-widget'),
+  onWidgetUpdate: (callback) => {
+    ipcRenderer.on('widget-update', (event, data) => callback(data));
+  },
+  closeWidget: () => ipcRenderer.send('close-widget'),
+
+  // Browser awareness
+  getOpenBrowsers: () => ipcRenderer.invoke('get-open-browsers'),
+  onBrowserWarning: (callback) => {
+    ipcRenderer.on('browser-warning', (event, data) => callback(data));
+  }
 });

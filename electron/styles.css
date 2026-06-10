@@ -826,6 +826,26 @@ input:disabled {
   color: white;
 }
 
+/* Phase badge - color shifts per wind-down stage */
+.phase-badge.active {
+  background: var(--accent-green);
+  color: #111418;
+}
+.phase-badge.active[data-phase="dim"] {
+  background: var(--accent-amber);
+  color: #111418;
+}
+.phase-badge.active[data-phase="lastlight"] {
+  background: var(--accent-red);
+  color: white;
+}
+
+/* Warm-shift filter: sepia tint applied to the cockpit during dim phase */
+body.warm-shift .cockpit {
+  filter: sepia(0.25) saturate(0.85) brightness(0.92);
+  transition: filter 3s ease;
+}
+
 .footer-right {
   color: var(--text-muted);
 }
@@ -1042,6 +1062,185 @@ input:disabled {
 
 .toast-error {
   background: #b63a3a;
+}
+
+/* Streaks + Insights */
+.streaks-panel {
+  padding: 8px 4px;
+}
+.streak-hero {
+  text-align: center;
+  padding: 16px 0 12px;
+}
+.streak-number {
+  font-size: 56px;
+  font-weight: 700;
+  color: var(--accent-amber);
+  line-height: 1;
+}
+.streak-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.streak-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 12px 0;
+}
+.streak-stat {
+  background: var(--bg-card);
+  border-radius: 6px;
+  padding: 10px 8px;
+  text-align: center;
+}
+.stat-value {
+  display: block;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.stat-label {
+  display: block;
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+.streak-week {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 48px;
+  margin: 8px 0 12px;
+  padding: 0 2px;
+}
+.streak-week .week-bar {
+  flex: 1;
+  background: var(--accent-amber);
+  border-radius: 2px 2px 0 0;
+  min-height: 4px;
+  position: relative;
+  opacity: 0.7;
+}
+.streak-week .week-bar.today {
+  opacity: 1;
+  background: var(--accent-cyan);
+}
+.streak-week .week-bar-label {
+  position: absolute;
+  bottom: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 8px;
+  color: var(--text-muted);
+}
+.achievements-heading {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  margin: 8px 0 6px;
+}
+.achievements-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.achievement-card {
+  background: var(--bg-card);
+  border-radius: 6px;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  text-align: center;
+}
+.achievement-card.unlocked {
+  border-color: var(--accent-amber);
+  background: rgba(212, 165, 10, 0.08);
+}
+.achievement-card .ach-name {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.achievement-card .ach-desc {
+  font-size: 8px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.achievement-card.locked {
+  opacity: 0.4;
+}
+.achievement-card.locked .ach-name {
+  color: var(--text-muted);
+}
+
+/* Custom Last Light sequence builder */
+.custom-seq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.custom-seq-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-card);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+.custom-seq-item .seq-item-name {
+  flex: 1;
+  color: var(--text-primary);
+}
+.custom-seq-item .seq-item-delete {
+  cursor: pointer;
+  color: var(--accent-red);
+  border: none;
+  background: none;
+  font-size: 12px;
+  padding: 0 4px;
+}
+.custom-seq-builder {
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  padding: 8px;
+  margin-top: 6px;
+}
+.custom-seq-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.seq-step-row {
+  display: flex;
+  gap: 4px;
+}
+.seq-step-row input {
+  font-size: 11px;
+  padding: 3px 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  color: var(--text-primary);
+}
+.seq-step-row .seq-headline { flex: 1; }
+.seq-step-row .seq-line { flex: 2; }
+
+/* Widget toggle badge */
+.widget-toggle {
+  cursor: pointer;
+  border: none;
+  transition: background 0.2s;
+}
+.widget-toggle:hover {
+  background: var(--accent-blue) !important;
+  color: #111418 !important;
 }
 
 /* Mini mode */

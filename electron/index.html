@@ -234,6 +234,7 @@
           <button class="tab-btn" data-tab="schedule">Schedule</button>
           <button class="tab-btn" data-tab="clock">Clock</button>
           <button class="tab-btn" data-tab="countdown">Countdown</button>
+          <button class="tab-btn" data-tab="streaks">Streaks</button>
         </div>
         <div class="tabs-content">
           <div class="tab-panel active" id="tab-library">
@@ -307,6 +308,41 @@
             </div>
           </div>
         </div>
+
+        <!-- Streaks + Insights panel -->
+        <div class="tab-panel" id="tab-streaks">
+          <div class="streaks-panel">
+            <div class="streak-hero">
+              <div class="streak-number" id="streak-count">0</div>
+              <div class="streak-label">Night Streak</div>
+            </div>
+            <div class="streak-stats">
+              <div class="streak-stat">
+                <span class="stat-value" id="streak-best">0</span>
+                <span class="stat-label">Best</span>
+              </div>
+              <div class="streak-stat">
+                <span class="stat-value" id="streak-total">0</span>
+                <span class="stat-label">Total Nights</span>
+              </div>
+              <div class="streak-stat">
+                <span class="stat-value" id="streak-weekavg">--:--</span>
+                <span class="stat-label">Avg Bedtime</span>
+              </div>
+              <div class="streak-stat">
+                <span class="stat-value" id="streak-ontime">0%</span>
+                <span class="stat-label">On-Time (7d)</span>
+              </div>
+            </div>
+            <div class="streak-week" id="streak-week-bar">
+              <!-- 7-day mini bar chart rendered by JS -->
+            </div>
+            <h4 class="achievements-heading">Achievements</h4>
+            <div class="achievements-grid" id="achievements-grid">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
       </section>
 
     </main>
@@ -315,11 +351,13 @@
     <footer class="app-footer">
       <div class="footer-left">
         <span class="badge" id="badge-dryrun">DRY RUN</span>
+        <span class="badge phase-badge" id="badge-phase" style="display:none">FOCUS</span>
         <span class="badge" id="badge-confirm">CONFIRM</span>
         <span class="badge" id="badge-cancel">CANCEL</span>
+        <button class="badge widget-toggle" id="btn-widget" title="Desktop widget">WIDGET</button>
       </div>
       <div class="footer-right">
-        <span id="version">v5.3.0</span>
+        <span id="version">v6.0.0</span>
       </div>
     </footer>
 
@@ -503,6 +541,25 @@
           </div>
 
           <div class="option-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="cz-warmshift" checked>
+              Warm shift during wind-down
+            </label>
+          </div>
+
+          <div class="option-group">
+            <label>Ambient Soundscape</label>
+            <select id="cz-soundscape">
+              <option value="off">Off</option>
+              <option value="rain">Rain</option>
+              <option value="whitenoise">White Noise</option>
+              <option value="brownnoise">Brown Noise</option>
+              <option value="crickets">Crickets</option>
+              <option value="ocean">Ocean Waves</option>
+            </select>
+          </div>
+
+          <div class="option-group">
             <button type="button" id="btn-reset-customize" class="btn-secondary">Reset to defaults</button>
           </div>
         </div>
@@ -538,6 +595,31 @@
             </div>
             <div class="option-group">
               <button type="button" id="btn-preview-lastlight" class="btn-secondary">Preview finale</button>
+            </div>
+            <div class="option-group">
+              <label>Custom Sequences</label>
+              <div id="custom-seq-list" class="custom-seq-list">
+                <!-- Populated by JS -->
+              </div>
+              <button type="button" id="btn-add-custom-seq" class="btn-secondary" style="margin-top:6px">+ New Sequence</button>
+            </div>
+            <div id="custom-seq-builder" style="display:none" class="custom-seq-builder">
+              <div class="option-group">
+                <label>Name</label>
+                <input type="text" id="custom-seq-name" placeholder="My Ritual" maxlength="30">
+              </div>
+              <div id="custom-seq-steps" class="custom-seq-steps">
+                <div class="seq-step-row">
+                  <input type="text" placeholder="Headline" class="seq-headline" maxlength="40">
+                  <input type="text" placeholder="Line" class="seq-line" maxlength="80">
+                  <input type="number" placeholder="ms" class="seq-dwell" value="1500" min="200" max="5000" style="width:60px">
+                </div>
+              </div>
+              <button type="button" id="btn-add-step" class="btn-secondary" style="margin-top:4px">+ Step</button>
+              <div style="display:flex;gap:6px;margin-top:6px">
+                <button type="button" id="btn-save-custom-seq" class="btn-primary">Save</button>
+                <button type="button" id="btn-cancel-custom-seq" class="btn-secondary">Cancel</button>
+              </div>
             </div>
           </div>
         </div>

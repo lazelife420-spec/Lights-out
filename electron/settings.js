@@ -42,12 +42,15 @@ const DEFAULTS = {
     theme: 'midnight',
     ringStyle: 'glow',
     opacity: 1,
-    volume: 1
+    volume: 1,
+    warmShift: true,
+    soundscape: 'off'
   },
   lastLight: {
     enabled: false,
     sequence: 'ClassicFade',
-    sound: 'Off'
+    sound: 'Off',
+    customSequences: []
   },
   // Persisted running-timer snapshot for crash/quit recovery. null when idle.
   activeTimer: null

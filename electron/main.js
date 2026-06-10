@@ -6,12 +6,51 @@ const profiles = require('./profiles');
 const calendar = require('./calendar');
 const settingsStore = require('./settings');
 const lastLight = require('./lastLight');
+const streaks = require('./streaks');
 
 const APP_ICON = path.join(__dirname, 'assets', 'icon.ico');
 
+// Pre-built tray icon variants (generated on first use).
+let trayIcons = null;
+
+async function ensureTrayIcons() {
+  if (trayIcons) return trayIcons;
+  try {
+    const sharp = require('sharp');
+    const base16 = await sharp(APP_ICON).resize(16, 16).png().toBuffer();
+
+    async function withDot(color, opacity) {
+      const dotSvg = `<svg width="16" height="16"><circle cx="13" cy="13" r="3" fill="${color}" opacity="${opacity || 0.9}"/></svg>`;
+      const dotBuf = await sharp(Buffer.from(dotSvg)).png().toBuffer();
+      return await sharp(base16).composite([{ input: dotBuf, blend: 'over' }]).png().toBuffer();
+    }
+
+    const [idle, running, paused, dim] = await Promise.all([
+      withDot('#6b7685', 0.5),
+      withDot('#4caf50', 0.9),
+      withDot('#d4a50a', 0.9),
+      withDot('#5b8cff', 0.9)
+    ]);
+
+    trayIcons = {
+      idle: nativeImage.createFromBuffer(idle, { width: 16, height: 16 }),
+      running: nativeImage.createFromBuffer(running, { width: 16, height: 16 }),
+      paused: nativeImage.createFromBuffer(paused, { width: 16, height: 16 }),
+      dim: nativeImage.createFromBuffer(dim, { width: 16, height: 16 })
+    };
+  } catch {
+    // Fallback: just use the base icon for all states.
+    const base = nativeImage.createFromPath(APP_ICON);
+    trayIcons = { idle: base, running: base, paused: base, dim: base };
+  }
+  return trayIcons;
+}
+
 let mainWindow;
+let widgetWindow = null;
 let tray = null;
 let miniMode = false;
+let widgetMode = false;
 let timerInterval = null;
 
 const launchOptions = parseLaunchOptions(process.argv);
@@ -26,8 +65,19 @@ const timerState = {
   forceShutdown: false,
   muteSystem: false,
   gracePeriod: 2,
-  endsAt: null
+  endsAt: null,
+  phase: 'idle'        // idle | focus | dim | lastlight
 };
+
+// Wind-down phase boundaries (fraction of total time remaining).
+// Focus: 100% → 25%, Dim: 25% → gracePeriod, Last Light: gracePeriod → 0.
+function computePhase(remaining, total, gracePeriod) {
+  if (remaining <= 0 || total <= 0) return 'lastlight';
+  const graceSeconds = Math.max(0, (gracePeriod || 0) * 60);
+  if (remaining <= graceSeconds) return 'lastlight';
+  if (remaining / total <= 0.25) return 'dim';
+  return 'focus';
+}
 
 function parseLaunchOptions(argv) {
   const options = {
@@ -113,8 +163,9 @@ function createWindow() {
   });
 }
 
-function createTray() {
-  tray = new Tray(nativeImage.createFromPath(APP_ICON));
+async function createTray() {
+  await ensureTrayIcons();
+  tray = new Tray(trayIcons.idle);
   refreshTrayMenu();
 
   tray.setToolTip('Lights Out - idle');
@@ -212,6 +263,7 @@ function emitTimerUpdate(type, data = {}) {
     forceShutdown: timerState.forceShutdown,
     gracePeriod: timerState.gracePeriod,
     endsAt: timerState.endsAt,
+    phase: timerState.phase,
     ...data
   };
 
@@ -228,11 +280,18 @@ function updateTrayText() {
 
   if (!timerState.running && !timerState.paused) {
     tray.setToolTip('Lights Out - idle');
+    if (trayIcons) tray.setImage(trayIcons.idle);
     return;
   }
 
   const prefix = timerState.paused ? 'Paused' : 'Running';
   tray.setToolTip(`Lights Out - ${prefix}, ${formatTime(timerState.remainingSeconds)} left`);
+  if (trayIcons) {
+    const icon = timerState.paused ? trayIcons.paused
+      : timerState.phase === 'dim' ? trayIcons.dim
+      : trayIcons.running;
+    tray.setImage(icon);
+  }
 }
 
 function clearTimerInterval() {
@@ -313,6 +372,7 @@ function startTimer(input, legacyAction) {
   timerState.muteSystem = options.muteSystem;
   timerState.gracePeriod = options.gracePeriod;
   timerState.endsAt = new Date(Date.now() + options.durationSeconds * 1000).toISOString();
+  timerState.phase = 'focus';
 
   emitTimerUpdate('started');
   persistActiveTimer();
@@ -326,6 +386,22 @@ function startTimer(input, legacyAction) {
       ? (timerState.remainingSeconds / timerState.totalSeconds) * 100
       : 0;
 
+    // Phase transition detection
+    const prevPhase = timerState.phase;
+    timerState.phase = computePhase(timerState.remainingSeconds, timerState.totalSeconds, timerState.gracePeriod);
+    if (timerState.phase !== prevPhase) {
+      emitTimerUpdate('phase', { phase: timerState.phase, from: prevPhase, percent });
+      if (timerState.phase === 'dim') applyDimPhase(timerState.remainingSeconds, timerState.totalSeconds);
+      updateTrayText();
+    }
+
+    // During dim phase, progressively reduce window opacity for a visual wind-down.
+    if (timerState.phase === 'dim' && mainWindow && !mainWindow.isDestroyed()) {
+      const dimFraction = timerState.remainingSeconds / (timerState.totalSeconds * 0.25);
+      const opacity = 0.55 + 0.45 * Math.max(0, Math.min(1, dimFraction));
+      mainWindow.setOpacity(opacity);
+    }
+
     // Smart Lights integration
     if (smartLights.shouldStartDim(timerState.remainingSeconds)) {
       smartLights.startSmartLightDim(timerState.remainingSeconds);
@@ -334,13 +410,21 @@ function startTimer(input, legacyAction) {
       smartLights.updateSmartLightTick(timerState.remainingSeconds);
     }
 
-    emitTimerUpdate('tick', { percent });
+    emitTimerUpdate('tick', { percent, phase: timerState.phase });
+    updateWidget();
     setTaskbarProgress(percent, percent <= 10 ? 'error' : 'normal');
 
     if (timerState.gracePeriod > 0 && timerState.remainingSeconds === timerState.gracePeriod * 60) {
       emitTimerUpdate('warning', {
         message: `${formatAction(timerState.action)} in ${timerState.gracePeriod} minutes`
       });
+      // Fire-and-forget browser awareness check.
+      getOpenBrowsers().then(browsers => {
+        if (browsers.length > 0 && mainWindow && !mainWindow.isDestroyed()) {
+          const names = browsers.map(b => `${b.name} (${b.windowCount})`).join(', ');
+          mainWindow.webContents.send('browser-warning', { browsers, message: `Open browsers detected: ${names}. Save your work!` });
+        }
+      }).catch(() => {});
     }
 
     if (timerState.remainingSeconds <= 0) {
@@ -388,9 +472,11 @@ function cancelTimer() {
   timerState.paused = false;
   timerState.remainingSeconds = 0;
   timerState.endsAt = null;
+  timerState.phase = 'idle';
   setTaskbarProgress(0, 'none');
   smartLights.resetSmartLightState();
   persistActiveTimer();
+  restoreAfterTimer();
   emitTimerUpdate('cancelled');
   return { success: true };
 }
@@ -401,8 +487,10 @@ async function completeTimer() {
   timerState.paused = false;
   timerState.remainingSeconds = 0;
   timerState.endsAt = null;
+  timerState.phase = 'idle';
   setTaskbarProgress(0, 'none');
   persistActiveTimer();
+  restoreAfterTimer();
   
   // Turn off smart lights at timer completion
   if (smartLights.getConfig().enabled) {
@@ -414,6 +502,9 @@ async function completeTimer() {
   showNativeNotification('Lights Out', timerState.dryRun
     ? `Dry run complete: ${formatAction(timerState.action)} skipped.`
     : `Timer complete: ${formatAction(timerState.action)} now.`);
+
+  // Record a streak event for the completed ritual.
+  try { streaks.recordEvent(null, timerState.action, false); } catch {}
 
   await playLastLightRitual(timerState.dryRun);
   await executePowerAction({ ...timerState });
@@ -431,6 +522,33 @@ function playLastLightRitual(dryRun) {
   const durationMs = lastLight.getDurationMs(sequence, Boolean(dryRun));
   mainWindow.webContents.send('play-last-light', { sequence, dryRun: Boolean(dryRun), sound: cfg.sound });
   return new Promise(resolve => setTimeout(resolve, durationMs + 300));
+}
+
+// Applies the dim-phase visual wind-down.
+// Enables Windows Night Light (blue-light filter) via registry if the
+// customization setting is on, and tells the renderer to warm the UI.
+function applyDimPhase(remainingSeconds, totalSeconds) {
+  const custom = settingsStore.getSection('customization') || {};
+  if (custom.warmShift !== false) {
+    // Enable Windows Night Light (blue-light filter) during dim phase.
+    executePowerShell(
+      'Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\CloudStore\\Store\\DefaultAccount\\Current\\default$windows.data.bluelightreduction\\windows.data.bluelightreduction.bluelightreductionstate" -Name "Data" -Value ([byte[]](2,0,0,0) ) -ErrorAction SilentlyContinue'
+    ).catch(() => { /* Night Light registry path may not exist on all systems */ });
+  }
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('dim-phase-started', { remainingSeconds, totalSeconds });
+  }
+}
+
+function restoreAfterTimer() {
+  // Restore window opacity.
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setOpacity(1);
+  // Tell renderer to end dim phase.
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('dim-phase-ended');
+  // Disable Windows Night Light (restore original state).
+  executePowerShell(
+    'Remove-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\CloudStore\\Store\\DefaultAccount\\Current\\default$windows.data.bluelightreduction\\windows.data.bluelightreduction.bluelightreductionstate" -Name "Data" -ErrorAction SilentlyContinue'
+  ).catch(() => {});
 }
 
 function formatAction(action) {
@@ -453,7 +571,7 @@ function formatTime(totalSeconds) {
   return `${minutes}:${String(secs).padStart(2, '0')}`;
 }
 
-function executePowerShell(command) {
+async function executePowerShell(command) {
   return new Promise((resolve, reject) => {
     const ps = spawn('powershell.exe', [
       '-NoProfile',
@@ -475,6 +593,34 @@ function executePowerShell(command) {
       else reject(new Error(error.trim() || `PowerShell exited with code ${code}`));
     });
   });
+}
+
+// Detect running browsers that may have unsaved work.
+// Returns an array of { name, windowCount } for each detected browser.
+async function getOpenBrowsers() {
+  const browsers = [
+    { process: 'chrome', name: 'Chrome' },
+    { process: 'msedge', name: 'Edge' },
+    { process: 'firefox', name: 'Firefox' },
+    { process: 'brave', name: 'Brave' },
+    { process: 'opera', name: 'Opera' },
+    { process: 'vivaldi', name: 'Vivaldi' }
+  ];
+  const results = [];
+  const cmd = browsers.map(b =>
+    `$p = Get-Process -Name '${b.process}' -ErrorAction SilentlyContinue; if ($p) { '${b.name}:' + $p.Count }`
+  ).join('; ');
+  try {
+    const raw = await executePowerShell(cmd);
+    if (!raw) return [];
+    for (const part of raw.split(';').map(s => s.trim()).filter(Boolean)) {
+      const [name, count] = part.split(':');
+      if (name && count && parseInt(count) > 0) {
+        results.push({ name, windowCount: parseInt(count) });
+      }
+    }
+  } catch { /* best-effort */ }
+  return results;
 }
 
 async function executePowerAction(options = {}) {
@@ -591,6 +737,31 @@ ipcMain.handle('save-app-settings', async (event, settings = {}) => {
 ipcMain.handle('discard-recoverable-timer', async () => {
   settingsStore.setActiveTimer(null);
   return { success: true };
+});
+ipcMain.handle('get-streaks', async () => {
+  try { return streaks.getSummary(); } catch { return { streak: 0, bestStreak: 0, totalNights: 0, achievements: [], weekAvg: '--:--', weekOnTime: 0, weekDays: [] }; }
+});
+ipcMain.handle('get-achievements-catalog', async () => {
+  try { return streaks.getAchievementCatalog(); } catch { return []; }
+});
+ipcMain.handle('add-custom-sequence', async (event, seq) => {
+  const entry = lastLight.addCustomSequence(seq);
+  if (entry) {
+    const ll = settingsStore.getSection('lastLight') || {};
+    ll.customSequences = lastLight.getCustomSequences();
+    settingsStore.updateSection('lastLight', ll);
+  }
+  return entry;
+});
+ipcMain.handle('remove-custom-sequence', async (event, id) => {
+  lastLight.removeCustomSequence(id);
+  const ll = settingsStore.getSection('lastLight') || {};
+  ll.customSequences = lastLight.getCustomSequences();
+  settingsStore.updateSection('lastLight', ll);
+  return { success: true };
+});
+ipcMain.handle('get-open-browsers', async () => {
+  try { return await getOpenBrowsers(); } catch { return []; }
 });
 ipcMain.handle('resume-recoverable-timer', async () => {
   const snapshot = getRecoverableTimer();
@@ -718,6 +889,63 @@ ipcMain.on('toggle-mini-mode', () => {
   mainWindow.webContents.send('mini-mode-changed', miniMode);
 });
 
+// Desktop widget: tiny always-on-top "bed in N min" clock.
+function createWidgetWindow() {
+  if (widgetWindow && !widgetWindow.isDestroyed()) {
+    widgetWindow.show();
+    return;
+  }
+  widgetWindow = new BrowserWindow({
+    width: 180,
+    height: 52,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false,
+    skipTaskbar: true,
+    hasShadow: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
+    }
+  });
+  widgetWindow.setVisibleOnAllWorkspaces(true);
+  widgetWindow.setPosition(20, 20); // top-left corner
+  widgetWindow.loadFile('widget.html');
+  widgetWindow.on('closed', () => { widgetWindow = null; widgetMode = false; });
+  widgetMode = true;
+}
+
+function closeWidgetWindow() {
+  if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.close();
+  widgetWindow = null;
+  widgetMode = false;
+}
+
+function updateWidget() {
+  if (!widgetWindow || widgetWindow.isDestroyed()) return;
+  const running = timerState.running || timerState.paused;
+  const remaining = running ? formatTime(timerState.remainingSeconds) : '';
+  const phase = timerState.phase || 'idle';
+  widgetWindow.webContents.send('widget-update', {
+    running,
+    paused: timerState.paused,
+    remaining,
+    phase,
+    action: timerState.action
+  });
+}
+
+ipcMain.on('toggle-widget', () => {
+  if (widgetMode) closeWidgetWindow();
+  else createWidgetWindow();
+});
+
+ipcMain.on('close-widget', () => {
+  closeWidgetWindow();
+});
+
 ipcMain.on('show-notification', (event, title, body) => {
   showNativeNotification(title, body);
 });
@@ -819,17 +1047,21 @@ if (!gotTheLock) {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Load persisted settings and rehydrate the smart-lights module.
   settingsStore.load();
   smartLights.loadConfig(settingsStore.getSection('smartLights'));
+
+  // Load custom Last Light sequences from settings.
+  const llSettings = settingsStore.getSection('lastLight') || {};
+  if (llSettings.customSequences) lastLight.loadCustomSequences(llSettings.customSequences);
 
   // Initialize profiles module
   const profileCount = profiles.initialize();
   console.log(`Loaded ${profileCount} profiles`);
   
   createWindow();
-  createTray();
+  await createTray();
   setupJumpList();
   registerGlobalShortcuts();
 
