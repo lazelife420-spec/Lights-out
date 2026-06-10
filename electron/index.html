@@ -7,6 +7,89 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!-- Onboarding First-Run Wizard -->
+  <div class="onboarding-overlay" id="onboarding" style="display:none">
+    <div class="onboarding-container">
+      <div class="onboarding-progress">
+        <div class="onboarding-step-dot active" data-step="1"></div>
+        <div class="onboarding-step-dot" data-step="2"></div>
+        <div class="onboarding-step-dot" data-step="3"></div>
+      </div>
+
+      <!-- Step 1: When do you go to bed? -->
+      <div class="onboarding-panel active" id="onboard-step-1">
+        <div class="onboarding-illustration">&#x1F319;</div>
+        <h2>When do you go to bed?</h2>
+        <p class="onboarding-sub">We'll set a gentle reminder so you never miss your window.</p>
+        <div class="onboarding-choice-grid">
+          <button class="onboard-choice" data-bed="21:00">9 PM<span class="choice-sub">Early bird</span></button>
+          <button class="onboard-choice" data-bed="22:00">10 PM<span class="choice-sub">On schedule</span></button>
+          <button class="onboard-choice" data-bed="23:00">11 PM<span class="choice-sub">Night owl</span></button>
+          <button class="onboard-choice" data-bed="00:00">Midnight<span class="choice-sub">Still going</span></button>
+        </div>
+        <div class="onboarding-custom">
+          <input type="time" id="onboard-custom-bed" value="22:30">
+          <span>Or pick your own time</span>
+        </div>
+      </div>
+
+      <!-- Step 2: What distracts you? -->
+      <div class="onboarding-panel" id="onboard-step-2">
+        <div class="onboarding-illustration">&#x1F6AB;</div>
+        <h2>What keeps you up?</h2>
+        <p class="onboarding-sub">We'll help close distracting apps when it's time to wind down.</p>
+        <div class="onboarding-choice-grid">
+          <button class="onboard-choice" data-focus="chrome,msedge">Browsers<span class="choice-sub">One more tab...</span></button>
+          <button class="onboard-choice" data-focus="discord,slack,telegram">Chat apps<span class="choice-sub">Just one message</span></button>
+          <button class="onboard-choice" data-focus="spotify,vlc">Media<span class="choice-sub">Background noise</span></button>
+          <button class="onboard-choice" data-focus="">Nothing<span class="choice-sub">I'm disciplined</span></button>
+        </div>
+        <div class="onboarding-custom">
+          <input type="text" id="onboard-custom-focus" placeholder="e.g. chrome,discord,steam">
+          <span>Or name specific apps</span>
+        </div>
+      </div>
+
+      <!-- Step 3: Choose your ritual -->
+      <div class="onboarding-panel" id="onboard-step-3">
+        <div class="onboarding-illustration">&#x2728;</div>
+        <h2>How should Lights Out send you off?</h2>
+        <p class="onboarding-sub">Each ritual is a cinematic shutdown sequence. Pick your vibe.</p>
+        <div class="onboarding-ritual-grid">
+          <button class="onboard-ritual" data-seq="ClassicFade">
+            <span class="ritual-icon">&#x1F319;</span>
+            <span class="ritual-name">Classic Fade</span>
+            <span class="ritual-sub">Calm. Simple. Dignified.</span>
+          </button>
+          <button class="onboard-ritual" data-seq="ExitTheGrid">
+            <span class="ritual-icon">&#x1F310;</span>
+            <span class="ritual-name">Exit the Grid</span>
+            <span class="ritual-sub">Unplug from the feed.</span>
+          </button>
+          <button class="onboard-ritual" data-seq="AntiAlgorithm">
+            <span class="ritual-icon">&#x1F9E0;</span>
+            <span class="ritual-name">Anti-Algorithm</span>
+            <span class="ritual-sub">The algorithm lost tonight.</span>
+          </button>
+          <button class="onboard-ritual" data-seq="SignalSeverance">
+            <span class="ritual-icon">&#x26A1;</span>
+            <span class="ritual-name">Signal Severance</span>
+            <span class="ritual-sub">Night secured. Period.</span>
+          </button>
+        </div>
+        <label class="onboard-sound-toggle">
+          <input type="checkbox" id="onboard-sound" checked>
+          Play ambient rain during wind-down
+        </label>
+      </div>
+
+      <div class="onboarding-nav">
+        <button class="btn-secondary" id="onboard-back" style="visibility:hidden">Back</button>
+        <button class="btn-primary" id="onboard-next">Continue</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Main Cockpit Container -->
   <div class="cockpit">
     
@@ -350,15 +433,15 @@
     <!-- Footer -->
     <footer class="app-footer">
       <div class="footer-left">
-        <span class="badge" id="badge-dryrun">DRY RUN</span>
-        <span class="badge phase-badge" id="badge-phase" style="display:none">FOCUS</span>
-        <span class="badge" id="badge-confirm">CONFIRM</span>
-        <span class="badge" id="badge-cancel">CANCEL</span>
-        <button class="badge widget-toggle" id="btn-widget" title="Desktop widget">WIDGET</button>
-        <span class="badge update-badge" id="badge-update" style="display:none" title="Update available">UPDATE</span>
+        <span class="status-pill" id="status-pill">
+          <span class="status-dot" id="status-dot"></span>
+          <span class="status-text" id="status-text">Idle</span>
+        </span>
       </div>
       <div class="footer-right">
-        <span id="version">v6.1.0</span>
+        <button class="footer-action" id="btn-widget" title="Desktop widget">&#x1F4CA;</button>
+        <span class="badge update-badge" id="badge-update" style="display:none" title="Update available">UPDATE</span>
+        <span id="version">v7.0.0</span>
       </div>
     </footer>
 

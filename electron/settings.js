@@ -22,7 +22,9 @@ const DEFAULTS = {
     muteSystem: false,
     graceMinutes: 2,
     dryRun: false,
-    focusBlocklist: []
+    focusBlocklist: [],
+    onboarded: false,
+    bedtime: '22:30'
   },
   smartLights: {
     enabled: false,

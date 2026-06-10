@@ -196,9 +196,8 @@ const els = {
   chkRunLogin: document.getElementById('chk-run-login'),
   focusBlocklist: document.getElementById('focus-blocklist'),
   chkDryRun: document.getElementById('chk-dryrun'),
-  badgeDryRun: document.getElementById('badge-dryrun'),
-  badgeConfirm: document.getElementById('badge-confirm'),
-  badgeCancel: document.getElementById('badge-cancel'),
+  // Status pill (replaces old badges)
+  statusPill: document.getElementById('status-pill'),
   batteryLevel: document.getElementById('battery-level'),
   powerPlan: document.getElementById('power-plan'),
   actionName: document.getElementById('action-name'),
@@ -276,8 +275,10 @@ const els = {
   warningSnooze: document.getElementById('warning-snooze'),
   warningCancel: document.getElementById('warning-cancel'),
   warningDismiss: document.getElementById('warning-dismiss'),
-  // Phase badge
-  badgePhase: document.getElementById('badge-phase'),
+  // Status pill
+  statusPill: document.getElementById('status-pill'),
+  statusDot: document.getElementById('status-dot'),
+  statusText: document.getElementById('status-text'),
   // Streaks
   streakCount: document.getElementById('streak-count'),
   streakBest: document.getElementById('streak-best'),
@@ -297,6 +298,10 @@ const els = {
   btnCancelCustomSeq: document.getElementById('btn-cancel-custom-seq'),
   // Widget
   btnWidget: document.getElementById('btn-widget'),
+  // Status pill
+  statusPill: document.getElementById('status-pill'),
+  statusDot: document.getElementById('status-dot'),
+  statusText: document.getElementById('status-text'),
   // Alarm
   chkAlarm: document.getElementById('chk-alarm'),
   alarmConfig: document.getElementById('alarm-config'),
@@ -309,7 +314,11 @@ const els = {
   // Data export/import
   btnExportAllData: document.getElementById('btn-export-all-data'),
   btnImportAllData: document.getElementById('btn-import-all-data'),
-  importAllDataInput: document.getElementById('import-all-data-input')
+  importAllDataInput: document.getElementById('import-all-data-input'),
+  // Onboarding
+  onboarding: document.getElementById('onboarding'),
+  onboardBack: document.getElementById('onboard-back'),
+  onboardNext: document.getElementById('onboard-next')
 };
 
 const state = {
@@ -730,17 +739,32 @@ function render() {
   document.getElementById('toggle-mute')?.querySelector('.toggle-indicator')?.replaceChildren(document.createTextNode(state.sound ? 'ON' : 'OFF'));
   document.getElementById('toggle-graceful')?.querySelector('.toggle-indicator')?.replaceChildren(document.createTextNode(state.gracefulClose ? 'ON' : 'OFF'));
 
-  els.badgeDryRun.classList.toggle('active', state.dryRun);
-  els.badgeConfirm.classList.toggle('active', !state.forceShutdown);
-  els.badgeCancel.classList.toggle('active', state.running || state.paused);
-
-  // Phase badge
-  if (els.badgePhase) {
-    const showPhase = state.running && state.phase && state.phase !== 'idle';
-    els.badgePhase.classList.toggle('active', showPhase);
-    els.badgePhase.textContent = showPhase ? state.phase.toUpperCase() : '';
-    els.badgePhase.dataset.phase = state.phase || 'idle';
+  // Status pill: single animated indicator replacing badge soup
+  if (els.statusPill) {
+    const pill = els.statusPill;
+    pill.className = 'status-pill';
+    if (!state.running && !state.paused) {
+      els.statusText.textContent = state.dryRun ? 'Dry Run' : 'Idle';
+      if (state.dryRun) pill.classList.add('dryrun');
+    } else if (state.paused) {
+      pill.classList.add('paused');
+      els.statusText.textContent = 'Paused';
+    } else {
+      const phaseClass = state.phase === 'dim' ? 'dim' : state.phase === 'lastlight' ? 'lastlight' : 'running';
+      pill.classList.add(phaseClass);
+      if (state.dryRun) pill.classList.add('dryrun');
+      const labels = { focus: 'Focus', dim: 'Winding Down', lastlight: 'Last Light', idle: 'Running' };
+      els.statusText.textContent = labels[state.phase] || 'Running';
+    }
   }
+
+  // Phase class on body for ring animations + warm shift.
+  document.body.className = document.body.className.replace(/phase-\w+/g, '').trim();
+  if (state.running && state.phase && state.phase !== 'idle') {
+    document.body.classList.add('phase-' + state.phase);
+  }
+  if (state.paused) document.body.classList.add('is-paused');
+  else if (state.running) document.body.classList.add('is-running');
 
   els.actionName.textContent = actionLabel();
   els.endTime.textContent = state.running || state.paused ? formatEndTime(state.endsAt) : 'Idle';
@@ -949,7 +973,20 @@ function renderStreaks(summary, catalog, report) {
     const unlocked = summary.achievements || [];
     els.achievementsGrid.innerHTML = catalog.map(a => {
       const isUnlocked = unlocked.includes(a.id);
+      const icons = {
+        first_light: '&#x1F319;',
+        weekly_warrior: '&#x1F4AA;',
+        '3_night_streak': '&#x1F525;',
+        '7_night_streak': '&#x2B50;',
+        '14_night_streak': '&#x1F31F;',
+        '30_night_streak': '&#x1F451;',
+        centurion: '&#x1F396;',
+        no_snooze_7: '&#x23F0;',
+        last_light_activated: '&#x1F4A1;'
+      };
+      const icon = isUnlocked ? (icons[a.id] || '&#x1F4E6;') : '&#x1F512;';
       return `<div class="achievement-card ${isUnlocked ? 'unlocked' : 'locked'}">
+        <div class="ach-icon">${icon}</div>
         <div class="ach-name">${isUnlocked ? a.name : '???'}</div>
         <div class="ach-desc">${isUnlocked ? a.desc : 'Not yet unlocked'}</div>
       </div>`;
@@ -2439,3 +2476,146 @@ setupWarningHandlers();
 setupAlarmHandlers();
 setAction(state.action);
 loadInitialData().finally(render);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Onboarding First-Run Wizard
+// ─────────────────────────────────────────────────────────────────────────────
+let onboardStep = 1;
+let onboardData = { bedtime: null, focus: null, sequence: null, sound: true };
+
+function showOnboarding() {
+  if (!els.onboarding) return;
+  els.onboarding.style.display = 'flex';
+}
+
+function hideOnboarding() {
+  if (!els.onboarding) return;
+  els.onboarding.style.display = 'none';
+  // Persist onboarded flag.
+  const app = { onboarded: true };
+  if (onboardData.bedtime) app.bedtime = onboardData.bedtime;
+  if (onboardData.focus) app.focusBlocklist = onboardData.focus.split(',').map(s => s.trim()).filter(Boolean);
+  api.saveAppSettings({ app });
+  // Apply selected ritual.
+  if (onboardData.sequence) {
+    const custom = { lastLightEnabled: true, lastLightSequence: onboardData.sequence, lastLightSound: onboardData.sound ? 'Soft' : 'Off' };
+    api.saveAppSettings({ lastLight: custom });
+    state.lastLight.enabled = true;
+    state.lastLight.sequence = onboardData.sequence;
+    state.lastLight.sound = onboardData.sound ? 'Soft' : 'Off';
+    updateLastLightUIFromState();
+  }
+  // Apply soundscape.
+  if (onboardData.sound) {
+    state.customization.soundscape = 'rain';
+    api.saveAppSettings({ customization: { soundscape: 'rain' } });
+  }
+  // Set timer from bedtime if not already running.
+  if (onboardData.bedtime && !state.running) {
+    const [h, m] = onboardData.bedtime.split(':').map(Number);
+    const now = new Date();
+    let target = new Date(now);
+    target.setHours(h, m, 0, 0);
+    if (target <= now) target.setDate(target.getDate() + 1);
+    const diffSec = Math.round((target - now) / 1000);
+    if (diffSec > 60 && diffSec < 24 * 3600) {
+      state.remainingSeconds = diffSec;
+      state.totalSeconds = diffSec;
+      setInputFromSeconds(diffSec);
+      render();
+    }
+  }
+}
+
+function updateOnboardingUI() {
+  // Update step dots.
+  document.querySelectorAll('.onboarding-step-dot').forEach(dot => {
+    dot.classList.toggle('active', parseInt(dot.dataset.step) === onboardStep);
+  });
+  // Show/hide panels.
+  document.querySelectorAll('.onboarding-panel').forEach(panel => panel.classList.remove('active'));
+  const activePanel = document.getElementById(`onboard-step-${onboardStep}`);
+  if (activePanel) activePanel.classList.add('active');
+  // Back button visibility.
+  if (els.onboardBack) els.onboardBack.style.visibility = onboardStep > 1 ? 'visible' : 'hidden';
+  // Next button text.
+  if (els.onboardNext) els.onboardNext.textContent = onboardStep >= 3 ? "Let's go" : 'Continue';
+}
+
+function setupOnboarding() {
+  if (!els.onboarding) return;
+
+  // Choice button clicks (step 1 & 2).
+  document.querySelectorAll('.onboard-choice').forEach(btn => {
+    btn.addEventListener('click', () => {
+      btn.closest('.onboarding-choice-grid').querySelectorAll('.onboard-choice').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      if (btn.dataset.bed) onboardData.bedtime = btn.dataset.bed;
+      if (btn.dataset.focus !== undefined) onboardData.focus = btn.dataset.focus;
+    });
+  });
+
+  // Ritual button clicks (step 3).
+  document.querySelectorAll('.onboard-ritual').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.onboard-ritual').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      onboardData.sequence = btn.dataset.seq;
+    });
+  });
+
+  // Sound toggle.
+  const soundToggle = document.getElementById('onboard-sound');
+  if (soundToggle) {
+    soundToggle.addEventListener('change', () => {
+      onboardData.sound = soundToggle.checked;
+    });
+  }
+
+  // Custom bedtime override.
+  const customBed = document.getElementById('onboard-custom-bed');
+  if (customBed) {
+    customBed.addEventListener('change', () => {
+      if (customBed.value) onboardData.bedtime = customBed.value;
+    });
+  }
+
+  // Custom focus override.
+  const customFocus = document.getElementById('onboard-custom-focus');
+  if (customFocus) {
+    customFocus.addEventListener('input', () => {
+      if (customFocus.value.trim()) onboardData.focus = customFocus.value.trim();
+    });
+  }
+
+  // Nav buttons.
+  els.onboardBack?.addEventListener('click', () => {
+    if (onboardStep > 1) { onboardStep--; updateOnboardingUI(); }
+  });
+
+  els.onboardNext?.addEventListener('click', () => {
+    if (onboardStep < 3) {
+      onboardStep++;
+      updateOnboardingUI();
+    } else {
+      hideOnboarding();
+    }
+  });
+
+  updateOnboardingUI();
+}
+
+// Check if onboarding should show.
+async function checkOnboarding() {
+  try {
+    const settings = await api.getAppSettings();
+    if (!settings?.app?.onboarded) {
+      showOnboarding();
+      setupOnboarding();
+    }
+  } catch {
+    // If settings can't load, skip onboarding.
+  }
+}
+
+checkOnboarding();
