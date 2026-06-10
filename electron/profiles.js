@@ -94,6 +94,10 @@ function normalizeProfile(raw) {
     gracePeriod: Number.isFinite(Number(raw.gracePeriod)) ? Math.max(0, Number(raw.gracePeriod)) : 2,
     smartLightsEnabled: Boolean(raw.smartLightsEnabled),
     smartLightsMode: raw.smartLightsMode || 'gradual_dim',
+    // Last Light
+    lastLightEnabled: Boolean(raw.lastLightEnabled),
+    lastLightSequence: raw.lastLightSequence || 'ClassicFade',
+    lastLightSound: raw.lastLightSound || 'Off',
     createdAt: raw.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
@@ -228,6 +232,9 @@ function applyProfile(profileId, currentState = {}) {
       forceShutdown: profile.forceShutdown,
       muteSystem: profile.muteSystem,
       gracePeriod: profile.gracePeriod,
+      lastLightEnabled: profile.lastLightEnabled,
+      lastLightSequence: profile.lastLightSequence,
+      lastLightSound: profile.lastLightSound,
       endsAt
     },
     autoStart: profile.autoStart

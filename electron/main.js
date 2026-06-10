@@ -790,6 +790,19 @@ function registerGlobalShortcuts() {
   });
 
   globalShortcut.register('Ctrl+Shift+S', toggleMainWindow);
+
+  globalShortcut.register('Ctrl+Shift+P', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
+      const cfg = settingsStore.getSection('lastLight') || {};
+      mainWindow.webContents.send('play-last-light', {
+        sequence: lastLight.normalizeId(cfg.sequence),
+        dryRun: true,
+        sound: cfg.sound || 'Off'
+      });
+    }
+  });
 }
 
 const gotTheLock = app.requestSingleInstanceLock();

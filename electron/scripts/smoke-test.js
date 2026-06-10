@@ -89,6 +89,13 @@ check('settings: lastLight defaults present', () => {
   assert(ll && ll.sequence === 'ClassicFade' && ll.enabled === false, 'lastLight defaults wrong');
 });
 
+// 4b. profiles normalize lastLight fields (pure logic, no disk I/O).
+check('profiles: lastLight fields in normalized profile', () => {
+  const profiles = require(path.join(root, 'profiles.js'));
+  const norm = profiles.normalize({ name: 'Test LL', lastLightEnabled: true, lastLightSequence: 'ExitTheGrid', lastLightSound: 'Soft' });
+  assert(norm && norm.lastLightEnabled === true && norm.lastLightSequence === 'ExitTheGrid' && norm.lastLightSound === 'Soft', 'lastLight fields not preserved');
+});
+
 Module._load = origLoad;
 
 // 4b. lastLight sequence catalog + timing.

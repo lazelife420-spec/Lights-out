@@ -1879,6 +1879,28 @@ body[data-theme="aurora"] {
   font-size: 13px;
 }
 
+body.mini-mode .warning-modal-content {
+  max-width: 220px;
+  padding: 18px 14px;
+}
+
+body.mini-mode .warning-modal-content h2 {
+  font-size: 15px;
+}
+
+body.mini-mode .warning-modal-actions button {
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+body.mini-mode .ll-headline {
+  font-size: 14px;
+}
+
+body.mini-mode .ll-line {
+  font-size: 18px;
+}
+
 .btn-danger {
   padding: 8px 16px;
   font-size: 12px;

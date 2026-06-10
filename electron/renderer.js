@@ -1361,7 +1361,10 @@ function playLastLight(payload) {
       els.llHeadline.textContent = step.headline || '';
       els.llLine.textContent = step.line || '';
       els.llStamp.textContent = '';
-      if (soundMode === 'Soft') SoundSystem.playTone(660, 0.05, 'sine', 0.12);
+      if (soundMode === 'Soft') {
+        SoundSystem.playTone(880, 0.08, 'sine', 0.1);
+        setTimeout(() => SoundSystem.playTone(660, 0.12, 'sine', 0.08), 120);
+      }
     }, elapsed));
     elapsed += Number(step.dwellMs || 0);
   });
@@ -1492,7 +1495,14 @@ async function applyProfile(profileId) {
       state.forceShutdown = result.timerOptions.forceShutdown || false;
       state.muteSystem = result.timerOptions.muteSystem || false;
       state.graceMinutes = result.timerOptions.gracePeriod || 2;
-      
+
+      // Apply Last Light from profile
+      if (result.timerOptions.lastLightEnabled !== undefined) {
+        state.lastLight.enabled = result.timerOptions.lastLightEnabled;
+        if (result.timerOptions.lastLightSequence) state.lastLight.sequence = result.timerOptions.lastLightSequence;
+        if (result.timerOptions.lastLightSound) state.lastLight.sound = result.timerOptions.lastLightSound;
+      }
+
       setInputFromSeconds(result.timerOptions.durationSeconds || 1800);
       setAction(state.action);
     }
