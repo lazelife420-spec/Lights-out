@@ -27,6 +27,22 @@ const DEFAULTS = {
     bedtime: '22:30',
     timerName: 'Witching Hour'
   },
+  calendar: {
+    enabled: true,
+    provider: 'builtin',
+    syncIntervalMin: 30,
+    autoStartFromEvents: false,
+    builtin: {
+      enabled: true,
+      bedtime: '22:30',
+      days: ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'],
+      action: 'shutdown'
+    },
+    ical: { url: '' },
+    google: { apiKey: '', calendarId: '' },
+    outlook: { accessToken: '' },
+    calendly: { personalToken: '' }
+  },
   smartLights: {
     enabled: false,
     provider: 'none',

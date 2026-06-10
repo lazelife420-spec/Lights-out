@@ -9,6 +9,7 @@ const lastLight = require('./lastLight');
 const streaks = require('./streaks');
 const alarm = require('./alarm');
 const updater = require('./updater');
+const calProviders = require('./calendarProviders');
 
 const APP_ICON = path.join(__dirname, 'assets', 'icon.ico');
 
@@ -812,6 +813,7 @@ ipcMain.handle('get-app-settings', async () => ({
   app: settingsStore.getSection('app'),
   customization: settingsStore.getSection('customization'),
   lastLight: settingsStore.getSection('lastLight'),
+  calendar: settingsStore.getSection('calendar'),
   recoverableTimer: getRecoverableTimer()
 }));
 ipcMain.handle('save-app-settings', async (event, settings = {}) => {
@@ -819,11 +821,13 @@ ipcMain.handle('save-app-settings', async (event, settings = {}) => {
   if (settings.app) settingsStore.updateSection('app', settings.app);
   if (settings.customization) settingsStore.updateSection('customization', settings.customization);
   if (settings.lastLight) settingsStore.updateSection('lastLight', settings.lastLight);
+  if (settings.calendar) settingsStore.updateSection('calendar', settings.calendar);
   return {
     ...getLoginSettings(),
     app: settingsStore.getSection('app'),
     customization: settingsStore.getSection('customization'),
-    lastLight: settingsStore.getSection('lastLight')
+    lastLight: settingsStore.getSection('lastLight'),
+    calendar: settingsStore.getSection('calendar')
   };
 });
 ipcMain.handle('discard-recoverable-timer', async () => {
@@ -912,6 +916,35 @@ ipcMain.handle('import-all-data', async (event, jsonData) => {
   } catch (err) {
     return { success: false, error: err.message };
   }
+});
+
+// Calendar providers
+ipcMain.handle('get-calendar-providers', async () => {
+  return calProviders.getProviders();
+});
+ipcMain.handle('fetch-calendar-events', async (event, withinDays) => {
+  try {
+    const calConfig = settingsStore.getSection('calendar') || {};
+    const events = await calProviders.fetchAllEvents(calConfig, new Date(), withinDays || 14);
+    return events.map(e => ({
+      uid: e.uid,
+      summary: e.summary,
+      start: e.start.toISOString(),
+      end: e.end?.toISOString() || null,
+      location: e.location || '',
+      source: e.source,
+      action: e.action || 'shutdown'
+    }));
+  } catch (err) {
+    return [];
+  }
+});
+ipcMain.handle('save-calendar-settings', async (event, calSettings) => {
+  settingsStore.updateSection('calendar', calSettings);
+  return { success: true };
+});
+ipcMain.handle('get-calendar-settings', async () => {
+  return settingsStore.getSection('calendar');
 });
 ipcMain.handle('resume-recoverable-timer', async () => {
   const snapshot = getRecoverableTimer();

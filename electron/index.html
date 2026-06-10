@@ -354,26 +354,102 @@
             <div class="calendar-section">
               <div class="calendar-header">
                 <span class="icon">&#x1F4C5;</span>
-                <span>Calendar Import</span>
+                <span>Calendar</span>
+                <select id="sel-calendar-provider" class="cal-provider-select">
+                  <option value="builtin">Lights Out Calendar</option>
+                  <option value="ical">iCal / ICS Feed</option>
+                  <option value="google">Google Calendar</option>
+                  <option value="outlook">Outlook / Microsoft 365</option>
+                  <option value="calendly">Calendly</option>
+                </select>
               </div>
-              <div class="calendar-import">
-                <div class="import-tabs">
-                  <button class="import-tab-btn active" data-import-tab="file">File</button>
-                  <button class="import-tab-btn" data-import-tab="url">URL</button>
+
+              <!-- Built-in default calendar config -->
+              <div class="cal-provider-config" id="cal-cfg-builtin">
+                <div class="option-group">
+                  <label>Default Bedtime</label>
+                  <input type="time" id="cal-builtin-bedtime" value="22:30">
                 </div>
-                <div class="import-panel active" id="import-file-panel">
-                  <input type="file" id="calendar-file-input" accept=".ics" style="display: none;">
-                  <button class="btn-secondary" id="btn-import-file">Select .ics File</button>
-                  <small>Import from Google, Outlook, or Apple Calendar</small>
+                <div class="option-group">
+                  <label>Active Days</label>
+                  <div class="day-toggle-grid">
+                    <button class="day-toggle active" data-day="sun">Sun</button>
+                    <button class="day-toggle active" data-day="mon">Mon</button>
+                    <button class="day-toggle active" data-day="tue">Tue</button>
+                    <button class="day-toggle active" data-day="wed">Wed</button>
+                    <button class="day-toggle active" data-day="thu">Thu</button>
+                    <button class="day-toggle active" data-day="fri">Fri</button>
+                    <button class="day-toggle active" data-day="sat">Sat</button>
+                  </div>
                 </div>
-                <div class="import-panel" id="import-url-panel">
-                  <input type="url" id="calendar-url-input" placeholder="https://calendar.google.com/calendar/ical/...">
-                  <button class="btn-secondary" id="btn-import-url">Fetch Calendar</button>
+                <div class="option-group">
+                  <label>Action</label>
+                  <select id="cal-builtin-action">
+                    <option value="shutdown">Shutdown</option>
+                    <option value="sleep">Sleep</option>
+                    <option value="hibernate">Hibernate</option>
+                  </select>
+                </div>
+                <label class="checkbox-label" style="margin-top:4px">
+                  <input type="checkbox" id="cal-auto-start">
+                  Auto-start timer from calendar events
+                </label>
+              </div>
+
+              <!-- iCal URL config -->
+              <div class="cal-provider-config" id="cal-cfg-ical" style="display:none">
+                <div class="option-group">
+                  <label>iCal Feed URL</label>
+                  <input type="url" id="cal-ical-url" placeholder="https://calendar.google.com/calendar/ical/...">
                   <small>Paste your calendar's secret iCal URL</small>
                 </div>
+                <button class="btn-secondary" id="btn-cal-ical-fetch">Fetch Events</button>
               </div>
+
+              <!-- Google Calendar config -->
+              <div class="cal-provider-config" id="cal-cfg-google" style="display:none">
+                <div class="option-group">
+                  <label>Google API Key</label>
+                  <input type="password" id="cal-google-apikey" placeholder="AIza...">
+                </div>
+                <div class="option-group">
+                  <label>Calendar ID</label>
+                  <input type="text" id="cal-google-calid" placeholder="your@gmail.com">
+                </div>
+                <button class="btn-secondary" id="btn-cal-google-fetch">Fetch Events</button>
+              </div>
+
+              <!-- Outlook config -->
+              <div class="cal-provider-config" id="cal-cfg-outlook" style="display:none">
+                <div class="option-group">
+                  <label>Microsoft Graph Access Token</label>
+                  <input type="password" id="cal-outlook-token" placeholder="eyJ...">
+                  <small>Get from Azure AD app registration</small>
+                </div>
+                <button class="btn-secondary" id="btn-cal-outlook-fetch">Fetch Events</button>
+              </div>
+
+              <!-- Calendly config -->
+              <div class="cal-provider-config" id="cal-cfg-calendly" style="display:none">
+                <div class="option-group">
+                  <label>Personal Access Token</label>
+                  <input type="password" id="cal-calendly-token" placeholder="eyJ...">
+                  <small>Generate at calendly.com/integrations</small>
+                </div>
+                <button class="btn-secondary" id="btn-cal-calendly-fetch">Fetch Events</button>
+              </div>
+
+              <!-- Upcoming events list -->
               <div class="calendar-events" id="calendar-events">
                 <!-- Events loaded dynamically -->
+              </div>
+
+              <!-- Next event card -->
+              <div class="next-event-card" id="next-event-card" style="display:none">
+                <div class="next-event-label">Next Event</div>
+                <div class="next-event-name" id="next-event-name"></div>
+                <div class="next-event-time" id="next-event-time"></div>
+                <button class="btn-primary btn-sm" id="btn-start-from-event">Start Timer</button>
               </div>
             </div>
           </div>
@@ -442,7 +518,7 @@
       <div class="footer-right">
         <button class="footer-action" id="btn-widget" title="Desktop widget">&#x1F4CA;</button>
         <span class="badge update-badge" id="badge-update" style="display:none" title="Update available">UPDATE</span>
-        <span id="version">v7.1.0</span>
+        <span id="version">v7.2.0</span>
       </div>
     </footer>
 

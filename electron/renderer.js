@@ -144,6 +144,10 @@ const fallbackApi = (() => {
     onUpdateAvailable: () => {},
     exportAllData: async () => ({ success: false, error: 'Preview mode' }),
     importAllData: async () => ({ success: false, error: 'Preview mode' }),
+    getCalendarProviders: async () => [],
+    fetchCalendarEvents: async () => [],
+    saveCalendarSettings: async () => ({ success: true }),
+    getCalendarSettings: async () => ({ enabled: true, provider: 'builtin', builtin: { enabled: true, bedtime: '22:30', days: ['sun','mon','tue','wed','thu','fri','sat'], action: 'shutdown' } }),
     openExternal: url => window.open(url, '_blank', 'noopener'),
     // Profiles fallbacks
     getAllProfiles: async () => [],
@@ -319,7 +323,31 @@ const els = {
   // Onboarding
   onboarding: document.getElementById('onboarding'),
   onboardBack: document.getElementById('onboard-back'),
-  onboardNext: document.getElementById('onboard-next')
+  onboardNext: document.getElementById('onboard-next'),
+  // Calendar providers
+  selCalendarProvider: document.getElementById('sel-calendar-provider'),
+  calCfgBuiltin: document.getElementById('cal-cfg-builtin'),
+  calCfgIcal: document.getElementById('cal-cfg-ical'),
+  calCfgGoogle: document.getElementById('cal-cfg-google'),
+  calCfgOutlook: document.getElementById('cal-cfg-outlook'),
+  calCfgCalendly: document.getElementById('cal-cfg-calendly'),
+  calBuiltinBedtime: document.getElementById('cal-builtin-bedtime'),
+  calBuiltinAction: document.getElementById('cal-builtin-action'),
+  calAutoStart: document.getElementById('cal-auto-start'),
+  calIcalUrl: document.getElementById('cal-ical-url'),
+  calGoogleApikey: document.getElementById('cal-google-apikey'),
+  calGoogleCalid: document.getElementById('cal-google-calid'),
+  calOutlookToken: document.getElementById('cal-outlook-token'),
+  calCalendlyToken: document.getElementById('cal-calendly-token'),
+  btnCalIcalFetch: document.getElementById('btn-cal-ical-fetch'),
+  btnCalGoogleFetch: document.getElementById('btn-cal-google-fetch'),
+  btnCalOutlookFetch: document.getElementById('btn-cal-outlook-fetch'),
+  btnCalCalendlyFetch: document.getElementById('btn-cal-calendly-fetch'),
+  calendarEvents: document.getElementById('calendar-events'),
+  nextEventCard: document.getElementById('next-event-card'),
+  nextEventName: document.getElementById('next-event-name'),
+  nextEventTime: document.getElementById('next-event-time'),
+  btnStartFromEvent: document.getElementById('btn-start-from-event')
 };
 
 const state = {
@@ -2477,6 +2505,7 @@ setupCustomizeHandlers();
 setupLastLightHandlers();
 setupWarningHandlers();
 setupAlarmHandlers();
+setupCalendarHandlers();
 setAction(state.action);
 loadInitialData().finally(render);
 
@@ -2618,6 +2647,175 @@ async function checkOnboarding() {
     }
   } catch {
     // If settings can't load, skip onboarding.
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Calendar Provider Handlers
+// ─────────────────────────────────────────────────────────────────────────────
+let calEvents = [];
+let calNextEvent = null;
+
+function setupCalendarHandlers() {
+  // Provider selector: show/hide config panels.
+  els.selCalendarProvider?.addEventListener('change', () => {
+    const provider = els.selCalendarProvider.value;
+    const configs = ['builtin', 'ical', 'google', 'outlook', 'calendly'];
+    configs.forEach(id => {
+      const panel = document.getElementById(`cal-cfg-${id}`);
+      if (panel) panel.style.display = id === provider ? 'block' : 'none';
+    });
+    saveCalendarConfig();
+  });
+
+  // Day toggle buttons.
+  document.querySelectorAll('.day-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      btn.classList.toggle('active');
+      saveCalendarConfig();
+    });
+  });
+
+  // Built-in changes.
+  els.calBuiltinBedtime?.addEventListener('change', saveCalendarConfig);
+  els.calBuiltinAction?.addEventListener('change', saveCalendarConfig);
+  els.calAutoStart?.addEventListener('change', saveCalendarConfig);
+
+  // Provider input changes.
+  [els.calIcalUrl, els.calGoogleApikey, els.calGoogleCalid, els.calOutlookToken, els.calCalendlyToken].forEach(el => {
+    el?.addEventListener('change', saveCalendarConfig);
+  });
+
+  // Fetch buttons.
+  els.btnCalIcalFetch?.addEventListener('click', () => fetchAndRenderEvents());
+  els.btnCalGoogleFetch?.addEventListener('click', () => fetchAndRenderEvents());
+  els.btnCalOutlookFetch?.addEventListener('click', () => fetchAndRenderEvents());
+  els.btnCalCalendlyFetch?.addEventListener('click', () => fetchAndRenderEvents());
+
+  // Start from event.
+  els.btnStartFromEvent?.addEventListener('click', () => {
+    if (calNextEvent) {
+      const now = new Date();
+      const evtStart = new Date(calNextEvent.start);
+      const diffSec = Math.max(0, Math.round((evtStart - now) / 1000));
+      if (diffSec > 0) {
+        api.startTimer({ durationSeconds: diffSec, action: calNextEvent.action || 'shutdown' });
+        notify(`Timer set for ${calNextEvent.summary}`, 'success');
+      } else {
+        notify('Event has already passed', 'warning');
+      }
+    }
+  });
+
+  // Load initial config.
+  loadCalendarConfig();
+  fetchAndRenderEvents();
+}
+
+async function loadCalendarConfig() {
+  try {
+    const cal = await api.getCalendarSettings();
+    if (!cal) return;
+    if (els.selCalendarProvider) els.selCalendarProvider.value = cal.provider || 'builtin';
+    if (els.calBuiltinBedtime) els.calBuiltinBedtime.value = cal.builtin?.bedtime || '22:30';
+    if (els.calBuiltinAction) els.calBuiltinAction.value = cal.builtin?.action || 'shutdown';
+    if (els.calAutoStart) els.calAutoStart.checked = cal.autoStartFromEvents || false;
+    if (els.calIcalUrl) els.calIcalUrl.value = cal.ical?.url || '';
+    if (els.calGoogleApikey) els.calGoogleApikey.value = cal.google?.apiKey || '';
+    if (els.calGoogleCalid) els.calGoogleCalid.value = cal.google?.calendarId || '';
+    if (els.calOutlookToken) els.calOutlookToken.value = cal.outlook?.accessToken || '';
+    if (els.calCalendlyToken) els.calCalendlyToken.value = cal.calendly?.personalToken || '';
+    // Day toggles.
+    const days = cal.builtin?.days || ['sun','mon','tue','wed','thu','fri','sat'];
+    document.querySelectorAll('.day-toggle').forEach(btn => {
+      btn.classList.toggle('active', days.includes(btn.dataset.day));
+    });
+    // Show the active provider config.
+    els.selCalendarProvider?.dispatchEvent(new Event('change'));
+  } catch {}
+}
+
+async function saveCalendarConfig() {
+  const days = [...document.querySelectorAll('.day-toggle.active')].map(b => b.dataset.day);
+  const config = {
+    enabled: true,
+    provider: els.selCalendarProvider?.value || 'builtin',
+    autoStartFromEvents: els.calAutoStart?.checked || false,
+    builtin: {
+      enabled: true,
+      bedtime: els.calBuiltinBedtime?.value || '22:30',
+      days,
+      action: els.calBuiltinAction?.value || 'shutdown'
+    },
+    ical: { url: els.calIcalUrl?.value || '' },
+    google: { apiKey: els.calGoogleApikey?.value || '', calendarId: els.calGoogleCalid?.value || '' },
+    outlook: { accessToken: els.calOutlookToken?.value || '' },
+    calendly: { personalToken: els.calCalendlyToken?.value || '' }
+  };
+  await api.saveCalendarSettings(config);
+}
+
+async function fetchAndRenderEvents() {
+  try {
+    calEvents = await api.fetchCalendarEvents(14);
+    renderCalendarEvents();
+  } catch {}
+}
+
+function renderCalendarEvents() {
+  if (!els.calendarEvents) return;
+  const now = new Date();
+  const upcoming = calEvents.filter(e => new Date(e.start) > now).slice(0, 10);
+
+  if (!upcoming.length) {
+    els.calendarEvents.innerHTML = '<div style="color:var(--text-muted);font-size:11px;padding:8px">No upcoming events found.</div>';
+    if (els.nextEventCard) els.nextEventCard.style.display = 'none';
+    return;
+  }
+
+  calNextEvent = upcoming[0];
+
+  els.calendarEvents.innerHTML = upcoming.map(e => {
+    const start = new Date(e.start);
+    const timeStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const dateStr = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const sourceIcons = { builtin: '\u{1F4C5}', ical: '\u{1F5D3}', google: '\u{1F4E7}', outlook: '\u{1F4E9}', calendly: '\u{1F517}' };
+    return `<div class="calendar-event" data-uid="${e.uid}">
+      <div class="event-info">
+        <div class="event-name">${escapeHtml(e.summary)}</div>
+        <div class="event-meta">${dateStr} at ${timeStr} ${sourceIcons[e.source] || ''}</div>
+      </div>
+      <button class="btn-secondary btn-sm event-start-btn" data-uid="${e.uid}">Start</button>
+    </div>`;
+  }).join('');
+
+  // Start button handlers.
+  els.calendarEvents.querySelectorAll('.event-start-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const evt = calEvents.find(e => e.uid === btn.dataset.uid);
+      if (evt) {
+        const diffSec = Math.max(0, Math.round((new Date(evt.start) - new Date()) / 1000));
+        if (diffSec > 0) {
+          api.startTimer({ durationSeconds: diffSec, action: evt.action || 'shutdown' });
+          notify(`Timer set for ${evt.summary}`, 'success');
+        }
+      }
+    });
+  });
+
+  // Next event card.
+  if (els.nextEventCard && calNextEvent) {
+    els.nextEventCard.style.display = '';
+    const start = new Date(calNextEvent.start);
+    if (els.nextEventName) els.nextEventName.textContent = calNextEvent.summary;
+    if (els.nextEventTime) {
+      const isToday = start.toDateString() === now.toDateString();
+      const isTomorrow = new Date(now.getTime() + 86400000).toDateString() === start.toDateString();
+      const timeStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      if (isToday) els.nextEventTime.textContent = `Today at ${timeStr}`;
+      else if (isTomorrow) els.nextEventTime.textContent = `Tomorrow at ${timeStr}`;
+      else els.nextEventTime.textContent = `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at ${timeStr}`;
+    }
   }
 }
 

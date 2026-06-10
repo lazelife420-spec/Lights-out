@@ -135,5 +135,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Data export/import
   exportAllData: () => ipcRenderer.invoke('export-all-data'),
-  importAllData: (jsonData) => ipcRenderer.invoke('import-all-data', jsonData)
+  importAllData: (jsonData) => ipcRenderer.invoke('import-all-data', jsonData),
+
+  // Calendar providers
+  getCalendarProviders: () => ipcRenderer.invoke('get-calendar-providers'),
+  fetchCalendarEvents: (withinDays) => ipcRenderer.invoke('fetch-calendar-events', withinDays),
+  saveCalendarSettings: (calSettings) => ipcRenderer.invoke('save-calendar-settings', calSettings),
+  getCalendarSettings: () => ipcRenderer.invoke('get-calendar-settings')
 });

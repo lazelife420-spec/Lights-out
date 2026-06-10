@@ -2055,76 +2055,104 @@ body.mini-mode .action-btn {
   letter-spacing: 0.5px;
   margin-bottom: 12px;
 }
-
 .calendar-header .icon {
   font-size: 14px;
 }
+.cal-provider-select {
+  margin-left: auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 11px;
+  padding: 4px 8px;
+}
 
-.calendar-import {
+.cal-provider-config {
   background: var(--bg-secondary);
-  border-radius: var(--card-radius);
+  border-radius: var(--radius-md);
   padding: 12px;
   margin-bottom: 12px;
 }
-
-.import-tabs {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 12px;
+.cal-provider-config .option-group {
+  margin-bottom: 8px;
 }
-
-.import-tab-btn {
-  flex: 1;
-  padding: 8px 12px;
-  font-size: 12px;
-  font-weight: 500;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
+.cal-provider-config input[type="url"],
+.cal-provider-config input[type="text"],
+.cal-provider-config input[type="password"] {
+  width: 100%;
+  padding: 6px 8px;
   background: var(--bg-card);
-  color: var(--text-secondary);
-  transition: all 0.15s ease;
-}
-
-.import-tab-btn:hover {
-  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
   color: var(--text-primary);
+  font-size: 12px;
 }
-
-.import-tab-btn.active {
-  background: var(--accent-blue);
-  color: white;
+.cal-provider-config input:focus {
+  border-color: var(--accent-cyan);
+  outline: none;
 }
-
-.import-panel {
-  display: none;
-}
-
-.import-panel.active {
+.cal-provider-config small {
   display: block;
-}
-
-.import-panel small {
-  display: block;
-  margin-top: 8px;
+  margin-top: 4px;
   font-size: 10px;
   color: var(--text-muted);
 }
 
-#import-url-panel input {
-  width: 100%;
-  padding: 8px;
-  background: var(--bg-primary);
+/* Day toggle grid */
+.day-toggle-grid {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.day-toggle {
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 600;
   border: 1px solid var(--border-color);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.day-toggle.active {
+  background: rgba(91, 140, 255, 0.12);
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+/* Next event card */
+.next-event-card {
+  background: linear-gradient(135deg, rgba(91,140,255,0.08), rgba(118,201,255,0.06));
+  border: 1px solid var(--accent-blue);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  margin-top: 12px;
+  text-align: center;
+}
+.next-event-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.next-event-name {
+  font-size: 16px;
+  font-weight: 600;
   color: var(--text-primary);
+  margin: 4px 0;
+}
+.next-event-time {
   font-size: 12px;
+  color: var(--accent-cyan);
   margin-bottom: 8px;
 }
 
-#import-url-panel input:focus {
-  border-color: var(--accent-cyan);
-  outline: none;
+.btn-sm {
+  font-size: 11px;
+  padding: 5px 12px;
+}
 }
 
 .calendar-events {
