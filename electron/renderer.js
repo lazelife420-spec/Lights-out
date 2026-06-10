@@ -152,6 +152,20 @@ const fallbackApi = (() => {
       routerPass: '', deviceMacs: [], deviceIps: [], webhookUrl: '', webhookHeaders: {},
       blockOnDim: true, unblockOnCancel: true
     }),
+    contentBlock: async () => ({ success: true }),
+    contentUnblock: async () => ({ success: true }),
+    contentBlockStatus: async () => ({ blocked: false, sites: [] }),
+    saveContentBlockerSettings: async () => {},
+    getContentBlockerSettings: async () => ({
+      enabled: false, blockOnDim: true, unblockOnComplete: true, blocklist: [], useDefault: true
+    }),
+    onContentBlocked: (cb) => {},
+    saveAccountabilitySettings: async () => {},
+    getAccountabilitySettings: async () => ({
+      enabled: false, notifyOnStart: true, notifyOnSnooze: true, notifyOnCancel: true,
+      notifyOnComplete: true, partners: []
+    }),
+    testAccountabilityPartner: async () => ({ success: true }),
     addCustomSequence: async () => null,
     removeCustomSequence: async () => ({ success: true }),
     getOpenBrowsers: async () => [],
@@ -353,6 +367,38 @@ const els = {
   btnWifiBlockTest: document.getElementById('btn-wifi-block-test'),
   btnWifiUnblockTest: document.getElementById('btn-wifi-unblock-test'),
   wifiTestResult: document.getElementById('wifi-test-result'),
+
+  // Content Blocker
+  chkContentBlocker: document.getElementById('chk-content-blocker'),
+  contentBlockerConfig: document.getElementById('content-blocker-config'),
+  chkContentDefault: document.getElementById('chk-content-default'),
+  contentCustomBlocklist: document.getElementById('content-custom-blocklist'),
+  chkContentBlockDim: document.getElementById('chk-content-block-dim'),
+  chkContentUnblockComplete: document.getElementById('chk-content-unblock-complete'),
+  btnContentBlockTest: document.getElementById('btn-content-block-test'),
+  btnContentUnblockTest: document.getElementById('btn-content-unblock-test'),
+  contentTestResult: document.getElementById('content-test-result'),
+
+  // Accountability
+  chkAccountability: document.getElementById('chk-accountability'),
+  accountabilityConfig: document.getElementById('accountability-config'),
+  chkAccNotifyStart: document.getElementById('chk-acc-notify-start'),
+  chkAccNotifySnooze: document.getElementById('chk-acc-notify-snooze'),
+  chkAccNotifyCancel: document.getElementById('chk-acc-notify-cancel'),
+  chkAccNotifyComplete: document.getElementById('chk-acc-notify-complete'),
+  accWebhookUrl: document.getElementById('acc-webhook-url'),
+  accPartnerName: document.getElementById('acc-partner-name'),
+  btnAccTest: document.getElementById('btn-acc-test'),
+  accTestResult: document.getElementById('acc-test-result'),
+
+  // Guided Breathing
+  breathingOverlay: document.getElementById('breathing-overlay'),
+  breathingCircle: document.getElementById('breathing-circle'),
+  breathingLabel: document.getElementById('breathing-label'),
+  breathingCount: document.getElementById('breathing-count'),
+  breathingInstruction: document.getElementById('breathing-instruction'),
+  breathingCycles: document.getElementById('breathing-cycles'),
+  btnBreathingStop: document.getElementById('btn-breathing-stop'),
   // Status pill
   statusPill: document.getElementById('status-pill'),
   statusDot: document.getElementById('status-dot'),
@@ -971,6 +1017,7 @@ function applyTimerPayload(data) {
     loadStreaks();
     api.showNotification('Lights Out', state.dryRun ? 'Dry run complete.' : `${actionLabel()} started.`);
     notify(data.message || 'Timer complete', 'success', 5000);
+    stopGuidedBreathing();
   } else if (data.type === 'cancelled') {
     state.running = false;
     state.paused = false;
@@ -979,6 +1026,7 @@ function applyTimerPayload(data) {
     Soundscape.stop();
     hideWarningModal();
     removeWarmFilter();
+    stopGuidedBreathing();
   } else if (data.type === 'warning') {
     SoundSystem.playWarning();
     if (data.message) {
@@ -1280,7 +1328,136 @@ api.onWifiGuardStatus?.(data => {
   if (data?.blocked) notify('WiFi Guard: Internet blocked', 'warning');
   else if (data && !data.blocked) notify('WiFi Guard: Internet restored', 'info');
 });
-  els.btnPlus.addEventListener('click', () => {
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Content Blocker: block social media during wind-down
+// ─────────────────────────────────────────────────────────────────────────────
+
+if (els.chkContentBlocker) {
+  els.chkContentBlocker.addEventListener('change', () => {
+    els.contentBlockerConfig.style.display = els.chkContentBlocker.checked ? '' : 'none';
+  });
+}
+
+if (els.btnContentBlockTest) {
+  els.btnContentBlockTest.addEventListener('click', async () => {
+    els.contentTestResult.textContent = 'Blocking...';
+    try {
+      const result = await api.contentBlock?.();
+      els.contentTestResult.textContent = result.success ? `Blocked ${result.sites} sites!` : `Failed: ${result.error}`;
+      els.contentTestResult.style.color = result.success ? '#4caf50' : '#ff4d4d';
+    } catch { els.contentTestResult.textContent = 'Error (may need admin)'; }
+  });
+}
+
+if (els.btnContentUnblockTest) {
+  els.btnContentUnblockTest.addEventListener('click', async () => {
+    els.contentTestResult.textContent = 'Unblocking...';
+    try {
+      const result = await api.contentUnblock?.();
+      els.contentTestResult.textContent = result.success ? 'Unblocked!' : `Failed: ${result.error}`;
+      els.contentTestResult.style.color = result.success ? '#4caf50' : '#ff4d4d';
+    } catch { els.contentTestResult.textContent = 'Error'; }
+  });
+}
+
+api.onContentBlocked?.(data => {
+  if (data?.blocked) notify(`Content blocked: ${data.sites} sites`, 'warning');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Accountability Partner: notify on timer events
+// ─────────────────────────────────────────────────────────────────────────────
+
+if (els.chkAccountability) {
+  els.chkAccountability.addEventListener('change', () => {
+    els.accountabilityConfig.style.display = els.chkAccountability.checked ? '' : 'none';
+  });
+}
+
+if (els.btnAccTest) {
+  els.btnAccTest.addEventListener('click', async () => {
+    els.accTestResult.textContent = 'Sending...';
+    try {
+      const url = els.accWebhookUrl?.value;
+      const name = els.accPartnerName?.value || 'Partner';
+      if (!url) { els.accTestResult.textContent = 'Enter a webhook URL first'; return; }
+      const results = await api.testAccountabilityPartner?.({
+        type: 'webhook', url, name
+      });
+      const ok = results?.[0]?.success;
+      els.accTestResult.textContent = ok ? 'Notification sent!' : 'Failed to send';
+      els.accTestResult.style.color = ok ? '#4caf50' : '#ff4d4d';
+    } catch { els.accTestResult.textContent = 'Error'; }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Guided Breathing: 4-7-8 technique with ring pulse
+// ─────────────────────────────────────────────────────────────────────────────
+
+const BREATHING_PHASES = [
+  { name: 'Inhale', duration: 4 },
+  { name: 'Hold', duration: 7 },
+  { name: 'Exhale', duration: 8 }
+];
+const BREATHING_CYCLES = 4;
+let breathingActive = false;
+let breathingTimer = null;
+
+function startGuidedBreathing() {
+  if (breathingActive) return;
+  breathingActive = true;
+  let cycle = 0;
+  let phaseIdx = 0;
+  let count = BREATHING_PHASES[0].duration;
+
+  function tick() {
+    if (!breathingActive) return;
+    const phase = BREATHING_PHASES[phaseIdx];
+
+    if (els.breathingOverlay) els.breathingOverlay.classList.add('active');
+    if (els.breathingLabel) els.breathingLabel.textContent = phase.name;
+    if (els.breathingCount) els.breathingCount.textContent = count;
+    if (els.breathingInstruction) els.breathingInstruction.textContent = phase.name.toUpperCase();
+    if (els.breathingCycles) els.breathingCycles.textContent = `Cycle ${cycle + 1} of ${BREATHING_CYCLES}`;
+
+    // Animate the breathing circle.
+    if (els.breathingCircle) {
+      els.breathingCircle.classList.remove('inhale', 'hold', 'exhale');
+      if (phase.name === 'Inhale') els.breathingCircle.classList.add('inhale');
+      else if (phase.name === 'Hold') els.breathingCircle.classList.add('hold');
+      else els.breathingCircle.classList.add('exhale');
+    }
+
+    count--;
+    if (count < 0) {
+      phaseIdx++;
+      if (phaseIdx >= BREATHING_PHASES.length) {
+        phaseIdx = 0;
+        cycle++;
+        if (cycle >= BREATHING_CYCLES) {
+          stopGuidedBreathing();
+          return;
+        }
+      }
+      count = BREATHING_PHASES[phaseIdx].duration;
+    }
+    breathingTimer = setTimeout(tick, 1000);
+  }
+  tick();
+}
+
+function stopGuidedBreathing() {
+  breathingActive = false;
+  if (breathingTimer) { clearTimeout(breathingTimer); breathingTimer = null; }
+  if (els.breathingOverlay) els.breathingOverlay.classList.remove('active');
+  if (els.breathingCircle) els.breathingCircle.classList.remove('inhale', 'hold', 'exhale');
+}
+
+if (els.btnBreathingStop) {
+  els.btnBreathingStop.addEventListener('click', stopGuidedBreathing);
+}  els.btnPlus.addEventListener('click', () => {
     els.timerInput.value = inputValue() + 1;
     setInputFromSeconds(inputSeconds());
   });
@@ -1412,7 +1589,9 @@ api.onWifiGuardStatus?.(data => {
         app: collectAppSettings(),
         customization: state.customization,
         lastLight: state.lastLight,
-        wifiGuard: collectWifiGuardSettings()
+        wifiGuard: collectWifiGuardSettings(),
+        contentBlocker: collectContentBlockerSettings(),
+        accountability: collectAccountabilitySettings()
       });
       if (typeof saved?.runAtLogin === 'boolean') state.runAtLogin = saved.runAtLogin;
     } catch (error) {
@@ -1799,6 +1978,14 @@ async function loadInitialData() {
     if (appSettings.wifiGuard) {
       applyWifiGuardSettings(appSettings.wifiGuard);
     }
+    // Load Content Blocker config
+    if (appSettings.contentBlocker) {
+      applyContentBlockerSettings(appSettings.contentBlocker);
+    }
+    // Load Accountability config
+    if (appSettings.accountability) {
+      applyAccountabilitySettings(appSettings.accountability);
+    }
   } catch {
     els.batteryLevel.textContent = 'N/A';
     els.powerPlan.textContent = previewMode ? 'Preview' : 'Unknown';
@@ -1858,6 +2045,32 @@ function collectWifiGuardSettings() {
   };
 }
 
+function collectContentBlockerSettings() {
+  const customStr = els.contentCustomBlocklist?.value?.trim() || '';
+  const customList = customStr ? customStr.split('\n').map(s => s.trim()).filter(Boolean) : [];
+  return {
+    enabled: els.chkContentBlocker?.checked || false,
+    blockOnDim: els.chkContentBlockDim?.checked ?? true,
+    unblockOnComplete: els.chkContentUnblockComplete?.checked ?? true,
+    blocklist: customList,
+    useDefault: els.chkContentDefault?.checked ?? true
+  };
+}
+
+function collectAccountabilitySettings() {
+  const url = els.accWebhookUrl?.value?.trim() || '';
+  const name = els.accPartnerName?.value?.trim() || 'Partner';
+  const partners = url ? [{ type: 'webhook', url, name }] : [];
+  return {
+    enabled: els.chkAccountability?.checked || false,
+    notifyOnStart: els.chkAccNotifyStart?.checked ?? true,
+    notifyOnSnooze: els.chkAccNotifySnooze?.checked ?? true,
+    notifyOnCancel: els.chkAccNotifyCancel?.checked ?? true,
+    notifyOnComplete: els.chkAccNotifyComplete?.checked ?? false,
+    partners
+  };
+}
+
 function applyWifiGuardSettings(wifi) {
   if (!wifi) return;
   if (els.chkWifiGuard) els.chkWifiGuard.checked = !!wifi.enabled;
@@ -1874,6 +2087,30 @@ function applyWifiGuardSettings(wifi) {
   if (els.chkWifiUnblockCancel) els.chkWifiUnblockCancel.checked = wifi.unblockOnCancel !== false;
   wifiSelectedDevices.macs = wifi.deviceMacs || [];
   wifiSelectedDevices.ips = wifi.deviceIps || [];
+}
+
+function applyContentBlockerSettings(cb) {
+  if (!cb) return;
+  if (els.chkContentBlocker) els.chkContentBlocker.checked = !!cb.enabled;
+  if (els.contentBlockerConfig) els.contentBlockerConfig.style.display = cb.enabled ? '' : 'none';
+  if (els.chkContentDefault) els.chkContentDefault.checked = cb.useDefault !== false;
+  if (els.contentCustomBlocklist) els.contentCustomBlocklist.value = (cb.blocklist || []).join('\n');
+  if (els.chkContentBlockDim) els.chkContentBlockDim.checked = cb.blockOnDim !== false;
+  if (els.chkContentUnblockComplete) els.chkContentUnblockComplete.checked = cb.unblockOnComplete !== false;
+}
+
+function applyAccountabilitySettings(acc) {
+  if (!acc) return;
+  if (els.chkAccountability) els.chkAccountability.checked = !!acc.enabled;
+  if (els.accountabilityConfig) els.accountabilityConfig.style.display = acc.enabled ? '' : 'none';
+  if (els.chkAccNotifyStart) els.chkAccNotifyStart.checked = acc.notifyOnStart !== false;
+  if (els.chkAccNotifySnooze) els.chkAccNotifySnooze.checked = acc.notifyOnSnooze !== false;
+  if (els.chkAccNotifyCancel) els.chkAccNotifyCancel.checked = acc.notifyOnCancel !== false;
+  if (els.chkAccNotifyComplete) els.chkAccNotifyComplete.checked = !!acc.notifyOnComplete;
+  if (acc.partners?.[0]) {
+    if (els.accWebhookUrl) els.accWebhookUrl.value = acc.partners[0].url || '';
+    if (els.accPartnerName) els.accPartnerName.value = acc.partners[0].name || 'Partner';
+  }
 }
 
 function applyCustomization(c) {
@@ -2742,7 +2979,11 @@ api.onMiniModeChanged(isMini => {
 api.onPlaySound(soundType => {
   if (SoundSystem[soundType]) SoundSystem[soundType]();
 });
-api.onPlayLastLight(payload => playLastLight(payload));
+api.onPlayLastLight(payload => {
+  playLastLight(payload);
+  // Start guided breathing alongside Last Light.
+  startGuidedBreathing();
+});
 api.onBrowserWarning?.(data => {
   if (data?.message) notify(data.message, 'warning', 8000);
 });

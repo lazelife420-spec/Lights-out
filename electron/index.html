@@ -532,7 +532,7 @@
         <button class="footer-action" id="btn-widget" title="Desktop widget">&#x1F4CA;</button>
         <button class="footer-action" id="btn-companion" title="Companion PWA">&#x1F4F1;</button>
         <span class="badge update-badge" id="badge-update" style="display:none" title="Update available">UPDATE</span>
-        <span id="version">v8.2.0</span>
+        <span id="version">v9.0.0</span>
       </div>
     </footer>
 
@@ -796,6 +796,108 @@
           </div>
         </div>
 
+        <!-- Content Blocker Section -->
+        <div class="option-section content-blocker-section">
+          <h3>&#x1F6AB; Content Blocker</h3>
+          <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Block social media and doom-scrolling sites during wind-down.</p>
+
+          <div class="option-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="chk-content-blocker">
+              Enable content blocking
+            </label>
+          </div>
+
+          <div id="content-blocker-config" style="display:none">
+            <div class="option-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="chk-content-default" checked>
+                Use default blocklist (TikTok, Instagram, Reddit, YouTube, etc.)
+              </label>
+            </div>
+
+            <div class="option-group">
+              <label>Custom sites to block (one per line)</label>
+              <textarea id="content-custom-blocklist" rows="4" placeholder="example.com&#10;anothersite.com" style="width:100%;font-size:11px"></textarea>
+              <small style="display:block;font-size:9px;color:var(--text-muted);margin-top:2px">Added on top of the default list. Only used if "Use default" is checked, otherwise this IS the list.</small>
+            </div>
+
+            <div class="option-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="chk-content-block-dim" checked>
+                Block sites when dim phase starts
+              </label>
+            </div>
+            <div class="option-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="chk-content-unblock-complete" checked>
+                Unblock sites when timer completes or is cancelled
+              </label>
+            </div>
+
+            <div class="option-group" style="display:flex;gap:8px;align-items:center">
+              <button type="button" id="btn-content-block-test" class="btn-secondary">Test Block</button>
+              <button type="button" id="btn-content-unblock-test" class="btn-secondary">Test Unblock</button>
+              <span id="content-test-result" style="font-size:11px;color:var(--text-muted)"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Accountability Partner Section -->
+        <div class="option-section accountability-section">
+          <h3>&#x1F91D; Accountability Partner</h3>
+          <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Notify your partner when you start, snooze, or cancel wind-down.</p>
+
+          <div class="option-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="chk-accountability">
+              Enable accountability notifications
+            </label>
+          </div>
+
+          <div id="accountability-config" style="display:none">
+            <div class="option-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="chk-acc-notify-start" checked>
+                Notify when wind-down starts
+              </label>
+            </div>
+            <div class="option-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="chk-acc-notify-snooze" checked>
+                Notify when you hit snooze
+              </label>
+            </div>
+            <div class="option-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="chk-acc-notify-cancel" checked>
+                Notify when you cancel
+              </label>
+            </div>
+            <div class="option-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="chk-acc-notify-complete">
+                Notify when timer completes
+              </label>
+            </div>
+
+            <div class="option-group">
+              <label>Partner Webhook URL</label>
+              <input type="url" id="acc-webhook-url" placeholder="https://hooks.slack.com/... or https://discord.com/api/webhooks/...">
+              <small style="display:block;font-size:9px;color:var(--text-muted);margin-top:2px">Works with Discord, Slack, IFTTT, or any JSON webhook.</small>
+            </div>
+            <div class="option-group">
+              <label>Partner Name</label>
+              <input type="text" id="acc-partner-name" placeholder="e.g. Sarah">
+            </div>
+
+            <div class="option-group" style="display:flex;gap:8px;align-items:center">
+              <button type="button" id="btn-acc-test" class="btn-secondary">Test Notification</button>
+              <span id="acc-test-result" style="font-size:11px;color:var(--text-muted)"></span>
+            </div>
+          </div>
+        </div>
+
         <!-- Customization Section -->
         <div class="option-section customize-section">
           <h3>&#x1F3A8; Customize</h3>
@@ -1008,6 +1110,19 @@
       <div class="ll-headline" id="ll-headline"></div>
       <div class="ll-line" id="ll-line"></div>
       <div class="ll-stamp" id="ll-stamp"></div>
+    </div>
+  </div>
+
+  <!-- Guided Breathing Overlay (4-7-8 technique) -->
+  <div class="breathing-overlay" id="breathing-overlay" aria-hidden="true">
+    <div class="breathing-stage">
+      <div class="breathing-circle" id="breathing-circle">
+        <span class="breathing-label" id="breathing-label">Breathe</span>
+        <span class="breathing-count" id="breathing-count">4</span>
+      </div>
+      <div class="breathing-instruction" id="breathing-instruction">Inhale</div>
+      <div class="breathing-cycles" id="breathing-cycles">Cycle 1 of 4</div>
+      <button class="btn-secondary breathing-stop" id="btn-breathing-stop">Stop</button>
     </div>
   </div>
 

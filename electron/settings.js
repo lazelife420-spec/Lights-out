@@ -85,6 +85,21 @@ const DEFAULTS = {
     blockOnDim: true,
     unblockOnCancel: true
   },
+  contentBlocker: {
+    enabled: false,
+    blockOnDim: true,
+    unblockOnComplete: true,
+    blocklist: [],
+    useDefault: true
+  },
+  accountability: {
+    enabled: false,
+    notifyOnStart: true,
+    notifyOnSnooze: true,
+    notifyOnCancel: true,
+    notifyOnComplete: true,
+    partners: []
+  },
   // Persisted running-timer snapshot for crash/quit recovery. null when idle.
   activeTimer: null
 };

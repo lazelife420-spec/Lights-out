@@ -15,6 +15,8 @@ const media = require('./media');
 const unsavedGuard = require('./unsavedGuard');
 const family = require('./family');
 const wifiGuard = require('./wifiGuard');
+const contentBlocker = require('./contentBlocker');
+const accountability = require('./accountability');
 
 const APP_ICON = path.join(__dirname, 'assets', 'icon.ico');
 
@@ -406,6 +408,8 @@ function startTimer(input, legacyAction) {
   timerState.phase = 'focus';
 
   emitTimerUpdate('started');
+  // Accountability: notify partner that wind-down started.
+  sendAccountability('TIMER_STARTED');
   persistActiveTimer();
   setTaskbarProgress(100, 'normal');
 
@@ -494,6 +498,7 @@ function snoozeTimer(seconds = 300) {
   timerState.remainingSeconds += addSeconds;
   timerState.endsAt = new Date(Date.now() + timerState.remainingSeconds * 1000).toISOString();
   emitTimerUpdate('snoozed', { addedSeconds: addSeconds });
+  sendAccountability('TIMER_SNOOZED', { addedSeconds: addSeconds });
   return { success: true, state: { ...timerState } };
 }
 
@@ -509,6 +514,7 @@ function cancelTimer() {
   persistActiveTimer();
   restoreAfterTimer();
   emitTimerUpdate('cancelled');
+  sendAccountability('TIMER_CANCELLED');
   return { success: true };
 }
 
@@ -536,6 +542,7 @@ async function completeTimer() {
 
   // Record a streak event for the completed ritual.
   try { streaks.recordEvent(null, timerState.action, false); } catch {}
+  sendAccountability('TIMER_COMPLETE');
 
   // Unsaved work guardian: check for unsaved work before power action.
   if (!timerState.dryRun) {
@@ -601,6 +608,21 @@ function applyDimPhase(remainingSeconds, totalSeconds) {
       }
     }).catch(() => {});
   }
+  // Content Blocker: block distracting websites during dim phase.
+  const cbConfig = settingsStore.getSection('contentBlocker');
+  if (cbConfig && cbConfig.enabled && cbConfig.blockOnDim !== false) {
+    const sites = (cbConfig.useDefault !== false) ? contentBlocker.DEFAULT_BLOCKLIST : (cbConfig.blocklist || []);
+    contentBlocker.blockSites(sites).then(result => {
+      if (result.success && mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('content-blocked', { sites: result.sites, blocked: true });
+      }
+    }).catch(() => {});
+  }
+  // Progressive screen lockout: make window always-on-top and hide menu during dim.
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setAlwaysOnTop(true, 'floating');
+    mainWindow.setMenuBarVisibility(false);
+  }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('dim-phase-started', { remainingSeconds, totalSeconds });
   }
@@ -657,6 +679,16 @@ function restoreAfterTimer() {
       }
     }).catch(() => {});
   }
+  // Unblock distracting websites.
+  const cbConfig = settingsStore.getSection('contentBlocker');
+  if (cbConfig && cbConfig.enabled && cbConfig.unblockOnComplete !== false) {
+    contentBlocker.unblockSites().catch(() => {});
+  }
+  // Undo progressive lockout: restore normal window behavior.
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setAlwaysOnTop(false);
+    mainWindow.setMenuBarVisibility(true);
+  }
 }
 
 // First Light: the morning bookend to Last Light.
@@ -700,6 +732,31 @@ function formatAction(action) {
     logout: 'Log out'
   };
   return labels[action] || 'Power action';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Accountability Partner: notify on timer events
+// ─────────────────────────────────────────────────────────────────────────────
+
+function sendAccountability(eventType, extra = {}) {
+  const accConfig = settingsStore.getSection('accountability');
+  if (!accConfig || !accConfig.enabled) return;
+  // Only send for events the user has enabled.
+  const eventMap = {
+    'TIMER_STARTED': accConfig.notifyOnStart,
+    'TIMER_SNOOZED': accConfig.notifyOnSnooze,
+    'TIMER_CANCELLED': accConfig.notifyOnCancel,
+    'TIMER_COMPLETE': accConfig.notifyOnComplete
+  };
+  if (eventMap[eventType] === false) return;
+  const appSettings = settingsStore.getSection('app') || {};
+  accountability.notifyPartner(eventType, {
+    config: accConfig,
+    timerName: appSettings.timerName || 'Witching Hour',
+    remainingSeconds: timerState.remainingSeconds,
+    phase: timerState.phase,
+    ...extra
+  }).catch(() => {}); // best-effort, never block
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1082,6 +1139,32 @@ ipcMain.handle('save-wifi-guard-settings', async (e, wifiSettings) => {
 });
 ipcMain.handle('get-wifi-guard-settings', async () => {
   return settingsStore.getSection('wifiGuard');
+});
+ipcMain.handle('content-block', async (e, blocklist) => {
+  return contentBlocker.blockSites(blocklist);
+});
+ipcMain.handle('content-unblock', async () => {
+  return contentBlocker.unblockSites();
+});
+ipcMain.handle('content-block-status', async () => {
+  return { blocked: contentBlocker.isBlocked(), sites: contentBlocker.getActiveBlocklist() };
+});
+ipcMain.handle('save-content-blocker-settings', async (e, s) => {
+  settingsStore.setSection('contentBlocker', s);
+  return { saved: true };
+});
+ipcMain.handle('get-content-blocker-settings', async () => {
+  return settingsStore.getSection('contentBlocker');
+});
+ipcMain.handle('save-accountability-settings', async (e, s) => {
+  settingsStore.setSection('accountability', s);
+  return { saved: true };
+});
+ipcMain.handle('get-accountability-settings', async () => {
+  return settingsStore.getSection('accountability');
+});
+ipcMain.handle('test-accountability-partner', async (e, partner) => {
+  return accountability.testPartner(partner);
 });
 ipcMain.handle('resume-recoverable-timer', async () => {
   const snapshot = getRecoverableTimer();

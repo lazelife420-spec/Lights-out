@@ -166,5 +166,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   wifiGuardBlock: () => ipcRenderer.invoke('wifi-guard-block'),
   wifiGuardUnblock: () => ipcRenderer.invoke('wifi-guard-unblock'),
   saveWifiGuardSettings: (s) => ipcRenderer.invoke('save-wifi-guard-settings', s),
-  getWifiGuardSettings: () => ipcRenderer.invoke('get-wifi-guard-settings')
+  getWifiGuardSettings: () => ipcRenderer.invoke('get-wifi-guard-settings'),
+
+  // Content Blocker
+  contentBlock: (list) => ipcRenderer.invoke('content-block', list),
+  contentUnblock: () => ipcRenderer.invoke('content-unblock'),
+  contentBlockStatus: () => ipcRenderer.invoke('content-block-status'),
+  saveContentBlockerSettings: (s) => ipcRenderer.invoke('save-content-blocker-settings', s),
+  getContentBlockerSettings: () => ipcRenderer.invoke('get-content-blocker-settings'),
+  onContentBlocked: (cb) => ipcRenderer.on('content-blocked', (e, data) => cb(data)),
+
+  // Accountability
+  saveAccountabilitySettings: (s) => ipcRenderer.invoke('save-accountability-settings', s),
+  getAccountabilitySettings: () => ipcRenderer.invoke('get-accountability-settings'),
+  testAccountabilityPartner: (p) => ipcRenderer.invoke('test-accountability-partner', p)
 });
