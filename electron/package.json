@@ -30,6 +30,8 @@
       "settings.js",
       "lastLight.js",
       "streaks.js",
+      "alarm.js",
+      "updater.js",
       "widget.html",
       "assets/**"
     ],

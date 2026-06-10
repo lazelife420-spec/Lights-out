@@ -1243,6 +1243,18 @@ body.warm-shift .cockpit {
   color: #111418 !important;
 }
 
+/* Update badge */
+.update-badge {
+  background: var(--accent-green) !important;
+  color: #111418 !important;
+  cursor: pointer;
+  animation: badge-pulse 2s ease infinite;
+}
+@keyframes badge-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
 /* Mini mode */
 body.mini-mode {
   overflow: hidden;
@@ -1581,6 +1593,22 @@ body.mini-mode .action-btn {
   margin-bottom: 2px;
 }
 
+.profile-item-name-input {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 1px 4px;
+  width: 100%;
+  outline: none;
+}
+.profile-item-name-input:focus {
+  border-color: var(--accent-blue);
+  background: var(--bg-card);
+}
+
 .profile-item-hint {
   font-size: 11px;
   color: var(--text-muted);
@@ -1605,6 +1633,16 @@ body.mini-mode .action-btn {
 .profile-item-btn:hover {
   background: var(--accent-blue);
   color: white;
+}
+
+.profile-item-btn.move-btn {
+  font-size: 9px;
+  padding: 4px 6px;
+}
+
+.profile-item-btn.move-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
 }
 
 .profile-item-btn.delete:hover {

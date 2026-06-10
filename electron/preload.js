@@ -109,5 +109,30 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getOpenBrowsers: () => ipcRenderer.invoke('get-open-browsers'),
   onBrowserWarning: (callback) => {
     ipcRenderer.on('browser-warning', (event, data) => callback(data));
-  }
+  },
+
+  // Wake-up alarm
+  scheduleWakeAlarm: (alarmTime) => ipcRenderer.invoke('schedule-wake-alarm', alarmTime),
+  removeWakeAlarm: () => ipcRenderer.invoke('remove-wake-alarm'),
+  getWakeAlarmStatus: () => ipcRenderer.invoke('get-wake-alarm-status'),
+  onSunriseAlarmStarted: (callback) => {
+    ipcRenderer.on('sunrise-alarm-started', () => callback());
+  },
+  onSunriseAlarmTick: (callback) => {
+    ipcRenderer.on('sunrise-alarm-tick', (event, data) => callback(data));
+  },
+  onSunriseAlarmEnded: (callback) => {
+    ipcRenderer.on('sunrise-alarm-ended', () => callback());
+  },
+
+  // Auto-update
+  checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
+  getUpdateStatus: () => ipcRenderer.invoke('get-update-status'),
+  onUpdateAvailable: (callback) => {
+    ipcRenderer.on('update-available', (event, data) => callback(data));
+  },
+
+  // Data export/import
+  exportAllData: () => ipcRenderer.invoke('export-all-data'),
+  importAllData: (jsonData) => ipcRenderer.invoke('import-all-data', jsonData)
 });

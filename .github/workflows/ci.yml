@@ -39,6 +39,8 @@ jobs:
           node --check calendar.js
           node --check lastLight.js
           node --check streaks.js
+          node --check alarm.js
+          node --check updater.js
 
       - name: Smoke tests
         run: npm run smoke

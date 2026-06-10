@@ -7,6 +7,8 @@ const calendar = require('./calendar');
 const settingsStore = require('./settings');
 const lastLight = require('./lastLight');
 const streaks = require('./streaks');
+const alarm = require('./alarm');
+const updater = require('./updater');
 
 const APP_ICON = path.join(__dirname, 'assets', 'icon.ico');
 
@@ -84,7 +86,8 @@ function parseLaunchOptions(argv) {
     minimized: false,
     noAutoStart: false,
     timerMinutes: 0,
-    action: 'shutdown'
+    action: 'shutdown',
+    wakeAlarm: false
   };
 
   for (const arg of argv) {
@@ -93,6 +96,7 @@ function parseLaunchOptions(argv) {
     if (lower === '--no-auto-start') options.noAutoStart = true;
     if (lower.startsWith('--timer=')) options.timerMinutes = Number(lower.split('=')[1]) || 0;
     if (lower.startsWith('--action=')) options.action = lower.split('=')[1] || 'shutdown';
+    if (lower === '--wake-alarm') options.wakeAlarm = true;
   }
 
   return options;
@@ -535,8 +539,23 @@ function applyDimPhase(remainingSeconds, totalSeconds) {
       'Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\CloudStore\\Store\\DefaultAccount\\Current\\default$windows.data.bluelightreduction\\windows.data.bluelightreduction.bluelightreductionstate" -Name "Data" -Value ([byte[]](2,0,0,0) ) -ErrorAction SilentlyContinue'
     ).catch(() => { /* Night Light registry path may not exist on all systems */ });
   }
+  // Enable Windows dark mode (system-wide) during wind-down.
+  applyNightMode(true);
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('dim-phase-started', { remainingSeconds, totalSeconds });
+  }
+}
+
+function applyNightMode(enable) {
+  const val = enable ? 0 : 1; // 0 = dark, 1 = light (AppsUseLightTheme)
+  const cmds = [
+    // System apps theme
+    `Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize' -Name 'AppsUseLightTheme' -Value ${val} -Type DWord -ErrorAction SilentlyContinue`,
+    // System theme
+    `Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize' -Name 'SystemUsesLightTheme' -Value ${val} -Type DWord -ErrorAction SilentlyContinue`
+  ];
+  for (const cmd of cmds) {
+    executePowerShell(cmd).catch(() => {});
   }
 }
 
@@ -545,10 +564,43 @@ function restoreAfterTimer() {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setOpacity(1);
   // Tell renderer to end dim phase.
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('dim-phase-ended');
+  // Restore Windows light theme.
+  applyNightMode(false);
   // Disable Windows Night Light (restore original state).
   executePowerShell(
     'Remove-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\CloudStore\\Store\\DefaultAccount\\Current\\default$windows.data.bluelightreduction\\windows.data.bluelightreduction.bluelightreductionstate" -Name "Data" -ErrorAction SilentlyContinue'
   ).catch(() => {});
+}
+
+// Sunrise alarm: gradually increases window opacity from 0 to 1 over
+// SUNRISE_DURATION seconds, and plays a gentle chime. Called when the app
+// is launched via the --wake-alarm scheduled task.
+const SUNRISE_DURATION = 60; // 60 seconds of gradual brightening
+
+function playSunriseAlarm() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.show();
+  mainWindow.setOpacity(0);
+  mainWindow.webContents.send('sunrise-alarm-started');
+
+  let elapsed = 0;
+  const interval = setInterval(() => {
+    elapsed++;
+    const progress = Math.min(1, elapsed / SUNRISE_DURATION);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setOpacity(progress);
+      mainWindow.webContents.send('sunrise-alarm-tick', { progress, elapsed });
+    }
+    if (elapsed >= SUNRISE_DURATION) {
+      clearInterval(interval);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setOpacity(1);
+        mainWindow.webContents.send('sunrise-alarm-ended');
+      }
+      // Clean up the scheduled task after it fires.
+      alarm.removeWakeAlarm().catch(() => {});
+    }
+  }, 1000);
 }
 
 function formatAction(action) {
@@ -762,6 +814,61 @@ ipcMain.handle('remove-custom-sequence', async (event, id) => {
 });
 ipcMain.handle('get-open-browsers', async () => {
   try { return await getOpenBrowsers(); } catch { return []; }
+});
+
+// Wake-up alarm IPC
+ipcMain.handle('schedule-wake-alarm', async (event, alarmTime) => {
+  const appExePath = process.execPath;
+  return alarm.scheduleWakeAlarm(alarmTime, appExePath);
+});
+ipcMain.handle('remove-wake-alarm', async () => {
+  return alarm.removeWakeAlarm();
+});
+ipcMain.handle('get-wake-alarm-status', async () => {
+  return alarm.getWakeAlarmStatus();
+});
+
+// Auto-update checker
+ipcMain.handle('check-for-update', async () => {
+  return updater.checkForUpdate();
+});
+ipcMain.handle('get-update-status', async () => {
+  return updater.getLastCheckResult();
+});
+
+// Data export/import
+ipcMain.handle('export-all-data', async () => {
+  try {
+    const data = {
+      version: updater.currentVersion,
+      exportedAt: new Date().toISOString(),
+      settings: settingsStore.getAll(),
+      streaks: streaks.getSummary(),
+      profiles: profiles.getAllProfiles()
+    };
+    return { success: true, data };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+ipcMain.handle('import-all-data', async (event, jsonData) => {
+  try {
+    const parsed = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
+    if (!parsed || typeof parsed !== 'object') return { success: false, error: 'Invalid data format' };
+    if (parsed.settings) {
+      for (const [section, value] of Object.entries(parsed.settings)) {
+        if (value && typeof value === 'object') settingsStore.updateSection(section, value);
+      }
+    }
+    if (parsed.profiles && Array.isArray(parsed.profiles)) {
+      for (const p of parsed.profiles) {
+        if (p.name) profiles.create(p);
+      }
+    }
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 });
 ipcMain.handle('resume-recoverable-timer', async () => {
   const snapshot = getRecoverableTimer();
@@ -1064,6 +1171,21 @@ app.whenReady().then(async () => {
   await createTray();
   setupJumpList();
   registerGlobalShortcuts();
+
+  // If launched via --wake-alarm, run the sunrise sequence.
+  if (launchOptions.wakeAlarm) {
+    playSunriseAlarm();
+  }
+
+  // Start periodic update checker.
+  updater.startPeriodicCheck((result) => {
+    if (result.available) {
+      showNativeNotification('Lights Out Update', `v${result.latestVersion} available. Click to download.`);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-available', result);
+      }
+    }
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

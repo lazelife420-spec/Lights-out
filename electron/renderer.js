@@ -132,6 +132,17 @@ const fallbackApi = (() => {
     removeCustomSequence: async () => ({ success: true }),
     getOpenBrowsers: async () => [],
     onBrowserWarning: () => {},
+    scheduleWakeAlarm: async () => ({ success: false, error: 'Preview mode' }),
+    removeWakeAlarm: async () => ({ success: true }),
+    getWakeAlarmStatus: async () => ({ active: false }),
+    onSunriseAlarmStarted: () => {},
+    onSunriseAlarmTick: () => {},
+    onSunriseAlarmEnded: () => {},
+    checkForUpdate: async () => ({ available: false }),
+    getUpdateStatus: async () => ({ available: false }),
+    onUpdateAvailable: () => {},
+    exportAllData: async () => ({ success: false, error: 'Preview mode' }),
+    importAllData: async () => ({ success: false, error: 'Preview mode' }),
     openExternal: url => window.open(url, '_blank', 'noopener'),
     // Profiles fallbacks
     getAllProfiles: async () => [],
@@ -283,7 +294,20 @@ const els = {
   btnSaveCustomSeq: document.getElementById('btn-save-custom-seq'),
   btnCancelCustomSeq: document.getElementById('btn-cancel-custom-seq'),
   // Widget
-  btnWidget: document.getElementById('btn-widget')
+  btnWidget: document.getElementById('btn-widget'),
+  // Alarm
+  chkAlarm: document.getElementById('chk-alarm'),
+  alarmConfig: document.getElementById('alarm-config'),
+  alarmTime: document.getElementById('alarm-time'),
+  btnSetAlarm: document.getElementById('btn-set-alarm'),
+  btnRemoveAlarm: document.getElementById('btn-remove-alarm'),
+  alarmStatus: document.getElementById('alarm-status'),
+  // Update badge
+  badgeUpdate: document.getElementById('badge-update'),
+  // Data export/import
+  btnExportAllData: document.getElementById('btn-export-all-data'),
+  btnImportAllData: document.getElementById('btn-import-all-data'),
+  importAllDataInput: document.getElementById('import-all-data-input')
 };
 
 const state = {
@@ -1323,6 +1347,42 @@ function wireEvents() {
     els.importFileInput.addEventListener('change', importProfiles);
   }
 
+  // All-data export/import
+  els.btnExportAllData?.addEventListener('click', async () => {
+    const result = await api.exportAllData();
+    if (result.success && result.data) {
+      const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `lights-out-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      notify('Data exported successfully', 'success');
+    } else {
+      notify('Export failed: ' + (result.error || 'Unknown error'), 'error');
+    }
+  });
+  els.btnImportAllData?.addEventListener('click', () => {
+    els.importAllDataInput?.click();
+  });
+  els.importAllDataInput?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const result = await api.importAllData(text);
+      if (result.success) {
+        notify('Data imported successfully. Restart to see all changes.', 'success');
+      } else {
+        notify('Import failed: ' + (result.error || 'Unknown error'), 'error');
+      }
+    } catch (err) {
+      notify('Import error: ' + err.message, 'error');
+    }
+    e.target.value = '';
+  });
+
   // Keyboard shortcuts for profiles (Ctrl+1, Ctrl+2, etc.)
   document.addEventListener('keydown', event => {
     if (event.ctrlKey && /^[1-9]$/.test(event.key)) {
@@ -1605,6 +1665,64 @@ function setupWarningHandlers() {
   els.warningModal?.addEventListener('click', event => {
     if (event.target === els.warningModal) hideWarningModal();
   });
+}
+
+// Wake-up alarm handlers
+function setupAlarmHandlers() {
+  els.chkAlarm?.addEventListener('change', () => {
+    if (els.alarmConfig) els.alarmConfig.style.display = els.chkAlarm.checked ? 'block' : 'none';
+  });
+
+  els.btnSetAlarm?.addEventListener('click', async () => {
+    const time = els.alarmTime?.value;
+    if (!time) return;
+    const result = await api.scheduleWakeAlarm(time);
+    if (result.success) {
+      notify(`Wake alarm set for ${time}`, 'success');
+      refreshAlarmStatus();
+    } else {
+      notify(`Alarm failed: ${result.error}`, 'error');
+    }
+  });
+
+  els.btnRemoveAlarm?.addEventListener('click', async () => {
+    await api.removeWakeAlarm();
+    notify('Wake alarm removed', 'info');
+    refreshAlarmStatus();
+  });
+
+  // Sunrise alarm visual feedback.
+  api.onSunriseAlarmStarted?.(() => {
+    notify('Sunrise alarm started', 'success');
+    document.body.classList.add('sunrise-alarm');
+  });
+  api.onSunriseAlarmTick?.((data) => {
+    // Gradually warm the UI during sunrise.
+    const warmth = Math.round(data.progress * 20);
+    document.body.style.filter = `sepia(${warmth}%) brightness(${0.6 + data.progress * 0.4})`;
+  });
+  api.onSunriseAlarmEnded?.(() => {
+    document.body.classList.remove('sunrise-alarm');
+    document.body.style.filter = '';
+    notify('Good morning!', 'success', 5000);
+  });
+
+  refreshAlarmStatus();
+}
+
+async function refreshAlarmStatus() {
+  try {
+    const status = await api.getWakeAlarmStatus();
+    if (els.alarmStatus) {
+      if (status.active) {
+        els.alarmStatus.textContent = `Alarm set for ${status.alarmTime || 'scheduled'}`;
+        els.alarmStatus.style.color = 'var(--accent-green)';
+      } else {
+        els.alarmStatus.textContent = 'No alarm scheduled';
+        els.alarmStatus.style.color = 'var(--text-muted)';
+      }
+    }
+  } catch {}
 }
 
 function updateLastLightUIFromState() {
@@ -1909,21 +2027,39 @@ function renderProfilesList() {
     return;
   }
 
-  els.profilesList.innerHTML = state.profiles.map(profile => {
+  els.profilesList.innerHTML = state.profiles.map((profile, idx) => {
     const hint = getProfileHint(profile);
     return `
       <div class="profile-item" data-profile-id="${profile.id}">
         <div class="profile-item-info">
-          <div class="profile-item-name">${escapeHtml(profile.name)}</div>
+          <input type="text" class="profile-item-name-input" value="${escapeHtml(profile.name)}" data-profile-id="${profile.id}" maxlength="32" spellcheck="false">
           <div class="profile-item-hint">${escapeHtml(hint)}</div>
         </div>
         <div class="profile-item-actions">
+          <button class="profile-item-btn move-btn" data-action="up" data-idx="${idx}" title="Move up" ${idx === 0 ? 'disabled' : ''}>&#9650;</button>
+          <button class="profile-item-btn move-btn" data-action="down" data-idx="${idx}" title="Move down" ${idx === state.profiles.length - 1 ? 'disabled' : ''}>&#9660;</button>
           <button class="profile-item-btn load-btn" data-action="load">Load</button>
           <button class="profile-item-btn delete-btn" data-action="delete">Delete</button>
         </div>
       </div>
     `;
   }).join('');
+
+  // Rename handler (save on blur/enter).
+  els.profilesList.querySelectorAll('.profile-item-name-input').forEach(input => {
+    input.addEventListener('change', async () => {
+      const newName = input.value.trim();
+      const profileId = input.dataset.profileId;
+      if (!newName || !profileId) return;
+      await api.updateProfile(profileId, { name: newName });
+      await loadProfiles();
+      renderProfiles();
+      renderProfilesList();
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') input.blur();
+    });
+  });
 
   // Add event handlers
   els.profilesList.querySelectorAll('.profile-item-btn').forEach(btn => {
@@ -1937,6 +2073,16 @@ function renderProfilesList() {
         closeProfilesModal();
       } else if (action === 'delete') {
         await deleteProfile(profileId);
+      } else if (action === 'up' || action === 'down') {
+        const idx = parseInt(btn.dataset.idx);
+        const newIdx = action === 'up' ? idx - 1 : idx + 1;
+        if (newIdx < 0 || newIdx >= state.profiles.length) return;
+        const ids = state.profiles.map(p => p.id);
+        [ids[idx], ids[newIdx]] = [ids[newIdx], ids[idx]];
+        await api.reorderProfiles(ids);
+        await loadProfiles();
+        renderProfiles();
+        renderProfilesList();
       }
     });
   });
@@ -2241,9 +2387,21 @@ api.onBrowserWarning?.(data => {
   if (data?.message) notify(data.message, 'warning', 8000);
 });
 
+api.onUpdateAvailable?.(data => {
+  if (data?.available && els.badgeUpdate) {
+    els.badgeUpdate.style.display = '';
+    els.badgeUpdate.textContent = `v${data.latestVersion}`;
+    els.badgeUpdate.style.cursor = 'pointer';
+    els.badgeUpdate.addEventListener('click', () => {
+      api.openExternal?.(data.downloadUrl || data.releaseUrl);
+    }, { once: true });
+  }
+});
+
 wireEvents();
 setupCustomizeHandlers();
 setupLastLightHandlers();
 setupWarningHandlers();
+setupAlarmHandlers();
 setAction(state.action);
 loadInitialData().finally(render);
