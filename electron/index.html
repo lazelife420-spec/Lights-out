@@ -196,6 +196,7 @@
             <circle class="ring-progress" cx="100" cy="100" r="90"/>
           </svg>
           <div class="timer-display">
+            <div class="timer-name" id="timer-name" contenteditable="true" spellcheck="false" data-placeholder="Name this session">Witching Hour</div>
             <div class="time-main" id="timer-main">28:20</div>
             <div class="time-label" id="timer-label">until shutdown</div>
           </div>
@@ -441,7 +442,7 @@
       <div class="footer-right">
         <button class="footer-action" id="btn-widget" title="Desktop widget">&#x1F4CA;</button>
         <span class="badge update-badge" id="badge-update" style="display:none" title="Update available">UPDATE</span>
-        <span id="version">v7.0.0</span>
+        <span id="version">v7.1.0</span>
       </div>
     </footer>
 
@@ -582,14 +583,14 @@
           </div>
         </div>
 
-        <!-- Wake-up Alarm Section -->
+        <!-- First Light Section -->
         <div class="option-section alarm-section">
-          <h3>&#x1F305; Wake-up Alarm</h3>
+          <h3>&#x1F305; First Light</h3>
 
           <div class="option-group">
             <label class="checkbox-label">
               <input type="checkbox" id="chk-alarm">
-              Set a sunrise wake-up alarm
+              Set a First Light sunrise alarm
             </label>
           </div>
           <div id="alarm-config" style="display:none">
@@ -598,7 +599,7 @@
               <input type="time" id="alarm-time" value="07:00">
             </div>
             <div class="option-group">
-              <button type="button" id="btn-set-alarm" class="btn-primary">Set Alarm</button>
+              <button type="button" id="btn-set-alarm" class="btn-primary">Set First Light</button>
               <button type="button" id="btn-remove-alarm" class="btn-secondary" style="margin-left:6px">Remove</button>
               <span id="alarm-status" style="margin-left:8px;font-size:11px;color:var(--text-muted)"></span>
             </div>
@@ -606,6 +607,7 @@
               <span style="font-size:10px;color:var(--text-muted)">
                 Works with Sleep or Hibernate: schedules a Windows wake task,
                 then runs a 60-second sunrise brightening sequence on resume.
+                The morning bookend to your Last Light ritual.
               </span>
             </div>
           </div>
@@ -641,6 +643,11 @@
             <label>Ring Style</label>
             <select id="cz-ring">
               <option value="glow">Glow</option>
+              <option value="neon">Neon</option>
+              <option value="sunset">Sunset</option>
+              <option value="ember">Ember</option>
+              <option value="aurora">Aurora</option>
+              <option value="midnight">Midnight</option>
               <option value="solid">Solid</option>
               <option value="minimal">Minimal</option>
             </select>

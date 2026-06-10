@@ -112,18 +112,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('browser-warning', (event, data) => callback(data));
   },
 
-  // Wake-up alarm
+  // First Light (wake-up alarm)
   scheduleWakeAlarm: (alarmTime) => ipcRenderer.invoke('schedule-wake-alarm', alarmTime),
   removeWakeAlarm: () => ipcRenderer.invoke('remove-wake-alarm'),
   getWakeAlarmStatus: () => ipcRenderer.invoke('get-wake-alarm-status'),
-  onSunriseAlarmStarted: (callback) => {
-    ipcRenderer.on('sunrise-alarm-started', () => callback());
+  onFirstLightStarted: (callback) => {
+    ipcRenderer.on('first-light-started', () => callback());
   },
-  onSunriseAlarmTick: (callback) => {
-    ipcRenderer.on('sunrise-alarm-tick', (event, data) => callback(data));
+  onFirstLightTick: (callback) => {
+    ipcRenderer.on('first-light-tick', (event, data) => callback(data));
   },
-  onSunriseAlarmEnded: (callback) => {
-    ipcRenderer.on('sunrise-alarm-ended', () => callback());
+  onFirstLightEnded: (callback) => {
+    ipcRenderer.on('first-light-ended', () => callback());
   },
 
   // Auto-update

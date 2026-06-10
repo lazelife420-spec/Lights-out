@@ -24,7 +24,8 @@ const DEFAULTS = {
     dryRun: false,
     focusBlocklist: [],
     onboarded: false,
-    bedtime: '22:30'
+    bedtime: '22:30',
+    timerName: 'Witching Hour'
   },
   smartLights: {
     enabled: false,

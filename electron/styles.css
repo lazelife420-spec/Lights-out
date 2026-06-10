@@ -546,6 +546,41 @@ body.phase-lastlight .ring-progress {
   text-align: center;
 }
 
+.timer-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  outline: none;
+  transition: all 0.2s ease;
+  min-width: 60px;
+  white-space: nowrap;
+  cursor: text;
+}
+.timer-name:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+  font-style: italic;
+  opacity: 0.5;
+}
+.timer-name:hover {
+  border-color: var(--border-color);
+}
+.timer-name:focus {
+  border-color: var(--accent-blue);
+  background: rgba(91, 140, 255, 0.06);
+  box-shadow: 0 0 8px rgba(91,140,255,0.15);
+}
+.timer-name:active,
+.timer-name:focus {
+  cursor: text;
+}
+
 .time-main {
   font-family: var(--font-mono);
   font-size: 48px;
@@ -2266,6 +2301,64 @@ body.mini-mode .action-btn {
 /* Ring style variants */
 body[data-ring="glow"] .ring-progress {
   filter: drop-shadow(0 0 8px var(--accent-glow, rgba(118, 201, 255, 0.5)));
+}
+
+body[data-ring="neon"] .ring-progress {
+  stroke-width: 10;
+  filter: drop-shadow(0 0 6px var(--accent-cyan)) drop-shadow(0 0 14px var(--accent-cyan)) drop-shadow(0 0 28px rgba(118, 201, 255, 0.3));
+  animation: neonFlicker 4s ease infinite;
+}
+@keyframes neonFlicker {
+  0%, 100% { opacity: 1; }
+  92% { opacity: 1; }
+  93% { opacity: 0.7; }
+  94% { opacity: 1; }
+  96% { opacity: 0.8; }
+  97% { opacity: 1; }
+}
+
+body[data-ring="sunset"] .ring-progress {
+  stroke-width: 12;
+  stroke: url(#sunset-gradient);
+  filter: drop-shadow(0 0 10px rgba(255, 120, 50, 0.4));
+}
+body[data-ring="sunset"] .ring-bg {
+  stroke: rgba(255, 100, 50, 0.08);
+}
+
+body[data-ring="ember"] .ring-progress {
+  stroke-width: 14;
+  stroke-linecap: butt;
+  filter: drop-shadow(0 0 8px rgba(255, 80, 20, 0.5));
+  animation: emberGlow 3s ease infinite;
+}
+@keyframes emberGlow {
+  0%, 100% { filter: drop-shadow(0 0 8px rgba(255, 80, 20, 0.5)); stroke: #ff5014; }
+  50% { filter: drop-shadow(0 0 16px rgba(255, 120, 20, 0.7)); stroke: #ff7814; }
+}
+
+body[data-ring="aurora"] .ring-progress {
+  stroke-width: 10;
+  filter: drop-shadow(0 0 12px rgba(100, 255, 200, 0.4));
+  animation: auroraShift 6s ease infinite;
+}
+@keyframes auroraShift {
+  0%, 100% { stroke: #64ffc8; filter: drop-shadow(0 0 12px rgba(100, 255, 200, 0.4)); }
+  33% { stroke: #4a9eff; filter: drop-shadow(0 0 12px rgba(74, 158, 255, 0.4)); }
+  66% { stroke: #c878ff; filter: drop-shadow(0 0 12px rgba(200, 120, 255, 0.4)); }
+}
+
+body[data-ring="midnight"] .ring-progress {
+  stroke-width: 8;
+  filter: drop-shadow(0 0 6px rgba(40, 60, 100, 0.6));
+  stroke: #283c64;
+}
+body[data-ring="midnight"] .ring-bg {
+  stroke: rgba(30, 40, 70, 0.15);
+}
+body[data-ring="midnight"] .time-main {
+  color: #4a6fa5;
+  text-shadow: 0 0 16px rgba(74, 111, 165, 0.3);
 }
 
 body[data-ring="solid"] .ring-progress {

@@ -5,7 +5,7 @@
 const { spawn } = require('child_process');
 const path = require('path');
 
-const TASK_NAME = 'LightsOut_WakeAlarm';
+const TASK_NAME = 'LightsOut_FirstLight';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Scheduling: uses Windows Task Scheduler to create a one-shot wake task.
@@ -23,10 +23,10 @@ async function scheduleWakeAlarm(alarmTime, appExePath) {
 
   // Build the PowerShell command to create a scheduled task that wakes the PC.
   const psCmd = [
-    `$Action = New-ScheduledTaskAction -Execute '${appExePath.replace(/'/g, "''")}' -Argument '--wake-alarm'`,
+    `$Action = New-ScheduledTaskAction -Execute '${appExePath.replace(/'/g, "''")}' -Argument '--first-light'`,
     `$Trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).Date.AddHours(${hours}).AddMinutes(${minutes})`,
     `$Settings = New-ScheduledTaskSettingsSet -WakeToRun -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable`,
-    `Register-ScheduledTask -TaskName '${TASK_NAME}' -Action $Action -Trigger $Trigger -Settings $Settings -Force -Description 'Lights Out wake-up alarm'`
+    `Register-ScheduledTask -TaskName '${TASK_NAME}' -Action $Action -Trigger $Trigger -Settings $Settings -Force -Description 'Lights Out First Light wake-up alarm'`
   ].join('; ');
 
   try {

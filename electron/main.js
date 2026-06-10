@@ -87,7 +87,8 @@ function parseLaunchOptions(argv) {
     noAutoStart: false,
     timerMinutes: 0,
     action: 'shutdown',
-    wakeAlarm: false
+    wakeAlarm: false,
+    firstLight: false
   };
 
   for (const arg of argv) {
@@ -96,7 +97,7 @@ function parseLaunchOptions(argv) {
     if (lower === '--no-auto-start') options.noAutoStart = true;
     if (lower.startsWith('--timer=')) options.timerMinutes = Number(lower.split('=')[1]) || 0;
     if (lower.startsWith('--action=')) options.action = lower.split('=')[1] || 'shutdown';
-    if (lower === '--wake-alarm') options.wakeAlarm = true;
+    if (lower === '--wake-alarm' || lower === '--first-light') options.firstLight = true;
   }
 
   return options;
@@ -180,31 +181,51 @@ function refreshTrayMenu() {
   if (!tray) return;
 
   const active = timerState.running || timerState.paused;
+  const remaining = active ? formatTime(timerState.remainingSeconds) : '';
+  const phaseLabel = timerState.phase === 'dim' ? 'Dim' : timerState.phase === 'lastlight' ? 'Last Light' : '';
+  const statusLine = active
+    ? (timerState.paused ? `Paused - ${remaining}` : `${phaseLabel ? phaseLabel + ' - ' : ''}${remaining} left`)
+    : 'Idle';
+
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: mainWindow && mainWindow.isVisible() ? 'Hide Lights Out' : 'Show Lights Out',
+      label: `Lights Out  ·  ${statusLine}`,
+      enabled: false
+    },
+    { type: 'separator' },
+    {
+      label: mainWindow && mainWindow.isVisible() ? 'Hide Window' : 'Show Window',
       click: toggleMainWindow
     },
-    { type: 'separator' },
     {
-      label: timerState.paused ? 'Resume Timer' : 'Pause Timer',
-      enabled: active,
-      click: () => (timerState.paused ? resumeTimer() : pauseTimer())
-    },
-    {
-      label: 'Snooze +5 Minutes',
-      enabled: active,
-      click: () => snoozeTimer(300)
-    },
-    {
-      label: 'Cancel Timer',
-      enabled: active,
-      click: cancelTimer
+      label: 'Desktop Widget',
+      type: 'checkbox',
+      checked: widgetMode,
+      click: () => {
+        if (widgetMode) closeWidgetWindow();
+        else createWidgetWindow();
+      }
     },
     { type: 'separator' },
-    { label: 'Start 5 Minutes', click: () => startTimer({ durationSeconds: 5 * 60, action: 'shutdown' }) },
-    { label: 'Start 15 Minutes', click: () => startTimer({ durationSeconds: 15 * 60, action: 'shutdown' }) },
-    { label: 'Start 30 Minutes', click: () => startTimer({ durationSeconds: 30 * 60, action: 'shutdown' }) },
+    ...active ? [
+      {
+        label: timerState.paused ? 'Resume' : 'Pause',
+        click: () => (timerState.paused ? resumeTimer() : pauseTimer())
+      },
+      {
+        label: 'Snooze +5 min',
+        click: () => snoozeTimer(300)
+      },
+      {
+        label: 'Cancel Timer',
+        click: cancelTimer
+      }
+    ] : [
+      { label: '15 min until bed', click: () => startTimer({ durationSeconds: 15 * 60, action: 'shutdown' }) },
+      { label: '30 min until bed', click: () => startTimer({ durationSeconds: 30 * 60, action: 'shutdown' }) },
+      { label: '45 min until bed', click: () => startTimer({ durationSeconds: 45 * 60, action: 'shutdown' }) },
+      { label: '1 hour until bed', click: () => startTimer({ durationSeconds: 60 * 60, action: 'shutdown' }) }
+    ],
     { type: 'separator' },
     {
       label: 'Quit',
@@ -590,30 +611,31 @@ function restoreAfterTimer() {
   ).catch(() => {});
 }
 
-// Sunrise alarm: gradually increases window opacity from 0 to 1 over
-// SUNRISE_DURATION seconds, and plays a gentle chime. Called when the app
-// is launched via the --wake-alarm scheduled task.
-const SUNRISE_DURATION = 60; // 60 seconds of gradual brightening
+// First Light: the morning bookend to Last Light.
+// Gradually increases window opacity from 0 to 1 over FIRST_LIGHT_DURATION
+// seconds, simulating a sunrise. Called when the app launches via the
+// --first-light scheduled task.
+const FIRST_LIGHT_DURATION = 60; // 60 seconds of gradual brightening
 
-function playSunriseAlarm() {
+function playFirstLight() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.show();
   mainWindow.setOpacity(0);
-  mainWindow.webContents.send('sunrise-alarm-started');
+  mainWindow.webContents.send('first-light-started');
 
   let elapsed = 0;
   const interval = setInterval(() => {
     elapsed++;
-    const progress = Math.min(1, elapsed / SUNRISE_DURATION);
+    const progress = Math.min(1, elapsed / FIRST_LIGHT_DURATION);
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.setOpacity(progress);
-      mainWindow.webContents.send('sunrise-alarm-tick', { progress, elapsed });
+      mainWindow.webContents.send('first-light-tick', { progress, elapsed });
     }
-    if (elapsed >= SUNRISE_DURATION) {
+    if (elapsed >= FIRST_LIGHT_DURATION) {
       clearInterval(interval);
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.setOpacity(1);
-        mainWindow.webContents.send('sunrise-alarm-ended');
+        mainWindow.webContents.send('first-light-ended');
       }
       // Clean up the scheduled task after it fires.
       alarm.removeWakeAlarm().catch(() => {});
@@ -1136,6 +1158,7 @@ function setupJumpList() {
 }
 
 function registerGlobalShortcuts() {
+  // Ctrl+Shift+L: Quick 15-min timer
   globalShortcut.register('Ctrl+Shift+L', () => {
     if (mainWindow) {
       mainWindow.show();
@@ -1145,8 +1168,10 @@ function registerGlobalShortcuts() {
     }
   });
 
+  // Ctrl+Shift+S: Show/hide window
   globalShortcut.register('Ctrl+Shift+S', toggleMainWindow);
 
+  // Ctrl+Shift+P: Preview Last Light
   globalShortcut.register('Ctrl+Shift+P', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.show();
@@ -1157,6 +1182,72 @@ function registerGlobalShortcuts() {
         dryRun: true,
         sound: cfg.sound || 'Off'
       });
+    }
+  });
+
+  // Ctrl+Shift+Space: Pause/Resume toggle
+  globalShortcut.register('Ctrl+Shift+Space', () => {
+    if (timerState.paused) {
+      resumeTimer();
+      showNativeNotification('Lights Out', 'Timer resumed');
+    } else if (timerState.running) {
+      pauseTimer();
+      showNativeNotification('Lights Out', 'Timer paused');
+    }
+  });
+
+  // Ctrl+Shift+Z: Snooze +5 min
+  globalShortcut.register('Ctrl+Shift+Z', () => {
+    if (timerState.running || timerState.paused) {
+      snoozeTimer(300);
+      showNativeNotification('Lights Out', 'Snoozed +5 minutes');
+    }
+  });
+
+  // Ctrl+Shift+X: Cancel timer
+  globalShortcut.register('Ctrl+Shift+X', () => {
+    if (timerState.running || timerState.paused) {
+      cancelTimer();
+      showNativeNotification('Lights Out', 'Timer cancelled');
+    }
+  });
+
+  // Ctrl+Shift+1: 30-min timer
+  globalShortcut.register('Ctrl+Shift+1', () => {
+    startTimer({ durationSeconds: 30 * 60, action: 'shutdown' });
+    showNativeNotification('Lights Out', '30 minute timer started');
+  });
+
+  // Ctrl+Shift+2: 45-min timer
+  globalShortcut.register('Ctrl+Shift+2', () => {
+    startTimer({ durationSeconds: 45 * 60, action: 'shutdown' });
+    showNativeNotification('Lights Out', '45 minute timer started');
+  });
+
+  // Ctrl+Shift+3: 60-min timer
+  globalShortcut.register('Ctrl+Shift+3', () => {
+    startTimer({ durationSeconds: 60 * 60, action: 'shutdown' });
+    showNativeNotification('Lights Out', '1 hour timer started');
+  });
+
+  // Ctrl+Shift+4: 90-min timer
+  globalShortcut.register('Ctrl+Shift+4', () => {
+    startTimer({ durationSeconds: 90 * 60, action: 'shutdown' });
+    showNativeNotification('Lights Out', '90 minute timer started');
+  });
+
+  // Ctrl+Shift+W: Toggle widget
+  globalShortcut.register('Ctrl+Shift+W', () => {
+    if (widgetMode) closeWidgetWindow();
+    else createWidgetWindow();
+  });
+
+  // Ctrl+Shift+A: Toggle alarm
+  globalShortcut.register('Ctrl+Shift+A', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
+      mainWindow.webContents.send('toggle-alarm-focus');
     }
   });
 }
@@ -1193,9 +1284,9 @@ app.whenReady().then(async () => {
   setupJumpList();
   registerGlobalShortcuts();
 
-  // If launched via --wake-alarm, run the sunrise sequence.
-  if (launchOptions.wakeAlarm) {
-    playSunriseAlarm();
+  // If launched via --first-light, run the First Light sunrise sequence.
+  if (launchOptions.firstLight) {
+    playFirstLight();
   }
 
   // Start periodic update checker.

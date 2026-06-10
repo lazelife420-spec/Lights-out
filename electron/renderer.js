@@ -136,9 +136,9 @@ const fallbackApi = (() => {
     scheduleWakeAlarm: async () => ({ success: false, error: 'Preview mode' }),
     removeWakeAlarm: async () => ({ success: true }),
     getWakeAlarmStatus: async () => ({ active: false }),
-    onSunriseAlarmStarted: () => {},
-    onSunriseAlarmTick: () => {},
-    onSunriseAlarmEnded: () => {},
+    onFirstLightStarted: () => {},
+    onFirstLightTick: () => {},
+    onFirstLightEnded: () => {},
     checkForUpdate: async () => ({ available: false }),
     getUpdateStatus: async () => ({ available: false }),
     onUpdateAvailable: () => {},
@@ -174,6 +174,7 @@ const els = {
   body: document.body,
   timerMain: document.getElementById('timer-main'),
   timerLabel: document.getElementById('timer-label'),
+  timerName: document.getElementById('timer-name'),
   ringProgress: document.querySelector('.ring-progress'),
   timerInput: document.getElementById('timer-input'),
   btnStart: document.getElementById('btn-start'),
@@ -369,6 +370,8 @@ const state = {
   },
   // Wind-down phase state
   phase: 'idle',
+  // Custom timer name
+  timerName: 'Witching Hour',
   // Profiles state
   profiles: [],
   currentProfileId: null,
@@ -1735,7 +1738,7 @@ function setupAlarmHandlers() {
     if (!time) return;
     const result = await api.scheduleWakeAlarm(time);
     if (result.success) {
-      notify(`Wake alarm set for ${time}`, 'success');
+      notify(`First Light set for ${time}`, 'success');
       refreshAlarmStatus();
     } else {
       notify(`Alarm failed: ${result.error}`, 'error');
@@ -1744,24 +1747,24 @@ function setupAlarmHandlers() {
 
   els.btnRemoveAlarm?.addEventListener('click', async () => {
     await api.removeWakeAlarm();
-    notify('Wake alarm removed', 'info');
+    notify('First Light removed', 'info');
     refreshAlarmStatus();
   });
 
   // Sunrise alarm visual feedback.
-  api.onSunriseAlarmStarted?.(() => {
-    notify('Sunrise alarm started', 'success');
-    document.body.classList.add('sunrise-alarm');
+  api.onFirstLightStarted?.(() => {
+    notify('First Light rising', 'success');
+    document.body.classList.add('first-light-rising');
   });
-  api.onSunriseAlarmTick?.((data) => {
-    // Gradually warm the UI during sunrise.
+  api.onFirstLightTick?.((data) => {
+    // Gradually warm the UI during First Light.
     const warmth = Math.round(data.progress * 20);
     document.body.style.filter = `sepia(${warmth}%) brightness(${0.6 + data.progress * 0.4})`;
   });
-  api.onSunriseAlarmEnded?.(() => {
-    document.body.classList.remove('sunrise-alarm');
+  api.onFirstLightEnded?.(() => {
+    document.body.classList.remove('first-light-rising');
     document.body.style.filter = '';
-    notify('Good morning!', 'success', 5000);
+    notify('First Light complete. Good morning.', 'success', 5000);
   });
 
   refreshAlarmStatus();
@@ -1772,10 +1775,10 @@ async function refreshAlarmStatus() {
     const status = await api.getWakeAlarmStatus();
     if (els.alarmStatus) {
       if (status.active) {
-        els.alarmStatus.textContent = `Alarm set for ${status.alarmTime || 'scheduled'}`;
+        els.alarmStatus.textContent = `First Light at ${status.alarmTime || 'scheduled'}`;
         els.alarmStatus.style.color = 'var(--accent-green)';
       } else {
-        els.alarmStatus.textContent = 'No alarm scheduled';
+        els.alarmStatus.textContent = 'No First Light scheduled';
         els.alarmStatus.style.color = 'var(--text-muted)';
       }
     }
