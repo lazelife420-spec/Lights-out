@@ -21,6 +21,7 @@ const focusSessions = require('./focusSessions');
 const screenTime = require('./screenTime');
 const sleepDebt = require('./sleepDebt');
 const emergencyOverride = require('./emergencyOverride');
+const runReceipts = require('./runReceipts');
 
 const APP_ICON = path.join(__dirname, 'assets', 'icon.ico');
 
@@ -66,6 +67,7 @@ let tray = null;
 let miniMode = false;
 let widgetMode = false;
 let timerInterval = null;
+let activeReceiptId = null;
 
 const launchOptions = parseLaunchOptions(process.argv);
 
@@ -412,6 +414,9 @@ function startTimer(input, legacyAction) {
   timerState.phase = 'focus';
 
   emitTimerUpdate('started');
+  // Create a run receipt for this timer session.
+  const receipt = runReceipts.createRunReceipt(timerState);
+  activeReceiptId = receipt.id;
   // Send screen time reality check to renderer.
   screenTime.getScreenTimeToday().then(st => {
     const msg = screenTime.getRealityCheckMessage(st);
@@ -464,6 +469,8 @@ function startTimer(input, legacyAction) {
       emitTimerUpdate('warning', {
         message: `${formatAction(timerState.action)} in ${timerState.gracePeriod} minutes`
       });
+      // Record warning in receipt.
+      if (activeReceiptId) runReceipts.receiptWarning(activeReceiptId);
       // Fire-and-forget browser awareness check.
       getOpenBrowsers().then(browsers => {
         if (browsers.length > 0 && mainWindow && !mainWindow.isDestroyed()) {
@@ -484,6 +491,7 @@ function startTimer(input, legacyAction) {
 function pauseTimer() {
   if (!timerState.running || timerState.paused) return { success: false };
   timerState.paused = true;
+  if (activeReceiptId) runReceipts.receiptPaused(activeReceiptId);
   emitTimerUpdate('paused');
   persistActiveTimer();
   setTaskbarProgress(
@@ -497,6 +505,7 @@ function resumeTimer() {
   if (!timerState.running || !timerState.paused) return { success: false };
   timerState.paused = false;
   timerState.endsAt = new Date(Date.now() + timerState.remainingSeconds * 1000).toISOString();
+  if (activeReceiptId) runReceipts.updateRunReceipt(activeReceiptId, { notes: 'Resumed' });
   emitTimerUpdate('resumed');
   persistActiveTimer();
   return { success: true, state: { ...timerState } };
@@ -509,6 +518,7 @@ function snoozeTimer(seconds = 300) {
   timerState.remainingSeconds += addSeconds;
   timerState.endsAt = new Date(Date.now() + timerState.remainingSeconds * 1000).toISOString();
   emitTimerUpdate('snoozed', { addedSeconds: addSeconds });
+  if (activeReceiptId) runReceipts.receiptSnoozed(activeReceiptId);
   sendAccountability('TIMER_SNOOZED', { addedSeconds: addSeconds });
   return { success: true, state: { ...timerState } };
 }
@@ -525,6 +535,15 @@ function cancelTimer() {
   persistActiveTimer();
   restoreAfterTimer();
   emitTimerUpdate('cancelled');
+  // Update receipt: cancelled.
+  if (activeReceiptId) {
+    runReceipts.updateRunReceipt(activeReceiptId, {
+      endedAt: new Date().toISOString(),
+      remainingSeconds: timerState.remainingSeconds,
+      result: 'cancelled'
+    });
+    activeReceiptId = null;
+  }
   sendAccountability('TIMER_CANCELLED');
   return { success: true };
 }
@@ -553,6 +572,15 @@ async function completeTimer() {
 
   // Record a streak event for the completed ritual.
   try { streaks.recordEvent(null, timerState.action, false); } catch {}
+  // Update receipt: completing.
+  if (activeReceiptId) {
+    runReceipts.updateRunReceipt(activeReceiptId, {
+      endedAt: new Date().toISOString(),
+      remainingSeconds: 0,
+      result: timerState.dryRun ? 'dry_run_completed' : 'completing',
+      lastLightSequence: settingsStore.getSection('lastLight')?.sequence || null
+    });
+  }
   sendAccountability('TIMER_COMPLETE');
   // Record sleep debt for tonight.
   try {
@@ -889,6 +917,15 @@ async function executePowerAction(options = {}) {
 
   if (dryRun) {
     emitTimerUpdate('dryrun', { action, message: `Dry run: ${formatAction(action)} skipped` });
+    // Update receipt: dry run completed.
+    if (activeReceiptId) {
+      runReceipts.updateRunReceipt(activeReceiptId, {
+        result: 'dry_run_completed',
+        endedAt: new Date().toISOString(),
+        notes: 'Dry run - no power action executed'
+      });
+      activeReceiptId = null;
+    }
     return { success: true, dryRun: true };
   }
 
@@ -917,9 +954,27 @@ async function executePowerAction(options = {}) {
         return { success: false, error: `Unknown action: ${action}` };
     }
 
+    // Update receipt: power executed.
+    if (activeReceiptId) {
+      runReceipts.updateRunReceipt(activeReceiptId, {
+        result: 'power_executed',
+        powerCommand: action + (forceShutdown ? ' /f' : ''),
+        endedAt: new Date().toISOString()
+      });
+      activeReceiptId = null;
+    }
     return { success: true };
   } catch (error) {
     emitTimerUpdate('error', { message: error.message });
+    // Update receipt: blocked/error.
+    if (activeReceiptId) {
+      runReceipts.updateRunReceipt(activeReceiptId, {
+        result: 'error',
+        notes: error.message,
+        endedAt: new Date().toISOString()
+      });
+      activeReceiptId = null;
+    }
     return { success: false, error: error.message };
   }
 }
@@ -1230,6 +1285,20 @@ ipcMain.handle('get-override-consequences', async () => {
 });
 ipcMain.handle('execute-override', async (e, reason) => {
   return emergencyOverride.executeOverride(reason, timerState);
+});
+
+// Run Receipts IPC.
+ipcMain.handle('get-latest-receipt', async () => {
+  return runReceipts.getLatestReceipt();
+});
+ipcMain.handle('list-receipts', async (e, limit) => {
+  return runReceipts.listReceipts(limit || 20);
+});
+ipcMain.handle('clear-receipts', async () => {
+  return runReceipts.clearReceipts();
+});
+ipcMain.handle('get-receipt-stats', async () => {
+  return runReceipts.getReceiptStats();
 });
 ipcMain.handle('resume-recoverable-timer', async () => {
   const snapshot = getRecoverableTimer();
