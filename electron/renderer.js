@@ -892,6 +892,12 @@ function render() {
   els.btnSnooze.disabled = !(state.running || state.paused);
   els.btnPause.querySelector('span:last-child').textContent = state.paused ? 'Resume' : 'Pause';
 
+  // Toggle between setup controls and running action bar.
+  const setupEl = document.getElementById('setup-controls');
+  const runEl = document.getElementById('action-bar-running');
+  if (setupEl) setupEl.style.display = (state.running || state.paused) ? 'none' : '';
+  if (runEl) runEl.style.display = (state.running || state.paused) ? '' : 'none';
+
   els.timerInput.disabled = state.running || state.paused;
   els.btnPlus.disabled = state.running || state.paused;
   els.btnMinus.disabled = state.running || state.paused;

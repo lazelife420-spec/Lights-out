@@ -770,6 +770,39 @@ input:disabled {
   justify-content: center;
 }
 
+.setup-controls {
+  text-align: center;
+  margin-top: 12px;
+}
+
+.setup-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.setup-row input[type="number"] {
+  width: 60px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 600;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  padding: 6px 8px;
+}
+
+.setup-controls .start-btn {
+  margin-bottom: 10px;
+}
+
+.setup-controls .chips-row {
+  margin-top: 4px;
+}
+
 .chips-row {
   display: flex;
   gap: 8px;
@@ -1720,6 +1753,7 @@ body.mini-mode .cockpit {
 body.mini-mode .chrome-header,
 body.mini-mode .input-section,
 body.mini-mode .presets-section,
+body.mini-mode .setup-controls,
 body.mini-mode .status-section,
 body.mini-mode .tabs-section,
 body.mini-mode .app-footer {

@@ -123,17 +123,6 @@
             </div>
           </div>
         </div>
-        <div class="menu-item" id="menu-presets">
-          <span>Presets</span>
-          <div class="submenu">
-            <div class="submenu-item" data-minutes="5">5 Minutes</div>
-            <div class="submenu-item" data-minutes="10">10 Minutes</div>
-            <div class="submenu-item" data-minutes="15">15 Minutes</div>
-            <div class="submenu-item" data-minutes="30">30 Minutes</div>
-            <div class="submenu-item" data-minutes="45">45 Minutes</div>
-            <div class="submenu-item" data-minutes="60">1 Hour</div>
-          </div>
-        </div>
         <div class="menu-item" id="menu-settings">
           <span>Settings</span>
           <div class="submenu">
@@ -202,8 +191,8 @@
           </div>
         </div>
         
-        <!-- Quick Action Bar -->
-        <div class="action-bar">
+        <!-- Quick Action Bar (shown when timer is running) -->
+        <div class="action-bar" id="action-bar-running" style="display:none">
           <button class="action-btn secondary" id="btn-pause">
             <span class="icon">&#x23F8;</span>
             <span>Pause</span>
@@ -217,38 +206,30 @@
             <span>Cancel</span>
           </button>
         </div>
-      </section>
 
-      <!-- Manual Input Section -->
-      <section class="input-section">
-        <div class="input-group">
-          <label>Timer Amount</label>
-          <div class="number-input">
+        <!-- Setup controls (shown when timer is idle) -->
+        <div class="setup-controls" id="setup-controls">
+          <div class="setup-row">
             <button class="num-btn" id="btn-minus">&#x2212;</button>
             <input type="number" id="timer-input" value="28" min="1" max="480">
             <button class="num-btn" id="btn-plus">+</button>
+            <div class="unit-selector">
+              <button class="unit-btn active" data-unit="min">min</button>
+              <button class="unit-btn" data-unit="sec">sec</button>
+            </div>
           </div>
-          <div class="unit-selector">
-            <button class="unit-btn active" data-unit="min">min</button>
-            <button class="unit-btn" data-unit="sec">sec</button>
+          <button class="start-btn" id="btn-start">
+            <span class="icon">&#x25B6;</span>
+            <span>START</span>
+          </button>
+          <div class="chips-row">
+            <button class="chip" data-min="5">5m</button>
+            <button class="chip" data-min="15">15m</button>
+            <button class="chip" data-min="30">30m</button>
+            <button class="chip" data-min="45">45m</button>
+            <button class="chip" data-min="60">1h</button>
+            <button class="chip" data-min="120">2h</button>
           </div>
-        </div>
-        
-        <button class="start-btn" id="btn-start">
-          <span class="icon">&#x25B6;</span>
-          <span>START</span>
-        </button>
-      </section>
-
-      <!-- Preset Chips -->
-      <section class="presets-section">
-        <div class="chips-row">
-          <button class="chip" data-min="5">5m</button>
-          <button class="chip" data-min="10">10m</button>
-          <button class="chip" data-min="15">15m</button>
-          <button class="chip" data-min="30">30m</button>
-          <button class="chip" data-min="60">1h</button>
-          <button class="chip" data-min="120">2h</button>
         </div>
       </section>
 
