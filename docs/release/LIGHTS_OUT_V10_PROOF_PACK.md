@@ -1,9 +1,25 @@
-# Lights Out v10.0.1 Proof Pack
+# Lights Out v10.0.2 Proof Pack
 
-**Version:** 10.0.1
+**Version:** 10.0.2
 
 **Release line:**
-Lights Out v10.0.1 is the zero-friction sleep/shutdown timer: calendar-aware, idle-aware, bedtime-aware, with ambient visuals, smart-light sunrise, and proof-backed Windows builds. v10.0.1 is a patch release that ships real bug fixes found during post-release screenshot review.
+Lights Out v10.0.2 is the zero-friction sleep/shutdown timer: calendar-aware, idle-aware, bedtime-aware, with ambient visuals, smart-light sunrise, and proof-backed Windows builds. v10.0.2 is a patch release that fixes settings persistence, stops the app from changing the Windows desktop theme, adds opt-in wind-down system actions, and ships a UI polish pass.
+
+## Patch v10.0.2 (fixes after v10.0.1)
+
+These are the user-facing fixes and improvements in this patch. All were verified before the `v10.0.2` tag.
+
+- **Settings persistence fix** — the options modal no longer gets reset by render() ticks while open, so toggles (including **Force Shutdown** and **sound off**) actually save. Quick toggles (mute/dry-run/graceful) now persist across relaunch.
+- **No more desktop-theme hijack** — removed `applyNightMode()` and its call sites. The app no longer flips the user's Windows dark/light theme during wind-down or restore.
+- **Opt-in Wind-down system actions (default OFF)** — new settings `nightLightOnDim`, `pauseMediaOnDim`, `lockoutOnDim`, surfaced in a new "Wind-down system actions" settings section. The app never touches the OS unless explicitly enabled.
+- **Menu / window cleanup** — dropdown menus stay clickable (z-index + hover bridge), and the window auto-fits its height to content within the display work area (skipped in mini/maximized/fullscreen).
+- **UI polish** — hero radial glow + glass disc behind the ring, larger countdown hierarchy, calm-blue START, stronger tab states, layered cards with accent rails, tightened layout rhythm, subtle version label. CSS-only; before/after evidence in `docs/release/screenshots/polish/`.
+
+### Patch v10.0.2 verification
+
+- `node --check` (main/renderer/settings/preload): PASS
+- Smoke tests: 41/41 PASS
+- `npm run build`: PASS (portable + installer)
 
 ## Patch v10.0.1 (fixes after v10.0.0 was cut)
 
@@ -27,6 +43,8 @@ These fixes are why a patch was required. They were found and verified after the
 - `75a1f57` original v10 implementation
 - `18748a0` hardening/proof fixes
 - v10.0.1 patch: ambient visuals global export, customize scroll, menu bar, AC power fallback, window height, screenshots
+- `48461d4` v10.0.2: settings persistence, drop desktop-theme hijack, opt-in wind-down toggles, menu/window (#3)
+- `a750430` v10.0.2: hero/tabs/cards UI polish (#4)
 
 ## Build
 
@@ -36,7 +54,7 @@ These fixes are why a patch was required. They were found and verified after the
 
 ## Artifacts
 
-- `Lights Out Setup 10.0.1.exe`
+- `Lights Out Setup 10.0.2.exe`
 - `LightsOut.exe` portable
 - `SHA256SUMS.txt` (checksums for both artifacts, generated in CI release step)
 
@@ -80,10 +98,10 @@ These fixes are why a patch was required. They were found and verified after the
 
 ## Version Alignment
 
-- `package.json` version: `10.0.1`
-- Build output: `Lights Out Setup 10.0.1.exe`
-- HTML footer: `v10.0.1`
-- Git tag: `v10.0.1`
+- `package.json` version: `10.0.2`
+- Build output: `Lights Out Setup 10.0.2.exe`
+- HTML footer: `v10.0.2`
+- Git tag: `v10.0.2`
 
 ## Safety Guarantees
 
