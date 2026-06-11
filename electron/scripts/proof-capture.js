@@ -53,12 +53,15 @@ async function captureApp() {
   await win.webContents.reload();
   await wait(2500);
 
-  // 1. Ready state
+  // 1. Ready state (Dry Run OFF for a clean public hero shot)
   await win.webContents.executeJavaScript(`(function(){
     if (typeof state !== 'undefined') {
       state.running = false; state.paused = false; state.phase = 'idle';
       state.remainingSeconds = 1680; state.totalSeconds = 1680; state.endsAt = null;
+      state.dryRun = false;
     }
+    var chkDry = document.getElementById('chk-dryrun');
+    if (chkDry) chkDry.checked = false;
     document.body.className = document.body.className.replace(/phase-\\w+|is-running|is-paused|warm-shift/g, '').trim();
     if (typeof AmbientVisuals !== 'undefined') AmbientVisuals.stop();
     if (typeof render === 'function') render();
@@ -121,12 +124,11 @@ async function captureApp() {
 }
 
 async function captureRelease() {
-  // Electron cannot load external GitHub URLs (ERR_FAILED).
-  // Use capture-website-cli (Puppeteer-based) instead:
-  //   npx capture-website-cli "$RELEASE_URL" --output="$OUT/05_github_release.png" --width=1200 --height=1000
-  // Or screenshot manually in a browser.
-  console.log('NOTE: GitHub release screenshot must be captured separately.');
-  console.log('  npx capture-website-cli "' + RELEASE_URL + '" --output="' + path.join(OUT, '05_github_release.png') + '" --width=1200 --height=1000');
+  // Repo is private, so unauthenticated headless browsers get 404.
+  // To capture: open the release page in your authenticated browser and screenshot,
+  // or make the repo public first so Puppeteer/capture-website-cli can access it.
+  console.log('NOTE: GitHub release screenshot must be captured manually or after repo goes public.');
+  console.log('  URL: ' + RELEASE_URL);
 }
 
 app.whenReady().then(async () => {
