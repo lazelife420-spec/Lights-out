@@ -131,7 +131,7 @@ function createWindow() {
     resizable: true
   } : {
     width: 520,
-    height: 720,
+    height: 800,
     minWidth: 480,
     minHeight: 600,
     alwaysOnTop: false,
@@ -142,6 +142,7 @@ function createWindow() {
     ...windowConfig,
     frame: true,
     titleBarStyle: 'default',
+    autoHideMenuBar: true,
     show: false,
     icon: APP_ICON,
     webPreferences: {
@@ -735,7 +736,7 @@ function restoreAfterTimer() {
   // Undo progressive lockout: restore normal window behavior.
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.setAlwaysOnTop(false);
-    mainWindow.setMenuBarVisibility(true);
+    mainWindow.setMenuBarVisibility(false);
   }
 }
 

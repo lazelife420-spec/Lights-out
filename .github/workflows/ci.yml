@@ -106,10 +106,18 @@ jobs:
           name: lights-out-windows
           path: dist
 
+      - name: Generate SHA256 checksums
+        working-directory: ${{ github.workspace }}/dist
+        run: |
+          sha256sum LightsOut.exe "Lights Out Setup "*.exe > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          make_latest: true
           files: |
             dist/LightsOut.exe
             dist/Lights Out Setup *.exe
+            dist/SHA256SUMS.txt
           generate_release_notes: true

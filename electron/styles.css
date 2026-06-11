@@ -1313,6 +1313,8 @@ body.phase-lastlight .cockpit {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow-y: auto;
+  max-height: calc(100vh - 120px);
 }
 
 .option-group {

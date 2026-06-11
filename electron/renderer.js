@@ -2359,7 +2359,8 @@ async function loadInitialData() {
     loadMorningProof();
 
     els.batteryLevel.textContent = systemInfo.battery === 'N/A' ? 'N/A' : `${systemInfo.battery}%`;
-    els.powerPlan.textContent = systemInfo.powerPlan || 'Unknown';
+    const pp = systemInfo.powerPlan;
+    els.powerPlan.textContent = (!pp || pp === 'Unknown') ? (systemInfo.battery === 'N/A' ? 'AC Power' : 'Unknown') : pp;
 
     if (typeof appSettings.runAtLogin === 'boolean') {
       state.runAtLogin = appSettings.runAtLogin;
@@ -2416,7 +2417,7 @@ async function loadInitialData() {
     }
   } catch {
     els.batteryLevel.textContent = 'N/A';
-    els.powerPlan.textContent = previewMode ? 'Preview' : 'Unknown';
+    els.powerPlan.textContent = previewMode ? 'Preview' : 'AC Power';
   }
 }
 

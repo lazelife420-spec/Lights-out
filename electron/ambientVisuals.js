@@ -1,8 +1,12 @@
 // Ambient Visuals: canvas-rendered backgrounds during wind-down.
 // Fireplace, rain, starfield, aurora. Makes the experience cinematic.
+// Dual-mode: usable via require() in Node/main and via <script> in the renderer.
 
-// Each visual is a render function that draws one frame.
-// The engine calls the active visual at ~30fps via requestAnimationFrame.
+(function (root, factory) {
+  const mod = factory();
+  if (typeof module !== 'undefined' && module.exports) module.exports = mod;
+  if (root) root.AmbientVisuals = mod;
+})(typeof window !== 'undefined' ? window : null, function () {
 
 let canvas = null;
 let ctx = null;
@@ -243,4 +247,5 @@ function drawAurora() {
 function isActive() { return !!activeVisual; }
 function getActive() { return activeVisual; }
 
-module.exports = { init, start, stop, isActive, getActive, VISUALS };
+return { init, start, stop, isActive, getActive, VISUALS };
+});
