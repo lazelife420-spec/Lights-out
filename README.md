@@ -6,6 +6,18 @@ Set a bedtime. Lights Out handles the rest: a calm wind-down, ambient visuals,
 optional smart-light sunrise, and a deliberate shutdown action when the timer
 ends. No surprise countdowns. No hidden force-quits.
 
+<img src="docs/release/screenshots/v10.0.2/01_ready.png" width="520" alt="Lights Out cockpit - Ready state">
+
+### I built this because I use it every night
+
+I got tired of shutting down my PC the hard way. Command-line timers are fine
+until you typo `shutdown /s /t 3600` and your screen goes black. Task Scheduler
+works but feels like doing taxes at bedtime. I wanted something that felt like
+closing a book, not launching a missile.
+
+Lights Out opens idle. You pick a time, press START, and the app walks you
+through a wind-down. If you change your mind, you cancel. No drama.
+
 ### Free because trust comes first
 
 - **No account.** Nothing to sign up for.
@@ -20,12 +32,14 @@ them up.
 ### Proof-backed releases
 
 Every release ships an installer, a portable build, and SHA256 checksums, built
-and published by CI.
+and published by CI. No hand-edited binaries. No mystery downloads.
 
 - Latest release: https://github.com/Z3r0DayZion-install/lights-out/releases/latest
 - Installer: `Lights Out Setup *.exe`
 - Portable: `LightsOut.exe`
 - Checksums: `SHA256SUMS.txt`
+
+<img src="docs/release/screenshots/v10.0.2/05_github_release.png" width="600" alt="GitHub release page showing v10.0.2 assets and SHA256SUMS">
 
 ## Surfaces
 
@@ -42,6 +56,8 @@ full contributor handoff and which runtime owns a given task.
 
 - Countdown to shutdown, restart, sleep, hibernate, or log out.
 - Start, pause, resume, snooze, cancel, mini mode, tray, and taskbar progress.
+- **Wind-down phase** - ambient visuals (fireplace, rain, starfield, aurora),
+  warm color shift, and optional Night Light / media pause.
 - **Stateful settings** - everything persists to `userData\settings.json` and is
   restored on launch.
 - **Customization console** - accent color, theme (Midnight / Carbon / Aurora),
@@ -52,6 +68,8 @@ full contributor handoff and which runtime owns a given task.
 - **Imminent-action warning** - a grace-period dialog with Snooze / Cancel.
 - **Crash recovery** - an interrupted countdown offers Resume / Dismiss on restart.
 
+<img src="docs/release/screenshots/v10.0.2/03_winddown_ambient.png" width="520" alt="Wind-down phase with fireplace ambient visuals">
+
 ## Why it is safe by default
 
 - Opens idle, never as an instant countdown.
@@ -59,6 +77,11 @@ full contributor handoff and which runtime owns a given task.
   opt-in (Settings) or via the explicitly named
   `Lights Out - Force Shutdown Within 1 Hour.bat`.
 - "Run at login" means start minimized and idle, nothing more.
+- **System actions are opt-in.** Night Light, media pause, and window lockout
+  during wind-down are all OFF by default. The app never touches your OS unless
+  you explicitly enable it.
+
+<img src="docs/release/screenshots/v10.0.2/04_settings_winddown.png" width="520" alt="Settings showing Wind-down system actions all OFF by default">
 
 ## Run the Electron app
 
