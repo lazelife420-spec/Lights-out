@@ -26,6 +26,7 @@ const idleDetection = require('./idleDetection');
 const bedtimeReminder = require('./bedtimeReminder');
 
 const APP_ICON = path.join(__dirname, 'assets', 'icon.ico');
+const TRAY_ICON = path.join(__dirname, 'assets', 'tray-32.png');
 
 // Pre-built tray icon variants (generated on first use).
 let trayIcons = null;
@@ -34,7 +35,7 @@ async function ensureTrayIcons() {
   if (trayIcons) return trayIcons;
   try {
     const sharp = require('sharp');
-    const base16 = await sharp(APP_ICON).resize(16, 16).png().toBuffer();
+    const base16 = await sharp(TRAY_ICON).resize(16, 16).png().toBuffer();
 
     async function withDot(color, opacity) {
       const dotSvg = `<svg width="16" height="16"><circle cx="13" cy="13" r="3" fill="${color}" opacity="${opacity || 0.9}"/></svg>`;

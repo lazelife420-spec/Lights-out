@@ -41,6 +41,13 @@ async function render(svgPath, size) {
     .png()
     .toFile(path.join(assets, 'logo-512.png'));
   console.log('Wrote assets/logo-512.png');
+
+  // Pre-rendered tray glyph (simplified mark) for crisp 16px tray compositing.
+  await sharp(fs.readFileSync(logoSvg), { density: 384 })
+    .resize(32, 32, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png()
+    .toFile(path.join(assets, 'tray-32.png'));
+  console.log('Wrote assets/tray-32.png');
 })().catch(err => {
   console.error(err);
   process.exit(1);

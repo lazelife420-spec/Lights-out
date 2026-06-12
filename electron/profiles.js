@@ -73,7 +73,9 @@ function normalizeProfile(raw) {
   const id = raw.id || generateId();
   const seconds = Math.max(60, Math.round(Number(raw.seconds) || 1800));
   const clock = raw.clock || '23:30';
-  const autoStart = raw.autoStart !== undefined ? Boolean(raw.autoStart) : true;
+  // Auto-start is opt-in (default OFF) so selecting a profile never launches a
+  // power action without the user pressing Start.
+  const autoStart = raw.autoStart !== undefined ? Boolean(raw.autoStart) : false;
 
   return {
     id,

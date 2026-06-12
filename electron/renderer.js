@@ -300,12 +300,27 @@ const els = {
   // Profiles elements
   profilesGrid: document.getElementById('profiles-grid'),
   btnManageProfiles: document.getElementById('btn-manage-profiles'),
+  btnSaveCurrentProfile: document.getElementById('btn-save-current-profile'),
+  profileSavePreview: document.getElementById('profile-save-preview'),
   profilesModal: document.getElementById('profiles-modal'),
   profilesModalClose: document.getElementById('profiles-modal-close'),
   btnCloseProfiles: document.getElementById('btn-close-profiles'),
   newProfileName: document.getElementById('new-profile-name'),
   newProfileAutostart: document.getElementById('new-profile-autostart'),
   btnSaveProfile: document.getElementById('btn-save-profile'),
+  scheduleHint: document.getElementById('schedule-hint'),
+  // Clock face elements
+  czClockFace: document.getElementById('cz-clockface'),
+  analogClock: document.getElementById('analog-clock'),
+  analogTicks: document.getElementById('analog-ticks'),
+  clockHour: document.getElementById('clock-hour'),
+  clockMinute: document.getElementById('clock-minute'),
+  clockSecond: document.getElementById('clock-second'),
+  analogDigital: document.getElementById('analog-digital'),
+  czClockStyle: document.getElementById('cz-clock-style'),
+  czClockHands: document.getElementById('cz-clock-hands'),
+  czClockSeconds: document.getElementById('cz-clock-seconds'),
+  clockStyleGroup: document.getElementById('clock-style-group'),
   profilesList: document.getElementById('profiles-list'),
   btnExportProfiles: document.getElementById('btn-export-profiles'),
   btnImportProfiles: document.getElementById('btn-import-profiles'),
@@ -572,6 +587,14 @@ const state = {
   phase: 'idle',
   // Clock Mode: show current time when idle
   clockMode: true,
+  // Clock face style when idle: 'digital' | 'analog' | 'hybrid'
+  clockFace: 'digital',
+  // Analog/hybrid clock customization.
+  clockStyle: 'modern',
+  clockHandColor: '#76c9ff',
+  clockSeconds: true,
+  // Tracks whether clock mode was dismissed by profile application (restore on cancel).
+  _clockDismissedByProfile: false,
   // Custom timer name
   timerName: 'Witching Hour',
   // Profiles state
@@ -858,7 +881,15 @@ function setInputFromSeconds(seconds) {
 }
 
 function secondsUntilClockValue(timeValue) {
-  const [hours, minutes] = String(timeValue).split(':').map(Number);
+  const raw = String(timeValue || '');
+  // datetime-local value ("YYYY-MM-DDTHH:MM") = an absolute date and time.
+  if (raw.includes('T')) {
+    const target = new Date(raw);
+    if (Number.isNaN(target.getTime())) return inputValue() * 60;
+    return Math.max(60, Math.round((target - new Date()) / 1000));
+  }
+  // Time-only value ("HH:MM") = next occurrence today or tomorrow.
+  const [hours, minutes] = raw.split(':').map(Number);
   if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return inputValue() * 60;
 
   const now = new Date();
@@ -923,7 +954,17 @@ function render() {
     const now = new Date();
     const h = now.getHours().toString().padStart(2, '0');
     const m = now.getMinutes().toString().padStart(2, '0');
-    els.timerMain.textContent = `${h}:${m}`;
+    const face = state.clockFace || 'digital';
+    const showAnalog = face === 'analog' || face === 'hybrid';
+    if (els.analogClock) els.analogClock.style.display = showAnalog ? '' : 'none';
+    if (showAnalog) {
+      updateAnalogHands(now);
+      // Hybrid: show digital readout inside the analog clock face.
+      if (els.analogDigital) els.analogDigital.textContent = face === 'hybrid' ? `${h}:${m}` : '';
+    }
+    // Pure analog hides the digital text; hybrid hides it (readout is inside the SVG); digital shows full HH:MM.
+    els.timerMain.textContent = face === 'analog' || face === 'hybrid' ? '' : `${h}:${m}`;
+    els.timerMain.classList.remove('hybrid-readout');
     // Show next bedtime reminder if configured.
     const bedtime = state.bedtime || '';
     if (bedtime && els.timerLabel) {
@@ -932,6 +973,8 @@ function render() {
       els.timerLabel.textContent = 'ready';
     }
   } else {
+    if (els.analogClock) els.analogClock.style.display = 'none';
+    els.timerMain.classList.remove('hybrid-readout');
     els.timerMain.textContent = formatTime(displaySeconds);
     els.timerLabel.textContent = state.paused
       ? `${actionLabel()} paused`
@@ -1010,6 +1053,39 @@ function render() {
   });
 }
 
+// Build the 12 hour ticks for the analog clock face once.
+function buildAnalogTicks() {
+  if (!els.analogTicks || els.analogTicks.childNodes.length) return;
+  const ns = 'http://www.w3.org/2000/svg';
+  for (let i = 0; i < 12; i++) {
+    const angle = (i * 30) * Math.PI / 180;
+    const major = i % 3 === 0;
+    const inner = major ? 37 : 41;
+    const outer = 45;
+    const line = document.createElementNS(ns, 'line');
+    line.setAttribute('x1', (50 + inner * Math.sin(angle)).toFixed(2));
+    line.setAttribute('y1', (50 - inner * Math.cos(angle)).toFixed(2));
+    line.setAttribute('x2', (50 + outer * Math.sin(angle)).toFixed(2));
+    line.setAttribute('y2', (50 - outer * Math.cos(angle)).toFixed(2));
+    line.setAttribute('class', major ? 'tick major' : 'tick');
+    els.analogTicks.appendChild(line);
+  }
+}
+
+// Rotate the analog clock hands to match the given time.
+function updateAnalogHands(now) {
+  buildAnalogTicks();
+  const sec = now.getSeconds();
+  const min = now.getMinutes();
+  const hr = now.getHours() % 12;
+  const secDeg = sec * 6;
+  const minDeg = min * 6 + sec * 0.1;
+  const hrDeg = hr * 30 + min * 0.5;
+  if (els.clockHour) els.clockHour.setAttribute('transform', `rotate(${hrDeg} 50 50)`);
+  if (els.clockMinute) els.clockMinute.setAttribute('transform', `rotate(${minDeg} 50 50)`);
+  if (els.clockSecond) els.clockSecond.setAttribute('transform', `rotate(${secDeg} 50 50)`);
+}
+
 async function startTimer(seconds = inputSeconds()) {
   const durationSeconds = Math.max(1, Math.round(seconds));
 
@@ -1049,6 +1125,11 @@ async function cancelTimer() {
     state.remainingSeconds = inputSeconds();
     state.totalSeconds = state.remainingSeconds;
     state.endsAt = null;
+    // Restore clock mode if it was dismissed by applying a profile.
+    if (state._clockDismissedByProfile) {
+      state.clockMode = true;
+      state._clockDismissedByProfile = false;
+    }
     render();
     notify('Timer cancelled', 'info');
   } catch (error) {
@@ -1112,6 +1193,7 @@ function applyTimerPayload(data) {
     state.remainingSeconds = inputSeconds();
     state.totalSeconds = state.remainingSeconds;
     state.endsAt = null;
+    if (state._clockDismissedByProfile) { state.clockMode = true; state._clockDismissedByProfile = false; }
     state.phase = 'idle';
     SoundSystem.playComplete();
     Soundscape.fadeToZero(2);
@@ -1276,7 +1358,31 @@ function selectClockTarget(timeValue) {
   const seconds = secondsUntilClockValue(timeValue);
   state.unit = 'min';
   setInputFromSeconds(seconds);
-  notify(`Target selected: ${timeValue}`, 'info');
+  updateScheduleHint(seconds, timeValue);
+  notify('Schedule target selected', 'info');
+}
+
+// Format a "YYYY-MM-DDTHH:MM" default for the schedule picker: next occurrence of bedtime.
+function defaultScheduleDateTime(hhmm) {
+  const [h, m] = String(hhmm || '22:30').split(':').map(Number);
+  const t = new Date();
+  t.setHours(Number.isFinite(h) ? h : 22, Number.isFinite(m) ? m : 30, 0, 0);
+  if (t <= new Date()) t.setDate(t.getDate() + 1);
+  const pad = n => String(n).padStart(2, '0');
+  return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}T${pad(t.getHours())}:${pad(t.getMinutes())}`;
+}
+
+// Show a plain-language summary of when a scheduled action will fire.
+function updateScheduleHint(seconds, timeValue) {
+  if (!els.scheduleHint) return;
+  if (!timeValue) { els.scheduleHint.textContent = ''; return; }
+  const h = Math.floor(seconds / 3600);
+  const m = Math.round((seconds % 3600) / 60);
+  const parts = [];
+  if (h) parts.push(`${h}h`);
+  parts.push(`${m}m`);
+  const when = String(timeValue).includes('T') ? new Date(timeValue).toLocaleString() : timeValue;
+  els.scheduleHint.textContent = `${actionLabel()} in ${parts.join(' ')} \u2014 ${when}`;
 }
 
 function applyTonightCard(card) {
@@ -2093,13 +2199,51 @@ function renderReceiptsModal(receipts, stats) {
   });
 
   els.scheduleCheck?.addEventListener('change', () => {
-    if (els.scheduleCheck.checked) selectClockTarget(els.scheduleTime.value);
+    if (els.scheduleCheck.checked) {
+      if (els.scheduleTime && !els.scheduleTime.value) {
+        els.scheduleTime.value = defaultScheduleDateTime(state.bedtime || '22:30');
+      }
+      selectClockTarget(els.scheduleTime.value);
+    } else if (els.scheduleHint) {
+      els.scheduleHint.textContent = '';
+    }
     render();
   });
 
   els.scheduleTime?.addEventListener('change', () => {
     if (els.scheduleCheck.checked) selectClockTarget(els.scheduleTime.value);
   });
+
+  if (els.czClockFace) {
+    els.czClockFace.addEventListener('change', () => {
+      state.clockFace = els.czClockFace.value || 'digital';
+      updateClockStyleVisibility();
+      render();
+    });
+  }
+
+  if (els.czClockStyle) {
+    els.czClockStyle.addEventListener('change', () => {
+      state.clockStyle = els.czClockStyle.value || 'modern';
+      applyClockStyle();
+      render();
+    });
+  }
+
+  if (els.czClockHands) {
+    els.czClockHands.addEventListener('input', () => {
+      state.clockHandColor = els.czClockHands.value || '#76c9ff';
+      applyClockStyle();
+    });
+  }
+
+  if (els.czClockSeconds) {
+    els.czClockSeconds.addEventListener('change', () => {
+      state.clockSeconds = els.czClockSeconds.checked;
+      applyClockStyle();
+      render();
+    });
+  }
 
   document.addEventListener('keydown', event => {
     if (event.target.tagName === 'INPUT' || event.target.tagName === 'SELECT') {
@@ -2159,8 +2303,35 @@ function renderReceiptsModal(receipts, stats) {
   });
 
   document.addEventListener('contextmenu', event => {
-    if (!previewMode) event.preventDefault();
+    if (previewMode) return; // browser fallback: leave the native menu alone
+    event.preventDefault();
+
+    const card = event.target.closest ? event.target.closest('.profile-card') : null;
+    if (card && card.dataset.profileId) {
+      const profileId = card.dataset.profileId;
+      showContextMenu(event.clientX, event.clientY, [
+        { label: '\u25B6  Start', action: () => applyProfile(profileId, { start: true }) },
+        { label: '\u270E  Edit\u2026', action: () => openProfilesModal() },
+        { label: '\u2715  Delete', danger: true, action: () => deleteProfile(profileId) }
+      ]);
+      return;
+    }
+
+    const clock = event.target.closest ? event.target.closest('.timer-display') : null;
+    if (clock && state.clockMode && !state.running && !state.paused) {
+      cycleClockFace();
+    }
   });
+
+  // Dismiss the custom context menu on outside interaction.
+  document.addEventListener('mousedown', event => {
+    if (contextMenuEl && !contextMenuEl.contains(event.target)) closeContextMenu();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') closeContextMenu();
+  });
+  window.addEventListener('blur', closeContextMenu);
+  window.addEventListener('scroll', closeContextMenu, true);
 
   // Smart Lights event handlers
   if (els.chkSmartLights) {
@@ -2251,6 +2422,13 @@ function renderReceiptsModal(receipts, stats) {
   if (els.btnManageProfiles) {
     els.btnManageProfiles.addEventListener('click', () => {
       openProfilesModal();
+    });
+  }
+
+  if (els.btnSaveCurrentProfile) {
+    els.btnSaveCurrentProfile.addEventListener('click', () => {
+      openProfilesModal();
+      setTimeout(() => els.newProfileName?.focus(), 50);
     });
   }
 
@@ -2473,7 +2651,11 @@ function collectAppSettings() {
     nightLightOnDim: els.chkNightlightDim?.checked || false,
     pauseMediaOnDim: els.chkPauseMediaDim?.checked || false,
     lockoutOnDim: els.chkLockoutDim?.checked || false,
-    clockMode: els.chkClockMode?.checked || false
+    clockMode: els.chkClockMode?.checked || false,
+    clockFace: els.czClockFace?.value || 'digital',
+    clockStyle: els.czClockStyle?.value || 'modern',
+    clockHandColor: els.czClockHands?.value || '#76c9ff',
+    clockSeconds: els.czClockSeconds ? els.czClockSeconds.checked : true
   };
 }
 
@@ -2504,8 +2686,36 @@ function applyAppSettings(app) {
   if (els.chkLockoutDim) els.chkLockoutDim.checked = !!app.lockoutOnDim;
   if (els.chkClockMode) els.chkClockMode.checked = app.clockMode !== false;
   state.clockMode = app.clockMode !== false;
+  if (state.clockMode) state._clockDismissedByProfile = false; // explicit re-enable clears dismissal
+  state.clockFace = app.clockFace || 'digital';
+  if (els.czClockFace) els.czClockFace.value = state.clockFace;
+  state.clockStyle = app.clockStyle || 'modern';
+  state.clockHandColor = app.clockHandColor || '#76c9ff';
+  state.clockSeconds = app.clockSeconds !== false;
+  if (els.czClockStyle) els.czClockStyle.value = state.clockStyle;
+  if (els.czClockHands) els.czClockHands.value = state.clockHandColor;
+  if (els.czClockSeconds) els.czClockSeconds.checked = state.clockSeconds;
+  applyClockStyle();
+  updateClockStyleVisibility();
   state.bedtime = app.bedtime || '';
   render();
+}
+
+// Apply the clock style preset, hand color, and second-hand visibility to the analog SVG.
+function applyClockStyle() {
+  if (!els.analogClock) return;
+  const style = state.clockStyle || 'modern';
+  els.analogClock.classList.remove('style-modern', 'style-bold', 'style-minimal', 'style-neon');
+  els.analogClock.classList.add('style-' + style);
+  els.analogClock.classList.toggle('hide-seconds', state.clockSeconds === false);
+  els.analogClock.style.setProperty('--clock-hand-color', state.clockHandColor || '#76c9ff');
+}
+
+// Clock customization controls only apply to analog/hybrid faces; hide them for digital.
+function updateClockStyleVisibility() {
+  if (!els.clockStyleGroup) return;
+  const showsAnalog = state.clockFace === 'analog' || state.clockFace === 'hybrid';
+  els.clockStyleGroup.style.display = showsAnalog ? '' : 'none';
 }
 
 function collectWifiGuardSettings() {
@@ -3071,7 +3281,54 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-async function applyProfile(profileId) {
+let contextMenuEl = null;
+
+function closeContextMenu() {
+  if (contextMenuEl) {
+    contextMenuEl.remove();
+    contextMenuEl = null;
+  }
+}
+
+function showContextMenu(x, y, items) {
+  closeContextMenu();
+  const menu = document.createElement('div');
+  menu.className = 'context-menu';
+  menu.id = 'app-context-menu';
+  items.forEach(item => {
+    const btn = document.createElement('button');
+    btn.className = 'context-menu-item' + (item.danger ? ' danger' : '');
+    btn.textContent = item.label;
+    btn.addEventListener('click', () => {
+      closeContextMenu();
+      try { item.action(); } catch (_) { /* no-op */ }
+    });
+    menu.appendChild(btn);
+  });
+  menu.style.visibility = 'hidden';
+  document.body.appendChild(menu);
+  const rect = menu.getBoundingClientRect();
+  const px = Math.max(8, Math.min(x, window.innerWidth - rect.width - 8));
+  const py = Math.max(8, Math.min(y, window.innerHeight - rect.height - 8));
+  menu.style.left = px + 'px';
+  menu.style.top = py + 'px';
+  menu.style.visibility = 'visible';
+  contextMenuEl = menu;
+}
+
+function cycleClockFace() {
+  const order = ['digital', 'analog', 'hybrid'];
+  const idx = order.indexOf(state.clockFace);
+  const next = order[(idx + 1) % order.length];
+  state.clockFace = next;
+  if (els.czClockFace) els.czClockFace.value = next;
+  updateClockStyleVisibility();
+  render();
+  try { api.saveAppSettings({ app: collectAppSettings() }); } catch (_) { /* no-op */ }
+  notify(`Clock face: ${next.charAt(0).toUpperCase() + next.slice(1)}`, 'info');
+}
+
+async function applyProfile(profileId, opts = {}) {
   try {
     const result = await api.applyProfile(profileId);
     if (!result.success) {
@@ -3080,7 +3337,13 @@ async function applyProfile(profileId) {
     }
 
     state.currentProfileId = profileId;
-    
+
+    // Dismiss clock mode so the user sees the loaded timer value, not the clock face.
+    if (state.clockMode) {
+      state.clockMode = false;
+      state._clockDismissedByProfile = true;
+    }
+
     // Apply timer options from profile
     if (result.timerOptions) {
       state.action = result.timerOptions.action || state.action;
@@ -3103,9 +3366,11 @@ async function applyProfile(profileId) {
     renderProfiles();
     notify(`Profile "${result.profile.name}" loaded`, 'success');
 
-    // Auto-start if configured
-    if (result.autoStart && !state.running && !state.paused) {
-      startTimer(result.timerOptions.durationSeconds);
+    // Auto-start if configured, or when started explicitly from the context menu.
+    const shouldStart = opts.start || result.autoStart;
+    if (shouldStart && !state.running && !state.paused) {
+      state._clockDismissedByProfile = false; // timer starting, no restore needed
+      startTimer(result.timerOptions?.durationSeconds);
     }
   } catch (error) {
     notify(`Failed to apply profile: ${error.message}`, 'error');
@@ -3115,7 +3380,24 @@ async function applyProfile(profileId) {
 function openProfilesModal() {
   if (!els.profilesModal) return;
   els.profilesModal.classList.add('active');
+  updateProfileSavePreview();
   renderProfilesList();
+}
+
+// Show what the current timer will save as, so the save form is never a blind guess.
+function updateProfileSavePreview() {
+  if (!els.profileSavePreview) return;
+  const action = actionLabel();
+  const secs = inputSeconds();
+  let when;
+  if (secs >= 3600 && secs % 3600 === 0) {
+    when = `${secs / 3600}h`;
+  } else if (secs >= 60) {
+    when = `${Math.round(secs / 60)}m`;
+  } else {
+    when = `${secs}s`;
+  }
+  els.profileSavePreview.textContent = `Will save: ${action} in ${when}`;
 }
 
 function closeProfilesModal() {
@@ -3206,7 +3488,7 @@ async function saveNewProfile() {
     action: state.action,
     mode: 'duration',
     seconds: inputSeconds(),
-    autoStart: els.newProfileAutostart?.checked ?? true,
+    autoStart: els.newProfileAutostart?.checked ?? false,
     dryRun: state.dryRun,
     forceShutdown: state.forceShutdown,
     muteSystem: state.muteSystem,

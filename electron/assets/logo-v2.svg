@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Lights Out v2 Full Logo: sharp lamp mark + wordmark on dark background -->
+<svg width="720" height="180" viewBox="0 0 720 180" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="f-ambient" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="12" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="f-ring" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="f-shadow">
+      <feDropShadow dx="1" dy="1.5" stdDeviation="1.5" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+    <linearGradient id="g-ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#00FFD1"/>
+      <stop offset="0.35" stop-color="#64FFF0"/>
+      <stop offset="0.7" stop-color="#00BFA6"/>
+      <stop offset="1" stop-color="#00FFD1"/>
+    </linearGradient>
+    <linearGradient id="g-wordmark" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f2f6fb"/>
+      <stop offset="1" stop-color="#c8d6e5"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="720" height="180" rx="16" fill="#060912"/>
+
+  <!-- === SHARP LAMP MARK === -->
+  <g transform="translate(28, 8)" stroke-linejoin="miter">
+    <circle cx="105" cy="95" r="55" fill="#00FFD1" opacity="0.025"/>
+
+    <g filter="url(#f-shadow)">
+      <!-- Base -->
+      <ellipse cx="28" cy="148" rx="21" ry="5.5" fill="#161b24"/>
+      <rect x="15" y="138" width="21" height="10" fill="#1c212b"/>
+      <line x1="15" y1="141" x2="36" y2="141" stroke="#2a3039" stroke-width="1.2"/>
+
+      <!-- Lower arm -->
+      <line x1="26" y1="140" x2="56" y2="98" stroke="#1c212b" stroke-width="6" stroke-linecap="butt"/>
+      <line x1="26" y1="140" x2="56" y2="98" stroke="#2a3039" stroke-width="2.4" stroke-linecap="butt"/>
+
+      <!-- Mid joint -->
+      <rect x="53" y="95" width="6" height="8" rx="0" fill="#161b24"/>
+      <rect x="52" y="97" width="8" height="2.5" rx="0" fill="#2a3039"/>
+
+      <!-- Upper arm -->
+      <line x1="56" y1="98" x2="82" y2="66" stroke="#1c212b" stroke-width="5.2" stroke-linecap="butt"/>
+      <line x1="56" y1="98" x2="82" y2="66" stroke="#2a3039" stroke-width="2" stroke-linecap="butt"/>
+
+      <!-- Head joint -->
+      <rect x="79" y="63" width="6" height="7" rx="0" fill="#161b24"/>
+      <rect x="78" y="65" width="8" height="2" rx="0" fill="#2a3039"/>
+
+      <!-- Shade -->
+      <polygon points="68,71 88,67 108,98 90,102"
+               fill="#1c212b" stroke="#0f1218" stroke-width="1.5"/>
+      <polygon points="73,73 85,69 99,95 89,97"
+               fill="#2a3039"/>
+      <line x1="90" y1="102" x2="108" y2="98"
+            stroke="#353c46" stroke-width="2.5" stroke-linecap="butt"/>
+    </g>
+
+    <!-- Glow ring -->
+    <g transform="translate(4, -4)">
+      <circle cx="106" cy="100" r="38"
+              fill="none" stroke="#00FFD1" stroke-width="16" opacity="0.04"
+              filter="url(#f-ambient)"/>
+      <circle cx="106" cy="100" r="29"
+              fill="none" stroke="url(#g-ring)" stroke-width="3.8" stroke-linecap="butt"
+              stroke-dasharray="38 6 42 4 36 5 28 38"
+              stroke-dashoffset="12"
+              filter="url(#f-ring)"/>
+      <line x1="84" y1="70" x2="84" y2="80"
+            stroke="url(#g-ring)" stroke-width="3.8" stroke-linecap="butt"
+            filter="url(#f-ring)"/>
+
+      <!-- Flicker squares -->
+      <rect x="76" y="102" width="3" height="3" fill="#64FFF0" opacity="0.7" transform="rotate(25 78 104)"/>
+      <rect x="124" y="80" width="2.5" height="2.5" fill="#64FFF0" opacity="0.6" transform="rotate(40 125 82)"/>
+      <rect x="86" y="117" width="2.2" height="2.2" fill="#64FFF0" opacity="0.45" transform="rotate(-15 88 119)"/>
+      <rect x="135" y="94" width="2.5" height="2.5" fill="#64FFF0" opacity="0.5" transform="rotate(10 136 96)"/>
+    </g>
+  </g>
+
+  <!-- === WORDMARK === -->
+  <g transform="translate(206, 56)">
+    <text x="0" y="52" font-family="'Segoe UI', system-ui, sans-serif" font-size="48"
+          font-weight="900" letter-spacing="4" fill="url(#g-wordmark)"
+          text-anchor="start">LIGHTS</text>
+    <text x="0" y="104" font-family="'Segoe UI', system-ui, sans-serif" font-size="48"
+          font-weight="900" letter-spacing="8" fill="#00FFD1"
+          text-anchor="start"
+          filter="url(#f-ring)">OUT</text>
+    <text x="2" y="128" font-family="'Segoe UI', system-ui, sans-serif" font-size="13"
+          font-weight="600" letter-spacing="4" fill="#5a6577"
+          text-anchor="start">NIGHTLY SHUTDOWN RITUAL</text>
+  </g>
+</svg>

@@ -188,6 +188,14 @@
           </svg>
           <div class="timer-display">
             <div class="timer-name" id="timer-name" contenteditable="true" spellcheck="false" data-placeholder="Name this session">Witching Hour</div>
+            <svg class="analog-clock" id="analog-clock" viewBox="0 0 100 100" style="display:none" aria-hidden="true">
+              <g class="analog-ticks" id="analog-ticks"></g>
+              <line class="analog-hand hour" id="clock-hour" x1="50" y1="50" x2="50" y2="30"/>
+              <line class="analog-hand minute" id="clock-minute" x1="50" y1="50" x2="50" y2="20"/>
+              <line class="analog-hand second" id="clock-second" x1="50" y1="50" x2="50" y2="16"/>
+              <circle class="analog-cap" cx="50" cy="50" r="2.4"/>
+              <text class="analog-digital" id="analog-digital" x="50" y="68" text-anchor="middle"></text>
+            </svg>
             <div class="time-main" id="timer-main">28:20</div>
             <div class="time-label" id="timer-label">until shutdown</div>
           </div>
@@ -239,7 +247,10 @@
       <section class="profiles-section">
         <div class="profiles-header">
           <span class="profiles-title">Saved Profiles</span>
-          <button class="btn-icon" id="btn-manage-profiles" title="Manage Profiles">&#x2699;</button>
+          <div class="profiles-header-actions">
+            <button class="btn-save-profile-quick" id="btn-save-current-profile" title="Save the current timer as a reusable profile">&#x2795; Save as Profile</button>
+            <button class="btn-icon" id="btn-manage-profiles" title="Manage Profiles">&#x2699;</button>
+          </div>
         </div>
         <div class="profiles-grid" id="profiles-grid">
           <!-- Profiles loaded dynamically -->
@@ -347,9 +358,10 @@
             <div class="schedule-controls">
               <label>
                 <input type="checkbox" id="chk-schedule">
-                Enable scheduled shutdown
+                Shut down at a specific date &amp; time
               </label>
-              <input type="time" id="schedule-time" value="22:30">
+              <input type="datetime-local" id="schedule-time">
+              <small class="schedule-hint" id="schedule-hint"></small>
             </div>
 
             <!-- Calendar Import Section -->
@@ -579,7 +591,7 @@
         <button class="footer-action" id="btn-widget" title="Desktop widget">&#x1F4CA;</button>
         <button class="footer-action" id="btn-companion" title="Companion PWA">&#x1F4F1;</button>
         <span class="badge update-badge" id="badge-update" style="display:none" title="Update available">UPDATE</span>
-        <span id="version">v10.0.3</span>
+        <span id="version">v10.0.4</span>
       </div>
     </footer>
 
@@ -1035,6 +1047,37 @@
           </div>
 
           <div class="option-group">
+            <label>Clock Face</label>
+            <select id="cz-clockface">
+              <option value="digital">Digital</option>
+              <option value="analog">Analog</option>
+              <option value="hybrid">Hybrid</option>
+            </select>
+          </div>
+
+          <div id="clock-style-group">
+            <div class="option-group">
+              <label>Clock Style</label>
+              <select id="cz-clock-style">
+                <option value="modern">Modern</option>
+                <option value="bold">Bold</option>
+                <option value="minimal">Minimal</option>
+                <option value="neon">Neon</option>
+              </select>
+            </div>
+            <div class="option-group">
+              <label>Clock Hand Color</label>
+              <input type="color" id="cz-clock-hands" value="#76c9ff">
+            </div>
+            <div class="option-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="cz-clock-seconds" checked>
+                Show second hand
+              </label>
+            </div>
+          </div>
+
+          <div class="option-group">
             <label>Ambient Soundscape</label>
             <select id="cz-soundscape">
               <option value="off">Off</option>
@@ -1161,13 +1204,14 @@
         <!-- Create New Profile -->
         <div class="profile-form">
           <h3>Save Current Settings as Profile</h3>
+          <div class="profile-save-preview" id="profile-save-preview">Will save the current timer.</div>
           <div class="option-group">
             <label>Profile Name</label>
             <input type="text" id="new-profile-name" placeholder="e.g., Movie Night" maxlength="32">
           </div>
           <div class="option-group checkbox-row">
             <label class="checkbox-label">
-              <input type="checkbox" id="new-profile-autostart" checked>
+              <input type="checkbox" id="new-profile-autostart">
               Auto-start timer when profile is selected
             </label>
           </div>

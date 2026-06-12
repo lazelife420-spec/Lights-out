@@ -36,7 +36,13 @@ const DEFAULTS = {
     pauseMediaOnDim: false,
     lockoutOnDim: false,
     // Clock Mode: show current time when idle instead of countdown input.
-    clockMode: true
+    clockMode: true,
+    // Clock face style when idle in Clock Mode: 'digital' | 'analog' | 'hybrid'.
+    clockFace: 'digital',
+    // Analog/hybrid clock customization.
+    clockStyle: 'modern',          // 'modern' | 'bold' | 'minimal' | 'neon'
+    clockHandColor: '#76c9ff',     // hand + cap accent color
+    clockSeconds: true             // show the sweeping second hand
   },
   calendar: {
     enabled: true,

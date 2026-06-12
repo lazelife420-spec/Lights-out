@@ -1,37 +1,103 @@
-<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Lights Out v2 App Icon: sharp geometric lamp over a bold flickering power ring -->
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="ic-grad" x1="56" y1="48" x2="200" y2="208" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#7dd3fc"/>
-      <stop offset="0.5" stop-color="#5b8cff"/>
-      <stop offset="1" stop-color="#a855f7"/>
-    </linearGradient>
-    <radialGradient id="ic-bg" cx="0.35" cy="0.28" r="0.9">
-      <stop offset="0" stop-color="#1b2440"/>
-      <stop offset="1" stop-color="#080b16"/>
-    </radialGradient>
-    <filter id="ic-glow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="5" result="b"/>
-      <feMerge>
-        <feMergeNode in="b"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
+    <!-- Wide soft ambient glow -->
+    <filter id="f-ambient" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="18" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
+    <!-- Tight bright ring glow -->
+    <filter id="f-ring" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <!-- Subtle shadow under the lamp -->
+    <filter id="f-shadow" x="-20%" y="-10%" width="140%" height="130%">
+      <feDropShadow dx="1" dy="2" stdDeviation="2.5" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+
+    <radialGradient id="g-bg" cx="0.48" cy="0.42" r="0.75">
+      <stop offset="0" stop-color="#111d2e"/>
+      <stop offset="1" stop-color="#060912"/>
+    </radialGradient>
+    <linearGradient id="g-ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#00FFD1"/>
+      <stop offset="0.35" stop-color="#64FFF0"/>
+      <stop offset="0.7" stop-color="#00BFA6"/>
+      <stop offset="1" stop-color="#00FFD1"/>
+    </linearGradient>
   </defs>
 
-  <!-- Rounded badge -->
-  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#ic-bg)"/>
+  <!-- Rounded-square badge -->
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#g-bg)"/>
   <rect x="8.5" y="8.5" width="239" height="239" rx="55.5" fill="none"
-        stroke="#5b8cff" stroke-opacity="0.35" stroke-width="1.5"/>
+        stroke="#00FFD1" stroke-opacity="0.08" stroke-width="1"/>
 
-  <!-- Glow halo behind glyph -->
-  <circle cx="128" cy="132" r="74" fill="#5b8cff" opacity="0.10"/>
+  <!-- Ambient halo behind the lamp -->
+  <circle cx="170" cy="155" r="75" fill="#00FFD1" opacity="0.03"/>
 
-  <g filter="url(#ic-glow)">
-    <!-- Open power ring (gap at top) -->
-    <path d="M90 86 a54 54 0 1 0 76 0"
-          stroke="url(#ic-grad)" stroke-width="18" stroke-linecap="round" fill="none"/>
-    <!-- Power line notch -->
-    <line x1="128" y1="66" x2="128" y2="120"
-          stroke="url(#ic-grad)" stroke-width="18" stroke-linecap="round"/>
+  <!-- ===== LAMP: sharp, geometric, all miter joints ===== -->
+  <g filter="url(#f-shadow)" stroke-linejoin="miter">
+    <!-- Base: flat ellipse + rectangular column -->
+    <ellipse cx="72" cy="218" rx="28" ry="7" fill="#161b24"/>
+    <rect x="58" y="206" width="28" height="12" fill="#1c212b"/>
+    <!-- Base accent line -->
+    <line x1="58" y1="209" x2="86" y2="209" stroke="#2a3039" stroke-width="1.5"/>
+
+    <!-- Lower arm: single bold line, no rounding -->
+    <line x1="72" y1="208" x2="115" y2="153" stroke="#1c212b" stroke-width="8" stroke-linecap="butt"/>
+    <line x1="72" y1="208" x2="115" y2="153" stroke="#2a3039" stroke-width="3" stroke-linecap="butt"/>
+
+    <!-- Mid joint: geometric hex bolt look -->
+    <rect x="112" y="150" width="6" height="10" rx="0" fill="#161b24"/>
+    <rect x="111" y="152" width="8" height="3" rx="0" fill="#2a3039"/>
+
+    <!-- Upper arm -->
+    <line x1="115" y1="153" x2="150" y2="106" stroke="#1c212b" stroke-width="7" stroke-linecap="butt"/>
+    <line x1="115" y1="153" x2="150" y2="106" stroke="#2a3039" stroke-width="2.5" stroke-linecap="butt"/>
+
+    <!-- Head joint -->
+    <rect x="147" y="103" width="6" height="9" rx="0" fill="#161b24"/>
+    <rect x="146" y="105" width="8" height="2.5" rx="0" fill="#2a3039"/>
+
+    <!-- Shade: sharp trapezoid cone, miter joints -->
+    <polygon points="134,112 158,106 186,150 162,156"
+             fill="#1c212b" stroke="#0f1218" stroke-width="2"/>
+    <!-- Shade face highlight -->
+    <polygon points="140,114 156,109 176,146 160,150"
+             fill="#2a3039"/>
+    <!-- Sharp rim edge at the opening -->
+    <line x1="162" y1="156" x2="186" y2="150"
+          stroke="#353c46" stroke-width="3" stroke-linecap="butt"/>
+  </g>
+
+  <!-- ===== GLOW / POWER RING ===== -->
+  <g transform="translate(8, -6)">
+    <!-- Soft ambient ring under lamp -->
+    <circle cx="172" cy="155" r="52"
+            fill="none" stroke="#00FFD1" stroke-width="22" opacity="0.05"
+            filter="url(#f-ambient)"/>
+
+    <!-- Bold broken countdown ring.
+         dasharray: long dash, gap (flicker), long dash, gap, big open gap for power symbol.
+         stroke-linecap:butt for sharp flicker edges instead of soft rounded caps. -->
+    <circle cx="172" cy="155" r="40"
+            fill="none" stroke="url(#g-ring)" stroke-width="5" stroke-linecap="butt"
+            stroke-dasharray="52 6 58 4 44 5 34 44"
+            stroke-dashoffset="16"
+            filter="url(#f-ring)"/>
+
+    <!-- Power notch: vertical bar in the top opening -->
+    <line x1="143" y1="117" x2="143" y2="131"
+          stroke="url(#g-ring)" stroke-width="5" stroke-linecap="butt"
+          filter="url(#f-ring)"/>
+
+    <!-- Flicker particles at gap edges (fewer, bolder) -->
+    <rect x="132" y="157" width="4" height="4" fill="#64FFF0" opacity="0.8" transform="rotate(25 134 159)"/>
+    <rect x="196" y="128" width="3.5" height="3.5" fill="#64FFF0" opacity="0.7" transform="rotate(40 198 130)"/>
+    <rect x="146" y="177" width="3" height="3" fill="#64FFF0" opacity="0.55" transform="rotate(-15 148 179)"/>
+    <rect x="208" y="145" width="3" height="3" fill="#64FFF0" opacity="0.6" transform="rotate(10 210 147)"/>
+    <rect x="195" y="178" width="2.5" height="2.5" fill="#64FFF0" opacity="0.4" transform="rotate(-30 197 180)"/>
   </g>
 </svg>
