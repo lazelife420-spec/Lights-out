@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 
 const PREFIX = process.argv[2] || 'before';
-const OUT = path.join('C:\\Users\\KickA\\Desktop\\Lights Out\\docs\\release\\screenshots\\polish');
+const OUT = path.resolve(__dirname, '..', '..', 'docs', 'release', 'screenshots', 'polish');
 fs.mkdirSync(OUT, { recursive: true });
 
 function getTarget() {

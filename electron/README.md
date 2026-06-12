@@ -23,7 +23,7 @@ It explains which runtime is authoritative for a task and what verification path
 
 ### Option 2: Run from PowerShell/Terminal
 ```powershell
-cd "C:\Users\KickA\Desktop\Lights Out\electron"
+cd electron
 npm install   # Only needed first time
 npm start
 ```
@@ -70,7 +70,7 @@ electron/
 To create a standalone `.exe`:
 
 ```bash
-cd "C:\Users\KickA\Desktop\Lights Out\electron"
+cd electron
 npm install
 npm run build
 ```
