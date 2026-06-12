@@ -14,14 +14,14 @@ Installer, portable build, SHA256 checksums, and proof-backed releases are all p
 
 **Download:** https://github.com/Z3r0DayZion-install/lights-out/releases/latest
 
-![Lights Out cockpit - Ready state](release/screenshots/v10.0.3/01_clock_mode_idle.png)
+![Lights Out cockpit - analog/hybrid clock face and the new desk-lamp logo](release/screenshots/v10.0.4/01_clock_face_hybrid.png)
 
 ## What it does
 
 - **Nightly tray utility.** It sits in your tray and shows the current time while
-  idle (Clock Mode). Start common timers (28 min / 1 hour), or pause / resume /
-  snooze / cancel straight from the tray. The live countdown stays in the tray
-  tooltip.
+  idle (Clock Mode) - pick a digital, analog, or hybrid clock face and recolor the
+  hands. Start common timers (28 min / 1 hour), or pause / resume / snooze / cancel
+  straight from the tray. The live countdown stays in the tray tooltip.
 - **Countdown to shutdown, restart, sleep, hibernate, or log out.**
 - **Wind-down phase** with ambient visuals (fireplace, rain, starfield, aurora),
   a warm color shift, and optional Night Light / media pause.
@@ -46,8 +46,10 @@ verify exactly what you downloaded. Builds are produced and published by CI, and
 each release is gated on `node --check`, a smoke suite, and a successful package
 step.
 
-**Latest: v10.0.3** - tray utility + Clock Mode + a native menu stability fix.
-Release notes: https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.0.3
+**Latest: v10.0.4** - customizable clock faces (digital / analog / hybrid), a new
+desk-lamp logo, right-click menus on profiles and the clock, and a smoother
+"save this timer as a profile" flow.
+Release notes: https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.0.4
 
 ---
 

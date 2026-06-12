@@ -1,9 +1,32 @@
-# Lights Out v10.0.3 Proof Pack
+# Lights Out v10.0.4 Proof Pack
 
-**Version:** 10.0.3
+**Version:** 10.0.4
 
 **Release line:**
-Lights Out v10.0.3 is the zero-friction sleep/shutdown timer: calendar-aware, idle-aware, bedtime-aware, with ambient visuals, smart-light sunrise, and proof-backed Windows builds. v10.0.3 is a UX patch that reworks the system-tray context menu, adds an idle Clock Mode hero, and fixes a tray-menu rebuild bug that could drop a click on the open menu.
+Lights Out v10.0.4 is the zero-friction sleep/shutdown timer: calendar-aware, idle-aware, bedtime-aware, with ambient visuals, smart-light sunrise, and proof-backed Windows builds. v10.0.4 reworks the custom-timer/profile flow, adds customizable idle clock faces (digital / analog / hybrid), introduces right-click menus on profiles and the clock, and ships a redesigned desk-lamp logo.
+
+## Patch v10.0.4 (feature patch after v10.0.3)
+
+These are the user-facing changes in this patch. All were verified before the `v10.0.4` tag.
+
+- **Customizable clock faces** — the idle Clock Mode hero can render as **digital**, **analog**, or **hybrid** (an analog dial with the digital time inside it). Analog/hybrid add a **Clock Style** preset (Modern / Bold / Minimal / Neon), a **hand color** picker, and a **second-hand** toggle; the style controls are hidden for the digital face. Lives in **Customize → Clock face**.
+- **Right-click menus** — right-clicking a saved-profile card opens a context menu with **Start** (load + begin the countdown), **Edit…** (open the profile manager), and **Delete**. Right-clicking the idle clock cycles the face (digital → analog → hybrid) and persists the choice. The native browser menu stays suppressed in the packaged app.
+- **Clearer custom-timer / profile flow** — a visible **"Save as Profile"** button with a live "Will save: …" preview, **auto-start now defaults OFF** (opt-in), and profiles can schedule by duration **or a specific date/time** via a `datetime-local` picker with a plain-language hint.
+- **Profile-load → countdown fix** — loading a profile now dismisses the idle clock face and shows the loaded countdown immediately (previously the clock face could stay up and hide the loaded timer). Cancel/complete restore the clock face.
+- **Redesigned logo (v2)** — a sharp, geometric graphite desk lamp over a flickering blue-green power ring (`#00FFD1` / `#00BFA6` / `#64FFF0`). New app icon (`icon.svg` → multi-size `icon.ico`), a dedicated tray glyph (`tray-32.png`) that stays legible at 16px, and a refreshed title-bar brand mark.
+
+### Patch v10.0.4 verification
+
+- `node --check` (main/renderer): PASS
+- Smoke tests: 41/41 PASS
+- `npm run build`: PASS (portable `LightsOut.exe` + `Lights Out Setup 10.0.4.exe`)
+- CDP runtime test (real app, not preview): profile context menu renders `Start / Edit… / Delete`; right-click clock cycles `digital → analog → hybrid → digital`; all four clock styles + hand color + second-hand toggle verified; new brand mark confirmed in the title bar
+- CI release run `27435970354`: verify + Windows package + publish all green; `v10.0.4` marked **Latest** with all three assets
+
+### Patch v10.0.4 screenshots
+
+- `docs/release/screenshots/v10.0.4/01_clock_face_hybrid.png` — idle hybrid clock face (analog dial + digital readout) with the new logo
+- `docs/release/screenshots/v10.0.4/02_clock_face_analog_neon.png` — analog face with the Neon style
 
 ## Patch v10.0.3 (UX patch after v10.0.2)
 
@@ -68,6 +91,7 @@ These fixes are why a patch was required. They were found and verified after the
 - `48461d4` v10.0.2: settings persistence, drop desktop-theme hijack, opt-in wind-down toggles, menu/window (#3)
 - `a750430` v10.0.2: hero/tabs/cards UI polish (#4)
 - `d365e59` v10.0.3: tray context menu + Clock Mode, with per-tick tray rebuild fix (#5)
+- `8e7d239` v10.0.4: clock faces + customization, profile UX, right-click menus, v2 logo
 
 ## Build
 
@@ -77,7 +101,7 @@ These fixes are why a patch was required. They were found and verified after the
 
 ## Artifacts
 
-- `Lights Out Setup 10.0.3.exe`
+- `Lights Out Setup 10.0.4.exe`
 - `LightsOut.exe` portable
 - `SHA256SUMS.txt` (checksums for both artifacts, generated in CI release step)
 
@@ -121,10 +145,10 @@ These fixes are why a patch was required. They were found and verified after the
 
 ## Version Alignment
 
-- `package.json` version: `10.0.3`
-- Build output: `Lights Out Setup 10.0.3.exe`
-- HTML footer: `v10.0.3`
-- Git tag: `v10.0.3`
+- `package.json` version: `10.0.4`
+- Build output: `Lights Out Setup 10.0.4.exe`
+- HTML footer: `v10.0.4`
+- Git tag: `v10.0.4`
 
 ## Safety Guarantees
 

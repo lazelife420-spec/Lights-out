@@ -6,7 +6,7 @@ Set a bedtime. Lights Out handles the rest: a calm wind-down, ambient visuals,
 optional smart-light sunrise, and a deliberate shutdown action when the timer
 ends. No surprise countdowns. No hidden force-quits.
 
-<img src="docs/release/screenshots/v10.0.2/01_ready.png" width="520" alt="Lights Out cockpit - Ready state">
+<img src="docs/release/screenshots/v10.0.4/01_clock_face_hybrid.png" width="520" alt="Lights Out cockpit - hybrid clock face and the new desk-lamp logo">
 
 ### I built this because I use it every night
 
@@ -59,6 +59,9 @@ full contributor handoff and which runtime owns a given task.
 - **Nightly tray utility** - sit in the tray and show the current time while idle
   (Clock Mode), start common timers (28 min / 1 hour) and pause / resume / snooze /
   cancel straight from the tray, with the live countdown kept in the tray tooltip.
+- **Customizable clock faces** - choose a digital, analog, or hybrid idle clock,
+  with Modern / Bold / Minimal / Neon styles, a custom hand color, and an optional
+  second hand. Right-click the clock to cycle faces.
 - **Wind-down phase** - ambient visuals (fireplace, rain, starfield, aurora),
   warm color shift, and optional Night Light / media pause.
 - **Stateful settings** - everything persists to `userData\settings.json` and is
@@ -66,7 +69,9 @@ full contributor handoff and which runtime owns a given task.
 - **Customization console** - accent color, theme (Midnight / Carbon / Aurora),
   ring style, window opacity, and sound volume, applied live.
 - **Smart Lights** - Philips Hue or HTTP webhook (gradual dim, warm shift, off-at-end).
-- **Saved profiles** and **calendar scheduling** (.ics import).
+- **Saved profiles** - save the current timer as a profile in one click, schedule
+  by duration or a specific date/time, and right-click a profile to Start, Edit, or
+  Delete it. Plus **calendar scheduling** (.ics import).
 - **Last Light finale** - an optional cinematic timer-zero sequence.
 - **Imminent-action warning** - a grace-period dialog with Snooze / Cancel.
 - **Crash recovery** - an interrupted countdown offers Resume / Dismiss on restart.
