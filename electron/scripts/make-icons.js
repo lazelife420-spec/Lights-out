@@ -8,10 +8,16 @@ const root = path.join(__dirname, '..');
 const assets = path.join(root, 'assets');
 const brand = path.join(assets, 'brand');
 const iconSvg = path.join(brand, 'lights-out-icon.svg');
+const iconSmallSvg = path.join(brand, 'lights-out-icon-small.svg');
 const logoSvg = path.join(brand, 'lights-out-icon.svg');
+const wordmarkSvg = path.join(brand, 'lights-out-wordmark-transparent.svg');
 const traySvg = path.join(brand, 'lights-out-tray.svg');
 
 const icoSizes = [16, 24, 32, 48, 64, 128, 256];
+// Sizes at or below this threshold use the simplified small icon (badge + bold ring,
+// no fine lamp detail) so they stay crisp when rasterized down. Larger sizes use the
+// full detailed lamp icon.
+const smallIconMaxSize = 32;
 
 async function render(svgPath, size) {
   return sharp(svgPath, { density: 384 })
@@ -24,10 +30,12 @@ async function render(svgPath, size) {
   const pngToIco = (await import('png-to-ico')).default;
   const svg = fs.readFileSync(iconSvg);
 
-  // Multi-size PNG buffers for the ICO.
+  // Multi-size PNG buffers for the ICO. Small sizes use the simplified mark so the
+  // taskbar / titlebar / 32px renders stay crisp; large sizes use the detailed lamp icon.
   const pngBuffers = [];
   for (const size of icoSizes) {
-    pngBuffers.push(await render(iconSvg, size));
+    const src = size <= smallIconMaxSize ? iconSmallSvg : iconSvg;
+    pngBuffers.push(await render(src, size));
   }
   const ico = await pngToIco(pngBuffers);
   fs.writeFileSync(path.join(assets, 'icon.ico'), ico);
@@ -50,6 +58,13 @@ async function render(svgPath, size) {
     .png()
     .toFile(path.join(assets, 'tray-32.png'));
   console.log('Wrote assets/tray-32.png');
+
+  // Transparent full wordmark PNG for About / splash / docs (composites on dark chrome).
+  await sharp(fs.readFileSync(wordmarkSvg), { density: 384 })
+    .resize(1272, 440, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png()
+    .toFile(path.join(assets, 'wordmark-1272.png'));
+  console.log('Wrote assets/wordmark-1272.png');
 })().catch(err => {
   console.error(err);
   process.exit(1);

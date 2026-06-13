@@ -25,7 +25,10 @@
   .notes ul { padding-left: 18px; }
   .notes li { margin: 4px 0; }
   .dark-bg { background: #050B10; padding: 16px 20px; border-radius: 10px; display: inline-block; }
-  .light-bg { background: #e8ecf0; padding: 16px 20px; border-radius: 10px; display: inline-block; }
+  .surface-bg { background: #1a2230; padding: 16px 20px; border-radius: 10px; display: inline-block; }
+  .checker-bg { padding: 16px 20px; border-radius: 10px; display: inline-block;
+    background-image: linear-gradient(45deg,#2a3340 25%,transparent 25%),linear-gradient(-45deg,#2a3340 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#2a3340 75%),linear-gradient(-45deg,transparent 75%,#2a3340 75%);
+    background-size: 16px 16px; background-position: 0 0,0 8px,8px -8px,-8px 0; background-color: #232b38; }
   .wordmark-row { display: flex; flex-direction: column; gap: 16px; }
 </style>
 </head>
@@ -37,18 +40,24 @@
 <!-- WORDMARK -->
 <div class="section">
   <h2>1. Full Wordmark</h2>
-  <p style="margin-bottom:12px">Articulated desk lamp + "LIGHTS OUT" in segmented digital alarm-clock style. OUT fades left-to-right; O is a partial countdown ring.</p>
+  <p style="margin-bottom:12px">Articulated desk lamp + "LIGHTS OUT" in segmented digital alarm-clock style. OUT carries a gentle left-to-right fade; O is a partial countdown ring.</p>
   <div class="wordmark-row">
     <div>
-      <h3>Dark background (standard)</h3>
+      <h3>Dark background — standard plate (lights-out-wordmark.svg)</h3>
       <div class="dark-bg">
-        <img src="../../../electron/assets/brand/lights-out-wordmark.svg" alt="Lights Out Wordmark (dark)" style="max-width:100%;height:auto;width:800px">
+        <img src="../../../electron/assets/brand/lights-out-wordmark.svg" alt="Lights Out Wordmark (dark plate)" style="max-width:100%;height:auto;width:800px">
       </div>
     </div>
     <div>
-      <h3>Light/transparent background</h3>
-      <div class="light-bg">
-        <img src="../../../electron/assets/brand/lights-out-wordmark.svg" alt="Lights Out Wordmark (light)" style="max-width:100%;height:auto;width:800px">
+      <h3>Transparent variant on app surface (lights-out-wordmark-transparent.svg)</h3>
+      <div class="surface-bg">
+        <img src="../../../electron/assets/brand/lights-out-wordmark-transparent.svg" alt="Lights Out Wordmark (transparent, on surface)" style="max-width:100%;height:auto;width:800px">
+      </div>
+    </div>
+    <div>
+      <h3>Transparent variant on checkerboard (proves no baked-in plate)</h3>
+      <div class="checker-bg">
+        <img src="../../../electron/assets/brand/lights-out-wordmark-transparent.svg" alt="Lights Out Wordmark (transparent, on checker)" style="max-width:100%;height:auto;width:800px">
       </div>
     </div>
   </div>
@@ -57,12 +66,20 @@
 <!-- APP ICON -->
 <div class="section">
   <h2>2. App Icon</h2>
-  <p style="margin-bottom:12px">Simplified lamp head + glowing partial countdown ring. No wordmark. Must read at 256, 128, 64, and 32 px.</p>
-  <div class="card-row">
+  <p style="margin-bottom:12px">Detailed lamp + glowing partial countdown ring for large sizes (256/128/64/48). <strong>Below 48px the build swaps to a simplified mark</strong> (badge + bold power ring, no lamp) so 16/24/32 stay crisp.</p>
+  <h3>Detailed icon — large sizes (lights-out-icon.svg → 48px and up)</h3>
+  <div class="card-row" style="margin-bottom:18px">
     <div class="card"><img src="../../../electron/assets/brand/lights-out-icon.svg" width="256" height="256" alt="256px"><span class="label">256px</span></div>
     <div class="card"><img src="../../../electron/assets/brand/lights-out-icon.svg" width="128" height="128" alt="128px"><span class="label">128px</span></div>
     <div class="card"><img src="../../../electron/assets/brand/lights-out-icon.svg" width="64" height="64" alt="64px"><span class="label">64px</span></div>
-    <div class="card"><img src="../../../electron/assets/brand/lights-out-icon.svg" width="32" height="32" alt="32px"><span class="label">32px</span></div>
+    <div class="card"><img src="../../../electron/assets/brand/lights-out-icon.svg" width="48" height="48" alt="48px"><span class="label">48px</span></div>
+  </div>
+  <h3>Simplified icon — small sizes (lights-out-icon-small.svg → 16/24/32)</h3>
+  <div class="card-row">
+    <div class="card"><img src="../../../electron/assets/brand/lights-out-icon-small.svg" width="64" height="64" alt="64px ref"><span class="label">64px (ref)</span></div>
+    <div class="card"><img src="../../../electron/assets/brand/lights-out-icon-small.svg" width="32" height="32" alt="32px"><span class="label">32px</span></div>
+    <div class="card"><img src="../../../electron/assets/brand/lights-out-icon-small.svg" width="24" height="24" alt="24px"><span class="label">24px</span></div>
+    <div class="card"><img src="../../../electron/assets/brand/lights-out-icon-small.svg" width="16" height="16" alt="16px"><span class="label">16px</span></div>
   </div>
 </div>
 

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Lights Out App Icon (SMALL, <=32px): badge + bold centered power/countdown ring.
+     Lamp dropped so the mark stays crisp at 16/24/32 px. Broken ring is a dasharray
+     circle (NOT arc paths) + a single flat glow filter, so it rasterizes cheaply and
+     reliably in every renderer. -->
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="f-ring" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="3.5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <radialGradient id="g-bg" cx="0.48" cy="0.42" r="0.75">
+      <stop offset="0" stop-color="#0d1621"/>
+      <stop offset="1" stop-color="#050810"/>
+    </radialGradient>
+    <linearGradient id="g-ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0"   stop-color="#00FFD1"/>
+      <stop offset="0.4" stop-color="#64FFF0"/>
+      <stop offset="1"   stop-color="#00BFA6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded-square badge (matches the full icon) -->
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#g-bg)"/>
+  <rect x="8.5" y="8.5" width="239" height="239" rx="55.5" fill="none"
+        stroke="#00FFD1" stroke-opacity="0.08" stroke-width="1"/>
+
+  <!-- Soft ambient halo + wide low-opacity underlay for glow bloom (plain fills, no filter) -->
+  <circle cx="128" cy="130" r="84" fill="#00FFD1" opacity="0.035"/>
+  <circle cx="128" cy="128" r="72" fill="none" stroke="#00FFD1" stroke-width="28" opacity="0.06"/>
+
+  <!-- ===== BOLD BROKEN POWER / COUNTDOWN RING =====
+       rotate(-90) puts the dash sequence start at 12 o'clock; the 44u gap sits centred
+       at the top to hold the power notch, with one 14u flicker break lower-right. -->
+  <g transform="rotate(-90 128 128)" filter="url(#f-ring)"
+     fill="none" stroke="url(#g-ring)" stroke-width="16" stroke-linecap="round">
+    <circle cx="128" cy="128" r="72" stroke-dasharray="196 14 198 44" stroke-dashoffset="22"/>
+  </g>
+
+  <!-- Power notch: bold vertical bar protruding through the top gap (classic power read) -->
+  <line x1="128" y1="42" x2="128" y2="106" stroke="#3df5da"
+        stroke-width="16" stroke-linecap="round" filter="url(#f-ring)"/>
+
+  <!-- Flicker particles around the broken ring (plain fills) -->
+  <g fill="#64FFF0">
+    <rect x="196" y="176" width="6" height="6" opacity="0.7" transform="rotate(30 199 179)"/>
+    <rect x="56"  y="150" width="5" height="5" opacity="0.6" transform="rotate(-20 58 152)"/>
+  </g>
+</svg>

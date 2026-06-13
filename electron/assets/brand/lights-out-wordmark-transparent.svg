@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Lights Out Wordmark: dark articulated lamp + digital alarm-clock "LIGHTS OUT" with fading/dimming OUT -->
+<!-- Lights Out Wordmark (TRANSPARENT): no baked-in background plate. Composites onto any dark surface (toolbars, headers, splash). For light surfaces a dedicated dark-ink lockup is still TODO. -->
 <svg width="636" height="220" viewBox="0 0 636 220" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <!-- Beam: semi-transparent cone from shade to right edge -->
@@ -40,20 +40,9 @@
       <stop offset="0" stop-color="#00FFD1" stop-opacity="0.18"/>
       <stop offset="1" stop-color="#00FFD1" stop-opacity="0"/>
     </radialGradient>
-
-    <!-- Subtle grid pattern for digital background texture -->
-    <pattern id="p-grid" width="8" height="8" patternUnits="userSpaceOnUse">
-      <circle cx="4" cy="4" r="0.4" fill="#00FFD1" opacity="0.03"/>
-    </pattern>
   </defs>
 
-  <!-- Background -->
-  <rect width="636" height="220" rx="14" fill="#050B10"/>
-  <!-- Subtle digital grid texture -->
-  <rect width="636" height="220" rx="14" fill="url(#p-grid)"/>
-  <!-- Thin border -->
-  <rect x="0.5" y="0.5" width="635" height="219" rx="13.5"
-        fill="none" stroke="#00FFD1" stroke-opacity="0.06" stroke-width="1"/>
+  <!-- No background plate: transparent canvas. -->
 
   <!-- Soft teal halo behind the lamp head (reads as a lit lamp) -->
   <circle cx="150" cy="128" r="58" fill="url(#g-lamp-glow)"/>
@@ -105,14 +94,6 @@
            fill="url(#g-beam)"/>
 
   <!-- ===== "LIGHTS OUT" TEXT ===== -->
-  <!--
-    Digital alarm-clock styling:
-    - "LIGHTS" in segmented/geometric letterforms, fully lit #00FFD1
-    - "OUT" fading left-to-right
-    - O rendered as partial countdown ring
-    - U dimmer but readable
-    - T mostly dark
-  -->
 
   <!-- Sub-grid lines to suggest digital display -->
   <g stroke="#00FFD1" stroke-opacity="0.04" stroke-width="0.5">
@@ -158,9 +139,8 @@
     <rect x="405" y="160" width="32" height="8"/>
   </g>
 
-  <!-- " OUT": fading, O as partial ring -->
+  <!-- " OUT": gentle fade, O as partial countdown ring -->
   <g>
-    <!-- Gap between words -->
     <!-- O: partial countdown ring -->
     <g transform="translate(467, 108)">
       <!-- Full ring background (dark, subtle) -->
