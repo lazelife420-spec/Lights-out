@@ -489,6 +489,8 @@ const els = {
   receiptStats: document.getElementById('receipt-stats'),
   receiptsList: document.getElementById('receipts-list'),
   btnClearReceipts: document.getElementById('btn-clear-receipts'),
+  aboutModal: document.getElementById('about-modal'),
+  aboutModalClose: document.getElementById('about-modal-close'),
   // Status pill
   statusPill: document.getElementById('status-pill'),
   statusDot: document.getElementById('status-dot'),
@@ -2083,6 +2085,11 @@ function renderReceiptsModal(receipts, stats) {
         return;
       }
 
+      if (item.id === 'open-about') {
+        els.aboutModal.classList.add('active');
+        return;
+      }
+
       if (item.dataset.external) {
         api.openExternal(item.dataset.external);
         return;
@@ -2119,6 +2126,15 @@ function renderReceiptsModal(receipts, stats) {
   els.optionsModal.addEventListener('click', event => {
     if (event.target === els.optionsModal) els.optionsModal.classList.remove('active');
   });
+
+  if (els.aboutModalClose) {
+    els.aboutModalClose.addEventListener('click', () => els.aboutModal.classList.remove('active'));
+  }
+  if (els.aboutModal) {
+    els.aboutModal.addEventListener('click', event => {
+      if (event.target === els.aboutModal) els.aboutModal.classList.remove('active');
+    });
+  }
 
   els.btnSaveOpt.addEventListener('click', async () => {
     state.action = els.selAction.value;

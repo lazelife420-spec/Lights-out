@@ -1401,6 +1401,31 @@ body.phase-lastlight .cockpit {
   max-height: calc(100vh - 120px);
 }
 
+/* About modal: brand wordmark on the app's dark surface */
+.about-body {
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 24px 20px 28px;
+}
+.about-wordmark {
+  width: 100%;
+  max-width: 320px;
+  height: auto;
+  margin-bottom: 4px;
+}
+.about-tagline {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+.about-version {
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+
 .option-group {
   display: flex;
   flex-direction: column;

@@ -156,7 +156,7 @@
               <span class="icon">&#x2328;</span>
               <span>Keyboard Shortcuts</span>
             </div>
-            <div class="submenu-item" data-help="Lights Out Electron v5.3.0. Startup login mode opens minimized and idle.">
+            <div class="submenu-item" id="open-about">
               <span class="icon">&#x24D8;</span>
               <span>About Lights Out</span>
             </div>
@@ -1290,6 +1290,21 @@
         <div class="receipts-actions">
           <button class="btn-danger btn-tiny" id="btn-clear-receipts">Clear All Receipts</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- About Modal -->
+  <div class="modal" id="about-modal">
+    <div class="modal-content about-modal-content">
+      <div class="modal-header">
+        <h2>About</h2>
+        <button class="modal-close" id="about-modal-close">&times;</button>
+      </div>
+      <div class="modal-body about-body">
+        <img class="about-wordmark" src="assets/brand/lights-out-wordmark-transparent.svg" alt="Lights Out" draggable="false">
+        <p class="about-tagline">Bedtime shutdown timer for Windows.</p>
+        <p class="about-version">Version 10.0.4</p>
       </div>
     </div>
   </div>
