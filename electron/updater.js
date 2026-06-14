@@ -6,7 +6,34 @@ const { net } = require('electron');
 const currentVersion = require('./package.json').version;
 
 const REPO_API = 'https://api.github.com/repos/Z3r0DayZion-install/lights-out/releases/latest';
+const REPO_DOWNLOAD = 'https://github.com/Z3r0DayZion-install/lights-out/releases/download';
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
+
+// The NSIS installer asset, e.g. "Lights.Out.Setup.10.0.7.exe".
+// Casing is significant: GitHub asset URLs are case-sensitive.
+const INSTALLER_RE = /^Lights\.Out\.Setup\.\d+\.\d+\.\d+\.exe$/i;
+const PORTABLE_NAME = 'LightsOut.exe';
+const CHECKSUM_NAME = 'SHA256SUMS.txt';
+
+// Resolve download targets from the release's real asset list rather than
+// guessing names. Falls back to the documented installer naming convention
+// (never lower-cased) only when no matching asset is present.
+function resolveAssets(assets, tag, version) {
+  const list = Array.isArray(assets) ? assets : [];
+  const installer =
+    list.find(a => INSTALLER_RE.test(a?.name || '')) ||
+    list.find(a => a?.name?.toLowerCase().endsWith('.exe') && a.name !== PORTABLE_NAME);
+  const checksum = list.find(a => a?.name === CHECKSUM_NAME);
+
+  const fallbackTag = tag || (version ? `v${version}` : '');
+  const downloadUrl =
+    installer?.browser_download_url ||
+    (fallbackTag && version
+      ? `${REPO_DOWNLOAD}/${fallbackTag}/Lights.Out.Setup.${version}.exe`
+      : '');
+
+  return { downloadUrl, checksumUrl: checksum?.browser_download_url || '' };
+}
 
 let lastCheckResult = null;
 let intervalId = null;
@@ -35,14 +62,15 @@ async function checkForUpdate() {
         const data = await response.json();
         const latestTag = data.tag_name || '';
         const latestVersion = latestTag.replace(/^v/, '');
-        const downloadUrl = (data.assets || []).find(a => a.name?.endsWith('.exe'))?.browser_download_url || data.html_url;
+        const { downloadUrl, checksumUrl } = resolveAssets(data.assets, latestTag, latestVersion);
 
         if (compareVersions(latestVersion, currentVersion) > 0) {
           lastCheckResult = {
             available: true,
             latestVersion,
             currentVersion,
-            downloadUrl,
+            downloadUrl: downloadUrl || data.html_url,
+            checksumUrl,
             releaseNotes: data.body || '',
             releaseUrl: data.html_url
           };
@@ -88,5 +116,6 @@ module.exports = {
   startPeriodicCheck,
   stopPeriodicCheck,
   getLastCheckResult,
+  resolveAssets,
   currentVersion
 };
