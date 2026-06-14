@@ -148,6 +148,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Companion PWA
   getCompanionStatus: () => ipcRenderer.invoke('get-companion-status'),
 
+  // Remote control gating (companion + family). Off by default.
+  getRemoteControl: () => ipcRenderer.invoke('get-remote-control'),
+  setRemoteControlEnabled: (enabled) => ipcRenderer.invoke('set-remote-control-enabled', enabled),
+  regenerateRemoteToken: () => ipcRenderer.invoke('regenerate-remote-token'),
+
   // Family mode
   getFamilyPeers: () => ipcRenderer.invoke('get-family-peers'),
   familyRemoteStart: (ip, durationSeconds, action) => ipcRenderer.invoke('family-remote-start', ip, durationSeconds, action),

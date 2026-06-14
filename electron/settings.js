@@ -118,6 +118,13 @@ const DEFAULTS = {
     notifyOnComplete: true,
     partners: []
   },
+  // LAN remote / family control. OFF by default: when disabled, no network
+  // listener (family command server, UDP discovery, companion PWA) ever starts.
+  // When enabled, a pairing token is required on every remote command.
+  remoteControl: {
+    enabled: false,
+    token: ''
+  },
   // Persisted running-timer snapshot for crash/quit recovery. null when idle.
   activeTimer: null
 };

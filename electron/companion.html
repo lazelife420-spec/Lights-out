@@ -229,10 +229,11 @@
 
     let ws = null;
     let reconnectTimer = null;
+    const pairToken = new URLSearchParams(location.search).get('t') || '';
 
     function connect() {
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      ws = new WebSocket(`${proto}//${location.host}`);
+      ws = new WebSocket(`${proto}//${location.host}/?t=${encodeURIComponent(pairToken)}`);
 
       ws.onopen = () => {
         disconnected.style.display = 'none';

@@ -134,6 +134,9 @@ const fallbackApi = (() => {
     getWeeklyReport: async () => null,
     getSleepScore: async () => ({ score: null, label: 'Preview', breakdown: {} }),
     getCompanionStatus: async () => ({ running: false, port: 0, clients: 0, url: '' }),
+    getRemoteControl: async () => ({ enabled: false, token: '', port: 0, lanIp: '', url: '' }),
+    setRemoteControlEnabled: async () => ({ enabled: false, token: '', url: '' }),
+    regenerateRemoteToken: async () => ({ enabled: false, token: '', url: '' }),
     getFamilyPeers: async () => [],
     familyRemoteStart: async () => ({ success: true }),
     familyRemotePause: async () => ({ success: true }),
@@ -402,6 +405,13 @@ const els = {
   btnCancelCustomSeq: document.getElementById('btn-cancel-custom-seq'),
   // Widget
   btnWidget: document.getElementById('btn-widget'),
+  // Remote control
+  chkRemoteControl: document.getElementById('chk-remote-control'),
+  remoteControlConfig: document.getElementById('remote-control-config'),
+  remoteUrl: document.getElementById('remote-url'),
+  remoteToken: document.getElementById('remote-token'),
+  btnRegenToken: document.getElementById('btn-regen-token'),
+
   // Family mode
   btnFamilyScan: document.getElementById('btn-family-scan'),
   familyStatus: document.getElementById('family-status'),
@@ -1466,10 +1476,12 @@ function wireEvents() {
   });
   els.btnCompanion?.addEventListener('click', async () => {
     try {
-      const status = await api.getCompanionStatus?.();
-      if (status?.url) {
-        await api.openExternal?.(status.url);
-        notify(`Companion PWA at ${status.url}`, 'info');
+      const rc = await api.getRemoteControl?.();
+      if (rc?.enabled && rc.url) {
+        await api.openExternal?.(rc.url);
+        notify(`Companion at ${rc.url}`, 'info');
+      } else {
+        notify('Enable Remote Control in settings first', 'info');
       }
     } catch {}
   });
@@ -1485,6 +1497,36 @@ function wireEvents() {
       els.familyStatus.textContent = 'Scan failed';
     }
   });
+
+function renderRemoteControl(rc) {
+  if (!rc || !els.chkRemoteControl) return;
+  els.chkRemoteControl.checked = !!rc.enabled;
+  if (els.remoteControlConfig) els.remoteControlConfig.style.display = rc.enabled ? '' : 'none';
+  if (els.remoteUrl) els.remoteUrl.textContent = rc.url || '';
+  if (els.remoteToken) els.remoteToken.textContent = rc.token || '';
+}
+
+async function loadRemoteControlState() {
+  if (!els.chkRemoteControl) return;
+  try { renderRemoteControl(await api.getRemoteControl?.()); } catch {}
+}
+
+function setupRemoteControlHandlers() {
+  els.chkRemoteControl?.addEventListener('change', async () => {
+    try {
+      const rc = await api.setRemoteControlEnabled?.(els.chkRemoteControl.checked);
+      renderRemoteControl(rc);
+      notify(els.chkRemoteControl.checked ? 'Remote control enabled' : 'Remote control disabled', 'info');
+    } catch { notify('Failed to update remote control', 'error'); }
+  });
+  els.btnRegenToken?.addEventListener('click', async () => {
+    try {
+      renderRemoteControl(await api.regenerateRemoteToken?.());
+      notify('New pairing code generated', 'success');
+    } catch { notify('Failed to regenerate code', 'error'); }
+  });
+  loadRemoteControlState();
+}
 
 function renderFamilyPeers(peers) {
   if (!els.familyPeers) return;
@@ -3907,6 +3949,7 @@ setupLastLightHandlers();
 setupWarningHandlers();
 setupAlarmHandlers();
 setupCalendarHandlers();
+setupRemoteControlHandlers();
 setAction(state.action);
 loadInitialData().finally(render);
 

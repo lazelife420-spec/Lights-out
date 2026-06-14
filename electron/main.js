@@ -14,6 +14,7 @@ const companion = require('./companion');
 const media = require('./media');
 const unsavedGuard = require('./unsavedGuard');
 const family = require('./family');
+const remoteControl = require('./remoteControl');
 const wifiGuard = require('./wifiGuard');
 const contentBlocker = require('./contentBlocker');
 const accountability = require('./accountability');
@@ -917,6 +918,64 @@ function broadcastCompanionState() {
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Remote control gating (companion PWA + family LAN). OFF by default: no network
+// listener binds unless the user explicitly enables it AND a pairing token exists.
+// Every inbound command is token-authenticated and validated before dispatch.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function familyCommandHandler(cmd) {
+  if (!cmd || !cmd.command) return;
+  switch (cmd.command) {
+    case 'start':
+      startTimer({
+        durationSeconds: cmd.durationSeconds || 1800,
+        action: cmd.action || 'shutdown'
+      });
+      break;
+    case 'pause':
+      if (timerState.running && !timerState.paused) pauseTimer();
+      break;
+    case 'resume':
+      if (timerState.running && timerState.paused) resumeTimer();
+      break;
+    case 'snooze':
+      if (timerState.running) snoozeTimer(cmd.seconds || 300);
+      break;
+    case 'cancel':
+      if (timerState.running) cancelTimer();
+      break;
+  }
+}
+
+function getRemoteControlState() {
+  const rc = settingsStore.getSection('remoteControl') || {};
+  const ips = family.getLocalIPs();
+  const lanIp = ips[0] || '127.0.0.1';
+  return {
+    enabled: !!rc.enabled,
+    token: rc.token || '',
+    port: companion.PWA_PORT,
+    lanIp,
+    url: (rc.enabled && rc.token) ? `http://${lanIp}:${companion.PWA_PORT}/?t=${rc.token}` : ''
+  };
+}
+
+function stopRemoteControl() {
+  try { companion.stop(); } catch {}
+  try { family.stop(); } catch {}
+}
+
+function startRemoteControl() {
+  // Always rebuild from a clean state so token changes take effect.
+  stopRemoteControl();
+  const rc = settingsStore.getSection('remoteControl') || {};
+  if (!rc.enabled || !rc.token) return false;
+  companion.start({ token: rc.token, host: '0.0.0.0' });
+  family.start({ enabled: true, token: rc.token, peerName: require('os').hostname() }, familyCommandHandler);
+  return true;
+}
+
 function formatTime(totalSeconds) {
   const seconds = Math.max(0, Math.round(totalSeconds));
   const hours = Math.floor(seconds / 3600);
@@ -1240,6 +1299,23 @@ ipcMain.handle('get-calendar-settings', async () => {
 });
 ipcMain.handle('get-companion-status', async () => {
   return companion.getStatus();
+});
+ipcMain.handle('get-remote-control', async () => {
+  return getRemoteControlState();
+});
+ipcMain.handle('set-remote-control-enabled', async (e, enabled) => {
+  const rc = settingsStore.getSection('remoteControl') || {};
+  const patch = { enabled: !!enabled };
+  // Generate a pairing token the first time remote control is turned on.
+  if (enabled && !rc.token) patch.token = remoteControl.generateToken();
+  settingsStore.updateSection('remoteControl', patch);
+  startRemoteControl();
+  return getRemoteControlState();
+});
+ipcMain.handle('regenerate-remote-token', async () => {
+  settingsStore.updateSection('remoteControl', { token: remoteControl.generateToken() });
+  startRemoteControl();
+  return getRemoteControlState();
 });
 ipcMain.handle('get-family-peers', async () => {
   return family.getPeers();
@@ -1786,12 +1862,12 @@ app.whenReady().then(async () => {
     }
   });
 
-  // Start companion PWA server.
-  companion.start();
-  companion.onMessage((msg, client) => {
-    handleCompanionMessage(msg, client);
+  // Companion + family remote control. Listeners are registered once; the
+  // servers only bind when the user explicitly enables remote control.
+  companion.onMessage((msg) => {
+    handleCompanionMessage(msg);
   });
-  companion.onConnect((client) => {
+  companion.onConnect(() => {
     // Send initial state + streaks on connect.
     setTimeout(() => {
       broadcastCompanionState();
@@ -1802,34 +1878,11 @@ app.whenReady().then(async () => {
     }, 500);
   });
 
-  // Broadcast timer state to companion clients periodically.
+  // Broadcast timer state to connected companion clients periodically.
   setInterval(broadcastCompanionState, 2000);
 
-  // Start family mode: discovery + command server.
-  family.startDiscovery();
-  family.startCommandServer((cmd) => {
-    if (!cmd || !cmd.command) return;
-    switch (cmd.command) {
-      case 'start':
-        startTimer({
-          durationSeconds: cmd.durationSeconds || 1800,
-          action: cmd.action || 'shutdown'
-        });
-        break;
-      case 'pause':
-        if (timerState.running && !timerState.paused) pauseTimer();
-        break;
-      case 'resume':
-        if (timerState.running && timerState.paused) resumeTimer();
-        break;
-      case 'snooze':
-        if (timerState.running) snoozeTimer(cmd.seconds || 300);
-        break;
-      case 'cancel':
-        if (timerState.running) cancelTimer();
-        break;
-    }
-  });
+  // Start remote control only if enabled in settings (off by default).
+  startRemoteControl();
 
   // Focus Sessions: forward ticks and phase changes to renderer.
   focusSessions.onTick((fs) => {
@@ -1903,9 +1956,7 @@ app.on('before-quit', () => {
   app.isQuitting = true;
   clearTimerInterval();
   globalShortcut.unregisterAll();
-  companion.stop();
-  family.stopDiscovery();
-  family.stopCommandServer();
+  stopRemoteControl();
   idleDetection.stopMonitoring();
   bedtimeReminder.stopReminder();
 });

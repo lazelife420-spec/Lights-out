@@ -787,10 +787,30 @@
           </div>
         </div>
 
+        <!-- Remote Control Section -->
+        <div class="option-section remote-control-section">
+          <h3>&#x1F4F1; Remote Control</h3>
+          <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Control this PC from your phone or other PCs on your network. Off by default and protected by a pairing code.</p>
+          <div class="option-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="chk-remote-control">
+              <span>Enable phone &amp; family remote control</span>
+            </label>
+          </div>
+          <div id="remote-control-config" style="display:none;margin-top:8px">
+            <p style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Open this address on your phone (same Wi-Fi):</p>
+            <code id="remote-url" style="display:block;font-size:11px;word-break:break-all;background:var(--bg-card);padding:6px;border-radius:6px"></code>
+            <p style="font-size:11px;color:var(--text-muted);margin:8px 0 4px">Pairing code:</p>
+            <code id="remote-token" style="display:block;font-size:12px;background:var(--bg-card);padding:6px;border-radius:6px"></code>
+            <button type="button" id="btn-regen-token" class="btn-secondary" style="margin-top:8px">Regenerate Code</button>
+            <p style="font-size:10px;color:var(--text-muted);margin-top:8px">Anyone with this address and code can start, pause, snooze, or cancel timers (never a forced shutdown). Regenerate to revoke old links.</p>
+          </div>
+        </div>
+
         <!-- Family Mode Section -->
         <div class="option-section family-section">
           <h3>&#x1F468;&#x200D;&#x1F469;&#x200D;&#x1F467;&#x200D;&#x1F466; Family Mode</h3>
-          <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Control Lights Out on other PCs on your local network.</p>
+          <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Control Lights Out on other PCs on your local network. Requires Remote Control enabled above.</p>
           <div class="option-group">
             <button type="button" id="btn-family-scan" class="btn-secondary">Scan for Peers</button>
             <span id="family-status" style="margin-left:8px;font-size:11px;color:var(--text-muted)"></span>

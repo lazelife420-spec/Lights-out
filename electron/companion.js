@@ -7,18 +7,36 @@ const { EventEmitter } = require('events');
 const path = require('path');
 const fs = require('fs');
 
+const remoteControl = require('./remoteControl');
+
 const PWA_PORT = 58732;
 let server = null;
 let wss = null;
 let clients = new Set();
 const emitter = new EventEmitter();
 
+// Pairing token required from every client. Empty = no listener may bind.
+let expectedToken = '';
+let bindHost = '127.0.0.1';
+
+function tokenFromUrl(url) {
+  const i = String(url || '').indexOf('?');
+  if (i === -1) return '';
+  try { return new URLSearchParams(url.slice(i + 1)).get('t') || ''; }
+  catch { return ''; }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Minimal WebSocket server (no external deps)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function upgradeHandler(req, socket, head) {
-  if (req.headers.upgrade?.toLowerCase() !== 'websocket') return;
+  if (req.headers.upgrade?.toLowerCase() !== 'websocket') { socket.destroy(); return; }
+
+  // Reject any client that does not present the correct pairing token.
+  if (!remoteControl.tokensMatch(tokenFromUrl(req.url), expectedToken)) {
+    socket.destroy(); return;
+  }
 
   const key = req.headers['sec-websocket-key'];
   if (!key) { socket.destroy(); return; }
@@ -40,7 +58,9 @@ function upgradeHandler(req, socket, head) {
   socket.on('data', (buf) => {
     try {
       const msg = decodeWS(buf);
-      if (msg) emitter.emit('message', JSON.parse(msg), client);
+      if (!msg) return;
+      const result = remoteControl.validateCompanionMessage(JSON.parse(msg));
+      if (result.ok) emitter.emit('message', result.message, client);
     } catch { /* ignore malformed */ }
   });
 
@@ -101,7 +121,13 @@ function broadcast(data) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function requestHandler(req, res) {
-  if (req.url === '/' || req.url === '/index.html') {
+  const pathOnly = String(req.url || '').split('?')[0];
+  if (pathOnly === '/' || pathOnly === '/index.html') {
+    if (!remoteControl.tokensMatch(tokenFromUrl(req.url), expectedToken)) {
+      res.writeHead(401, { 'Content-Type': 'text/plain' });
+      res.end('Unauthorized: pairing code required');
+      return;
+    }
     const htmlPath = path.join(__dirname, 'companion.html');
     try {
       const html = fs.readFileSync(htmlPath, 'utf8');
@@ -142,8 +168,12 @@ function requestHandler(req, res) {
 // Public API
 // ─────────────────────────────────────────────────────────────────────────────
 
-function start() {
+function start(opts = {}) {
   if (server) return;
+  expectedToken = String(opts.token || '');
+  bindHost = opts.host || '127.0.0.1';
+  // Never expose a listener without a pairing token.
+  if (!expectedToken) return;
   server = http.createServer(requestHandler);
   server.on('upgrade', upgradeHandler);
 
@@ -159,8 +189,8 @@ function start() {
     }
   });
 
-  server.listen(PWA_PORT, '0.0.0.0', () => {
-    console.log(`Companion PWA running at http://localhost:${PWA_PORT}`);
+  server.listen(PWA_PORT, bindHost, () => {
+    console.log(`Companion PWA running on ${bindHost}:${PWA_PORT}`);
   });
 }
 
@@ -169,6 +199,7 @@ function stop() {
     server.close();
     server = null;
   }
+  expectedToken = '';
   for (const client of clients) {
     try { client.socket.destroy(); } catch {}
   }
@@ -180,7 +211,7 @@ function getStatus() {
     running: !!server,
     port: PWA_PORT,
     clients: clients.size,
-    url: `http://localhost:${PWA_PORT}`
+    host: bindHost
   };
 }
 

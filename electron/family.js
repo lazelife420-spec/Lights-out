@@ -4,13 +4,17 @@
 const dgram = require('dgram');
 const http = require('http');
 const { EventEmitter } = require('events');
+const remoteControl = require('./remoteControl');
 
 const DISCOVERY_PORT = 58733;
+const COMMAND_PORT = 58734;
 const BROADCAST_INTERVAL = 10000; // 10s beacon
 const FAMILY_MAGIC = 'LIGHTSOUT_FAMILY_V1';
+const TOKEN_HEADER = 'x-lightsout-token';
 
 let discoverySocket = null;
 let beaconTimer = null;
+let localToken = ''; // pairing secret; required on every inbound/outbound command
 const emitter = new EventEmitter();
 const knownPeers = new Map(); // ip -> { ip, port, lastSeen }
 
@@ -76,10 +80,14 @@ function sendRemoteCommand(peerIp, command, payload = {}) {
     const data = JSON.stringify({ command, ...payload });
     const options = {
       hostname: peerIp,
-      port: 58734, // Family command port (separate from PWA)
+      port: COMMAND_PORT, // Family command port (separate from PWA)
       path: '/command',
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(data),
+        [TOKEN_HEADER]: localToken // peer must share the same pairing token
+      },
       timeout: 5000
     };
 
@@ -126,41 +134,62 @@ async function remoteSnooze(peerIp, seconds = 300) {
 
 let commandServer = null;
 
+function reject(res, code, error) {
+  res.writeHead(code, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ success: false, error }));
+}
+
+// onCommand receives ONLY sanitized, validated commands. The handler enforces
+// the pairing token and command validation before anything is dispatched.
 function startCommandServer(onCommand) {
   if (commandServer) return;
   commandServer = http.createServer((req, res) => {
-    if (req.method === 'POST' && req.url === '/command') {
-      let body = '';
-      req.on('data', chunk => body += chunk);
-      req.on('end', () => {
-        try {
-          const cmd = JSON.parse(body);
-          onCommand(cmd);
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: true }));
-        } catch {
-          res.writeHead(400);
-          res.end(JSON.stringify({ success: false, error: 'Invalid command' }));
-        }
-      });
-    } else {
+    if (req.method !== 'POST' || req.url !== '/command') {
       res.writeHead(404);
       res.end();
+      return;
     }
+
+    // Cap body size to avoid abuse.
+    let body = '';
+    let tooBig = false;
+    req.on('data', chunk => {
+      body += chunk;
+      if (body.length > 4096) { tooBig = true; req.destroy(); }
+    });
+    req.on('end', () => {
+      if (tooBig) return;
+
+      // 1. Authenticate: pairing token must match (header or body).
+      let parsed;
+      try { parsed = JSON.parse(body); } catch { return reject(res, 400, 'invalid json'); }
+      const provided = req.headers[TOKEN_HEADER] || parsed.token;
+      if (!remoteControl.tokensMatch(provided, localToken)) {
+        return reject(res, 401, 'unauthorized');
+      }
+
+      // 2. Validate + sanitize the command.
+      const result = remoteControl.validateCommand(parsed);
+      if (!result.ok) return reject(res, 400, result.error);
+
+      onCommand(result.command);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true }));
+    });
   });
 
   // Degrade gracefully if the port is taken instead of crashing the main process.
   commandServer.on('error', (err) => {
     commandServer = null;
     if (err && err.code === 'EADDRINUSE') {
-      console.warn('Family command port 58734 already in use - family remote disabled for this instance.');
+      console.warn(`Family command port ${COMMAND_PORT} already in use - family remote disabled for this instance.`);
     } else {
       console.warn(`Family command server error: ${err && (err.message || err.code)}`);
     }
   });
 
-  commandServer.listen(58734, '0.0.0.0', () => {
-    console.log('Family command server on port 58734');
+  commandServer.listen(COMMAND_PORT, '0.0.0.0', () => {
+    console.log('Family command server listening (LAN remote control enabled)');
   });
 }
 
@@ -169,6 +198,28 @@ function stopCommandServer() {
     try { commandServer.close(); } catch {}
     commandServer = null;
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Lifecycle: nothing binds unless explicitly enabled with a pairing token.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function start(opts, onCommand) {
+  if (!opts || !opts.enabled || !opts.token) return false;
+  localToken = String(opts.token);
+  startDiscovery(opts.peerName);
+  startCommandServer(onCommand);
+  return true;
+}
+
+function stop() {
+  stopDiscovery();
+  stopCommandServer();
+  localToken = '';
+}
+
+function isRunning() {
+  return !!(commandServer || discoverySocket);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -201,6 +252,9 @@ function getLocalIPs() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 module.exports = {
+  start,
+  stop,
+  isRunning,
   startDiscovery,
   stopDiscovery,
   startCommandServer,
