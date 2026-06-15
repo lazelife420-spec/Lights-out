@@ -46,10 +46,8 @@ verify exactly what you downloaded. Builds are produced and published by CI, and
 each release is gated on `node --check`, a smoke suite, and a successful package
 step.
 
-**Latest: v10.0.8** - fixed the in-app updater download target so it selects the
-actual installer asset from the release instead of relying on fragile `.exe`
-asset ordering or filename construction.
-Release notes: https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.0.8
+**Latest: v10.0.9** - restores the Streaks tab panel and fixes a cancel-timer error where guided breathing cleanup could show a red error toast.
+Release notes: https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.0.9
 
 Previously, v10.0.7 fixed clock preference restoration on app launch and
 prevented saved clock settings from being overwritten by startup defaults;
