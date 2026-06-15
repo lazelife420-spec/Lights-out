@@ -1269,7 +1269,7 @@ function applyTimerPayload(data) {
     loadStreaks();
     api.showNotification('Lights Out', state.dryRun ? 'Dry run complete.' : `${actionLabel()} started.`);
     notify(data.message || 'Timer complete', 'success', 5000);
-    stopGuidedBreathing();
+    if (typeof stopGuidedBreathing === 'function') stopGuidedBreathing();
     if (typeof AmbientVisuals !== 'undefined') AmbientVisuals.stop();
   } else if (data.type === 'cancelled') {
     state.running = false;
@@ -1279,7 +1279,7 @@ function applyTimerPayload(data) {
     Soundscape.stop();
     hideWarningModal();
     removeWarmFilter();
-    stopGuidedBreathing();
+    if (typeof stopGuidedBreathing === 'function') stopGuidedBreathing();
     if (typeof AmbientVisuals !== 'undefined') AmbientVisuals.stop();
   } else if (data.type === 'warning') {
     SoundSystem.playWarning();
@@ -1782,7 +1782,7 @@ function startGuidedBreathing() {
         phaseIdx = 0;
         cycle++;
         if (cycle >= BREATHING_CYCLES) {
-          stopGuidedBreathing();
+          if (typeof stopGuidedBreathing === 'function') stopGuidedBreathing();
           return;
         }
       }
@@ -1801,7 +1801,9 @@ function stopGuidedBreathing() {
 }
 
 if (els.btnBreathingStop) {
-  els.btnBreathingStop.addEventListener('click', stopGuidedBreathing);
+  els.btnBreathingStop.addEventListener('click', () => {
+    if (typeof stopGuidedBreathing === 'function') stopGuidedBreathing();
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
