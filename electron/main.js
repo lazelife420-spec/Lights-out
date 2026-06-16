@@ -1358,7 +1358,7 @@ ipcMain.handle('wifi-guard-unblock', async () => {
   return wifiGuard.unblockInternet(config);
 });
 ipcMain.handle('save-wifi-guard-settings', async (e, wifiSettings) => {
-  settingsStore.setSection('wifiGuard', wifiSettings);
+  settingsStore.updateSection('wifiGuard', wifiSettings);
   return { saved: true };
 });
 ipcMain.handle('get-wifi-guard-settings', async () => {
@@ -1374,14 +1374,14 @@ ipcMain.handle('content-block-status', async () => {
   return { blocked: contentBlocker.isBlocked(), sites: contentBlocker.getActiveBlocklist() };
 });
 ipcMain.handle('save-content-blocker-settings', async (e, s) => {
-  settingsStore.setSection('contentBlocker', s);
+  settingsStore.updateSection('contentBlocker', s);
   return { saved: true };
 });
 ipcMain.handle('get-content-blocker-settings', async () => {
   return settingsStore.getSection('contentBlocker');
 });
 ipcMain.handle('save-accountability-settings', async (e, s) => {
-  settingsStore.setSection('accountability', s);
+  settingsStore.updateSection('accountability', s);
   return { saved: true };
 });
 ipcMain.handle('get-accountability-settings', async () => {
@@ -1465,7 +1465,7 @@ ipcMain.handle('set-bedtime-reminder', async (e, min) => {
 ipcMain.handle('set-calendar-auto-start', async (e, enabled) => {
   const cal = settingsStore.getSection('calendar') || {};
   cal.autoStartFromEvents = !!enabled;
-  settingsStore.setSection('calendar', cal);
+  settingsStore.updateSection('calendar', cal);
   return { autoStartFromEvents: cal.autoStartFromEvents };
 });
 ipcMain.handle('resume-recoverable-timer', async () => {
