@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lights Out - Make your PC keep the bedtime promise</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #05080b;
+      --surface: #10171d;
+      --surface-elevated: #151f27;
+      --text-primary: #f3f7fa;
+      --text-muted: #91a2b3;
+      --accent: #6bd3ff;
+      --accent-success: #58d46b;
+      --accent-warning: #ff4d4d;
+      --divider: rgba(255,255,255,0.10);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Hero Section */
+    .hero {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: center;
+      padding: 2rem 4rem;
+      gap: 4rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -20%;
+      width: 80%;
+      height: 200%;
+      background: radial-gradient(ellipse at center, rgba(107, 211, 255, 0.08) 0%, transparent 70%);
+      pointer-events: none;
+      animation: pulse 8s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(1.05); }
+    }
+
+    .hero-content {
+      max-width: 520px;
+      z-index: 1;
+    }
+
+    .hero-eyebrow {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+      font-weight: 600;
+    }
+
+    .hero-title {
+      font-size: clamp(3rem, 8vw, 5rem);
+      font-weight: 700;
+      line-height: 1.1;
+      margin-bottom: 1.5rem;
+      letter-spacing: -0.02em;
+    }
+
+    .hero-subtitle {
+      font-size: 1.25rem;
+      color: var(--text-muted);
+      margin-bottom: 2rem;
+      line-height: 1.5;
+    }
+
+    .hero-cta {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.875rem 1.5rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-decoration: none;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: var(--bg);
+    }
+
+    .btn-primary:hover {
+      background: #8adfff;
+      transform: translateY(-2px);
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text-primary);
+      border: 1px solid var(--divider);
+    }
+
+    .btn-secondary:hover {
+      background: var(--surface-elevated);
+      border-color: rgba(255,255,255,0.2);
+    }
+
+    .hero-microcopy {
+      margin-top: 1.5rem;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .hero-visual {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1;
+    }
+
+    .app-preview {
+      width: 100%;
+      max-width: 600px;
+      aspect-ratio: 16/10;
+      background: var(--surface);
+      border-radius: 12px;
+      border: 1px solid var(--divider);
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5), 0 0 0 1px rgba(107, 211, 255, 0.1);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .countdown-ring {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 200px;
+      height: 200px;
+    }
+
+    .ring-svg {
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+    }
+
+    .ring-bg {
+      fill: none;
+      stroke: var(--surface-elevated);
+      stroke-width: 8;
+    }
+
+    .ring-progress {
+      fill: none;
+      stroke: var(--accent);
+      stroke-width: 8;
+      stroke-linecap: round;
+      stroke-dasharray: 565;
+      stroke-dashoffset: 141;
+      animation: sweep 4s ease-in-out infinite;
+    }
+
+    @keyframes sweep {
+      0%, 100% { stroke: var(--accent); }
+      50% { stroke: var(--accent-success); }
+    }
+
+    .countdown-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+
+    .countdown-time {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .countdown-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    /* Proof Bar */
+    .proof-bar {
+      background: var(--surface);
+      border-top: 1px solid var(--divider);
+      border-bottom: 1px solid var(--divider);
+      padding: 1rem 4rem;
+    }
+
+    .proof-items {
+      display: flex;
+      gap: 3rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .proof-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+
+    .proof-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-success);
+    }
+
+    /* Sections */
+    .section {
+      padding: 6rem 4rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 4rem;
+    }
+
+    .section-title {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+    }
+
+    .section-subtitle {
+      font-size: 1.125rem;
+      color: var(--text-muted);
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* Workflow Section */
+    .workflow {
+      display: flex;
+      gap: 2rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .workflow-step {
+      flex: 1;
+      min-width: 180px;
+      max-width: 200px;
+      text-align: center;
+      padding: 2rem;
+      background: var(--surface);
+      border-radius: 8px;
+      border: 1px solid var(--divider);
+      transition: all 0.3s ease;
+    }
+
+    .workflow-step:hover {
+      border-color: rgba(107, 211, 255, 0.3);
+      transform: translateY(-4px);
+    }
+
+    .step-number {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--surface-elevated);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      margin: 0 auto 1rem;
+      color: var(--accent);
+    }
+
+    .step-title {
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .step-desc {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+
+    /* Feature Cards */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+    }
+
+    .feature {
+      padding: 2rem;
+      background: var(--surface);
+      border-radius: 8px;
+      border: 1px solid var(--divider);
+    }
+
+    .feature-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: var(--accent);
+    }
+
+    .feature-body {
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* Streaks Section */
+    .streaks-showcase {
+      background: var(--surface);
+      border-radius: 12px;
+      border: 1px solid var(--divider);
+      padding: 2rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      align-items: center;
+    }
+
+    .streaks-content h3 {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .streaks-content p {
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+    }
+
+    .streaks-visual {
+      background: var(--bg);
+      border-radius: 8px;
+      padding: 1.5rem;
+      border: 1px solid var(--divider);
+    }
+
+    .streak-hero {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .streak-flame {
+      font-size: 2.5rem;
+    }
+
+    .streak-count {
+      font-size: 2rem;
+      font-weight: 700;
+    }
+
+    .streak-label {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+
+    .week-bar {
+      display: flex;
+      gap: 4px;
+      margin-top: 1rem;
+    }
+
+    .day-dot {
+      flex: 1;
+      height: 8px;
+      border-radius: 4px;
+      background: var(--surface-elevated);
+    }
+
+    .day-dot.filled {
+      background: var(--accent-success);
+    }
+
+    /* Profiles Section */
+    .profiles-grid {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .profile-card {
+      padding: 1.5rem 2rem;
+      background: var(--surface);
+      border-radius: 8px;
+      border: 1px solid var(--divider);
+      text-align: center;
+      min-width: 140px;
+    }
+
+    .profile-icon {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .profile-name {
+      font-weight: 600;
+    }
+
+    /* Safety Section */
+    .safety-content {
+      text-align: center;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .safety-content p {
+      font-size: 1.25rem;
+      color: var(--text-muted);
+    }
+
+    /* Final CTA */
+    .final-cta {
+      text-align: center;
+      padding: 6rem 4rem;
+      background: var(--surface);
+      border-top: 1px solid var(--divider);
+    }
+
+    .final-cta h2 {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .final-cta p {
+      font-size: 1.125rem;
+      color: var(--text-muted);
+      margin-bottom: 2rem;
+    }
+
+    /* Footer */
+    footer {
+      padding: 2rem 4rem;
+      text-align: center;
+      border-top: 1px solid var(--divider);
+    }
+
+    footer p {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .hero {
+        grid-template-columns: 1fr;
+        padding: 2rem;
+        gap: 2rem;
+        text-align: center;
+      }
+
+      .hero-content {
+        max-width: 100%;
+        order: 1;
+      }
+
+      .hero-visual {
+        order: 2;
+      }
+
+      .hero-cta {
+        justify-content: center;
+      }
+
+      .section {
+        padding: 4rem 1.5rem;
+      }
+
+      .proof-items {
+        gap: 1.5rem;
+      }
+
+      .streaks-showcase {
+        grid-template-columns: 1fr;
+      }
+
+      .workflow {
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .workflow-step {
+        max-width: 100%;
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-content">
+      <p class="hero-eyebrow">Windows shutdown, with a spine.</p>
+      <h1 class="hero-title">Lights Out</h1>
+      <p class="hero-subtitle">Make your PC keep the bedtime promise. A Windows wind-down timer with profiles, streaks, proof receipts, and shutdown controls that stay out of your way until it matters.</p>
+      <div class="hero-cta">
+        <a href="https://github.com/Z3r0DayZion-install/lights-out/releases/latest" class="btn btn-primary">Download for Windows</a>
+        <a href="https://github.com/Z3r0DayZion-install/lights-out/releases" class="btn btn-secondary">View release proof</a>
+      </div>
+      <p class="hero-microcopy">Latest: v10.0.9. Installer, portable build, and SHA256 checksums available.</p>
+    </div>
+    <div class="hero-visual">
+      <div class="app-preview">
+        <div class="countdown-ring">
+          <svg class="ring-svg" viewBox="0 0 200 200">
+            <circle class="ring-bg" cx="100" cy="100" r="90"></circle>
+            <circle class="ring-progress" cx="100" cy="100" r="90"></circle>
+          </svg>
+          <div class="countdown-text">
+            <div class="countdown-time">28:00</div>
+            <div class="countdown-label">minutes</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Proof Bar -->
+  <div class="proof-bar">
+    <div class="proof-items">
+      <div class="proof-item">
+        <span class="proof-dot"></span>
+        <span>v10.0.9 live</span>
+      </div>
+      <div class="proof-item">
+        <span class="proof-dot"></span>
+        <span>Smoke 41/41</span>
+      </div>
+      <div class="proof-item">
+        <span class="proof-dot"></span>
+        <span>Installer + portable</span>
+      </div>
+      <div class="proof-item">
+        <span class="proof-dot"></span>
+        <span>SHA256 checksums</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Problem Section -->
+  <section class="section">
+    <div class="section-header">
+      <h2 class="section-title">The problem is not knowing bedtime. It is obeying it.</h2>
+      <p class="section-subtitle">One more video turns into two hours. One quick check turns into a wrecked morning. Lights Out turns the shutdown decision into a visible countdown, then backs it with receipts.</p>
+    </div>
+    <div class="features">
+      <div class="feature">
+        <h3 class="feature-title">Start a hard stop in seconds</h3>
+        <p class="feature-body">Pick a duration, start the countdown, and let the visible deadline do the discipline.</p>
+      </div>
+      <div class="feature">
+        <h3 class="feature-title">Save routines for different nights</h3>
+        <p class="feature-body">Movie night, hard stop, or a two-hour limit—load your routine without rebuilding the timer.</p>
+      </div>
+      <div class="feature">
+        <h3 class="feature-title">Watch streaks build from real sessions</h3>
+        <p class="feature-body">Track nights from actual recorded events, not fake wellness guesses.</p>
+      </div>
+      <div class="feature">
+        <h3 class="feature-title">Keep proof of what happened</h3>
+        <p class="feature-body">Receipts show action, duration, start time, end time, and command.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Workflow Section -->
+  <section class="section">
+    <div class="section-header">
+      <h2 class="section-title">Set it. See it. Let it end the night.</h2>
+    </div>
+    <div class="workflow">
+      <div class="workflow-step">
+        <div class="step-number">1</div>
+        <h4 class="step-title">Set duration</h4>
+        <p class="step-desc">Pick minutes or choose a saved profile.</p>
+      </div>
+      <div class="workflow-step">
+        <div class="step-number">2</div>
+        <h4 class="step-title">Start countdown</h4>
+        <p class="step-desc">The timer begins with a visible deadline.</p>
+      </div>
+      <div class="workflow-step">
+        <div class="step-number">3</div>
+        <h4 class="step-title">Pause or snooze</h4>
+        <p class="step-desc">Life happens. Extend if you need to.</p>
+      </div>
+      <div class="workflow-step">
+        <div class="step-number">4</div>
+        <h4 class="step-title">Shutdown/cancel</h4>
+        <p class="step-desc">Follow through or abort cleanly.</p>
+      </div>
+      <div class="workflow-step">
+        <div class="step-number">5</div>
+        <h4 class="step-title">Receipt and streak</h4>
+        <p class="step-desc">Proof of the session, streak updated.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Streaks Section -->
+  <section class="section">
+    <div class="section-header">
+      <h2 class="section-title">Streaks from real sessions.</h2>
+      <p class="section-subtitle">Not guesses. Not medical claims. Just the nights you actually followed through.</p>
+    </div>
+    <div class="streaks-showcase">
+      <div class="streaks-content">
+        <h3>3 night streak</h3>
+        <p>Each night you complete a timer session, your streak grows. Miss a night and the streak resets honestly. No fake wellness scores, just real event data.</p>
+        <div class="hero-cta">
+          <a href="https://github.com/Z3r0DayZion-install/lights-out/releases/latest" class="btn btn-primary">Download for Windows</a>
+        </div>
+      </div>
+      <div class="streaks-visual">
+        <div class="streak-hero">
+          <span class="streak-flame">🔥</span>
+          <div>
+            <div class="streak-count">3</div>
+            <div class="streak-label">current streak</div>
+          </div>
+        </div>
+        <div class="week-bar">
+          <div class="day-dot filled"></div>
+          <div class="day-dot filled"></div>
+          <div class="day-dot filled"></div>
+          <div class="day-dot"></div>
+          <div class="day-dot"></div>
+          <div class="day-dot"></div>
+          <div class="day-dot"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Profiles Section -->
+  <section class="section">
+    <div class="section-header">
+      <h2 class="section-title">Save the routines you actually use.</h2>
+      <p class="section-subtitle">Start them without rebuilding the same timer every night.</p>
+    </div>
+    <div class="profiles-grid">
+      <div class="profile-card">
+        <div class="profile-icon">🎬</div>
+        <div class="profile-name">Witchcraft</div>
+      </div>
+      <div class="profile-card">
+        <div class="profile-icon">💰</div>
+        <div class="profile-name">Money</div>
+      </div>
+      <div class="profile-card">
+        <div class="profile-icon">🛑</div>
+        <div class="profile-name">Hard Stop</div>
+      </div>
+      <div class="profile-card">
+        <div class="profile-icon">⚡</div>
+        <div class="profile-name">Beastmode</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Receipts Section -->
+  <section class="section">
+    <div class="section-header">
+      <h2 class="section-title">Receipts or it did not happen.</h2>
+      <p class="section-subtitle">When the night ends, Lights Out can show what happened: action, duration, start time, end time, warnings, and command.</p>
+    </div>
+    <div class="features">
+      <div class="feature">
+        <h3 class="feature-title">Session proof</h3>
+        <p class="feature-body">Every timer completion or cancellation generates a receipt with full session details.</p>
+      </div>
+      <div class="feature">
+        <h3 class="feature-title">View history</h3>
+        <p class="feature-body">Browse past sessions with clear status indicators for completed, cancelled, or dry-run sessions.</p>
+      </div>
+      <div class="feature">
+        <h3 class="feature-title">Copy proof</h3>
+        <p class="feature-body">Export session data for accountability partners or personal records.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Safety Section -->
+  <section class="section">
+    <div class="safety-content">
+      <h2 class="section-title">Safety and integrity.</h2>
+      <p>Remote control is off by default. Updates use published release assets. Checksums ship with the release.</p>
+    </div>
+  </section>
+
+  <!-- Final CTA -->
+  <section class="final-cta">
+    <h2>Make the computer blink first.</h2>
+    <p>Download Lights Out for Windows and turn bedtime from a negotiation into a command.</p>
+    <div class="hero-cta" style="justify-content: center;">
+      <a href="https://github.com/Z3r0DayZion-install/lights-out/releases/latest" class="btn btn-primary">Download for Windows</a>
+      <a href="https://github.com/Z3r0DayZion-install/lights-out/releases" class="btn btn-secondary">View Checksums</a>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="section">
+    <div class="section-header">
+      <h2 class="section-title">FAQ</h2>
+    </div>
+    <div class="features">
+      <div class="feature">
+        <h3 class="feature-title">Does Lights Out force shutdown?</h3>
+        <p class="feature-body">Only when the user explicitly chooses a force-shutdown path. The normal workflow keeps shutdown controls visible and user-controlled.</p>
+      </div>
+      <div class="feature">
+        <h3 class="feature-title">Does it track my sleep?</h3>
+        <p class="feature-body">No. It tracks app events such as timer sessions and streaks. This is not medical sleep tracking.</p>
+      </div>
+      <div class="feature">
+        <h3 class="feature-title">Does remote control run by default?</h3>
+        <p class="feature-body">No. Remote control is off by default and requires a pairing token when enabled.</p>
+      </div>
+      <div class="feature">
+        <h3 class="feature-title">Is there a portable version?</h3>
+        <p class="feature-body">Yes. Releases include an installer and portable build.</p>
+      </div>
+      <div class="feature">
+        <h3 class="feature-title">How do I verify the download?</h3>
+        <p class="feature-body">Use the release checksum file, SHA256SUMS.txt, published with the release assets.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Lights Out - Windows wind-down timer. Open source. Proof-backed releases.</p>
+  </footer>
+</body>
+</html>
