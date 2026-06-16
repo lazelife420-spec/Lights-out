@@ -589,7 +589,9 @@ async function completeTimer() {
     : `Timer complete: ${formatAction(timerState.action)} now.`);
 
   // Record a streak event for the completed ritual.
-  try { streaks.recordEvent(null, timerState.action, false); } catch {}
+  try { streaks.recordEvent(null, timerState.action, false); } catch (e) {
+    console.error('Failed to record streak event:', e);
+  }
   // Update receipt: completing.
   if (activeReceiptId) {
     runReceipts.updateRunReceipt(activeReceiptId, {
@@ -606,7 +608,9 @@ async function completeTimer() {
     const bedTime = new Date().toTimeString().slice(0, 5);
     const estimated = sleepDebt.estimateSleepHours(bedTime, appSettings.wakeTime || '07:00');
     sleepDebt.recordNight(bedTime, appSettings.wakeTime || '07:00', estimated);
-  } catch {}
+  } catch (e) {
+    console.error('Failed to record sleep debt:', e);
+  }
 
   // Unsaved work guardian: check for unsaved work before power action.
   if (!timerState.dryRun) {
@@ -772,11 +776,13 @@ function playFirstLight() {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('morning-briefing', {
           events: (events || []).slice(0, 5),
-          sleepDebt: sleepDebt.getDebtSummary(),
+          sleepDebt: sleepDebt.getSummary(),
           streaks: streaks.getSummary()
         });
       }
-    } catch {}
+    } catch (e) {
+      console.error('Failed to send morning briefing:', e);
+    }
   }, 5000);
 
   let elapsed = 0;
@@ -1874,7 +1880,9 @@ app.whenReady().then(async () => {
       try {
         const summary = streaks.getSummary();
         companion.broadcast({ type: 'streaks', streak: summary.streak || 0, bestStreak: summary.bestStreak || 0 });
-      } catch {}
+      } catch (e) {
+        console.error('Failed to broadcast streaks to companion:', e);
+      }
     }, 500);
   });
 

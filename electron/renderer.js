@@ -1890,7 +1890,9 @@ async function loadSleepDebt() {
   try {
     const debt = await api.getSleepDebt?.();
     if (debt) renderSleepDebt(debt);
-  } catch {}
+  } catch (e) {
+    console.error('Failed to load sleep debt:', e);
+  }
 }
 
 function renderSleepDebt(debt) {
@@ -1981,7 +1983,9 @@ async function loadMorningProof() {
   try {
     const receipt = await api.getLatestReceipt?.();
     if (receipt) renderMorningProof(receipt);
-  } catch {}
+  } catch (e) {
+    console.error('Failed to load morning proof:', e);
+  }
 }
 
 function renderMorningProof(receipt) {
@@ -2042,7 +2046,9 @@ if (els.btnProofDetails) {
       ]);
       renderReceiptsModal(receipts || [], stats);
       if (els.receiptsModal) els.receiptsModal.classList.add('active');
-    } catch {}
+    } catch (e) {
+      console.error('Failed to load receipts:', e);
+    }
   });
 }
 
@@ -2083,7 +2089,9 @@ if (els.btnClearReceipts) {
       if (els.receiptsList) els.receiptsList.innerHTML = '<p style="font-size:11px;color:var(--text-muted)">No receipts.</p>';
       if (els.receiptStats) els.receiptStats.innerHTML = '';
       notify('All receipts cleared', 'info');
-    } catch {}
+    } catch (e) {
+      console.error('Failed to clear receipts:', e);
+    }
   });
 }
 
@@ -3240,7 +3248,9 @@ async function renderCustomSequences() {
     try {
       const settings = await api.getAppSettings();
       customs = settings?.lastLight?.customSequences || [];
-    } catch {}
+    } catch (e) {
+      console.error('Failed to load custom sequences from settings:', e);
+    }
   }
   els.customSeqList.innerHTML = customs.length
     ? customs.map(s => `<div class="custom-seq-item">
@@ -4178,7 +4188,9 @@ async function loadCalendarConfig() {
     });
     // Show the active provider config.
     els.selCalendarProvider?.dispatchEvent(new Event('change'));
-  } catch {}
+  } catch (e) {
+    console.error('Failed to load calendar config:', e);
+  }
 }
 
 async function saveCalendarConfig() {
@@ -4205,7 +4217,9 @@ async function fetchAndRenderEvents() {
   try {
     calEvents = await api.fetchCalendarEvents(14);
     renderCalendarEvents();
-  } catch {}
+  } catch (e) {
+    console.error('Failed to fetch calendar events:', e);
+  }
 }
 
 function renderCalendarEvents() {
