@@ -38,6 +38,7 @@
       "media.js",
       "unsavedGuard.js",
       "family.js",
+      "remoteControl.js",
       "wifiGuard.js",
       "contentBlocker.js",
       "accountability.js",
