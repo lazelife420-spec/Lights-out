@@ -1384,7 +1384,7 @@ function renderStreaks(summary, catalog, report, sleepScore) {
       const pct = Math.min(100, Math.max(8, (mins / maxMins) * 100));
       const isToday = d.date === today;
       const dayIdx = new Date(d.date + 'T12:00:00').getDay();
-      return `<div class="week-bar${isToday ? ' today' : ''}" style="height:${pct}%" title="${d.bedTime}"><span class="week-bar-label">${dayLabels[dayIdx]}</span></div>`;
+      return `<div class="week-bar${isToday ? ' today' : ''}" style="height:${pct}%" title="${escapeHtml(d.bedTime || '')}"><span class="week-bar-label">${dayLabels[dayIdx]}</span></div>`;
     }).join('');
   }
 
@@ -1407,8 +1407,8 @@ function renderStreaks(summary, catalog, report, sleepScore) {
       const icon = isUnlocked ? (icons[a.id] || '&#x1F4E6;') : '&#x1F512;';
       return `<div class="achievement-card ${isUnlocked ? 'unlocked' : 'locked'}">
         <div class="ach-icon">${icon}</div>
-        <div class="ach-name">${isUnlocked ? a.name : '???'}</div>
-        <div class="ach-desc">${isUnlocked ? a.desc : 'Not yet unlocked'}</div>
+        <div class="ach-name">${isUnlocked ? escapeHtml(a.name) : '???'}</div>
+        <div class="ach-desc">${isUnlocked ? escapeHtml(a.desc) : 'Not yet unlocked'}</div>
       </div>`;
     }).join('');
   }
@@ -1939,10 +1939,10 @@ async function showOverrideModal() {
     if (els.overrideConsequences) {
       els.overrideConsequences.innerHTML = consequences.consequences.map(c => `
         <div class="override-consequence" style="display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--bg-card)">
-          <span style="font-size:18px">${c.icon}</span>
+          <span style="font-size:18px">${escapeHtml(c.icon)}</span>
           <div>
-            <span style="font-size:12px;color:var(--text-primary)">${c.message}</span>
-            <span style="font-size:9px;color:${c.severity === 'high' ? '#ff4d4d' : 'var(--text-muted)'};display:block;margin-top:2px">${c.severity.toUpperCase()}</span>
+            <span style="font-size:12px;color:var(--text-primary)">${escapeHtml(c.message)}</span>
+            <span style="font-size:9px;color:${c.severity === 'high' ? '#ff4d4d' : 'var(--text-muted)'};display:block;margin-top:2px">${escapeHtml(c.severity?.toUpperCase() || '')}</span>
           </div>
         </div>
       `).join('');
@@ -2020,14 +2020,14 @@ function renderMorningProof(receipt) {
     const force = receipt.forceShutdown ? ' / Force' : '';
 
     els.proofBody.innerHTML = `
-      <div class="proof-row"><span>Action</span><span>${action}${force}${dryRun}</span></div>
+      <div class="proof-row"><span>Action</span><span>${escapeHtml(action)}${force}${dryRun}</span></div>
       <div class="proof-row"><span>Duration</span><span>${dur}</span></div>
       <div class="proof-row"><span>Started</span><span>${start}</span></div>
       <div class="proof-row"><span>${receipt.result === 'cancelled' ? 'Cancelled' : 'Ended'}</span><span>${end}</span></div>
       ${pauses ? `<div class="proof-row"><span>Pauses</span><span>${pauses}</span></div>` : ''}
       ${snoozes ? `<div class="proof-row"><span>Snoozes</span><span>${snoozes}</span></div>` : ''}
       ${warnings ? `<div class="proof-row"><span>Warnings</span><span>${warnings}</span></div>` : ''}
-      ${receipt.powerCommand ? `<div class="proof-row"><span>Command</span><span class="mono">${receipt.powerCommand}</span></div>` : ''}
+      ${receipt.powerCommand ? `<div class="proof-row"><span>Command</span><span class="mono">${escapeHtml(receipt.powerCommand)}</span></div>` : ''}
     `;
   }
 }
@@ -2115,9 +2115,9 @@ function renderReceiptsModal(receipts, stats) {
     return `<div class="receipt-row" style="border-left:3px solid ${c};padding:6px 8px;margin-bottom:4px;border-radius:0 4px 4px 0;background:var(--bg-card)">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <span style="font-size:11px;font-weight:600;color:var(--text-primary)">${start}</span>
-        <span style="font-size:10px;font-weight:700;color:${c};text-transform:uppercase">${r.result?.replace(/_/g, ' ')}</span>
+        <span style="font-size:10px;font-weight:700;color:${c};text-transform:uppercase">${escapeHtml(r.result?.replace(/_/g, ' ') || '')}</span>
       </div>
-      <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${r.action}${r.dryRun ? ' (dry)' : ''}${r.forceShutdown ? ' /force' : ''} | ${dur}m | ${r.pauseCount || 0}p ${r.snoozeCount || 0}s</div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${escapeHtml(r.action || '')}${r.dryRun ? ' (dry)' : ''}${r.forceShutdown ? ' /force' : ''} | ${dur}m | ${r.pauseCount || 0}p ${r.snoozeCount || 0}s</div>
     </div>`;
   }).join('');
 }  els.btnPlus.addEventListener('click', () => {
@@ -3244,9 +3244,9 @@ async function renderCustomSequences() {
   }
   els.customSeqList.innerHTML = customs.length
     ? customs.map(s => `<div class="custom-seq-item">
-        <span class="seq-item-name">${s.name}</span>
-        <button class="seq-item-share" data-id="${s.id}" title="Share (copy JSON)">&#x1F517;</button>
-        <button class="seq-item-delete" data-id="${s.id}" title="Delete">&times;</button>
+        <span class="seq-item-name">${escapeHtml(s.name)}</span>
+        <button class="seq-item-share" data-id="${escapeHtml(s.id)}" title="Share (copy JSON)">&#x1F517;</button>
+        <button class="seq-item-delete" data-id="${escapeHtml(s.id)}" title="Delete">&times;</button>
       </div>`).join('')
     : '<span style="color:var(--text-muted);font-size:11px">No custom sequences yet.</span>';
   els.customSeqList.querySelectorAll('.seq-item-delete').forEach(btn => {
@@ -3326,7 +3326,7 @@ function promptTimerRecovery(snapshot) {
   const banner = document.createElement('div');
   banner.className = 'recovery-banner';
   banner.innerHTML = `
-    <span class="recovery-text">${label}</span>
+    <span class="recovery-text">${escapeHtml(label)}</span>
     <button class="recovery-btn resume">Resume</button>
     <button class="recovery-btn dismiss">Dismiss</button>
   `;
