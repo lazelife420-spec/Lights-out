@@ -1,6 +1,8 @@
-# Lights Out Sales Page Copy
+# Lights Out™ — A Proof Foundry Product
 
-Use this as direct copy for a sales/landing page. Keep it lean.
+# Sales Page Copy
+
+Use this as direct copy for a sales/landing page. Keep it lean. No fake claims. No missing receipts. Ship with proof.
 
 ## Hero
 
@@ -13,8 +15,14 @@ Windows shutdown, with a spine.
 H1:
 
 ```text
-Lights Out
+Lights Out™
 Make your PC keep the bedtime promise.
+```
+
+Product Lockup:
+
+```text
+A Proof Foundry Product
 ```
 
 Subhead:
@@ -181,7 +189,7 @@ Make the computer blink first.
 Body:
 
 ```text
-Download Lights Out for Windows and turn bedtime from a negotiation into a command.
+Download Lights Out™ for Windows and turn bedtime from a negotiation into a command.
 ```
 
 Buttons:
@@ -190,6 +198,26 @@ Buttons:
 Download for Windows
 View Checksums
 ```
+
+Brand Lockup:
+
+```text
+Forged by The Proof Foundry™ — Build it. Prove it. Ship it.
+Proof-first software forged for builders.
+```
+
+## Brand Promise
+
+Proof-first software forged for builders.
+
+- Direct
+- Confident
+- Evidence-backed
+- Practical
+- No hype
+- No fake AI claims
+- No medical sleep claims
+- No guaranteed productivity/sleep claims
 
 ## FAQ
 
