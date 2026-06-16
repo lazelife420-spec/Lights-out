@@ -46,8 +46,10 @@ verify exactly what you downloaded. Builds are produced and published by CI, and
 each release is gated on `node --check`, a smoke suite, and a successful package
 step.
 
-**Latest: v10.0.9** - restores the Streaks tab panel and fixes a cancel-timer error where guided breathing cleanup could show a red error toast.
-Release notes: https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.0.9
+**Latest: v10.0.10** - fixes a packaged-app startup crash (a required module was missing from the build manifest) and a settings-save error in WiFi Guard, Content Blocker, and Accountability.
+Release notes: https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.0.10
+
+Previously, v10.0.9 restored the Streaks tab panel and fixed a cancel-timer error where guided breathing cleanup could show a red error toast.
 
 Previously, v10.0.7 fixed clock preference restoration on app launch and
 prevented saved clock settings from being overwritten by startup defaults;

@@ -4,13 +4,14 @@
 
 ## Current Truth
 
-Lights Out™ is live at v10.0.9 — proof-first software forged for builders.
+Lights Out™ is live at v10.0.10 — proof-first software forged for builders.
 
 Recent shipped fixes:
 
 - v10.0.8 fixed the in-app updater download target so it selects the real installer asset.
 - Remote control hardening landed on `main`: remote control is gated behind pairing token and safer host binding.
 - v10.0.9 restored the Streaks tab panel and fixed the cancel-timer guided-breathing error toast.
+- v10.0.10 fixed a packaged-app startup crash (remoteControl.js was missing from the electron-builder file manifest) and corrected settings saves for WiFi Guard, Content Blocker, and Accountability.
 
 Current strongest product promise:
 
