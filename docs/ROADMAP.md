@@ -1,8 +1,10 @@
-# Lights Out Roadmap
+# Lights Out™ — A Proof Foundry Product
+
+# Roadmap
 
 ## Current Truth
 
-Lights Out is live at v10.0.9.
+Lights Out™ is live at v10.0.9 — proof-first software forged for builders.
 
 Recent shipped fixes:
 
@@ -15,6 +17,10 @@ Current strongest product promise:
 ```text
 Lights Out helps Windows users stop drifting past bedtime by turning shutdown into a visible, repeatable routine with proof.
 ```
+
+## The Proof Foundry Standard
+
+> No fake claims. No missing receipts. Ship with proof.
 
 ## Product Pillars
 
@@ -201,6 +207,19 @@ Ship only if:
 - Manual runtime proof exists.
 - No fake integrations.
 - No unsafe remote defaults.
+
+## Brand Promise
+
+Proof-first software forged for builders.
+
+- Direct
+- Confident
+- Evidence-backed
+- Practical
+- No hype
+- No fake AI claims
+- No medical sleep claims
+- No guaranteed productivity/sleep claims
 
 ## Backlog Parking Lot
 

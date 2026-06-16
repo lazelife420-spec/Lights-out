@@ -3,21 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lights Out - Make your PC keep the bedtime promise</title>
+  <title>Lights Out™ — A Proof Foundry Product</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #05080b;
-      --surface: #10171d;
-      --surface-elevated: #151f27;
-      --text-primary: #f3f7fa;
-      --text-muted: #91a2b3;
-      --accent: #6bd3ff;
-      --accent-success: #58d46b;
-      --accent-warning: #ff4d4d;
-      --divider: rgba(255,255,255,0.10);
+      --bg: #0B0F14;
+      --surface: #1C232B;
+      --surface-elevated: #232B35;
+      --text-primary: #F4F7F8;
+      --text-muted: #8A9199;
+      --accent: #00D1B2;
+      --accent-success: #00D1B2;
+      --accent-warning: #E5484D;
+      --accent-gold: #D6A84F;
+      --divider: rgba(244,247,248,0.10);
     }
 
     * {
@@ -57,7 +58,7 @@
       right: -20%;
       width: 80%;
       height: 200%;
-      background: radial-gradient(ellipse at center, rgba(107, 211, 255, 0.08) 0%, transparent 70%);
+      background: radial-gradient(ellipse at center, rgba(0, 209, 178, 0.08) 0%, transparent 70%);
       pointer-events: none;
       animation: pulse 8s ease-in-out infinite;
     }
@@ -122,7 +123,7 @@
     }
 
     .btn-primary:hover {
-      background: #8adfff;
+      background: #00E6C3;
       transform: translateY(-2px);
     }
 
@@ -190,12 +191,6 @@
       stroke-linecap: round;
       stroke-dasharray: 565;
       stroke-dashoffset: 141;
-      animation: sweep 4s ease-in-out infinite;
-    }
-
-    @keyframes sweep {
-      0%, 100% { stroke: var(--accent); }
-      50% { stroke: var(--accent-success); }
     }
 
     .countdown-text {
@@ -247,7 +242,7 @@
       width: 6px;
       height: 6px;
       border-radius: 50%;
-      background: var(--accent-success);
+      background: var(--accent-gold);
     }
 
     /* Sections */
@@ -310,7 +305,7 @@
       justify-content: center;
       font-weight: 700;
       margin: 0 auto 1rem;
-      color: var(--accent);
+      color: var(--accent-gold);
     }
 
     .step-title {
@@ -342,6 +337,49 @@
       font-weight: 600;
       margin-bottom: 1rem;
       color: var(--accent);
+    }
+
+    /* Brand Lockup */
+    .brand-lockup {
+      text-align: center;
+      padding: 1.5rem;
+      border-top: 1px solid var(--divider);
+      margin-top: 2rem;
+    }
+
+    .brand-product {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .brand-studio {
+      font-size: 0.875rem;
+      color: var(--accent-gold);
+      font-weight: 600;
+    }
+
+    .brand-tagline {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.25rem;
+    }
+
+    .pf-seal {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.25rem 0.75rem;
+      background: rgba(214, 168, 79, 0.1);
+      border: 1px solid var(--accent-gold);
+      border-radius: 4px;
+      font-size: 0.75rem;
+      color: var(--accent-gold);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
 
     .feature-body {
@@ -413,7 +451,7 @@
     }
 
     .day-dot.filled {
-      background: var(--accent-success);
+      background: var(--accent);
     }
 
     /* Profiles Section */
@@ -536,8 +574,9 @@
   <section class="hero">
     <div class="hero-content">
       <p class="hero-eyebrow">Windows shutdown, with a spine.</p>
-      <h1 class="hero-title">Lights Out</h1>
+      <h1 class="hero-title">Lights Out™</h1>
       <p class="hero-subtitle">Make your PC keep the bedtime promise. A Windows wind-down timer with profiles, streaks, proof receipts, and shutdown controls that stay out of your way until it matters.</p>
+      <p class="brand-product">A Proof Foundry Product</p>
       <div class="hero-cta">
         <a href="https://github.com/Z3r0DayZion-install/lights-out/releases/latest" class="btn btn-primary">Download for Windows</a>
         <a href="https://github.com/Z3r0DayZion-install/lights-out/releases" class="btn btn-secondary">View release proof</a>
@@ -563,6 +602,10 @@
   <!-- Proof Bar -->
   <div class="proof-bar">
     <div class="proof-items">
+      <div class="proof-item">
+        <span class="pf-seal">✓</span>
+        <span>Proof Foundry Verified</span>
+      </div>
       <div class="proof-item">
         <span class="proof-dot"></span>
         <span>v10.0.9 live</span>
@@ -773,7 +816,11 @@
   </section>
 
   <footer>
-    <p>Lights Out - Windows wind-down timer. Open source. Proof-backed releases.</p>
+    <div class="brand-lockup">
+      <p class="brand-product">Lights Out™ — A Proof Foundry Product</p>
+      <p class="brand-studio">Forged by The Proof Foundry™</p>
+      <p class="brand-tagline">Proof-first software forged for builders. No fake claims. No missing receipts. Ship with proof.</p>
+    </div>
   </footer>
 </body>
 </html>
