@@ -416,6 +416,30 @@
       border: 1px solid var(--divider);
     }
 
+    /* Screenshot figure styles for captured app images */
+    .shot {
+      display: block;
+      width: 100%;
+      max-width: 480px;
+      margin: 0 auto;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--divider);
+      background: var(--surface);
+      padding: 0.25rem;
+    }
+
+    .shot img { display: block; width: 100%; height: auto; }
+
+    .shot figcaption {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      margin-top: 0.75rem;
+      text-align: center;
+    }
+
+    .shot-narrow { max-width: 360px; margin: 0.5rem auto; }
+
     .streak-hero {
       display: flex;
       align-items: center;
@@ -581,7 +605,7 @@
         <a href="https://github.com/Z3r0DayZion-install/lights-out/releases/latest" class="btn btn-primary">Download for Windows</a>
         <a href="https://github.com/Z3r0DayZion-install/lights-out/releases" class="btn btn-secondary">View release proof</a>
       </div>
-      <p class="hero-microcopy">Latest: v10.0.9. Installer, portable build, and SHA256 checksums available.</p>
+      <p class="hero-microcopy">Latest: v10.0.10. Installer, portable build, and SHA256 checksums available.</p>
     </div>
     <div class="hero-visual">
       <div class="app-preview">
@@ -608,7 +632,7 @@
       </div>
       <div class="proof-item">
         <span class="proof-dot"></span>
-        <span>v10.0.9 live</span>
+        <span>v10.0.10 live</span>
       </div>
       <div class="proof-item">
         <span class="proof-dot"></span>
@@ -699,24 +723,10 @@
           <a href="https://github.com/Z3r0DayZion-install/lights-out/releases/latest" class="btn btn-primary">Download for Windows</a>
         </div>
       </div>
-      <div class="streaks-visual">
-        <div class="streak-hero">
-          <span class="streak-flame">🔥</span>
-          <div>
-            <div class="streak-count">3</div>
-            <div class="streak-label">current streak</div>
-          </div>
-        </div>
-        <div class="week-bar">
-          <div class="day-dot filled"></div>
-          <div class="day-dot filled"></div>
-          <div class="day-dot filled"></div>
-          <div class="day-dot"></div>
-          <div class="day-dot"></div>
-          <div class="day-dot"></div>
-          <div class="day-dot"></div>
-        </div>
-      </div>
+      <figure class="shot">
+        <img src="assets/app-streaks-v10.0.10.png" alt="The Lights Out v10.0.10 Streaks tab: a 7-night streak, best of 14, 63 total nights, an 11:42 average bedtime, 86% on-time over 7 days, a weekly bar chart, and the First Light, Weekly Warrior, Triple Threat and Seven Strong achievements unlocked." loading="lazy" width="481" height="666">
+        <figcaption>The in-app Streaks tab, shown with example session data.</figcaption>
+      </figure>
     </div>
   </section>
 
@@ -773,6 +783,10 @@
     <div class="safety-content">
       <h2 class="section-title">Safety and integrity.</h2>
       <p>Remote control is off by default. Updates use published release assets. Checksums ship with the release.</p>
+      <figure class="shot shot-narrow" style="margin-top:1.5rem;">
+        <img src="assets/app-settings-v10.0.10.png" alt="Lights Out v10.0.10 Advanced Options: wind-down system actions — Windows Night Light, auto-pause media, and window lockout — are all unchecked by default, and Smart Lights and Remote Control are off." loading="lazy" width="412" height="560">
+        <figcaption>Advanced Options: wind-down actions are optional and off by default.</figcaption>
+      </figure>
     </div>
   </section>
 
