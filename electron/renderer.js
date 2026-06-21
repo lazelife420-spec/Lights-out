@@ -388,6 +388,9 @@ const els = {
   streakWeekAvg: document.getElementById('streak-weekavg'),
   streakOnTime: document.getElementById('streak-ontime'),
   streakWeekBar: document.getElementById('streak-week-bar'),
+  streakCallout: document.getElementById('streak-callout'),
+  streakCalloutCount: document.getElementById('streak-callout-count'),
+  streakCalloutBest: document.getElementById('streak-callout-best'),
   achievementsGrid: document.getElementById('achievements-grid'),
   // Sleep score
   scoreValue: document.getElementById('score-value'),
@@ -1326,6 +1329,32 @@ async function loadStreaks() {
   } catch { /* streaks are decorative, never block */ }
 }
 
+// Home streak callout: show the current streak above Saved Profiles, but only
+// when there actually is one. A zero/absent streak stays hidden so the home
+// screen never displays a "0-night streak" or any unearned claim.
+function updateStreakCallout(summary) {
+  if (!els.streakCallout) return;
+  const streak = Number(summary && summary.streak) || 0;
+  if (streak < 1) {
+    els.streakCallout.style.display = 'none';
+    return;
+  }
+  if (els.streakCalloutCount) els.streakCalloutCount.textContent = streak;
+  if (els.streakCalloutBest) {
+    const best = Number(summary.bestStreak) || 0;
+    els.streakCalloutBest.textContent = best > streak ? `· best ${best}` : '';
+  }
+  els.streakCallout.style.display = '';
+}
+
+// Fetch just the streak summary (cheap) to drive the home callout, independent
+// of the Streaks tab being opened.
+async function refreshStreakCallout() {
+  try {
+    updateStreakCallout(await api.getStreaks());
+  } catch { /* decorative, never block */ }
+}
+
 function renderStreaks(summary, catalog, report, sleepScore) {
   if (!summary) return;
 
@@ -1355,6 +1384,8 @@ function renderStreaks(summary, catalog, report, sleepScore) {
     els.scoreValue.textContent = '--';
     if (els.scoreLabel) els.scoreLabel.textContent = 'Sleep Score (need 3+ nights)';
   }
+
+  updateStreakCallout(summary);
 
   if (els.streakCount) els.streakCount.textContent = summary.streak || 0;
   if (els.streakBest) els.streakBest.textContent = summary.bestStreak || 0;
@@ -2226,6 +2257,11 @@ function renderReceiptsModal(receipts, stats) {
       if (btn.dataset.tab === 'streaks') loadStreaks();
       if (btn.dataset.tab === 'focus') loadSleepDebt();
     });
+  });
+
+  // Home streak callout jumps to the Streaks tab for the full breakdown.
+  els.streakCallout?.addEventListener('click', () => {
+    document.querySelector('.tab-btn[data-tab="streaks"]')?.click();
   });
 
   els.modalClose.addEventListener('click', () => els.optionsModal.classList.remove('active'));
@@ -3964,6 +4000,7 @@ setupCalendarHandlers();
 setupRemoteControlHandlers();
 setAction(state.action);
 loadInitialData().finally(render);
+refreshStreakCallout();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Onboarding First-Run Wizard
