@@ -152,6 +152,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getRemoteControl: () => ipcRenderer.invoke('get-remote-control'),
   setRemoteControlEnabled: (enabled) => ipcRenderer.invoke('set-remote-control-enabled', enabled),
   regenerateRemoteToken: () => ipcRenderer.invoke('regenerate-remote-token'),
+  generateQr: (text) => ipcRenderer.invoke('generate-qr', text),
 
   // Family mode
   getFamilyPeers: () => ipcRenderer.invoke('get-family-peers'),
