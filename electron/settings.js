@@ -2,11 +2,70 @@
 // Stores all user-facing settings (app, smart lights, customization, active timer)
 // in userData\settings.json. Mirrors the persistence pattern used by profiles.js.
 
-const { app } = require('electron');
+const electron = require('electron');
+const { app } = electron;
 const path = require('path');
 const fs = require('fs');
 
 const SETTINGS_FILE = 'settings.json';
+
+// Credential-bearing fields that should not sit in plaintext on disk. Each is a
+// path within the settings tree. Values are encrypted with the OS keystore
+// (DPAPI on Windows) via Electron's safeStorage when available, and transparently
+// decrypted back into memory on load. Legacy plaintext values still load fine.
+const SECRET_PATHS = [
+  ['wifiGuard', 'routerPass'],
+  ['calendar', 'google', 'apiKey'],
+  ['calendar', 'outlook', 'accessToken'],
+  ['calendar', 'calendly', 'personalToken'],
+  ['smartLights', 'hueUsername'],
+  ['remoteControl', 'token']
+];
+const ENC_PREFIX = 'enc:v1:';
+
+function encryptionAvailable() {
+  try {
+    return !!(electron.safeStorage && electron.safeStorage.isEncryptionAvailable());
+  } catch {
+    return false;
+  }
+}
+
+function encryptSecret(value) {
+  if (typeof value !== 'string' || value === '' || value.startsWith(ENC_PREFIX)) return value;
+  if (!encryptionAvailable()) return value; // fall back to plaintext rather than lose data
+  try {
+    return ENC_PREFIX + electron.safeStorage.encryptString(value).toString('base64');
+  } catch {
+    return value;
+  }
+}
+
+function decryptSecret(value) {
+  if (typeof value !== 'string' || !value.startsWith(ENC_PREFIX)) return value;
+  if (!encryptionAvailable()) return ''; // cannot recover; surface as empty so the user re-enters
+  try {
+    return electron.safeStorage.decryptString(Buffer.from(value.slice(ENC_PREFIX.length), 'base64'));
+  } catch {
+    return '';
+  }
+}
+
+// Apply fn to each present secret field in `tree`, mutating it in place.
+function transformSecrets(tree, fn) {
+  if (!tree || typeof tree !== 'object') return tree;
+  for (const segments of SECRET_PATHS) {
+    let node = tree;
+    for (let i = 0; i < segments.length - 1; i++) {
+      node = node && node[segments[i]];
+    }
+    const leaf = segments[segments.length - 1];
+    if (node && typeof node === 'object' && typeof node[leaf] === 'string') {
+      node[leaf] = fn(node[leaf]);
+    }
+  }
+  return tree;
+}
 
 let configPath = null;
 let cache = null;
@@ -162,6 +221,7 @@ function load() {
     if (fs.existsSync(file)) {
       const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
       cache = deepMerge(DEFAULTS, parsed);
+      transformSecrets(cache, decryptSecret); // in-memory cache holds plaintext secrets
       return cache;
     }
   } catch (error) {
@@ -178,7 +238,10 @@ function ensureLoaded() {
 
 function save() {
   try {
-    fs.writeFileSync(getConfigPath(), JSON.stringify(ensureLoaded(), null, 2), 'utf8');
+    // Serialize an encrypted copy; keep the in-memory cache as plaintext so the
+    // rest of the app keeps reading usable values.
+    const toWrite = transformSecrets(clone(ensureLoaded()), encryptSecret);
+    fs.writeFileSync(getConfigPath(), JSON.stringify(toWrite, null, 2), 'utf8');
     return true;
   } catch (error) {
     console.error('Failed to save settings:', error.message);
