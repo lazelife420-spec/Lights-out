@@ -703,8 +703,13 @@ function applyFocusMode(enable) {
   if (!blocklist.length) return;
 
   if (enable) {
-    // Gracefully close each blocked app.
-    const cmd = blocklist.map(proc =>
+    // Gracefully close each blocked app. Process names are interpolated into a
+    // PowerShell string, and the blocklist can arrive via imported config, so
+    // restrict each entry to safe process-name characters to prevent injection.
+    const safe = blocklist
+      .filter(proc => typeof proc === 'string' && /^[A-Za-z0-9 ._-]+$/.test(proc));
+    if (!safe.length) return;
+    const cmd = safe.map(proc =>
       `Get-Process -Name '${proc}' -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -ne '' } | ForEach-Object { $_.CloseMainWindow() | Out-Null }`
     ).join('; ');
     executePowerShell(cmd).catch(() => {});

@@ -10,6 +10,9 @@ const fs = require('fs');
 const remoteControl = require('./remoteControl');
 
 const PWA_PORT = 58732;
+const MAX_CLIENTS = 8;              // companion is a personal LAN tool; cap connections
+const MAX_MESSAGE = 64 * 1024;      // reject any single frame larger than this
+const MAX_BUFFER = 256 * 1024;      // reject a client that buffers without completing a frame
 let server = null;
 let wss = null;
 let clients = new Set();
@@ -41,6 +44,9 @@ function upgradeHandler(req, socket, head) {
   const key = req.headers['sec-websocket-key'];
   if (!key) { socket.destroy(); return; }
 
+  // Cap concurrent clients so a misbehaving LAN device can't exhaust sockets.
+  if (clients.size >= MAX_CLIENTS) { socket.destroy(); return; }
+
   const accept = require('crypto').createHash('sha1')
     .update(key + '258EAFA5-E914-47DA-95CA-5AB5E50F7B97')
     .digest('base64');
@@ -52,16 +58,14 @@ function upgradeHandler(req, socket, head) {
     `Sec-WebSocket-Accept: ${accept}\r\n\r\n`
   );
 
-  const client = { socket, alive: true };
+  const client = { socket, alive: true, buf: Buffer.alloc(0) };
   clients.add(client);
 
-  socket.on('data', (buf) => {
-    try {
-      const msg = decodeWS(buf);
-      if (!msg) return;
-      const result = remoteControl.validateCompanionMessage(JSON.parse(msg));
-      if (result.ok) emitter.emit('message', result.message, client);
-    } catch { /* ignore malformed */ }
+  socket.on('data', (chunk) => {
+    if (!client.alive) return;
+    client.buf = client.buf.length ? Buffer.concat([client.buf, chunk]) : chunk;
+    if (client.buf.length > MAX_BUFFER) { closeClient(client, 1009); return; }
+    consumeFrames(client);
   });
 
   socket.on('close', () => { client.alive = false; clients.delete(client); });
@@ -70,41 +74,100 @@ function upgradeHandler(req, socket, head) {
   emitter.emit('connect', client);
 }
 
-function decodeWS(buf) {
-  if (buf.length < 2) return null;
-  const second = buf[1];
-  const payloadLen = second & 0x7F;
-  let offset = 2;
-  if (payloadLen === 126) { offset = 4; }
-  else if (payloadLen === 127) { offset = 10; }
-  const masks = buf.slice(offset, offset + 4);
-  offset += 4;
-  let decoded = '';
-  for (let i = 0; i < payloadLen; i++) {
-    decoded += String.fromCharCode(buf[offset + i] ^ masks[i % 4]);
+// Minimal RFC 6455 frame reader. Consumes every complete frame currently held in
+// client.buf, leaving any partial frame for the next chunk. Enforces masking
+// (required for client→server frames), handles control frames (close/ping/pong),
+// and bounds payload size.
+function consumeFrames(client) {
+  let buf = client.buf;
+  while (client.alive) {
+    if (buf.length < 2) break;
+    const b0 = buf[0];
+    const b1 = buf[1];
+    const fin = (b0 & 0x80) !== 0;
+    const opcode = b0 & 0x0f;
+    const masked = (b1 & 0x80) !== 0;
+    let len = b1 & 0x7f;
+    let offset = 2;
+    if (len === 126) {
+      if (buf.length < 4) break;
+      len = buf.readUInt16BE(2);
+      offset = 4;
+    } else if (len === 127) {
+      if (buf.length < 10) break;
+      const big = buf.readBigUInt64BE(2);
+      if (big > BigInt(MAX_MESSAGE)) { closeClient(client, 1009); return; }
+      len = Number(big);
+      offset = 10;
+    }
+    if (len > MAX_MESSAGE) { closeClient(client, 1009); return; }
+    if (!masked) { closeClient(client, 1002); return; } // unmasked client frame is a protocol error
+    if (buf.length < offset + 4 + len) break;            // wait for the rest of the frame
+
+    const mask = buf.slice(offset, offset + 4);
+    offset += 4;
+    const payload = Buffer.allocUnsafe(len);
+    for (let i = 0; i < len; i++) payload[i] = buf[offset + i] ^ mask[i & 3];
+    buf = buf.slice(offset + len);
+    client.buf = buf;
+    dispatchFrame(client, opcode, fin, payload);
   }
-  return decoded;
+  client.buf = buf;
+}
+
+function dispatchFrame(client, opcode, fin, payload) {
+  switch (opcode) {
+    case 0x1: // text — the only message type the companion sends
+      if (!fin) return; // fragmented messages are not used; ignore safely
+      try {
+        const result = remoteControl.validateCompanionMessage(JSON.parse(payload.toString('utf8')));
+        if (result.ok) emitter.emit('message', result.message, client);
+      } catch { /* ignore malformed */ }
+      break;
+    case 0x8: // close — echo and tear down
+      closeClient(client, 1000);
+      break;
+    case 0x9: // ping — reply pong
+      try { client.socket.write(encodeFrame(0xA, payload)); } catch {}
+      break;
+    // 0x0 continuation, 0x2 binary, 0xA pong: ignored.
+  }
+}
+
+function closeClient(client, code) {
+  try {
+    const body = Buffer.alloc(2);
+    body.writeUInt16BE(code || 1000, 0);
+    client.socket.write(encodeFrame(0x8, body));
+  } catch { /* socket may already be gone */ }
+  client.alive = false;
+  clients.delete(client);
+  try { client.socket.end(); } catch {}
+}
+
+// Build a server→client frame (unmasked, single, FIN set).
+function encodeFrame(opcode, payloadBuf) {
+  const payload = payloadBuf || Buffer.alloc(0);
+  const len = payload.length;
+  let header;
+  if (len < 126) {
+    header = Buffer.alloc(2);
+    header[1] = len;
+  } else if (len < 65536) {
+    header = Buffer.alloc(4);
+    header[1] = 126;
+    header.writeUInt16BE(len, 2);
+  } else {
+    header = Buffer.alloc(10);
+    header[1] = 127;
+    header.writeBigUInt64BE(BigInt(len), 2);
+  }
+  header[0] = 0x80 | (opcode & 0x0f);
+  return Buffer.concat([header, payload]);
 }
 
 function encodeWS(data) {
-  const payload = Buffer.from(data);
-  let header;
-  if (payload.length < 126) {
-    header = Buffer.alloc(2);
-    header[0] = 0x81; // text frame, FIN
-    header[1] = payload.length;
-  } else if (payload.length < 65536) {
-    header = Buffer.alloc(4);
-    header[0] = 0x81;
-    header[1] = 126;
-    header.writeUInt16BE(payload.length, 2);
-  } else {
-    header = Buffer.alloc(10);
-    header[0] = 0x81;
-    header[1] = 127;
-    header.writeBigUInt64BE(BigInt(payload.length), 2);
-  }
-  return Buffer.concat([header, payload]);
+  return encodeFrame(0x1, Buffer.from(data));
 }
 
 function broadcast(data) {
@@ -123,15 +186,20 @@ function broadcast(data) {
 function requestHandler(req, res) {
   const pathOnly = String(req.url || '').split('?')[0];
   if (pathOnly === '/' || pathOnly === '/index.html') {
-    if (!remoteControl.tokensMatch(tokenFromUrl(req.url), expectedToken)) {
-      res.writeHead(401, { 'Content-Type': 'text/plain' });
-      res.end('Unauthorized: pairing code required');
-      return;
-    }
+    // Serve the static shell unauthenticated. It contains no secrets, and the
+    // WebSocket control plane (upgradeHandler) is what enforces the pairing
+    // token. Gating the page itself broke the installed-PWA launch, whose
+    // manifest start_url ('/') carries no token.
     const htmlPath = path.join(__dirname, 'companion.html');
     try {
       const html = fs.readFileSync(htmlPath, 'utf8');
-      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.writeHead(200, {
+        'Content-Type': 'text/html',
+        // The page is fully inline (script + style), so inline is allowed; it
+        // renders server data only via textContent, never innerHTML. The value
+        // of this CSP is locking down where the page may connect/load from.
+        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data:; base-uri 'none'; form-action 'none'; object-src 'none'"
+      });
       res.end(html);
     } catch {
       res.writeHead(404);

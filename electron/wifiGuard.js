@@ -5,7 +5,27 @@
 
 const http = require('http');
 const https = require('https');
+const net = require('net');
 const { spawn } = require('child_process');
+
+// Only ever interpolate strictly-validated values into PowerShell command
+// strings. Device IPs and MACs may originate from imported/shared config, so a
+// crafted value like `'; <evil> ; '` must never reach the shell. net.isIP
+// rejects anything that is not a clean IPv4/IPv6 literal.
+function validIps(list) {
+  return (list || []).filter(ip => typeof ip === 'string' && net.isIP(ip) !== 0);
+}
+
+// Escape values before embedding them in a SOAP/XML body so credentials or MAC
+// strings containing <, >, & or quotes cannot break out of their element.
+function xmlEscape(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Router API providers
@@ -93,10 +113,10 @@ async function netgearBlock(routerIp, username, password, deviceMacs) {
   const base = `http://${routerIp}`;
   try {
     // Netgear uses a SOAP body for auth.
-    const authBody = `<?xml version="1.0"?><SOAP-ENV:Envelope><SOAP-ENV:Body><Login><Username>${username}</Username><Password>${password}</Password></Login></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
+    const authBody = `<?xml version="1.0"?><SOAP-ENV:Envelope><SOAP-ENV:Body><Login><Username>${xmlEscape(username)}</Username><Password>${xmlEscape(password)}</Password></Login></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
     await httpPost(`${base}/soap/server_sa/`, authBody, { 'SOAPAction': 'Login' });
     for (const mac of deviceMacs) {
-      const blockBody = `<?xml version="1.0"?><SOAP-ENV:Envelope><SOAP-ENV:Body><SetBlockDeviceByMAC><MAC>${mac}</MAC><Enable>1</Enable></SetBlockDeviceByMAC></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
+      const blockBody = `<?xml version="1.0"?><SOAP-ENV:Envelope><SOAP-ENV:Body><SetBlockDeviceByMAC><MAC>${xmlEscape(mac)}</MAC><Enable>1</Enable></SetBlockDeviceByMAC></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
       await httpPost(`${base}/soap/server_sa/`, blockBody, { 'SOAPAction': 'SetBlockDeviceByMAC' });
     }
     return { success: true, provider: 'netgear' };
@@ -108,10 +128,10 @@ async function netgearBlock(routerIp, username, password, deviceMacs) {
 async function netgearUnblock(routerIp, username, password, deviceMacs) {
   const base = `http://${routerIp}`;
   try {
-    const authBody = `<?xml version="1.0"?><SOAP-ENV:Envelope><SOAP-ENV:Body><Login><Username>${username}</Username><Password>${password}</Password></Login></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
+    const authBody = `<?xml version="1.0"?><SOAP-ENV:Envelope><SOAP-ENV:Body><Login><Username>${xmlEscape(username)}</Username><Password>${xmlEscape(password)}</Password></Login></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
     await httpPost(`${base}/soap/server_sa/`, authBody, { 'SOAPAction': 'Login' });
     for (const mac of deviceMacs) {
-      const unblockBody = `<?xml version="1.0"?><SOAP-ENV:Envelope><SOAP-ENV:Body><SetBlockDeviceByMAC><MAC>${mac}</MAC><Enable>0</Enable></SetBlockDeviceByMAC></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
+      const unblockBody = `<?xml version="1.0"?><SOAP-ENV:Envelope><SOAP-ENV:Body><SetBlockDeviceByMAC><MAC>${xmlEscape(mac)}</MAC><Enable>0</Enable></SetBlockDeviceByMAC></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
       await httpPost(`${base}/soap/server_sa/`, unblockBody, { 'SOAPAction': 'SetBlockDeviceByMAC' });
     }
     return { success: true, provider: 'netgear' };
@@ -147,8 +167,9 @@ async function webhookUnblock(url, deviceMacs, headers) {
 const FW_RULE_PREFIX = 'LightsOut_WiFiGuard';
 
 async function firewallBlock(deviceIps) {
-  if (!deviceIps || !deviceIps.length) return { success: false, error: 'No IPs specified' };
-  const cmds = deviceIps.map(ip =>
+  const ips = validIps(deviceIps);
+  if (!ips.length) return { success: false, error: 'No valid IPs specified' };
+  const cmds = ips.map(ip =>
     `New-NetFirewallRule -DisplayName '${FW_RULE_PREFIX}_${ip}' -Direction Outbound -Action Block -RemoteAddress '0.0.0.0/0' -LocalAddress '${ip}' -Profile Any -Enabled True -ErrorAction SilentlyContinue`
   );
   try {
@@ -160,8 +181,9 @@ async function firewallBlock(deviceIps) {
 }
 
 async function firewallUnblock(deviceIps) {
-  if (!deviceIps || !deviceIps.length) return { success: false, error: 'No IPs specified' };
-  const cmds = deviceIps.map(ip =>
+  const ips = validIps(deviceIps);
+  if (!ips.length) return { success: false, error: 'No valid IPs specified' };
+  const cmds = ips.map(ip =>
     `Remove-NetFirewallRule -DisplayName '${FW_RULE_PREFIX}_${ip}' -ErrorAction SilentlyContinue`
   );
   try {
@@ -274,7 +296,11 @@ async function scanDevices() {
 // HTTP helper
 // ─────────────────────────────────────────────────────────────────────────────
 
-function httpPost(url, body, extraHeaders = {}) {
+// `allowSelfSigned` opts a single call out of TLS certificate validation. It is
+// reserved for LAN router endpoints (which commonly ship self-signed certs) and
+// is NOT applied to user-supplied webhook URLs, where a forged cert would let a
+// MITM capture router credentials.
+function httpPost(url, body, extraHeaders = {}, { allowSelfSigned = false } = {}) {
   return new Promise((resolve, reject) => {
     const urlObj = new URL(url);
     const isHttps = urlObj.protocol === 'https:';
@@ -290,7 +316,7 @@ function httpPost(url, body, extraHeaders = {}) {
         'Content-Length': Buffer.byteLength(data),
         ...extraHeaders
       },
-      rejectUnauthorized: false // router certs are often self-signed
+      rejectUnauthorized: !allowSelfSigned
     };
     const req = mod.request(options, (res) => {
       let result = '';
