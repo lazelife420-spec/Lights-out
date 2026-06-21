@@ -245,6 +245,15 @@
         </div>
       </section>
 
+      <!-- Home streak callout: current streak at a glance. Hidden until there
+           is a real streak (>=1) so it never overclaims. Click opens Streaks. -->
+      <button class="streak-callout" id="streak-callout" style="display:none" title="View your streak">
+        <span class="streak-callout-flame" aria-hidden="true">&#x1F525;</span>
+        <span class="streak-callout-text"><strong id="streak-callout-count">0</strong>-night streak</span>
+        <span class="streak-callout-best" id="streak-callout-best"></span>
+        <span class="streak-callout-go" aria-hidden="true">&#x203A;</span>
+      </button>
+
       <!-- Saved Profiles -->
       <section class="profiles-section">
         <div class="profiles-header">
