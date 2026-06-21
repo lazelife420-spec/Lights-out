@@ -1699,10 +1699,19 @@ api.onIdleDetected?.(data => {
 
 // Morning briefing (from First Light).
 api.onMorningBriefing?.(data => {
-  if (data?.events?.length) {
-    const next = data.events[0];
-    notify(`Morning! Next: ${next.title || 'Nothing scheduled'}`, 'info', 8000);
-  }
+  if (!data) return;
+  // Main sends a fresh streak summary with the briefing — keep the home streak
+  // callout in sync with it.
+  if (data.streaks) updateStreakCallout(data.streaks);
+
+  // Build an honest one-line briefing: lead with the streak only when there is
+  // one, then the next scheduled event if any.
+  const parts = [];
+  const streak = Number(data.streaks && data.streaks.streak) || 0;
+  if (streak >= 1) parts.push(`${streak}-night streak`);
+  const next = data.events && data.events[0];
+  if (next) parts.push(`next: ${next.title || 'nothing scheduled'}`);
+  if (parts.length) notify(`Good morning! ${parts.join(' · ')}`, 'info', 8000);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
