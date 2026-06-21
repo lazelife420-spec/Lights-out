@@ -624,7 +624,10 @@ const state = {
   currentProfileId: null,
   // Calendar state
   calendarEvents: [],
-  calendarSource: null
+  calendarSource: null,
+  // Transient outcome of the last session, shown briefly on the idle face:
+  // 'completed' | 'dryrun' | 'cancelled' | null.
+  lastOutcome: null
 };
 
 if (previewMode) {
@@ -1012,6 +1015,12 @@ function render() {
         : 'ready';
   }
 
+  // Briefly label how the last session ended, overriding the idle/clock label.
+  if (isIdle && state.lastOutcome && els.timerLabel) {
+    const outcomeLabels = { completed: 'session complete', dryrun: 'dry run complete', cancelled: 'session cancelled' };
+    if (outcomeLabels[state.lastOutcome]) els.timerLabel.textContent = outcomeLabels[state.lastOutcome];
+  }
+
   updateRing(displaySeconds, totalSeconds);
 
   els.btnStart.style.display = state.running || state.paused ? 'none' : 'flex';
@@ -1043,8 +1052,18 @@ function render() {
     const pill = els.statusPill;
     pill.className = 'status-pill';
     if (!state.running && !state.paused) {
-      els.statusText.textContent = state.dryRun ? 'Dry Run' : 'Idle';
-      if (state.dryRun) pill.classList.add('dryrun');
+      const outcomePill = state.lastOutcome && {
+        completed: { cls: 'complete', text: 'Completed' },
+        dryrun: { cls: 'complete', text: 'Dry Run Complete' },
+        cancelled: { cls: 'cancelled', text: 'Cancelled' }
+      }[state.lastOutcome];
+      if (outcomePill) {
+        pill.classList.add(outcomePill.cls);
+        els.statusText.textContent = outcomePill.text;
+      } else {
+        els.statusText.textContent = state.dryRun ? 'Dry Run' : 'Idle';
+        if (state.dryRun) pill.classList.add('dryrun');
+      }
     } else if (state.paused) {
       pill.classList.add('paused');
       els.statusText.textContent = 'Paused';
@@ -1183,6 +1202,8 @@ async function startTimer(seconds = inputSeconds()) {
     state.totalSeconds = durationSeconds;
     state.remainingSeconds = durationSeconds;
     state.endsAt = new Date(Date.now() + durationSeconds * 1000).toISOString();
+    state.lastOutcome = null;
+    if (outcomeTimer) clearTimeout(outcomeTimer);
     render();
   } catch (error) {
     notify(`Failed to start timer: ${error.message || error}`, 'error');
@@ -1204,7 +1225,6 @@ async function cancelTimer() {
       state._clockDismissedByProfile = false;
     }
     render();
-    notify('Timer cancelled', 'info');
   } catch (error) {
     notify(`Error cancelling timer: ${error.message || error}`, 'error');
   }
@@ -1245,6 +1265,19 @@ async function snooze(seconds = 5 * 60) {
   }
 }
 
+let outcomeTimer = null;
+// Briefly surface how the last session ended on the idle face, then auto-clear
+// back to the normal idle/clock state. Renderer-only; the timer authority in
+// main is unaffected.
+function setSessionOutcome(kind) {
+  state.lastOutcome = kind;
+  if (outcomeTimer) clearTimeout(outcomeTimer);
+  outcomeTimer = setTimeout(() => {
+    state.lastOutcome = null;
+    render();
+  }, 8000);
+}
+
 function applyTimerPayload(data) {
   if (!data || typeof data !== 'object') return;
 
@@ -1275,6 +1308,7 @@ function applyTimerPayload(data) {
     loadStreaks();
     api.showNotification('Lights Out', state.dryRun ? 'Dry run complete.' : `${actionLabel()} started.`);
     notify(data.message || 'Timer complete', 'success', 5000);
+    setSessionOutcome(state.dryRun ? 'dryrun' : 'completed');
     if (typeof stopGuidedBreathing === 'function') stopGuidedBreathing();
     if (typeof AmbientVisuals !== 'undefined') AmbientVisuals.stop();
   } else if (data.type === 'cancelled') {
@@ -1285,6 +1319,8 @@ function applyTimerPayload(data) {
     Soundscape.stop();
     hideWarningModal();
     removeWarmFilter();
+    setSessionOutcome('cancelled');
+    notify('Session cancelled', 'info');
     if (typeof stopGuidedBreathing === 'function') stopGuidedBreathing();
     if (typeof AmbientVisuals !== 'undefined') AmbientVisuals.stop();
   } else if (data.type === 'warning') {

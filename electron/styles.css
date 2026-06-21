@@ -1257,6 +1257,20 @@ input:disabled {
 .status-pill.dryrun .status-dot {
   background: var(--accent-cyan);
 }
+.status-pill.complete {
+  background: rgba(76, 175, 80, 0.12);
+  color: var(--accent-green);
+}
+.status-pill.complete .status-dot {
+  background: var(--accent-green);
+}
+.status-pill.cancelled {
+  background: rgba(255, 77, 77, 0.1);
+  color: var(--accent-red);
+}
+.status-pill.cancelled .status-dot {
+  background: var(--accent-red);
+}
 
 @keyframes statusPulse {
   0%, 100% { opacity: 1; transform: scale(1); }
