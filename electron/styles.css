@@ -1440,6 +1440,55 @@ body.phase-lastlight .cockpit {
   margin: 0;
 }
 
+.about-updater {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.updater-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.updater-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex: none;
+}
+.updater-status[data-state="checking"] .updater-dot {
+  background: var(--accent-cyan);
+  animation: statusPulse 1.2s ease infinite;
+}
+.updater-status[data-state="checking"] { color: var(--accent-cyan); }
+.updater-status[data-state="uptodate"] .updater-dot { background: var(--accent-green); }
+.updater-status[data-state="uptodate"] { color: var(--accent-green); }
+.updater-status[data-state="available"] .updater-dot { background: var(--accent-amber); }
+.updater-status[data-state="available"] { color: var(--accent-amber); }
+.updater-status[data-state="error"] .updater-dot { background: var(--accent-red); }
+.updater-status[data-state="error"] { color: var(--accent-red); }
+.updater-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.updater-check-btn {
+  font-size: 12px;
+  padding: 6px 14px;
+}
+.updater-download {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-amber);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .option-group {
   display: flex;
   flex-direction: column;
