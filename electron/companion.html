@@ -229,9 +229,36 @@
 
     let ws = null;
     let reconnectTimer = null;
-    const pairToken = new URLSearchParams(location.search).get('t') || '';
+
+    // Resolve the pairing token: prefer the one in the URL (QR/link from the
+    // desktop), then fall back to a previously remembered token. This makes the
+    // installed PWA work when launched from the home screen, where the
+    // manifest start_url ('/') has no token. The token never needs to stay in
+    // the URL after the first visit.
+    const TOKEN_KEY = 'lightsout_pair_token';
+    function resolveToken() {
+      const fromUrl = new URLSearchParams(location.search).get('t');
+      if (fromUrl) {
+        try { localStorage.setItem(TOKEN_KEY, fromUrl); } catch {}
+        // Strip the token from the address bar / history.
+        try { history.replaceState(null, '', location.pathname); } catch {}
+        return fromUrl;
+      }
+      let stored = '';
+      try { stored = localStorage.getItem(TOKEN_KEY) || ''; } catch {}
+      if (!stored) {
+        const entered = (window.prompt('Enter the pairing code from the desktop app') || '').trim();
+        if (entered) {
+          try { localStorage.setItem(TOKEN_KEY, entered); } catch {}
+          stored = entered;
+        }
+      }
+      return stored;
+    }
+    let pairToken = resolveToken();
 
     function connect() {
+      if (!pairToken) { disconnected.style.display = ''; return; }
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
       ws = new WebSocket(`${proto}//${location.host}/?t=${encodeURIComponent(pairToken)}`);
 
