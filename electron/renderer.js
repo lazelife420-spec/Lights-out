@@ -509,6 +509,11 @@ const els = {
   btnClearReceipts: document.getElementById('btn-clear-receipts'),
   aboutModal: document.getElementById('about-modal'),
   aboutModalClose: document.getElementById('about-modal-close'),
+  // Updater status (in About modal)
+  updaterStatus: document.getElementById('updater-status'),
+  updaterStatusText: document.getElementById('updater-status-text'),
+  btnCheckUpdate: document.getElementById('btn-check-update'),
+  updaterDownload: document.getElementById('updater-download'),
   // Status pill
   statusPill: document.getElementById('status-pill'),
   statusDot: document.getElementById('status-dot'),
@@ -2292,6 +2297,7 @@ function renderReceiptsModal(receipts, stats) {
 
       if (item.id === 'open-about') {
         els.aboutModal.classList.add('active');
+        refreshUpdaterStatus();
         return;
       }
 
@@ -4041,7 +4047,67 @@ api.onUpdateAvailable?.(data => {
       api.openExternal?.(data.downloadUrl || data.releaseUrl);
     }, { once: true });
   }
+  // Reflect the same result in the About modal's updater status.
+  if (data) renderUpdaterStatus(data);
 });
+
+// Render a check result into the About modal's visible updater status. States:
+// checking | available | uptodate | error | idle.
+function renderUpdaterStatus(result) {
+  if (!els.updaterStatus || !els.updaterStatusText) return;
+  const dl = els.updaterDownload;
+  if (dl) { dl.style.display = 'none'; dl.onclick = null; }
+
+  let state = 'idle';
+  let text = 'Check for the latest version';
+
+  if (result === 'checking') {
+    state = 'checking';
+    text = 'Checking for updates...';
+  } else if (result && result.error) {
+    state = 'error';
+    text = "Couldn't check for updates";
+  } else if (result && result.available) {
+    state = 'available';
+    text = `Update available: v${result.latestVersion}`;
+    if (dl) {
+      const url = result.downloadUrl || result.releaseUrl;
+      dl.style.display = url ? '' : 'none';
+      dl.onclick = (e) => { e.preventDefault(); if (url) api.openExternal?.(url); };
+    }
+  } else if (result && result.available === false) {
+    state = 'uptodate';
+    text = result.currentVersion ? `You're on the latest version (v${result.currentVersion})` : "You're on the latest version";
+  }
+
+  els.updaterStatus.dataset.state = state;
+  els.updaterStatusText.textContent = text;
+}
+
+async function runUpdateCheck() {
+  if (els.btnCheckUpdate) els.btnCheckUpdate.disabled = true;
+  renderUpdaterStatus('checking');
+  try {
+    const result = await api.checkForUpdate?.();
+    renderUpdaterStatus(result || { available: false });
+  } catch (err) {
+    renderUpdaterStatus({ error: err?.message || String(err) });
+  } finally {
+    if (els.btnCheckUpdate) els.btnCheckUpdate.disabled = false;
+  }
+}
+
+// Show the last known result (no network) when About opens; never block on it.
+async function refreshUpdaterStatus() {
+  try {
+    const last = await api.getUpdateStatus?.();
+    renderUpdaterStatus(last || null);
+  } catch {
+    renderUpdaterStatus(null);
+  }
+}
+
+els.btnCheckUpdate?.addEventListener('click', runUpdateCheck);
 
 // Media auto-paused notification.
 api.onMediaPaused?.(data => {
