@@ -1314,6 +1314,23 @@ ipcMain.handle('get-companion-status', async () => {
 ipcMain.handle('get-remote-control', async () => {
   return getRemoteControlState();
 });
+// Render the companion pairing URL as a scannable QR data URL so the phone can
+// pair by camera instead of typing a long URL + token. Returns '' on failure
+// (the URL + code are still shown as text as a fallback).
+ipcMain.handle('generate-qr', async (e, text) => {
+  if (typeof text !== 'string' || !text) return '';
+  try {
+    const QRCode = require('qrcode');
+    return await QRCode.toDataURL(text, {
+      margin: 1,
+      width: 220,
+      color: { dark: '#0d0e11ff', light: '#ffffffff' }
+    });
+  } catch (err) {
+    console.warn('QR generation failed:', err && err.message);
+    return '';
+  }
+});
 ipcMain.handle('set-remote-control-enabled', async (e, enabled) => {
   const rc = settingsStore.getSection('remoteControl') || {};
   const patch = { enabled: !!enabled };

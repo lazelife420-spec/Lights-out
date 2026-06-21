@@ -137,6 +137,7 @@ const fallbackApi = (() => {
     getRemoteControl: async () => ({ enabled: false, token: '', port: 0, lanIp: '', url: '' }),
     setRemoteControlEnabled: async () => ({ enabled: false, token: '', url: '' }),
     regenerateRemoteToken: async () => ({ enabled: false, token: '', url: '' }),
+    generateQr: async () => '',
     getFamilyPeers: async () => [],
     familyRemoteStart: async () => ({ success: true }),
     familyRemotePause: async () => ({ success: true }),
@@ -413,6 +414,8 @@ const els = {
   remoteControlConfig: document.getElementById('remote-control-config'),
   remoteUrl: document.getElementById('remote-url'),
   remoteToken: document.getElementById('remote-token'),
+  remoteQr: document.getElementById('remote-qr'),
+  remoteQrWrap: document.getElementById('remote-qr-wrap'),
   btnRegenToken: document.getElementById('btn-regen-token'),
 
   // Family mode
@@ -1535,6 +1538,25 @@ function renderRemoteControl(rc) {
   if (els.remoteControlConfig) els.remoteControlConfig.style.display = rc.enabled ? '' : 'none';
   if (els.remoteUrl) els.remoteUrl.textContent = rc.url || '';
   if (els.remoteToken) els.remoteToken.textContent = rc.token || '';
+  updateRemoteQr(rc.url);
+}
+
+// Generate (or clear) the pairing QR for the current companion URL so the phone
+// can pair by camera. Hidden whenever there is no URL or QR support.
+async function updateRemoteQr(url) {
+  if (!els.remoteQrWrap || !els.remoteQr) return;
+  if (!url || !api.generateQr) { els.remoteQrWrap.style.display = 'none'; return; }
+  try {
+    const dataUrl = await api.generateQr(url);
+    if (dataUrl) {
+      els.remoteQr.src = dataUrl;
+      els.remoteQrWrap.style.display = '';
+    } else {
+      els.remoteQrWrap.style.display = 'none';
+    }
+  } catch {
+    els.remoteQrWrap.style.display = 'none';
+  }
 }
 
 async function loadRemoteControlState() {
