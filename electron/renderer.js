@@ -4240,12 +4240,12 @@ function renderCalendarEvents() {
     const timeStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
     const dateStr = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const sourceIcons = { builtin: '\u{1F4C5}', ical: '\u{1F5D3}', google: '\u{1F4E7}', outlook: '\u{1F4E9}', calendly: '\u{1F517}' };
-    return `<div class="calendar-event" data-uid="${e.uid}">
+    return `<div class="calendar-event" data-uid="${escapeHtml(e.uid)}">
       <div class="event-info">
         <div class="event-name">${escapeHtml(e.summary)}</div>
         <div class="event-meta">${dateStr} at ${timeStr} ${sourceIcons[e.source] || ''}</div>
       </div>
-      <button class="btn-secondary btn-sm event-start-btn" data-uid="${e.uid}">Start</button>
+      <button class="btn-secondary btn-sm event-start-btn" data-uid="${escapeHtml(e.uid)}">Start</button>
     </div>`;
   }).join('');
 

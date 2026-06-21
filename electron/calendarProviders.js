@@ -246,6 +246,7 @@ function fetchWithTimeout(url, timeoutMs, headers = {}) {
     const client = urlObj.protocol === 'https:' ? https : http;
     const options = {
       hostname: urlObj.hostname,
+      port: urlObj.port || undefined, // honor non-default ports in the feed URL
       path: urlObj.pathname + urlObj.search,
       method: 'GET',
       timeout: timeoutMs,
@@ -254,13 +255,24 @@ function fetchWithTimeout(url, timeoutMs, headers = {}) {
         ...headers
       }
     };
+    const MAX_BYTES = 5 * 1024 * 1024; // cap response to guard against a hostile/huge feed
     const req = client.request(options, (res) => {
       if (res.statusCode !== 200) {
         reject(new Error(`HTTP ${res.statusCode}`));
+        res.resume(); // drain so the socket can be freed
         return;
       }
       let data = '';
-      res.on('data', chunk => data += chunk);
+      let size = 0;
+      res.on('data', chunk => {
+        size += chunk.length;
+        if (size > MAX_BYTES) {
+          req.destroy();
+          reject(new Error('Response too large'));
+          return;
+        }
+        data += chunk;
+      });
       res.on('end', () => resolve(data));
     });
     req.on('error', reject);
