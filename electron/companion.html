@@ -169,6 +169,56 @@
       font-weight: 700;
       color: #d4a50a;
     }
+    .pair-card {
+      background: #1b2024;
+      border: 1px solid #2a3040;
+      border-radius: 14px;
+      padding: 20px 18px;
+      text-align: left;
+    }
+    .pair-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #e8ecf1;
+      margin-bottom: 6px;
+    }
+    .pair-hint {
+      font-size: 12px;
+      line-height: 1.5;
+      color: #6b7685;
+      margin-bottom: 16px;
+    }
+    .pair-input {
+      width: 100%;
+      padding: 13px 14px;
+      border-radius: 10px;
+      border: 1px solid #2a3040;
+      background: #0d0e11;
+      color: #e8ecf1;
+      font-size: 15px;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+      outline: none;
+    }
+    .pair-input::placeholder { color: #4a5360; }
+    .pair-input:focus { border-color: #5b8cff; }
+    .pair-submit { width: 100%; }
+    .pair-error {
+      color: #ff4d4d;
+      font-size: 12px;
+      margin-top: 10px;
+    }
+    .pair-reset {
+      background: none;
+      border: none;
+      color: #5b8cff;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      padding: 4px;
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
@@ -184,6 +234,15 @@
     <div class="status-pill" id="status-pill">
       <span class="status-dot" id="status-dot"></span>
       <span class="status-text" id="status-text">Connecting...</span>
+    </div>
+
+    <!-- Pairing (shown when no token is stored yet) -->
+    <div class="pair-card" id="pair-card" style="display:none">
+      <div class="pair-title">Pair this phone</div>
+      <div class="pair-hint">Scan the QR code in the desktop app's Remote Control settings, or type the pairing code shown beneath it.</div>
+      <input class="pair-input" id="pair-input" type="text" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Pairing code" aria-label="Pairing code">
+      <button class="btn btn-primary pair-submit" id="pair-submit">Pair</button>
+      <div class="pair-error" id="pair-error" style="display:none">Enter the pairing code to continue.</div>
     </div>
 
     <!-- Quick start (shown when idle) -->
@@ -212,6 +271,7 @@
 
     <div class="disconnected" id="disconnected" style="display:none">
       Not connected to desktop app
+      <br><button class="pair-reset" id="pair-reset">Enter pairing code</button>
     </div>
   </div>
 
@@ -226,6 +286,11 @@
     const disconnected = document.getElementById('disconnected');
     const streakSection = document.getElementById('streak-section');
     const streakCount = document.getElementById('streak-count');
+    const pairCard = document.getElementById('pair-card');
+    const pairInput = document.getElementById('pair-input');
+    const pairSubmit = document.getElementById('pair-submit');
+    const pairError = document.getElementById('pair-error');
+    const pairReset = document.getElementById('pair-reset');
 
     let ws = null;
     let reconnectTimer = null;
@@ -246,16 +311,40 @@
       }
       let stored = '';
       try { stored = localStorage.getItem(TOKEN_KEY) || ''; } catch {}
-      if (!stored) {
-        const entered = (window.prompt('Enter the pairing code from the desktop app') || '').trim();
-        if (entered) {
-          try { localStorage.setItem(TOKEN_KEY, entered); } catch {}
-          stored = entered;
-        }
-      }
       return stored;
     }
     let pairToken = resolveToken();
+
+    // In-page pairing fallback (replaces a native window.prompt): shown only
+    // when no token is present in the URL or remembered from a prior visit.
+    function showPairing() {
+      pairCard.style.display = '';
+      statusPill.style.display = 'none';
+      idleControls.style.display = 'none';
+      activeControls.style.display = 'none';
+      disconnected.style.display = 'none';
+      pairError.style.display = 'none';
+      setTimeout(() => { try { pairInput.focus(); } catch {} }, 80);
+    }
+    function hidePairing() {
+      pairCard.style.display = 'none';
+      statusPill.style.display = '';
+    }
+    function applyPairToken() {
+      const entered = (pairInput.value || '').trim();
+      if (!entered) {
+        pairError.style.display = '';
+        try { pairInput.focus(); } catch {}
+        return;
+      }
+      try { localStorage.setItem(TOKEN_KEY, entered); } catch {}
+      pairToken = entered;
+      hidePairing();
+      connect();
+    }
+    pairSubmit.addEventListener('click', applyPairToken);
+    pairInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyPairToken(); });
+    pairReset.addEventListener('click', () => { pairInput.value = ''; showPairing(); });
 
     function connect() {
       if (!pairToken) { disconnected.style.display = ''; return; }
@@ -363,7 +452,11 @@
       send({ action: 'cancel' });
     });
 
-    connect();
+    if (pairToken) {
+      connect();
+    } else {
+      showPairing();
+    }
   </script>
 </body>
 </html>
