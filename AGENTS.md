@@ -29,16 +29,18 @@ There are two real app surfaces in this repo.
 
 ## Current State
 
-As of 2026-06-09, the important behavior is:
+As of 2026-06-24, the important behavior is:
 
 - `Lights Out.bat` opens the Steam UI idle by default.
 - force shutdown is no longer the default launcher behavior
 - the explicitly named force-shutdown batch file is still the only obvious "hard stop" shortcut
 - "Run at login" now means "start minimized and idle"
 - login startup should never silently imply force shutdown
-- displayed app/docs version is aligned to `5.3.0` across the shipping PowerShell app and Electron
+- the primary shipping app is the Electron line, last tagged release is `v10.0.10`; `main` is ahead with unreleased work (PRs #23–#27)
+- PowerShell remains present as a fallback runtime and backend integration layer, not the main feature lane
 - `SleepTimer.exe` was rebuilt after the login-startup behavior change
 - Electron build packaging succeeds with `npm run build`
+- Electron smoke coverage now explicitly guards startup wording/flags, tray menu wiring, timer control IPC, mini mode wiring, keyboard shortcuts, and browser-preview safe defaults
 
 ## Source Of Truth
 
@@ -71,6 +73,9 @@ Do not casually remove them.
 - `dist\`
   Electron build output. Do not hand-edit files here.
 
+- `LightsOut.exe` (root)
+  **Does not exist.** A stale pre-2026-06-19 build was moved to `archive\LightsOut-root-stale-pre20260619.exe` during canonical reconciliation. The only valid portable build is `dist\LightsOut.exe`.
+
 - `archive\`
   Historical backups. Do not edit unless the user explicitly asks.
 
@@ -100,27 +105,31 @@ If the user does not give a more specific request, this is the default backlog.
 
 1. Decide whether a task belongs to the primary PowerShell app or the Electron app.
 2. Preserve safe startup behavior and clear wording around login startup.
-3. Close Electron feature gaps before adding decorative surface area.
-4. Keep shipping behavior and docs in sync after every user-facing change.
+3. Strengthen Electron runtime confidence before adding more surface area.
+4. Keep shipping behavior, smoke coverage, and docs in sync after every user-facing change.
 
 ## Suggested Next Work
 
 These are the most useful follow-on projects for an agent.
 
-1. Close Electron parity gaps.
-   Port these PowerShell features to Electron:
-   - ✅ Smart lights (Philips Hue / HTTP webhook) - COMPLETE in v5.3.0+
-   - ✅ Saved profiles - COMPLETE in v5.3.0+
-   - ✅ Calendar scheduling (.ics import) - COMPLETE in v5.3.0+
-   - ✅ Last Light ritual - COMPLETE (electron/lastLight.js + renderer overlay)
-   - ✅ Richer warning dialogs - COMPLETE (imminent-action warning modal)
+1. Keep the Electron smoke lane honest.
+   It should keep catching regressions in:
+   - startup wording and login flags
+   - tray hide/show, tray quick actions, and tooltip updates
+   - start, pause, resume, snooze, cancel, and mini mode wiring
+   - preview-mode safe defaults (`DryRun`, idle startup, no Electron preload assumptions)
 
-2. Add repeatable smoke checks.
-   At minimum, keep a quick path to verify:
-   start, pause, resume, snooze, cancel, mini mode, tray hide/show, and login-startup wording.
+2. Add deeper runtime proof where it pays off.
+   Good next candidates:
+   - a real Electron interaction smoke for tray hide/show and mini mode
+   - a packaging smoke that launches the built app and checks startup safety
+   - a focused verification lane for recovery banners, receipts, and warning dialogs
 
-3. Archive or remove deprecated code.
-   ✅ `SleepTimer-Backend.ps1` removed.
+3. Keep docs aligned with the shipping Electron release line.
+   Watch for stale references to old version numbers, feature-gap language, or PowerShell-first framing.
+
+4. Archive or remove deprecated code when it stops helping.
+   `SleepTimer-Backend.ps1` is already removed; continue avoiding edits to backup/history folders unless asked.
 
 ## Verification Checklist
 
@@ -139,11 +148,21 @@ These are the most useful follow-on projects for an agent.
    `node --check .\electron\main.js`
    `node --check .\electron\renderer.js`
    `node --check .\electron\preload.js`
-2. Run:
+2. Run smoke:
+   `cd electron`
+   `npm run smoke`
+3. Run:
    `cd electron`
    `npm start`
-3. Package when the change is meaningful:
+4. Package when the change is meaningful:
    `npm run build`
+
+Current smoke expectations include:
+- startup wording and login flags
+- tray menu/show-hide protections
+- timer control IPC wiring
+- mini mode and keyboard shortcut guards
+- preview/fallback safe defaults
 
 ### For static browser preview of Electron UI
 
@@ -163,6 +182,7 @@ A task is not done until:
 - the change landed in the correct runtime
 - the safest default behavior still makes sense
 - verification was actually run for the surface you changed
+- the Electron smoke suite was updated if the changed behavior should be regression-guarded there
 - docs or launcher text were updated if user-facing behavior changed
 - `SleepTimer.exe` was rebuilt if the PowerShell source changed
 
