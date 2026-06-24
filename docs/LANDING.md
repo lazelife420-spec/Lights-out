@@ -46,8 +46,8 @@ verify exactly what you downloaded. Builds are produced and published by CI, and
 each release is gated on `node --check`, a smoke suite, and a successful package
 step.
 
-**Latest: v10.0.10** - fixes a packaged-app startup crash (a required module was missing from the build manifest) and a settings-save error in WiFi Guard, Content Blocker, and Accountability.
-Release notes: https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.0.10
+**Latest: v10.1.0** - adds the northstar visual UI: cinematic Last Light overlay, Lobby shell with sidebar, and Morning Proof hero with real session stats. Settings persistence for new UI state. Smoke suite expanded to 57 assertions.
+Release notes: https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.1.0
 
 Previously, v10.0.9 restored the Streaks tab panel and fixed a cancel-timer error where guided breathing cleanup could show a red error toast.
 
