@@ -94,7 +94,38 @@
   <!-- Main Cockpit Container -->
   <div class="cockpit">
     <canvas class="ambient-canvas" id="ambient-canvas"></canvas>
-    
+
+    <!-- Northstar left sidebar (icon rail) -->
+    <aside class="ns-sidebar" aria-label="Navigation">
+      <div class="ns-sidebar-logo">
+        <img src="assets/brand/lights-out-icon.svg" alt="Lights Out" draggable="false">
+      </div>
+      <nav class="ns-sidebar-nav">
+        <button class="ns-nav-item active" data-ns-tab="lib" title="Library">
+          <span class="ns-nav-icon" aria-hidden="true">&#x1F4DA;</span>
+          <span class="ns-nav-label">LIB</span>
+        </button>
+        <button class="ns-nav-item" data-ns-tab="sch" title="Schedule">
+          <span class="ns-nav-icon" aria-hidden="true">&#x1F4C5;</span>
+          <span class="ns-nav-label">SCH</span>
+        </button>
+        <button class="ns-nav-item" data-ns-tab="set" title="Settings">
+          <span class="ns-nav-icon" aria-hidden="true">&#x2699;</span>
+          <span class="ns-nav-label">SET</span>
+        </button>
+      </nav>
+      <div class="ns-sidebar-footer">
+        <button class="ns-nav-item" data-ns-tab="help" title="Help">
+          <span class="ns-nav-icon" aria-hidden="true">&#x3F;</span>
+          <span class="ns-nav-label">?</span>
+        </button>
+        <button class="ns-nav-item" data-ns-tab="stats" title="Stats">
+          <span class="ns-nav-icon" aria-hidden="true">&#x1F4CA;</span>
+          <span class="ns-nav-label">STATS</span>
+        </button>
+      </div>
+    </aside>
+
     <!-- Header with native window controls -->
     <header class="chrome-header">
       <div class="window-controls">
@@ -102,6 +133,12 @@
           <img class="brand-mark" src="assets/brand/lights-out-icon.svg" alt="" draggable="false">
           <span>Lights Out</span>
         </div>
+      </div>
+      <!-- Northstar centered wordmark -->
+      <div class="ns-header-wordmark" aria-hidden="true">
+        <img src="assets/brand/lights-out-icon.svg" alt="" draggable="false" class="ns-wordmark-icon">
+        <span class="ns-wordmark-title">Lights Out PC</span>
+        <span class="ns-wordmark-sub">Bedtime Mode for Windows</span>
       </div>
       <nav class="main-menu">
         <div class="menu-item" id="menu-power">
@@ -178,7 +215,70 @@
 
     <!-- Main Dashboard -->
     <main class="dashboard">
-      
+
+      <!-- Northstar: Tonight's Run hero card (shown in lobby/idle state) -->
+      <section class="ns-hero-card" id="ns-hero-card" style="display:none" aria-label="Tonight's Run">
+        <div class="ns-hero-body">
+          <div class="ns-hero-left">
+            <div class="ns-hero-label">TONIGHT'S RUN</div>
+            <div class="ns-hero-title" id="ns-hero-title">Weeknight &middot; 28 min &middot; Shutdown</div>
+            <div class="ns-hero-meta">
+              <span class="ns-hero-meta-item">Clearance: <span class="ns-meta-accent" id="ns-meta-clearance">Clear</span></span>
+              <span class="ns-hero-meta-sep">&middot;</span>
+              <span class="ns-hero-meta-item">Ending: <span class="ns-meta-accent" id="ns-meta-ending">Classic Fade</span></span>
+              <span class="ns-hero-meta-sep">&middot;</span>
+              <span class="ns-hero-meta-item">Proof: <span class="ns-meta-accent">Tomorrow morning</span></span>
+            </div>
+            <button class="ns-play-btn" id="ns-play-btn">
+              <span aria-hidden="true">&#x25B6;</span>
+              PLAY
+            </button>
+          </div>
+          <div class="ns-hero-right">
+            <div class="ns-preview-ring">
+              <svg class="ns-preview-svg" viewBox="0 0 120 120" aria-hidden="true">
+                <circle class="ns-preview-bg" cx="60" cy="60" r="50"/>
+                <circle class="ns-preview-arc" cx="60" cy="60" r="50"/>
+              </svg>
+              <div class="ns-preview-time" id="ns-preview-time">28:00</div>
+              <div class="ns-preview-sub">PREVIEW</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Northstar: trust badge bar -->
+      <div class="ns-trust-bar" id="ns-trust-bar" style="display:none" aria-hidden="true">
+        <div class="ns-trust-badge">
+          <span class="ns-trust-icon">&#x2705;</span>
+          <div>
+            <div class="ns-trust-title">LOCAL ONLY</div>
+            <div class="ns-trust-sub">Everything stays on this PC</div>
+          </div>
+        </div>
+        <div class="ns-trust-badge">
+          <span class="ns-trust-icon">&#x1F512;</span>
+          <div>
+            <div class="ns-trust-title">FINAL CONFIRM ON</div>
+            <div class="ns-trust-sub">You confirm before it runs</div>
+          </div>
+        </div>
+        <div class="ns-trust-badge ns-trust-warn">
+          <span class="ns-trust-icon">&#x26A0;</span>
+          <div>
+            <div class="ns-trust-title">EMERGENCY CANCEL</div>
+            <div class="ns-trust-sub">Instantly <strong>stop</strong> at any time</div>
+          </div>
+        </div>
+        <div class="ns-trust-badge">
+          <span class="ns-trust-icon">&#x2601;</span>
+          <div>
+            <div class="ns-trust-title">NO CLOUD</div>
+            <div class="ns-trust-sub">No accounts. No tracking.</div>
+          </div>
+        </div>
+      </div>
+
       <!-- Timer Ring Section -->
       <section class="timer-section">
         <div class="ring-container">
@@ -192,14 +292,17 @@
               <circle class="analog-rim" cx="50" cy="50" r="46.5"/>
               <g class="analog-ticks" id="analog-ticks"></g>
               <g class="analog-numerals" id="analog-numerals"></g>
+              <g class="analog-arabic" id="analog-arabic"></g>
               <line class="analog-hand hour" id="clock-hour" x1="50" y1="50" x2="50" y2="30"/>
               <line class="analog-hand minute" id="clock-minute" x1="50" y1="50" x2="50" y2="20"/>
               <line class="analog-hand second" id="clock-second" x1="50" y1="50" x2="50" y2="16"/>
               <circle class="analog-cap" cx="50" cy="50" r="2.4"/>
               <text class="analog-digital" id="analog-digital" x="50" y="68" text-anchor="middle"></text>
+              <text class="analog-date" id="analog-date" x="50" y="78" text-anchor="middle"></text>
             </svg>
             <div class="time-main" id="timer-main">28:20</div>
             <div class="time-label" id="timer-label">until shutdown</div>
+            <div class="time-sub" id="timer-sub"></div>
           </div>
         </div>
         
@@ -316,21 +419,57 @@
         </div>
       </section>
 
-      <!-- Morning Proof / Last Run Card -->
-      <section class="morning-proof-section" id="morning-proof-section" style="display:none">
-        <div class="proof-card" id="proof-card">
-          <div class="proof-header">
-            <span class="proof-icon" id="proof-icon">&#x1F4CB;</span>
-            <span class="proof-title">Morning Proof</span>
-            <span class="proof-badge" id="proof-badge"></span>
+      <!-- Morning Proof / Last Run Card (northstar hero) -->
+      <section class="morning-proof-section ns-proof-section" id="morning-proof-section" style="display:none">
+        <div class="proof-card ns-proof-hero" id="proof-card">
+
+          <!-- Glow background layer -->
+          <div class="ns-proof-bg" aria-hidden="true"></div>
+
+          <!-- Top row: icon + headline + result badge -->
+          <div class="ns-proof-top">
+            <span class="ns-proof-icon" id="proof-icon" aria-hidden="true">&#x2600;</span>
+            <div class="ns-proof-headline">
+              <div class="ns-proof-eyebrow">LAST NIGHT</div>
+              <div class="ns-proof-title" id="ns-proof-title">MISSION COMPLETE</div>
+            </div>
+            <span class="proof-badge ns-proof-badge" id="proof-badge"></span>
           </div>
-          <div class="proof-body" id="proof-body">
-            <!-- Filled dynamically -->
+
+          <!-- Stat pills row (real data only; JS shows/hides each pill) -->
+          <div class="ns-proof-pills" id="proof-body">
+            <div class="ns-proof-pill" id="ns-pill-duration" style="display:none">
+              <div class="ns-pill-value" id="ns-pill-duration-val">—</div>
+              <div class="ns-pill-label">SESSION</div>
+            </div>
+            <div class="ns-proof-pill" id="ns-pill-action" style="display:none">
+              <div class="ns-pill-value" id="ns-pill-action-val">—</div>
+              <div class="ns-pill-label">ACTION</div>
+            </div>
+            <div class="ns-proof-pill" id="ns-pill-snoozes" style="display:none">
+              <div class="ns-pill-value" id="ns-pill-snoozes-val">0</div>
+              <div class="ns-pill-label">SNOOZES</div>
+            </div>
+            <div class="ns-proof-pill" id="ns-pill-runs" style="display:none">
+              <div class="ns-pill-value" id="ns-pill-runs-val">—</div>
+              <div class="ns-pill-label">TOTAL RUNS</div>
+            </div>
           </div>
-          <div class="proof-footer">
-            <button class="btn-tiny" id="btn-proof-details">View Receipts</button>
-            <button class="btn-tiny" id="btn-proof-copy">Copy Proof</button>
+
+          <!-- Completed-at timestamp -->
+          <div class="ns-proof-timestamp" id="ns-proof-timestamp"></div>
+
+          <!-- Action buttons -->
+          <div class="ns-proof-actions">
+            <button class="ns-proof-btn ns-proof-btn-primary" id="btn-proof-again">
+              <span aria-hidden="true">&#x25B6;</span>
+              Play Tonight Again
+            </button>
+            <button class="ns-proof-btn ns-proof-btn-secondary" id="btn-proof-details">View Ledger</button>
+            <button class="ns-proof-btn ns-proof-btn-ghost" id="btn-proof-copy">Copy Proof</button>
+            <button class="ns-proof-btn ns-proof-btn-ghost" id="btn-proof-dismiss" aria-label="Dismiss">&#x2715;</button>
           </div>
+
         </div>
       </section>
 
@@ -1039,6 +1178,9 @@
               <option value="midnight">Midnight</option>
               <option value="carbon">Carbon</option>
               <option value="aurora">Aurora</option>
+              <option value="ember">Ember</option>
+              <option value="tide">Tide</option>
+              <option value="dawn">Dawn</option>
             </select>
           </div>
 
@@ -1091,6 +1233,27 @@
             </select>
           </div>
 
+          <div class="option-group">
+            <label>Time Format</label>
+            <select id="cz-clock-format">
+              <option value="24h">24-hour</option>
+              <option value="12h">12-hour</option>
+            </select>
+          </div>
+
+          <div class="option-group">
+            <label>Clock Size</label>
+            <input type="range" id="cz-clock-scale" min="0.8" max="1.35" step="0.05" value="1">
+            <span id="cz-clock-scale-val">100%</span>
+          </div>
+
+          <div class="option-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="cz-clock-date">
+              Show the date on the idle clock
+            </label>
+          </div>
+
           <div id="clock-style-group">
             <div class="option-group">
               <label>Clock Style</label>
@@ -1100,6 +1263,16 @@
                 <option value="minimal">Minimal</option>
                 <option value="neon">Neon</option>
                 <option value="classic">Classic (Roman)</option>
+              </select>
+            </div>
+            <div class="option-group">
+              <label>Clock Dial</label>
+              <select id="cz-clock-dial">
+                <option value="bars">Hour markers</option>
+                <option value="minutes">Minute rail</option>
+                <option value="arabic">Arabic numerals</option>
+                <option value="roman">Roman numerals</option>
+                <option value="auto">Match style</option>
               </select>
             </div>
             <div class="option-group">
@@ -1368,11 +1541,63 @@
 
   <!-- Last Light finale overlay -->
   <div class="last-light-overlay" id="last-light-overlay" aria-hidden="true">
-    <div class="ll-stage">
-      <div class="ll-title" id="ll-title">LAST LIGHT</div>
-      <div class="ll-headline" id="ll-headline"></div>
-      <div class="ll-line" id="ll-line"></div>
-      <div class="ll-stamp" id="ll-stamp"></div>
+    <div class="ll-bg-layer" aria-hidden="true"></div>
+
+    <div class="ll-layout">
+
+      <!-- Left flavor panel -->
+      <div class="ll-panel-left">
+        <div class="ll-sequence-badge">
+          <span class="ll-sequence-label" id="ll-title">LAST LIGHT</span>
+        </div>
+        <div class="ll-flavor-headline" id="ll-headline"></div>
+        <div class="ll-flavor-line" id="ll-line"></div>
+        <div class="ll-flavor-bar" id="ll-flavor-bar" aria-hidden="true">
+          <div class="ll-flavor-bar-fill" id="ll-flavor-bar-fill"></div>
+        </div>
+      </div>
+
+      <!-- Center stage -->
+      <div class="ll-stage">
+        <div class="ll-cinematic-title">LAST LIGHT</div>
+
+        <!-- Countdown ring -->
+        <div class="ll-ring-wrap">
+          <svg class="ll-ring-svg" viewBox="0 0 200 200" aria-hidden="true">
+            <circle class="ll-ring-bg" cx="100" cy="100" r="80"/>
+            <circle class="ll-ring-arc" cx="100" cy="100" r="80" id="ll-ring-arc"/>
+          </svg>
+          <div class="ll-ring-inner">
+            <div class="ll-ring-time" id="ll-ring-time">&#x2014;</div>
+            <div class="ll-ring-sub">TO DISCONNECT</div>
+            <div class="ll-ring-icon" aria-hidden="true">&#x1F319;</div>
+          </div>
+        </div>
+
+        <!-- UNPLUG CTA (visual/informational — power action fires automatically after sequence) -->
+        <button class="ll-unplug-btn" id="ll-unplug-btn" disabled aria-disabled="true" style="display:none">
+          <span class="ll-unplug-icon" aria-hidden="true">&#x23FB;</span>
+          UNPLUG
+        </button>
+        <div class="ll-unplug-sub" id="ll-unplug-sub" style="display:none">PROCEEDING AUTOMATICALLY</div>
+
+        <!-- Stamp (JS-driven) -->
+        <div class="ll-stamp" id="ll-stamp"></div>
+      </div>
+
+      <!-- Right stat panel -->
+      <div class="ll-panel-right" aria-hidden="true">
+        <div class="ll-stat-value" id="ll-stat-value">99%</div>
+        <div class="ll-stat-label">GRID STABILITY</div>
+      </div>
+
+    </div>
+
+    <!-- Emergency cancel footer -->
+    <div class="ll-footer">
+      <span class="ll-emergency-icon" aria-hidden="true">&#x26A0;</span>
+      <span class="ll-emergency-label">EMERGENCY CANCEL</span>
+      <kbd class="ll-emergency-key">Ctrl+Shift+S</kbd>
     </div>
   </div>
 

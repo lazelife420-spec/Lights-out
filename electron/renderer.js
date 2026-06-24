@@ -247,8 +247,10 @@ const previewMode = !window.electronAPI;
 
 const els = {
   body: document.body,
+  timerDisplay: document.querySelector('.timer-display'),
   timerMain: document.getElementById('timer-main'),
   timerLabel: document.getElementById('timer-label'),
+  timerSub: document.getElementById('timer-sub'),
   timerName: document.getElementById('timer-name'),
   ringProgress: document.querySelector('.ring-progress'),
   timerInput: document.getElementById('timer-input'),
@@ -318,12 +320,19 @@ const els = {
   analogClock: document.getElementById('analog-clock'),
   analogTicks: document.getElementById('analog-ticks'),
   analogNumerals: document.getElementById('analog-numerals'),
+  analogArabic: document.getElementById('analog-arabic'),
   clockHour: document.getElementById('clock-hour'),
   clockMinute: document.getElementById('clock-minute'),
   clockSecond: document.getElementById('clock-second'),
   analogDigital: document.getElementById('analog-digital'),
+  analogDate: document.getElementById('analog-date'),
   czClockStyle: document.getElementById('cz-clock-style'),
+  czClockDial: document.getElementById('cz-clock-dial'),
+  czClockFormat: document.getElementById('cz-clock-format'),
+  czClockScale: document.getElementById('cz-clock-scale'),
+  czClockScaleVal: document.getElementById('cz-clock-scale-val'),
   czClockHands: document.getElementById('cz-clock-hands'),
+  czClockDate: document.getElementById('cz-clock-date'),
   czClockSeconds: document.getElementById('cz-clock-seconds'),
   czClockSweep: document.getElementById('cz-clock-sweep'),
   clockStyleGroup: document.getElementById('clock-style-group'),
@@ -371,6 +380,11 @@ const els = {
   llHeadline: document.getElementById('ll-headline'),
   llLine: document.getElementById('ll-line'),
   llStamp: document.getElementById('ll-stamp'),
+  llRingArc: document.getElementById('ll-ring-arc'),
+  llRingTime: document.getElementById('ll-ring-time'),
+  llFavorBarFill: document.getElementById('ll-flavor-bar-fill'),
+  llUnplugBtn: document.getElementById('ll-unplug-btn'),
+  llUnplugSub: document.getElementById('ll-unplug-sub'),
   // Warning modal
   warningModal: document.getElementById('warning-modal'),
   warningModalText: document.getElementById('warning-modal-text'),
@@ -616,6 +630,10 @@ const state = {
   clockFace: 'hybrid',
   // Analog/hybrid clock customization.
   clockStyle: 'modern',
+  clockDial: 'bars',
+  clockFormat: '24h',
+  clockScale: 1,
+  clockShowDate: false,
   clockHandColor: '#76c9ff',
   clockSeconds: true,
   // Smooth sweeping second hand (premium watch glide) vs. a per-second tick.
@@ -970,22 +988,46 @@ function notify(message, type = 'info') {
   showToast(message, type);
 }
 
+function formatIdleClockTime(now, compact = false) {
+  const use12Hour = state.clockFormat === '12h';
+  const minutes = now.getMinutes().toString().padStart(2, '0');
+
+  if (!use12Hour) {
+    const hours24 = now.getHours().toString().padStart(2, '0');
+    return `${hours24}:${minutes}`;
+  }
+
+  const hours12 = now.getHours() % 12 || 12;
+  const meridiem = now.getHours() >= 12 ? 'PM' : 'AM';
+  return compact ? `${hours12}:${minutes}${meridiem.charAt(0).toLowerCase()}` : `${hours12}:${minutes} ${meridiem}`;
+}
+
+function formatIdleClockDate(now, compact = false) {
+  return now.toLocaleDateString('en-US', compact
+    ? { weekday: 'short', month: 'short', day: 'numeric' }
+    : { weekday: 'long', month: 'long', day: 'numeric' });
+}
+
 function render() {
   const isIdle = !state.running && !state.paused;
   const displaySeconds = state.running || state.paused ? state.remainingSeconds : inputSeconds();
   const totalSeconds = state.running || state.paused ? state.totalSeconds : displaySeconds;
+  const idleClockVisible = isIdle && state.clockMode;
 
   els.body.classList.toggle('is-running', state.running);
   els.body.classList.toggle('is-paused', state.paused);
   els.body.classList.toggle('mini-mode', state.miniMode);
+  els.timerDisplay?.classList.toggle('clock-idle', idleClockVisible);
 
   // Clock Mode: show current time when idle instead of countdown input.
-  if (isIdle && state.clockMode) {
+  if (idleClockVisible) {
     const now = new Date();
-    const h = now.getHours().toString().padStart(2, '0');
-    const m = now.getMinutes().toString().padStart(2, '0');
     const face = state.clockFace || 'digital';
     const showAnalog = face === 'analog' || face === 'hybrid';
+    const timeText = formatIdleClockTime(now, false);
+    const compactTimeText = formatIdleClockTime(now, true);
+    const dateText = state.clockShowDate ? formatIdleClockDate(now, false) : '';
+    const compactDateText = state.clockShowDate ? formatIdleClockDate(now, true) : '';
     if (els.analogClock) {
       els.analogClock.style.display = showAnalog ? '' : 'none';
       // Drop the sweep class while hidden so it re-syncs to real time on re-show.
@@ -994,11 +1036,13 @@ function render() {
     if (showAnalog) {
       updateAnalogHands(now);
       // Hybrid: show digital readout inside the analog clock face.
-      if (els.analogDigital) els.analogDigital.textContent = face === 'hybrid' ? `${h}:${m}` : '';
+      if (els.analogDigital) els.analogDigital.textContent = face === 'hybrid' ? compactTimeText : '';
+      if (els.analogDate) els.analogDate.textContent = compactDateText;
     }
-    // Pure analog hides the digital text; hybrid hides it (readout is inside the SVG); digital shows full HH:MM.
-    els.timerMain.textContent = face === 'analog' || face === 'hybrid' ? '' : `${h}:${m}`;
+    // Pure analog hides the digital text; hybrid keeps the readout inside the SVG; digital shows the full time.
+    els.timerMain.textContent = face === 'analog' || face === 'hybrid' ? '' : timeText;
     els.timerMain.classList.remove('hybrid-readout');
+    if (els.timerSub) els.timerSub.textContent = showAnalog ? '' : dateText;
     // Show next bedtime reminder if configured.
     const bedtime = state.bedtime || '';
     if (bedtime && els.timerLabel) {
@@ -1011,6 +1055,8 @@ function render() {
       els.analogClock.style.display = 'none';
       els.analogClock.classList.remove('sweep');
     }
+    if (els.analogDigital) els.analogDigital.textContent = '';
+    if (els.analogDate) els.analogDate.textContent = '';
     els.timerMain.classList.remove('hybrid-readout');
     els.timerMain.textContent = formatTime(displaySeconds);
     els.timerLabel.textContent = state.paused
@@ -1018,6 +1064,7 @@ function render() {
       : state.running
         ? `until ${actionLabel().toLowerCase()}`
         : 'ready';
+    if (els.timerSub) els.timerSub.textContent = '';
   }
 
   // Briefly label how the last session ended, overriding the idle/clock label.
@@ -1039,6 +1086,13 @@ function render() {
   const runEl = document.getElementById('action-bar-running');
   if (setupEl) setupEl.style.display = (state.running || state.paused) ? 'none' : '';
   if (runEl) runEl.style.display = (state.running || state.paused) ? '' : 'none';
+
+  // Northstar lobby elements: show on idle, hide while running/paused.
+  const nsHero = document.getElementById('ns-hero-card');
+  const nsTrust = document.getElementById('ns-trust-bar');
+  if (nsHero) nsHero.style.display = isIdle ? '' : 'none';
+  if (nsTrust) nsTrust.style.display = isIdle ? '' : 'none';
+  document.body.classList.toggle('ns-lobby', isIdle);
 
   els.timerInput.disabled = state.running || state.paused;
   els.btnPlus.disabled = state.running || state.paused;
@@ -1106,14 +1160,29 @@ function render() {
   });
 }
 
-// Build the 12 hour ticks for the analog clock face once.
+function resolveClockDial() {
+  if (state.clockDial === 'auto') {
+    return state.clockStyle === 'classic' ? 'roman' : 'bars';
+  }
+  return state.clockDial || 'bars';
+}
+
+// Build the analog dial markers for the current clock-dial mode.
 function buildAnalogTicks() {
-  if (!els.analogTicks || els.analogTicks.childNodes.length) return;
+  if (!els.analogTicks) return;
+  const dial = resolveClockDial();
+  if (els.analogTicks.dataset.variant === dial) return;
+  els.analogTicks.dataset.variant = dial;
+  els.analogTicks.innerHTML = '';
+  if (dial === 'roman' || dial === 'arabic') return;
   const ns = 'http://www.w3.org/2000/svg';
-  for (let i = 0; i < 12; i++) {
-    const angle = (i * 30) * Math.PI / 180;
-    const major = i % 3 === 0;
-    const inner = major ? 37 : 41;
+  const count = dial === 'minutes' ? 60 : 12;
+  for (let i = 0; i < count; i++) {
+    const angle = (i * (360 / count)) * Math.PI / 180;
+    const major = dial === 'minutes' ? i % 5 === 0 : i % 3 === 0;
+    const inner = dial === 'minutes'
+      ? (major ? 36 : 41.5)
+      : (major ? 37 : 41);
     const outer = 45;
     const line = document.createElementNS(ns, 'line');
     line.setAttribute('x1', (50 + inner * Math.sin(angle)).toFixed(2));
@@ -1124,10 +1193,10 @@ function buildAnalogTicks() {
     els.analogTicks.appendChild(line);
   }
   buildAnalogNumerals();
+  buildAnalogArabic();
 }
 
-// Build the 12 Roman numerals for the "Classic" clock face once.
-// Hidden by default; CSS reveals them only for .style-classic.
+// Build the 12 Roman numerals for the analog clock face once.
 function buildAnalogNumerals() {
   if (!els.analogNumerals || els.analogNumerals.childNodes.length) return;
   const ns = 'http://www.w3.org/2000/svg';
@@ -1147,9 +1216,29 @@ function buildAnalogNumerals() {
   }
 }
 
+function buildAnalogArabic() {
+  if (!els.analogArabic || els.analogArabic.childNodes.length) return;
+  const ns = 'http://www.w3.org/2000/svg';
+  const numbers = ['12', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'];
+  const r = 38;
+  for (let i = 0; i < 12; i++) {
+    const angle = (i * 30) * Math.PI / 180;
+    const t = document.createElementNS(ns, 'text');
+    t.setAttribute('x', (50 + r * Math.sin(angle)).toFixed(2));
+    t.setAttribute('y', (50 - r * Math.cos(angle)).toFixed(2));
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('dominant-baseline', 'central');
+    t.setAttribute('class', 'analog-arabic-numeral');
+    t.textContent = numbers[i];
+    els.analogArabic.appendChild(t);
+  }
+}
+
 // Rotate the analog clock hands to match the given time.
 function updateAnalogHands(now) {
   buildAnalogTicks();
+  buildAnalogNumerals();
+  buildAnalogArabic();
   const sec = now.getSeconds();
   const min = now.getMinutes();
   const hr = now.getHours() % 12;
@@ -2091,21 +2180,21 @@ async function loadMorningProof() {
   }
 }
 
-function renderMorningProof(receipt) {
+async function renderMorningProof(receipt) {
   if (!receipt || !els.morningProofSection) return;
   els.morningProofSection.style.display = '';
 
-  // Result badge.
+  // Result → badge + headline.
   const badgeMap = {
-    running: { text: 'RUNNING', color: '#5b8cff', icon: '\u{1F504}' },
-    completing: { text: 'COMPLETING', color: '#d4a50a', icon: '\u23F3' },
-    power_executed: { text: 'COMPLETED', color: '#4caf50', icon: '\u2705' },
-    dry_run_completed: { text: 'DRY RUN', color: '#76c9ff', icon: '\u{1F4CB}' },
-    cancelled: { text: 'CANCELLED', color: '#ff9800', icon: '\u274C' },
-    blocked: { text: 'BLOCKED', color: '#ff4d4d', icon: '\u{1F6AB}' },
-    error: { text: 'ERROR', color: '#ff4d4d', icon: '\u26A0\uFE0F' }
+    running:           { text: 'RUNNING',    color: '#5b8cff', icon: '\u{1F504}', title: 'IN PROGRESS' },
+    completing:        { text: 'COMPLETING', color: '#d4a50a', icon: '\u23F3',    title: 'COMPLETING\u2026' },
+    power_executed:    { text: 'COMPLETED',  color: '#4caf50', icon: '\u2600\uFE0F', title: 'MISSION COMPLETE' },
+    dry_run_completed: { text: 'DRY RUN',    color: '#76c9ff', icon: '\u{1F4CB}', title: 'DRY RUN COMPLETE' },
+    cancelled:         { text: 'CANCELLED',  color: '#ff9800', icon: '\u274C',    title: 'SESSION CANCELLED' },
+    blocked:           { text: 'BLOCKED',    color: '#ff4d4d', icon: '\u{1F6AB}', title: 'BLOCKED' },
+    error:             { text: 'ERROR',      color: '#ff4d4d', icon: '\u26A0\uFE0F', title: 'ERROR' }
   };
-  const badge = badgeMap[receipt.result] || { text: receipt.result?.toUpperCase(), color: 'var(--text-muted)', icon: '\u2753' };
+  const badge = badgeMap[receipt.result] || { text: receipt.result?.toUpperCase(), color: 'var(--text-muted)', icon: '\u2753', title: receipt.result?.toUpperCase() || '\u2014' };
 
   if (els.proofBadge) {
     els.proofBadge.textContent = badge.text;
@@ -2114,29 +2203,47 @@ function renderMorningProof(receipt) {
   }
   if (els.proofIcon) els.proofIcon.textContent = badge.icon;
 
-  // Body details.
-  if (els.proofBody) {
-    const start = receipt.startedAt ? new Date(receipt.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '?';
-    const end = receipt.endedAt ? new Date(receipt.endedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--';
-    const dur = receipt.durationSeconds ? `${Math.floor(receipt.durationSeconds / 60)}m` : '?';
-    const action = receipt.action || '?';
-    const pauses = receipt.pauseCount || 0;
-    const snoozes = receipt.snoozeCount || 0;
-    const warnings = receipt.warningsShown || 0;
-    const dryRun = receipt.dryRun ? ' (Dry Run)' : '';
-    const force = receipt.forceShutdown ? ' / Force' : '';
+  const proofTitle = document.getElementById('ns-proof-title');
+  if (proofTitle) proofTitle.textContent = badge.title;
 
-    els.proofBody.innerHTML = `
-      <div class="proof-row"><span>Action</span><span>${escapeHtml(action)}${force}${dryRun}</span></div>
-      <div class="proof-row"><span>Duration</span><span>${dur}</span></div>
-      <div class="proof-row"><span>Started</span><span>${start}</span></div>
-      <div class="proof-row"><span>${receipt.result === 'cancelled' ? 'Cancelled' : 'Ended'}</span><span>${end}</span></div>
-      ${pauses ? `<div class="proof-row"><span>Pauses</span><span>${pauses}</span></div>` : ''}
-      ${snoozes ? `<div class="proof-row"><span>Snoozes</span><span>${snoozes}</span></div>` : ''}
-      ${warnings ? `<div class="proof-row"><span>Warnings</span><span>${warnings}</span></div>` : ''}
-      ${receipt.powerCommand ? `<div class="proof-row"><span>Command</span><span class="mono">${escapeHtml(receipt.powerCommand)}</span></div>` : ''}
-    `;
+  // Timestamp line.
+  const timestamp = document.getElementById('ns-proof-timestamp');
+  if (timestamp) {
+    const end = receipt.endedAt ? new Date(receipt.endedAt) : null;
+    const start = receipt.startedAt ? new Date(receipt.startedAt) : null;
+    const parts = [];
+    if (start) parts.push('Started ' + start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    if (end)   parts.push((receipt.result === 'cancelled' ? 'Cancelled' : 'Ended') + ' ' + end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    timestamp.textContent = parts.join('\u2002\u00B7\u2002');
   }
+
+  // Stat pills — only show pills we have real values for.
+  function showPill(id, valId, value) {
+    const pill = document.getElementById(id);
+    const valEl = document.getElementById(valId);
+    if (!pill) return;
+    if (value !== null && value !== undefined && value !== '') {
+      if (valEl) valEl.textContent = value;
+      pill.style.display = '';
+    } else {
+      pill.style.display = 'none';
+    }
+  }
+
+  const durMin = receipt.durationSeconds ? Math.floor(receipt.durationSeconds / 60) : null;
+  showPill('ns-pill-duration', 'ns-pill-duration-val', durMin !== null ? `${durMin}m` : null);
+
+  const actionLabel = receipt.action ? (receipt.action.charAt(0).toUpperCase() + receipt.action.slice(1)) + (receipt.forceShutdown ? ' \u26A1' : '') + (receipt.dryRun ? ' \u{1F4CB}' : '') : null;
+  showPill('ns-pill-action', 'ns-pill-action-val', actionLabel);
+
+  const snoozes = receipt.snoozeCount || 0;
+  showPill('ns-pill-snoozes', 'ns-pill-snoozes-val', snoozes > 0 ? snoozes : null);
+
+  // Total runs from stats API (real count, no faking).
+  try {
+    const stats = await api.getReceiptStats?.();
+    showPill('ns-pill-runs', 'ns-pill-runs-val', stats?.total ?? null);
+  } catch { showPill('ns-pill-runs', 'ns-pill-runs-val', null); }
 }
 
 // View receipts modal.
@@ -2183,6 +2290,17 @@ if (els.btnProofCopy) {
     } catch { notify('Copy failed', 'error'); }
   });
 }
+
+// Northstar proof hero: Play Tonight Again — delegates to existing start flow.
+document.getElementById('btn-proof-again')?.addEventListener('click', () => {
+  if (els.morningProofSection) els.morningProofSection.style.display = 'none';
+  document.getElementById('btn-start')?.click();
+});
+
+// Northstar proof hero: Dismiss — hides the card.
+document.getElementById('btn-proof-dismiss')?.addEventListener('click', () => {
+  if (els.morningProofSection) els.morningProofSection.style.display = 'none';
+});
 
 // Clear receipts.
 if (els.btnClearReceipts) {
@@ -2470,6 +2588,33 @@ function renderReceiptsModal(receipts, stats) {
     });
   }
 
+  if (els.czClockDial) {
+    els.czClockDial.addEventListener('change', () => {
+      state.clockDial = els.czClockDial.value || 'bars';
+      applyClockStyle();
+      render();
+      persistClockPrefs();
+    });
+  }
+
+  if (els.czClockFormat) {
+    els.czClockFormat.addEventListener('change', () => {
+      state.clockFormat = els.czClockFormat.value || '24h';
+      render();
+      persistClockPrefs();
+    });
+  }
+
+  if (els.czClockScale) {
+    els.czClockScale.addEventListener('input', () => {
+      state.clockScale = clamp(Number(els.czClockScale.value) || 1, 0.8, 1.35);
+      applyClockStyle();
+      if (els.czClockScaleVal) els.czClockScaleVal.textContent = `${Math.round(state.clockScale * 100)}%`;
+      render();
+    });
+    els.czClockScale.addEventListener('change', persistClockPrefs);
+  }
+
   if (els.czClockHands) {
     els.czClockHands.addEventListener('input', () => {
       state.clockHandColor = els.czClockHands.value || '#76c9ff';
@@ -2483,6 +2628,14 @@ function renderReceiptsModal(receipts, stats) {
     els.czClockSeconds.addEventListener('change', () => {
       state.clockSeconds = els.czClockSeconds.checked;
       applyClockStyle();
+      render();
+      persistClockPrefs();
+    });
+  }
+
+  if (els.czClockDate) {
+    els.czClockDate.addEventListener('change', () => {
+      state.clockShowDate = els.czClockDate.checked;
       render();
       persistClockPrefs();
     });
@@ -2911,9 +3064,16 @@ function collectAppSettings() {
     clockMode: typeof state.clockMode === 'boolean' ? state.clockMode : (els.chkClockMode?.checked || false),
     clockFace: state.clockFace || els.czClockFace?.value || 'hybrid',
     clockStyle: state.clockStyle || els.czClockStyle?.value || 'modern',
+    clockDial: state.clockDial || els.czClockDial?.value || 'bars',
+    clockFormat: state.clockFormat || els.czClockFormat?.value || '24h',
+    clockScale: Number.isFinite(Number(state.clockScale)) ? Number(state.clockScale) : Number(els.czClockScale?.value || 1),
+    clockShowDate: Boolean(state.clockShowDate),
     clockHandColor: state.clockHandColor || els.czClockHands?.value || '#76c9ff',
     clockSeconds: state.clockSeconds !== false,
-    clockSweep: state.clockSweep !== false
+    clockSweep: state.clockSweep !== false,
+    timerName: els.timerName?.textContent?.trim() || state.timerName || 'Witching Hour',
+    nsActiveTab: document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || 'lib',
+    nsSelectedMode: document.querySelector('.ns-mode-card.selected')?.dataset?.nsMode || ''
   };
 }
 
@@ -2948,16 +3108,42 @@ function applyAppSettings(app) {
   state.clockFace = app.clockFace || 'hybrid';
   if (els.czClockFace) els.czClockFace.value = state.clockFace;
   state.clockStyle = app.clockStyle || 'modern';
+  state.clockDial = app.clockDial || 'bars';
+  state.clockFormat = app.clockFormat || '24h';
+  state.clockScale = Number.isFinite(Number(app.clockScale)) ? clamp(Number(app.clockScale), 0.8, 1.35) : 1;
+  state.clockShowDate = !!app.clockShowDate;
   state.clockHandColor = app.clockHandColor || '#76c9ff';
   state.clockSeconds = app.clockSeconds !== false;
   state.clockSweep = app.clockSweep !== false;
   if (els.czClockStyle) els.czClockStyle.value = state.clockStyle;
+  if (els.czClockDial) els.czClockDial.value = state.clockDial;
+  if (els.czClockFormat) els.czClockFormat.value = state.clockFormat;
+  if (els.czClockScale) els.czClockScale.value = String(state.clockScale);
+  if (els.czClockScaleVal) els.czClockScaleVal.textContent = `${Math.round(state.clockScale * 100)}%`;
   if (els.czClockHands) els.czClockHands.value = state.clockHandColor;
+  if (els.czClockDate) els.czClockDate.checked = state.clockShowDate;
   if (els.czClockSeconds) els.czClockSeconds.checked = state.clockSeconds;
   if (els.czClockSweep) els.czClockSweep.checked = state.clockSweep;
   applyClockStyle();
   updateClockStyleVisibility();
   state.bedtime = app.bedtime || '';
+  // Restore timer name.
+  if (app.timerName && els.timerName) {
+    els.timerName.textContent = app.timerName;
+    state.timerName = app.timerName;
+  }
+  // Restore northstar sidebar tab.
+  if (app.nsActiveTab) {
+    document.querySelectorAll('.ns-nav-item').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.nsTab === app.nsActiveTab);
+    });
+  }
+  // Restore northstar selected mode card.
+  if (app.nsSelectedMode) {
+    document.querySelectorAll('.ns-mode-card').forEach(card => {
+      card.classList.toggle('selected', card.dataset.nsMode === app.nsSelectedMode);
+    });
+  }
   render();
 }
 
@@ -2968,7 +3154,14 @@ function applyClockStyle() {
   els.analogClock.classList.remove('style-modern', 'style-bold', 'style-minimal', 'style-neon', 'style-classic');
   els.analogClock.classList.add('style-' + style);
   els.analogClock.classList.toggle('hide-seconds', state.clockSeconds === false);
+  els.analogClock.dataset.dial = resolveClockDial();
   els.analogClock.style.setProperty('--clock-hand-color', state.clockHandColor || '#76c9ff');
+  const clockScale = String(clamp(Number(state.clockScale) || 1, 0.8, 1.35));
+  els.analogClock.style.setProperty('--clock-scale', clockScale);
+  els.timerDisplay?.style.setProperty('--clock-scale', clockScale);
+  buildAnalogTicks();
+  buildAnalogNumerals();
+  buildAnalogArabic();
 }
 
 // Clock customization controls only apply to analog/hybrid faces; hide them for digital.
@@ -3392,10 +3585,33 @@ async function renderCustomSequences() {
   });
 }
 
+// Northstar PLAY button delegates to existing START button (visual alias only).
+document.getElementById('ns-play-btn')?.addEventListener('click', () => {
+  document.getElementById('btn-start')?.click();
+});
+
+// Northstar sidebar tab: toggle active class + persist.
+document.querySelectorAll('.ns-nav-item').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.ns-nav-item').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    try { api.saveAppSettings({ app: { nsActiveTab: btn.dataset.nsTab } }); } catch (_) {}
+  });
+});
+
+// Timer name: sync state and persist on every edit.
+els.timerName?.addEventListener('input', () => {
+  state.timerName = els.timerName.textContent.trim();
+  try { api.saveAppSettings({ app: { timerName: state.timerName } }); } catch (_) {}
+});
+
 let lastLightTimers = [];
 
 function clearLastLightTimers() {
-  lastLightTimers.forEach(t => clearTimeout(t));
+  lastLightTimers.forEach(t => {
+    if (t && t._interval) clearInterval(t._interval);
+    else clearTimeout(t);
+  });
   lastLightTimers = [];
 }
 
@@ -3408,11 +3624,43 @@ function playLastLight(payload) {
   const soundMode = LL.normalizeSoundId(payload && payload.sound);
   const steps = LL.getSteps(sequence, dryRun);
   const meta = LL.getMeta(sequence, dryRun);
+  const totalMs = steps.reduce((s, st) => s + Number(st.dwellMs || 0), 0);
+  const CIRCUMFERENCE = 503; // 2π × r(80)
 
   clearLastLightTimers();
+
+  // Reset northstar ring + UNPLUG
+  if (els.llRingArc) els.llRingArc.style.strokeDashoffset = '0';
+  if (els.llRingTime) els.llRingTime.textContent = '\u2014';
+  if (els.llFavorBarFill) els.llFavorBarFill.style.width = '0%';
+  if (els.llUnplugBtn) els.llUnplugBtn.style.display = 'none';
+  if (els.llUnplugSub) els.llUnplugSub.style.display = 'none';
+
   els.llTitle.textContent = meta.sequenceLabel || meta.cinematicTitle;
   els.lastLightOverlay.classList.add('active');
   els.lastLightOverlay.setAttribute('aria-hidden', 'false');
+
+  // Countdown ring ticker (1-second intervals)
+  let llRingInterval = null;
+  if (totalMs > 0 && els.llRingArc && els.llRingTime) {
+    const totalSec = Math.ceil(totalMs / 1000);
+    let secLeft = totalSec;
+    function fmtSec(s) {
+      const m = Math.floor(s / 60);
+      const sec = s % 60;
+      return String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+    }
+    els.llRingTime.textContent = fmtSec(secLeft);
+    llRingInterval = setInterval(() => {
+      secLeft = Math.max(0, secLeft - 1);
+      els.llRingTime.textContent = fmtSec(secLeft);
+      const progress = secLeft / totalSec;
+      els.llRingArc.style.strokeDashoffset = String(CIRCUMFERENCE * progress);
+      if (els.llFavorBarFill) els.llFavorBarFill.style.width = String((1 - progress) * 100) + '%';
+      if (secLeft === 0) clearInterval(llRingInterval);
+    }, 1000);
+    lastLightTimers.push({ _interval: llRingInterval });
+  }
 
   let elapsed = 0;
   steps.forEach(step => {
@@ -3428,14 +3676,19 @@ function playLastLight(payload) {
     elapsed += Number(step.dwellMs || 0);
   });
 
-  // Final stamp, then fade out.
+  // Final stamp + show UNPLUG
   lastLightTimers.push(setTimeout(() => {
     els.llStamp.textContent = meta.stampLine || '';
+    if (els.llUnplugBtn) els.llUnplugBtn.style.display = '';
+    if (els.llUnplugSub) els.llUnplugSub.style.display = '';
   }, Math.max(0, elapsed - 600)));
 
   lastLightTimers.push(setTimeout(() => {
+    if (llRingInterval) clearInterval(llRingInterval);
     els.lastLightOverlay.classList.remove('active');
     els.lastLightOverlay.setAttribute('aria-hidden', 'true');
+    if (els.llUnplugBtn) els.llUnplugBtn.style.display = 'none';
+    if (els.llUnplugSub) els.llUnplugSub.style.display = 'none';
   }, elapsed + 250));
 }
 

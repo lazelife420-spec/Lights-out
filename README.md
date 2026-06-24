@@ -111,7 +111,7 @@ npm run build   # portable LightsOut.exe + installer in ../dist
 ```powershell
 cd electron
 npm run icons   # regenerate app icon/logo from assets/*.svg
-npm run smoke   # syntax, settings/last-light/smart-light round-trips, UI checks
+npm run smoke   # syntax, settings round-trips, startup/tray guards, UI wiring, preview-safe defaults
 ```
 
 CI (`.github/workflows/ci.yml`) runs lint + smoke on Linux and packages on Windows

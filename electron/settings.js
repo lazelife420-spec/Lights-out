@@ -97,11 +97,19 @@ const DEFAULTS = {
     // Clock Mode: show current time when idle instead of countdown input.
     clockMode: true,
     // Clock face style when idle in Clock Mode: 'digital' | 'analog' | 'hybrid'.
-    clockFace: 'digital',
+    clockFace: 'hybrid',
     // Analog/hybrid clock customization.
-    clockStyle: 'modern',          // 'modern' | 'bold' | 'minimal' | 'neon'
+    clockStyle: 'modern',          // 'modern' | 'bold' | 'minimal' | 'neon' | 'classic'
+    clockDial: 'bars',             // 'bars' | 'minutes' | 'arabic' | 'roman' | 'auto'
+    clockFormat: '24h',            // '24h' | '12h'
+    clockScale: 1,                 // 0.8 - 1.35
+    clockShowDate: false,
     clockHandColor: '#76c9ff',     // hand + cap accent color
-    clockSeconds: true             // show the sweeping second hand
+    clockSeconds: true,            // show the second hand
+    clockSweep: true,              // smooth sweep vs per-second tick
+    // Northstar UI state
+    nsActiveTab: 'lib',            // last active sidebar tab
+    nsSelectedMode: ''             // last selected lobby mode card
   },
   calendar: {
     enabled: true,

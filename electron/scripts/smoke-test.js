@@ -29,6 +29,10 @@ function assert(cond, msg) {
   if (!cond) throw new Error(msg || 'assertion failed');
 }
 
+function assertMatch(src, pattern, msg) {
+  assert(pattern.test(src), msg || `missing pattern: ${pattern}`);
+}
+
 // 1. Syntax-check every first-party JS file.
 const jsFiles = ['main.js', 'preload.js', 'renderer.js', 'settings.js', 'smartLights.js', 'profiles.js', 'calendar.js', 'lastLight.js'];
 for (const file of jsFiles) {
@@ -53,6 +57,8 @@ check('settings: defaults load', () => {
   const all = settings.getAll();
   assert(all.app && all.customization, 'missing default sections');
   assert(all.customization.accent === '#5b8cff', 'unexpected default accent');
+  assert(all.app.clockFace === 'hybrid', 'clock face default should be hybrid');
+  assert(all.app.clockDial === 'bars', 'clock dial default should be hour markers');
 });
 
 check('settings: updateSection persists to disk', () => {
@@ -129,13 +135,98 @@ check('startup: no default force-shutdown auto-start', () => {
   assert(!/openAtLogin:\s*true/.test(mainSrc), 'login should not be forced on');
 });
 
+check('startup: launch flags still parse minimized, no-auto-start, timer, and action', () => {
+  assertMatch(mainSrc, /if \(lower === '--minimized' \|\| lower === '--minimized-to-tray'\) options\.minimized = true;/, 'minimized flag parser changed');
+  assertMatch(mainSrc, /if \(lower === '--no-auto-start'\) options\.noAutoStart = true;/, 'no-auto-start flag parser changed');
+  assertMatch(mainSrc, /if \(lower\.startsWith\('--timer='\)\) options\.timerMinutes = Number\(lower\.split\('='\)\[1\]\) \|\| 0;/, 'timer flag parser changed');
+  assertMatch(mainSrc, /if \(lower\.startsWith\('--action='\)\) options\.action = lower\.split\('='\)\[1\] \|\| 'shutdown';/, 'action flag parser changed');
+});
+
+check('tray: close-to-tray behavior remains the default window close action', () => {
+  assertMatch(mainSrc, /mainWindow\.on\('close', event => \{\s+if \(app\.isQuitting\) return;\s+event\.preventDefault\(\);\s+mainWindow\.hide\(\);\s+refreshTrayMenu\(\);\s+\}\);/s, 'window close no longer hides to tray');
+});
+
+check('tray: menu keeps show-hide, settings, timer controls, and quick starts', () => {
+  assertMatch(mainSrc, /label: mainWindow && mainWindow\.isVisible\(\) \? 'Hide to Tray' : 'Show Lights Out'/, 'tray show/hide label missing');
+  assertMatch(mainSrc, /label: 'Open Settings'[\s\S]*mainWindow\.webContents\.send\('open-settings'\);/s, 'tray settings action missing');
+  assertMatch(mainSrc, /label: timerState\.paused \? 'Resume' : 'Pause'/, 'tray pause/resume action missing');
+  assertMatch(mainSrc, /label: 'Snooze \+5 min'/, 'tray snooze action missing');
+  assertMatch(mainSrc, /label: 'Cancel Timer'/, 'tray cancel action missing');
+  assertMatch(mainSrc, /label: 'Start 28 min'/, 'tray 28 min quick start missing');
+  assertMatch(mainSrc, /label: 'Start 1 hour'/, 'tray 1 hour quick start missing');
+  assertMatch(mainSrc, /label: 'Quit'/, 'tray quit action missing');
+});
+
+check('tray: tooltip updates and menu rebuild guard still exist', () => {
+  assertMatch(mainSrc, /if \(!timerState\.running && !timerState\.paused\) \{\s+tray\.setToolTip\('Lights Out - idle'\);/s, 'idle tray tooltip missing');
+  assertMatch(mainSrc, /tray\.setToolTip\(`Lights Out - \$\{prefix\}, \$\{formatTime\(timerState\.remainingSeconds\)\} left`\);/, 'active tray tooltip missing');
+  assertMatch(mainSrc, /Only rebuild the tray context menu on real state transitions, not every[\s\S]*if \(type !== 'tick'\) refreshTrayMenu\(\);/s, 'per-tick tray menu rebuild guard missing');
+});
+
+check('timer: pause, resume, snooze, and cancel state transitions remain wired in main', () => {
+  assertMatch(mainSrc, /function pauseTimer\(\) \{[\s\S]*timerState\.paused = true;[\s\S]*emitTimerUpdate\('paused'\);/s, 'pause timer flow changed');
+  assertMatch(mainSrc, /function resumeTimer\(\) \{[\s\S]*timerState\.paused = false;[\s\S]*emitTimerUpdate\('resumed'\);/s, 'resume timer flow changed');
+  assertMatch(mainSrc, /function snoozeTimer\(seconds = 300\) \{[\s\S]*timerState\.totalSeconds \+= addSeconds;[\s\S]*timerState\.remainingSeconds \+= addSeconds;[\s\S]*emitTimerUpdate\('snoozed', \{ addedSeconds: addSeconds \}\);/s, 'snooze timer flow changed');
+  assertMatch(mainSrc, /function cancelTimer\(\) \{[\s\S]*timerState\.running = false;[\s\S]*timerState\.phase = 'idle';[\s\S]*emitTimerUpdate\('cancelled'\);/s, 'cancel timer flow changed');
+});
+
+check('ipc: timer and login handlers remain exposed from main', () => {
+  assertMatch(mainSrc, /ipcMain\.handle\('start-timer', async \(event, options, legacyAction\) => startTimer\(options, legacyAction\)\);/, 'start-timer IPC missing');
+  assertMatch(mainSrc, /ipcMain\.handle\('cancel-timer', async \(\) => cancelTimer\(\)\);/, 'cancel-timer IPC missing');
+  assertMatch(mainSrc, /ipcMain\.handle\('pause-timer', async \(\) => pauseTimer\(\)\);/, 'pause-timer IPC missing');
+  assertMatch(mainSrc, /ipcMain\.handle\('resume-timer', async \(\) => resumeTimer\(\)\);/, 'resume-timer IPC missing');
+  assertMatch(mainSrc, /ipcMain\.handle\('snooze-timer', async \(event, seconds\) => snoozeTimer\(seconds\)\);/, 'snooze-timer IPC missing');
+  assertMatch(mainSrc, /app\.setLoginItemSettings\(\{[\s\S]*openAtLogin: Boolean\(enabled\),[\s\S]*openAsHidden: false,[\s\S]*args: \['--minimized', '--no-auto-start'\]/s, 'run-at-login settings changed');
+});
+
 // 7. Core UI controls exist (start/pause/resume/snooze/cancel/mini + customize).
 const htmlSrc = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-for (const id of ['btn-start', 'btn-stop', 'btn-pause', 'btn-snooze', 'btn-mini', 'cz-accent', 'cz-theme', 'cz-ring', 'cz-opacity', 'cz-volume', 'chk-lastlight', 'sel-lastlight-sequence', 'warning-modal', 'last-light-overlay', 'morning-proof-section', 'proof-card', 'receipts-modal']) {
+for (const id of ['btn-start', 'btn-stop', 'btn-pause', 'btn-snooze', 'btn-mini', 'cz-accent', 'cz-theme', 'cz-ring', 'cz-opacity', 'cz-volume', 'cz-clock-format', 'cz-clock-scale', 'cz-clock-dial', 'cz-clock-date', 'chk-lastlight', 'sel-lastlight-sequence', 'warning-modal', 'last-light-overlay', 'morning-proof-section', 'proof-card', 'receipts-modal']) {
   check(`ui: #${id} present`, () => {
     assert(htmlSrc.includes(`id="${id}"`), `missing #${id}`);
   });
 }
+
+check('ui: login wording stays aligned with safe startup behavior', () => {
+  assertMatch(htmlSrc, /Run at login \(start minimized and idle\)/, 'login checkbox wording changed');
+});
+
+check('ui: warning modal keeps snooze and cancel choices', () => {
+  assertMatch(htmlSrc, /id="warning-snooze"/, 'warning snooze button missing');
+  assertMatch(htmlSrc, /id="warning-cancel"/, 'warning cancel button missing');
+});
+
+const preloadSrc = fs.readFileSync(path.join(root, 'preload.js'), 'utf8');
+check('preload: timer, mini-mode, and tray-settings bridge APIs remain exposed', () => {
+  assertMatch(preloadSrc, /startTimer: \(options, action\) => ipcRenderer\.invoke\('start-timer', options, action\)/, 'preload startTimer bridge missing');
+  assertMatch(preloadSrc, /cancelTimer: \(\) => ipcRenderer\.invoke\('cancel-timer'\)/, 'preload cancelTimer bridge missing');
+  assertMatch(preloadSrc, /pauseTimer: \(\) => ipcRenderer\.invoke\('pause-timer'\)/, 'preload pauseTimer bridge missing');
+  assertMatch(preloadSrc, /resumeTimer: \(\) => ipcRenderer\.invoke\('resume-timer'\)/, 'preload resumeTimer bridge missing');
+  assertMatch(preloadSrc, /snoozeTimer: \(seconds\) => ipcRenderer\.invoke\('snooze-timer', seconds\)/, 'preload snoozeTimer bridge missing');
+  assertMatch(preloadSrc, /toggleMiniMode: \(\) => ipcRenderer\.send\('toggle-mini-mode'\)/, 'preload toggleMiniMode bridge missing');
+  assertMatch(preloadSrc, /onMiniModeChanged: \(callback\) => \{[\s\S]*'mini-mode-changed'/s, 'preload onMiniModeChanged bridge missing');
+  assertMatch(preloadSrc, /onOpenSettings: \(callback\) => \{[\s\S]*'open-settings'/s, 'preload onOpenSettings bridge missing');
+});
+
+const rendererSrc = fs.readFileSync(path.join(root, 'renderer.js'), 'utf8');
+check('renderer: running-state controls still swap start-stop-pause visibility and label', () => {
+  assertMatch(rendererSrc, /els\.btnStart\.style\.display = state\.running \|\| state\.paused \? 'none' : 'flex';/, 'renderer start visibility changed');
+  assertMatch(rendererSrc, /els\.btnStop\.style\.display = state\.running \|\| state\.paused \? 'flex' : 'none';/, 'renderer stop visibility changed');
+  assertMatch(rendererSrc, /els\.btnPause\.style\.display = state\.running \|\| state\.paused \? 'flex' : 'none';/, 'renderer pause visibility changed');
+  assertMatch(rendererSrc, /els\.btnPause\.querySelector\('span:last-child'\)\.textContent = state\.paused \? 'Resume' : 'Pause';/, 'renderer pause/resume label changed');
+});
+
+check('renderer: keyboard shortcuts still cover space, escape, presets, and Ctrl+M', () => {
+  assertMatch(rendererSrc, /if \(event\.key === ' ' \|\| event\.code === 'Space'\) \{[\s\S]*if \(state\.running \|\| state\.paused\) togglePause\(\);[\s\S]*else startTimer\(\);/s, 'space shortcut changed');
+  assertMatch(rendererSrc, /if \(event\.key === 'Escape'\) \{[\s\S]*else if \(state\.running \|\| state\.paused\) \{[\s\S]*cancelTimer\(\);/s, 'escape cancel shortcut changed');
+  assertMatch(rendererSrc, /const presets = \{ '1': 5, '2': 10, '3': 15, '4': 30, '5': 60, '6': 120 \};/, 'preset shortcut map changed');
+  assertMatch(rendererSrc, /case 'm':[\s\S]*toggleMiniMode\(\);/s, 'Ctrl+M mini-mode shortcut changed');
+});
+
+check('renderer fallback: preview mode stays safe and idle by default', () => {
+  assertMatch(rendererSrc, /runAtLogin: false,[\s\S]*startupBehavior: 'Starts minimized and idle'/s, 'fallback startup behavior changed');
+  assertMatch(rendererSrc, /state\.dryRun = true;/, 'fallback should remain dry-run');
+});
 
 // 8. Run Receipts module logic.
 const rrPath = path.join(root, 'runReceipts.js');

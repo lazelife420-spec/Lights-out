@@ -16,6 +16,7 @@ system-tune-backup-*/
 
 # Dev capture artifacts
 electron/assets/_ui_*.png
+visual_smoke/
 
 # OS / editor cruft
 Thumbs.db
