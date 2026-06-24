@@ -1,33 +1,45 @@
 # Lights Out
 
-**A clean Windows wind-down and shutdown timer for people who do not want to touch Command Prompt, PowerShell, or Task Scheduler.**
+**A Windows bedtime shutdown timer that gets out of your way until it matters.**
 
-Set a bedtime. Lights Out handles the rest: a calm wind-down, ambient visuals,
-optional smart-light sunrise, and a deliberate shutdown action when the timer
-ends. No surprise countdowns. No hidden force-quits.
+Set a time. Press START. Lights Out walks you through a calm wind-down, shows a
+cinematic final-confirm sequence, and shuts down your PC. If you change your
+mind, press Cancel. No surprise force-quits. No cloud account. No drama.
 
-<img src="docs/release/screenshots/v10.0.4/01_clock_face_hybrid.png" width="520" alt="Lights Out cockpit - hybrid clock face and the new desk-lamp logo">
+[![Download v10.1.0](https://img.shields.io/badge/Download-v10.1.0-blue?style=for-the-badge)](https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.1.0)
 
-### I built this because I use it every night
+## Download
 
-I got tired of shutting down my PC the hard way. Command-line timers are fine
-until you typo `shutdown /s /t 3600` and your screen goes black. Task Scheduler
-works but feels like doing taxes at bedtime. I wanted something that felt like
-closing a book, not launching a missile.
+**[→ Lights Out v10.1.0 — installer, portable EXE, SHA256 checksums](https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.1.0)**
 
-Lights Out opens idle. You pick a time, press START, and the app walks you
-through a wind-down. If you change your mind, you cancel. No drama.
+- `Lights.Out.Setup.10.1.0.exe` — NSIS installer, standard Windows install
+- `LightsOut.exe` — portable, runs from any folder, no install needed
+- `SHA256SUMS.txt` — checksums for both artifacts
 
-### Free because trust comes first
+<img src="docs/release/screenshots/v10.0.4/01_clock_face_hybrid.png" width="520" alt="Lights Out cockpit — hybrid clock face and desk-lamp logo">
+
+### Why I built it
+
+I got tired of shutting down my PC the hard way. `shutdown /s /t 3600` works
+until you typo it and your screen goes black mid-project. Task Scheduler is fine
+but feels like doing taxes at bedtime. I wanted something that felt like closing
+a book, not launching a missile.
+
+Lights Out opens idle. No auto-start countdown. You pick a time, press START,
+and the app walks you through a wind-down. The Last Light cinematic sequence
+counts down the final seconds, then the machine shuts down. Emergency cancel
+is always one keystroke away (`Ctrl+Shift+S`).
+
+### Free. Local. No account.
 
 - **No account.** Nothing to sign up for.
 - **No subscription.** The whole app is free.
 - **No ads. No telemetry.** Your data stays on your machine.
+- **No cloud.** Receipts and settings live in `AppData`, never a server.
 
-Lights Out makes one outbound connection by default: a periodic check against the
-GitHub Releases API for a newer version. It sends no personal data and no usage
-analytics. Smart-light, calendar, and Wi-Fi features only reach out when you set
-them up.
+One outbound connection by default: a periodic check against the GitHub Releases
+API for a newer version. No personal data. No usage analytics. Smart-light,
+calendar, and Wi-Fi features only reach out when you configure them.
 
 ### Proof-backed releases
 
@@ -35,11 +47,8 @@ Every release ships an installer, a portable build, and SHA256 checksums, built
 and published by CI. No hand-edited binaries. No mystery downloads.
 
 - Latest release: https://github.com/Z3r0DayZion-install/lights-out/releases/latest
-- Installer: `Lights Out Setup *.exe`
-- Portable: `LightsOut.exe`
-- Checksums: `SHA256SUMS.txt`
-
-<img src="docs/release/screenshots/v10.0.2/05_github_release.png" width="600" alt="GitHub release page showing v10.0.2 assets and SHA256SUMS">
+- v10.1.0 release: https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.1.0
+- Smoke suite: 57/57 passing
 
 ## Surfaces
 
@@ -72,7 +81,11 @@ full contributor handoff and which runtime owns a given task.
 - **Saved profiles** - save the current timer as a profile in one click, schedule
   by duration or a specific date/time, and right-click a profile to Start, Edit, or
   Delete it. Plus **calendar scheduling** (.ics import).
-- **Last Light finale** - an optional cinematic timer-zero sequence.
+- **Last Light finale** - a cinematic timer-zero sequence with countdown ring,
+  atmospheric panels, and UNPLUG visual (v10.1.0 northstar design). Power action
+  fires automatically; emergency cancel (`Ctrl+Shift+S`) is always available.
+- **Morning Proof hero** - after a completed session, a full-width card shows
+  real stats: session length, action, snooze count, total runs. No fake data.
 - **Imminent-action warning** - a grace-period dialog with Snooze / Cancel.
 - **Crash recovery** - an interrupted countdown offers Resume / Dismiss on restart.
 
