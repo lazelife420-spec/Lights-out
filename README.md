@@ -2,9 +2,9 @@
 
 **A Windows bedtime shutdown timer that gets out of your way until it matters.**
 
-Set a time. Press START. Lights Out walks you through a calm wind-down, shows a
-cinematic final-confirm sequence, and shuts down your PC. If you change your
-mind, press Cancel. No surprise force-quits. No cloud account. No drama.
+Set a time. Press START. Lights Out walks you through a calm wind-down, then a
+cinematic Last Light final countdown before your PC shuts off. Emergency cancel
+is always available. No surprise force-quits. No cloud account. No drama.
 
 [![Download v10.1.0](https://img.shields.io/badge/Download-v10.1.0-blue?style=for-the-badge)](https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.1.0)
 
@@ -26,9 +26,9 @@ but feels like doing taxes at bedtime. I wanted something that felt like closing
 a book, not launching a missile.
 
 Lights Out opens idle. No auto-start countdown. You pick a time, press START,
-and the app walks you through a wind-down. The Last Light cinematic sequence
-counts down the final seconds, then the machine shuts down. Emergency cancel
-is always one keystroke away (`Ctrl+Shift+S`).
+and the app walks you through a wind-down. The Last Light cinematic final
+countdown runs, then the machine shuts down. Emergency cancel is always one
+keystroke away (`Ctrl+Shift+S`).
 
 ### Free. Local. No account.
 
