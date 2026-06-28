@@ -2153,10 +2153,10 @@ function hideOverrideModal() {
 if (els.btnOverrideConfirm) {
   els.btnOverrideConfirm.addEventListener('click', async () => {
     const reason = els.overrideReasonInput?.value?.trim() || 'No reason given';
+    // The main process cancels the active timer as part of executeOverride, so
+    // the shutdown is stopped authoritatively even if this handler errors after.
     await api.executeOverride?.(reason);
     hideOverrideModal();
-    // Cancel the timer since they chose to override.
-    api.cancelTimer?.();
     notify('Override recorded. Sleep well... eventually.', 'warning');
   });
 }
