@@ -34,26 +34,16 @@
       font-family: -apple-system, 'Segoe UI', system-ui, sans-serif;
       min-height: 100vh;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      overflow: hidden;
+      overflow-x: hidden;
       -webkit-font-smoothing: antialiased;
     }
-    .pwa { width: 100%; max-width: 420px; padding: 28px 22px; text-align: center; }
+    .pwa { width: 100%; max-width: 420px; padding: 26px 22px; text-align: center; }
 
-    /* Brand */
-    .brand {
-      display: inline-flex; align-items: center; gap: 8px;
-      margin-bottom: 26px;
-    }
+    .brand { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 22px; }
     .brand svg { width: 18px; height: 18px; opacity: 0.95; }
-    .brand-text {
-      font-size: 12px; font-weight: 700; letter-spacing: 3px;
-      text-transform: uppercase; color: var(--accent); opacity: 0.85;
-    }
+    .brand-text { font-size: 12px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--accent); opacity: 0.85; }
 
-    /* Progress ring + timer */
-    .ring-wrap {
-      position: relative; width: 264px; height: 264px; margin: 0 auto 6px;
-    }
+    .ring-wrap { position: relative; width: 256px; height: 256px; margin: 0 auto 4px; }
     .ring { width: 100%; height: 100%; transform: rotate(-90deg); }
     .ring-track { fill: none; stroke: #1b2230; stroke-width: 6; }
     .ring-progress {
@@ -61,33 +51,13 @@
       filter: drop-shadow(0 0 7px var(--ring));
       transition: stroke-dashoffset 0.9s cubic-bezier(.4,0,.2,1), stroke 0.5s ease;
     }
-    .ring-center {
-      position: absolute; inset: 0;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-    }
-    .timer-name {
-      font-size: 12px; font-weight: 600; color: var(--accent);
-      letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px;
-      max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    }
-    .timer-main {
-      font-size: 58px; font-weight: 700; color: #cfe4ff; line-height: 1;
-      letter-spacing: -2px; font-variant-numeric: tabular-nums;
-      text-shadow: 0 0 28px rgba(118,201,255,0.28);
-    }
-    .timer-label {
-      font-size: 12px; color: var(--muted); text-transform: uppercase;
-      letter-spacing: 1.5px; margin-top: 9px;
-    }
+    .ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .timer-name { font-size: 12px; font-weight: 600; color: var(--accent); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .timer-main { font-size: 56px; font-weight: 700; color: #cfe4ff; line-height: 1; letter-spacing: -2px; font-variant-numeric: tabular-nums; text-shadow: 0 0 28px rgba(118,201,255,0.28); }
+    .timer-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; margin-top: 9px; }
+    .target { font-size: 12px; color: var(--dim); margin-top: 5px; min-height: 14px; }
 
-    /* Status pill */
-    .status-pill {
-      display: inline-flex; align-items: center; gap: 7px;
-      padding: 7px 16px; border-radius: 999px;
-      background: #161b22; border: 1px solid var(--card-border);
-      font-size: 12px; font-weight: 600; color: var(--muted);
-      margin: 18px 0 24px;
-    }
+    .status-pill { display: inline-flex; align-items: center; gap: 7px; padding: 7px 16px; border-radius: 999px; background: #161b22; border: 1px solid var(--card-border); font-size: 12px; font-weight: 600; color: var(--muted); margin: 16px 0 22px; }
     .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
     .status-pill.running { background: rgba(76,175,80,0.10); border-color: rgba(76,175,80,0.25); color: #5ec763; }
     .status-pill.running .status-dot { background: #4caf50; animation: pulse 1.6s ease infinite; }
@@ -99,19 +69,19 @@
     .status-pill.lastlight .status-dot { background: #ff4d4d; animation: pulse 0.85s ease infinite; }
     @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.8); } }
 
-    /* Controls */
     .controls { display: flex; flex-direction: column; gap: 10px; }
+    .section-label { font-size: 10px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--dim); text-align: left; margin: 2px 2px -2px; }
+
+    /* Action segmented control */
+    .action-seg { display: flex; gap: 6px; background: #12161d; border: 1px solid var(--card-border); border-radius: 14px; padding: 5px; }
+    .seg-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 9px 4px; border: none; background: transparent; color: var(--muted); border-radius: 10px; cursor: pointer; font-size: 11px; font-weight: 600; transition: background 0.15s ease, color 0.15s ease; }
+    .seg-btn svg { width: 18px; height: 18px; }
+    .seg-btn.active { background: var(--accent-soft); color: #cfe0ff; box-shadow: inset 0 0 0 1px rgba(91,140,255,0.35); }
+
     .quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .btn {
-      padding: 16px 16px; border: none; border-radius: 14px;
-      font-size: 15px; font-weight: 700; cursor: pointer; letter-spacing: 0.2px;
-      transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
-    }
+    .btn { padding: 16px 16px; border: none; border-radius: 14px; font-size: 15px; font-weight: 700; cursor: pointer; letter-spacing: 0.2px; transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease; }
     .btn:active { transform: scale(0.96); }
-    .btn-primary {
-      background: linear-gradient(180deg, #6b97ff 0%, #5b8cff 100%);
-      color: #0b0e14; box-shadow: 0 6px 18px rgba(91,140,255,0.28);
-    }
+    .btn-primary { background: linear-gradient(180deg, #6b97ff 0%, #5b8cff 100%); color: #0b0e14; box-shadow: 0 6px 18px rgba(91,140,255,0.28); }
     .btn-secondary { background: #1a1f27; color: #c2cad8; border: 1px solid var(--card-border); }
     .btn-secondary:active { background: #20262f; }
     .btn-danger { background: rgba(255,77,77,0.12); color: #ff6b6b; border: 1px solid rgba(255,77,77,0.22); }
@@ -119,39 +89,30 @@
     .timer-actions { display: flex; gap: 10px; }
     .timer-actions .btn { flex: 1; }
 
-    .disconnected { color: var(--muted); font-size: 12px; margin-top: 22px; }
+    /* Custom duration */
+    .custom-row { display: flex; gap: 10px; }
+    .custom-input { flex: 1; display: flex; align-items: center; gap: 8px; background: #12161d; border: 1px solid var(--card-border); border-radius: 14px; padding: 0 14px; }
+    .custom-input input { width: 100%; background: transparent; border: none; outline: none; color: var(--text); font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; padding: 14px 0; -moz-appearance: textfield; }
+    .custom-input input::-webkit-outer-spin-button, .custom-input input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .custom-input .unit { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; }
+    .btn-custom { flex: 0 0 96px; }
 
-    .streak {
-      margin-top: 20px; padding: 14px; border-radius: 14px;
-      background: var(--card); border: 1px solid var(--card-border);
-      display: flex; align-items: center; justify-content: center; gap: 12px;
-    }
+    .disconnected { color: var(--muted); font-size: 12px; margin-top: 22px; }
+    .streak { margin-top: 18px; padding: 14px; border-radius: 14px; background: var(--card); border: 1px solid var(--card-border); display: flex; align-items: center; justify-content: center; gap: 12px; }
     .streak-flame { font-size: 22px; }
     .streak-meta { text-align: left; }
     .streak-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
     .streak-number { font-size: 26px; font-weight: 800; color: #e2b53a; line-height: 1.1; }
 
-    /* Pairing card */
-    .pair-card {
-      background: var(--card); border: 1px solid var(--card-border);
-      border-radius: 16px; padding: 22px 18px; text-align: left;
-    }
+    .pair-card { background: var(--card); border: 1px solid var(--card-border); border-radius: 16px; padding: 22px 18px; text-align: left; }
     .pair-title { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
     .pair-hint { font-size: 13px; line-height: 1.5; color: var(--muted); margin-bottom: 16px; }
-    .pair-input {
-      width: 100%; padding: 14px; border-radius: 12px;
-      border: 1px solid var(--card-border); background: #0d1016; color: var(--text);
-      font-size: 15px; letter-spacing: 0.5px; margin-bottom: 12px; outline: none;
-      transition: border-color 0.15s ease;
-    }
+    .pair-input { width: 100%; padding: 14px; border-radius: 12px; border: 1px solid var(--card-border); background: #0d1016; color: var(--text); font-size: 15px; letter-spacing: 0.5px; margin-bottom: 12px; outline: none; transition: border-color 0.15s ease; }
     .pair-input::placeholder { color: var(--dim); }
     .pair-input:focus { border-color: var(--accent); }
     .pair-submit { width: 100%; }
     .pair-error { color: #ff6b6b; font-size: 12px; margin-top: 10px; }
-    .pair-reset {
-      background: none; border: none; color: var(--accent); font-size: 12px;
-      font-weight: 700; cursor: pointer; margin-top: 10px; padding: 4px; text-decoration: underline;
-    }
+    .pair-reset { background: none; border: none; color: var(--accent); font-size: 12px; font-weight: 700; cursor: pointer; margin-top: 10px; padding: 4px; text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -171,6 +132,7 @@
         <div class="timer-name" id="timer-name">Witching Hour</div>
         <div class="timer-main" id="timer-main">--:--</div>
         <div class="timer-label" id="timer-label">Idle</div>
+        <div class="target" id="target"></div>
       </div>
     </div>
 
@@ -188,13 +150,38 @@
       <div class="pair-error" id="pair-error" style="display:none">Enter the pairing code to continue.</div>
     </div>
 
-    <!-- Quick start (shown when idle) -->
+    <!-- Start controls (shown when idle) -->
     <div class="controls" id="idle-controls">
+      <div class="section-label">When the timer ends</div>
+      <div class="action-seg" id="action-seg">
+        <button class="seg-btn" data-action="sleep" type="button">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12,3a9,9 0 1 0 9,9c0,-0.46 -0.04,-0.92 -0.1,-1.36a5.39,5.39 0 0 1 -4.4,2.26a5.4,5.4 0 0 1 -3.14,-9.8c-0.44,-0.06 -0.9,-0.1 -1.36,-0.1z"/></svg>
+          Sleep
+        </button>
+        <button class="seg-btn active" data-action="shutdown" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v8"/><path d="M7.5 7a7 7 0 1 0 9 0"/></svg>
+          Shut down
+        </button>
+        <button class="seg-btn" data-action="restart" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v5h-5"/></svg>
+          Restart
+        </button>
+      </div>
+
+      <div class="section-label">Quick start</div>
       <div class="quick-grid">
         <button class="btn btn-primary" data-min="15">15 min</button>
         <button class="btn btn-primary" data-min="30">30 min</button>
         <button class="btn btn-primary" data-min="45">45 min</button>
         <button class="btn btn-primary" data-min="60">1 hour</button>
+      </div>
+
+      <div class="custom-row">
+        <label class="custom-input">
+          <input id="custom-min" type="number" inputmode="numeric" min="1" max="1440" value="90" aria-label="Custom minutes">
+          <span class="unit">min</span>
+        </label>
+        <button class="btn btn-secondary btn-custom" id="custom-start">Start</button>
       </div>
     </div>
 
@@ -225,6 +212,7 @@
     const timerMain = document.getElementById('timer-main');
     const timerLabel = document.getElementById('timer-label');
     const timerName = document.getElementById('timer-name');
+    const targetEl = document.getElementById('target');
     const statusPill = document.getElementById('status-pill');
     const statusText = document.getElementById('status-text');
     const idleControls = document.getElementById('idle-controls');
@@ -233,20 +221,30 @@
     const streakSection = document.getElementById('streak-section');
     const streakCount = document.getElementById('streak-count');
     const ringProgress = document.getElementById('ring-progress');
+    const actionSeg = document.getElementById('action-seg');
+    const customMin = document.getElementById('custom-min');
     const pairCard = document.getElementById('pair-card');
     const pairInput = document.getElementById('pair-input');
     const pairSubmit = document.getElementById('pair-submit');
     const pairError = document.getElementById('pair-error');
     const pairReset = document.getElementById('pair-reset');
 
-    const RING_C = 2 * Math.PI * 54; // circumference for r=54
+    const RING_C = 2 * Math.PI * 54;
     const PHASE_COLORS = { focus: '#5b8cff', dim: '#d4a50a', lastlight: '#ff4d4d', idle: '#5b8cff' };
+    let selectedAction = 'shutdown';
 
-    // Sets the ring arc (fraction = time remaining) and its phase color.
     function setRing(fraction, phase) {
       const f = Math.max(0, Math.min(1, fraction || 0));
       ringProgress.style.strokeDashoffset = String(RING_C * (1 - f));
       document.documentElement.style.setProperty('--ring', PHASE_COLORS[phase] || PHASE_COLORS.idle);
+    }
+
+    // Formats the wall-clock time the action will fire, e.g. "11:30 PM".
+    function clockAt(secondsFromNow) {
+      const d = new Date(Date.now() + secondsFromNow * 1000);
+      let h = d.getHours(); const m = d.getMinutes();
+      const ampm = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12;
+      return `${h}:${String(m).padStart(2, '0')} ${ampm}`;
     }
 
     let ws = null;
@@ -281,11 +279,7 @@
     }
     function applyPairToken() {
       const entered = (pairInput.value || '').trim();
-      if (!entered) {
-        pairError.style.display = '';
-        try { pairInput.focus(); } catch {}
-        return;
-      }
+      if (!entered) { pairError.style.display = ''; try { pairInput.focus(); } catch {} return; }
       try { localStorage.setItem(TOKEN_KEY, entered); } catch {}
       pairToken = entered;
       hidePairing();
@@ -299,25 +293,17 @@
       if (!pairToken) { disconnected.style.display = ''; return; }
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
       ws = new WebSocket(`${proto}//${location.host}/?t=${encodeURIComponent(pairToken)}`);
-
-      ws.onopen = () => {
-        disconnected.style.display = 'none';
-        statusText.textContent = 'Idle';
-      };
-      ws.onmessage = (e) => {
-        try { handleUpdate(JSON.parse(e.data)); } catch {}
-      };
+      ws.onopen = () => { disconnected.style.display = 'none'; statusText.textContent = 'Idle'; };
+      ws.onmessage = (e) => { try { handleUpdate(JSON.parse(e.data)); } catch {} };
       ws.onclose = () => { disconnected.style.display = ''; scheduleReconnect(); };
       ws.onerror = () => { disconnected.style.display = ''; scheduleReconnect(); };
     }
+    function scheduleReconnect() { if (reconnectTimer) clearTimeout(reconnectTimer); reconnectTimer = setTimeout(connect, 3000); }
+    function send(data) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); }
 
-    function scheduleReconnect() {
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      reconnectTimer = setTimeout(connect, 3000);
-    }
-
-    function send(data) {
-      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
+    function startTimer(seconds) {
+      const s = Math.max(60, Math.min(24 * 60 * 60, Math.round(seconds)));
+      send({ action: 'start', durationSeconds: s, timerAction: selectedAction });
     }
 
     function handleUpdate(data) {
@@ -328,11 +314,10 @@
 
         timerName.textContent = data.timerName || 'Witching Hour';
         timerMain.textContent = formatTime(data.remainingSeconds);
-        timerLabel.textContent = running
-          ? (paused ? 'Paused' : `until ${data.action || 'shutdown'}`)
-          : 'Idle';
+        timerLabel.textContent = running ? (paused ? 'Paused' : `until ${data.action || 'shutdown'}`) : 'Idle';
+        targetEl.textContent = (running && !paused && data.remainingSeconds > 0)
+          ? `lights out ≈ ${clockAt(data.remainingSeconds)}` : '';
 
-        // Progress ring: fraction of time remaining, colored by phase.
         const total = Number(data.totalSeconds) || 0;
         const remaining = Number(data.remainingSeconds) || 0;
         setRing(running && total > 0 ? remaining / total : 0, running ? phase : 'idle');
@@ -355,10 +340,7 @@
       }
 
       if (data.type === 'streaks') {
-        if (data.streak > 0) {
-          streakSection.style.display = '';
-          streakCount.textContent = data.streak;
-        }
+        if (data.streak > 0) { streakSection.style.display = ''; streakCount.textContent = data.streak; }
       }
     }
 
@@ -371,11 +353,27 @@
       return `${m}:${String(s).padStart(2,'0')}`;
     }
 
-    document.querySelectorAll('[data-min]').forEach(btn => {
+    // Action selector
+    actionSeg.querySelectorAll('.seg-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        send({ action: 'start', durationSeconds: parseInt(btn.dataset.min) * 60, timerAction: 'shutdown' });
+        selectedAction = btn.dataset.action;
+        actionSeg.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b === btn));
       });
     });
+
+    // Quick-start presets
+    document.querySelectorAll('[data-min]').forEach(btn => {
+      btn.addEventListener('click', () => startTimer(parseInt(btn.dataset.min) * 60));
+    });
+
+    // Custom duration
+    document.getElementById('custom-start').addEventListener('click', () => {
+      const mins = parseInt(customMin.value, 10);
+      if (Number.isFinite(mins) && mins >= 1) startTimer(mins * 60);
+    });
+    customMin.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('custom-start').click(); });
+
+    // Running controls
     document.getElementById('btn-pause')?.addEventListener('click', () => send({ action: 'togglePause' }));
     document.getElementById('btn-snooze')?.addEventListener('click', () => send({ action: 'snooze', seconds: 300 }));
     document.getElementById('btn-cancel')?.addEventListener('click', () => send({ action: 'cancel' }));
