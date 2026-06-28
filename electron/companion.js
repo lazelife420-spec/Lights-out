@@ -22,6 +22,15 @@ const emitter = new EventEmitter();
 let expectedToken = '';
 let bindHost = '127.0.0.1';
 
+// Computes the RFC 6455 Sec-WebSocket-Accept value for a client key. The magic
+// GUID must be exactly this string — a wrong GUID produces an accept that every
+// strict client (real browsers, the `ws` library) rejects, so the socket opens
+// at the TCP level but the browser aborts the handshake (close 1006).
+const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+function computeAccept(key) {
+  return require('crypto').createHash('sha1').update(key + WS_GUID).digest('base64');
+}
+
 function tokenFromUrl(url) {
   const i = String(url || '').indexOf('?');
   if (i === -1) return '';
@@ -47,9 +56,7 @@ function upgradeHandler(req, socket, head) {
   // Cap concurrent clients so a misbehaving LAN device can't exhaust sockets.
   if (clients.size >= MAX_CLIENTS) { socket.destroy(); return; }
 
-  const accept = require('crypto').createHash('sha1')
-    .update(key + '258EAFA5-E914-47DA-95CA-5AB5E50F7B97')
-    .digest('base64');
+  const accept = computeAccept(key);
 
   socket.write(
     'HTTP/1.1 101 Switching Protocols\r\n' +
@@ -320,5 +327,7 @@ module.exports = {
   getStatus,
   onMessage,
   onConnect,
-  PWA_PORT
+  PWA_PORT,
+  // Exposed for unit testing the WebSocket handshake.
+  computeAccept
 };
