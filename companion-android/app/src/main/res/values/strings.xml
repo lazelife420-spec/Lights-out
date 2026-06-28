@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Lights Out</string>
+    <string name="setup_title">Connect to your PC</string>
+    <string name="setup_hint">On the desktop app, open Remote Control settings and enable it. Scan the QR code with your phone camera, then paste the link below — or type it as http://PC-IP:58732/?t=YOUR-TOKEN</string>
+    <string name="url_hint">http://192.168.1.50:58732/?t=…</string>
+    <string name="connect">Connect</string>
+    <string name="menu_change_pc">Change PC / URL</string>
+    <string name="invalid_url">Enter a valid link like http://192.168.1.50:58732/?t=…</string>
+</resources>
