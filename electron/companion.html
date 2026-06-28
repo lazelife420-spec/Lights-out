@@ -12,231 +12,171 @@
   <link rel="manifest" href="/manifest.json">
   <title>Lights Out</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0d0e11;
+      --accent: #5b8cff;
+      --accent-soft: rgba(91,140,255,0.14);
+      --text: #e8ecf1;
+      --muted: #8a93a6;
+      --dim: #5b6577;
+      --card: #14181f;
+      --card-border: #232a36;
+      --ring: #5b8cff;        /* recolored per phase in JS */
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; }
     body {
-      background: #0d0e11;
-      color: #e8ecf1;
+      background:
+        radial-gradient(120% 80% at 50% -10%, #1a2030 0%, rgba(26,32,48,0) 60%),
+        radial-gradient(90% 60% at 50% 115%, rgba(91,140,255,0.10) 0%, rgba(91,140,255,0) 55%),
+        var(--bg);
+      color: var(--text);
       font-family: -apple-system, 'Segoe UI', system-ui, sans-serif;
       min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
       overflow: hidden;
-      -webkit-tap-highlight-color: transparent;
+      -webkit-font-smoothing: antialiased;
     }
-    .pwa {
-      width: 100%;
-      max-width: 400px;
-      padding: 24px 20px;
-      text-align: center;
-    }
+    .pwa { width: 100%; max-width: 420px; padding: 28px 22px; text-align: center; }
+
+    /* Brand */
     .brand {
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: #5b8cff;
-      margin-bottom: 32px;
-      opacity: 0.8;
+      display: inline-flex; align-items: center; gap: 8px;
+      margin-bottom: 26px;
     }
-    .timer-display {
-      margin-bottom: 8px;
+    .brand svg { width: 18px; height: 18px; opacity: 0.95; }
+    .brand-text {
+      font-size: 12px; font-weight: 700; letter-spacing: 3px;
+      text-transform: uppercase; color: var(--accent); opacity: 0.85;
+    }
+
+    /* Progress ring + timer */
+    .ring-wrap {
+      position: relative; width: 264px; height: 264px; margin: 0 auto 6px;
+    }
+    .ring { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .ring-track { fill: none; stroke: #1b2230; stroke-width: 6; }
+    .ring-progress {
+      fill: none; stroke: var(--ring); stroke-width: 6; stroke-linecap: round;
+      filter: drop-shadow(0 0 7px var(--ring));
+      transition: stroke-dashoffset 0.9s cubic-bezier(.4,0,.2,1), stroke 0.5s ease;
+    }
+    .ring-center {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
     }
     .timer-name {
-      font-size: 14px;
-      font-weight: 600;
-      color: #5b8cff;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      margin-bottom: 4px;
+      font-size: 12px; font-weight: 600; color: var(--accent);
+      letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px;
+      max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .timer-main {
-      font-size: 64px;
-      font-weight: 700;
-      color: #76c9ff;
-      letter-spacing: -2px;
-      line-height: 1;
-      font-variant-numeric: tabular-nums;
-      text-shadow: 0 0 30px rgba(118, 201, 255, 0.3);
+      font-size: 58px; font-weight: 700; color: #cfe4ff; line-height: 1;
+      letter-spacing: -2px; font-variant-numeric: tabular-nums;
+      text-shadow: 0 0 28px rgba(118,201,255,0.28);
     }
     .timer-label {
-      font-size: 13px;
-      color: #6b7685;
-      text-transform: uppercase;
-      letter-spacing: 1.5px;
-      margin-top: 8px;
-      margin-bottom: 32px;
+      font-size: 12px; color: var(--muted); text-transform: uppercase;
+      letter-spacing: 1.5px; margin-top: 9px;
     }
+
+    /* Status pill */
     .status-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 16px;
-      border-radius: 20px;
-      background: #252b31;
-      font-size: 12px;
-      font-weight: 500;
-      color: #6b7685;
-      margin-bottom: 24px;
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 7px 16px; border-radius: 999px;
+      background: #161b22; border: 1px solid var(--card-border);
+      font-size: 12px; font-weight: 600; color: var(--muted);
+      margin: 18px 0 24px;
     }
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #6b7685;
-    }
-    .status-pill.running { background: rgba(76,175,80,0.1); color: #4caf50; }
-    .status-pill.running .status-dot { background: #4caf50; animation: pulse 1.5s ease infinite; }
-    .status-pill.paused { background: rgba(212,165,10,0.1); color: #d4a50a; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+    .status-pill.running { background: rgba(76,175,80,0.10); border-color: rgba(76,175,80,0.25); color: #5ec763; }
+    .status-pill.running .status-dot { background: #4caf50; animation: pulse 1.6s ease infinite; }
+    .status-pill.paused { background: rgba(212,165,10,0.10); border-color: rgba(212,165,10,0.28); color: #e2b53a; }
     .status-pill.paused .status-dot { background: #d4a50a; }
-    .status-pill.dim { background: rgba(91,140,255,0.1); color: #4a9eff; }
-    .status-pill.dim .status-dot { background: #4a9eff; animation: pulse 2s ease infinite; }
-    .status-pill.lastlight { background: rgba(255,77,77,0.1); color: #ff4d4d; }
-    .status-pill.lastlight .status-dot { background: #ff4d4d; animation: pulse 0.8s ease infinite; }
+    .status-pill.dim { background: rgba(212,165,10,0.10); border-color: rgba(212,165,10,0.28); color: #e2b53a; }
+    .status-pill.dim .status-dot { background: #d4a50a; animation: pulse 2.2s ease infinite; }
+    .status-pill.lastlight { background: rgba(255,77,77,0.10); border-color: rgba(255,77,77,0.3); color: #ff6b6b; }
+    .status-pill.lastlight .status-dot { background: #ff4d4d; animation: pulse 0.85s ease infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.8); } }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(0.85); }
-    }
-
-    .controls {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .quick-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-    }
+    /* Controls */
+    .controls { display: flex; flex-direction: column; gap: 10px; }
+    .quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .btn {
-      padding: 14px 16px;
-      border: none;
-      border-radius: 12px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.15s ease;
-      letter-spacing: 0.3px;
+      padding: 16px 16px; border: none; border-radius: 14px;
+      font-size: 15px; font-weight: 700; cursor: pointer; letter-spacing: 0.2px;
+      transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
     }
     .btn:active { transform: scale(0.96); }
     .btn-primary {
-      background: #5b8cff;
-      color: #111418;
+      background: linear-gradient(180deg, #6b97ff 0%, #5b8cff 100%);
+      color: #0b0e14; box-shadow: 0 6px 18px rgba(91,140,255,0.28);
     }
-    .btn-primary:hover { background: #4a9eff; }
-    .btn-secondary {
-      background: #252b31;
-      color: #9aa5b8;
-      border: 1px solid #2a3040;
-    }
-    .btn-secondary:hover { background: #273039; border-color: #5b8cff; }
-    .btn-danger {
-      background: rgba(255,77,77,0.12);
-      color: #ff4d4d;
-      border: 1px solid rgba(255,77,77,0.2);
-    }
-    .btn-danger:hover { background: rgba(255,77,77,0.2); }
-    .btn-amber {
-      background: rgba(212,165,10,0.12);
-      color: #d4a50a;
-      border: 1px solid rgba(212,165,10,0.2);
-    }
-    .btn-amber:hover { background: rgba(212,165,10,0.2); }
-    .timer-actions {
-      display: flex;
-      gap: 8px;
-    }
+    .btn-secondary { background: #1a1f27; color: #c2cad8; border: 1px solid var(--card-border); }
+    .btn-secondary:active { background: #20262f; }
+    .btn-danger { background: rgba(255,77,77,0.12); color: #ff6b6b; border: 1px solid rgba(255,77,77,0.22); }
+    .btn-amber { background: rgba(212,165,10,0.12); color: #e2b53a; border: 1px solid rgba(212,165,10,0.24); }
+    .timer-actions { display: flex; gap: 10px; }
     .timer-actions .btn { flex: 1; }
-    .disconnected {
-      color: #6b7685;
-      font-size: 12px;
-      margin-top: 24px;
-    }
+
+    .disconnected { color: var(--muted); font-size: 12px; margin-top: 22px; }
+
     .streak {
-      margin-top: 20px;
-      padding: 12px;
-      background: #1b2024;
-      border-radius: 10px;
-      border: 1px solid #2a3040;
+      margin-top: 20px; padding: 14px; border-radius: 14px;
+      background: var(--card); border: 1px solid var(--card-border);
+      display: flex; align-items: center; justify-content: center; gap: 12px;
     }
-    .streak-label {
-      font-size: 10px;
-      color: #6b7685;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    .streak-number {
-      font-size: 32px;
-      font-weight: 700;
-      color: #d4a50a;
-    }
+    .streak-flame { font-size: 22px; }
+    .streak-meta { text-align: left; }
+    .streak-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+    .streak-number { font-size: 26px; font-weight: 800; color: #e2b53a; line-height: 1.1; }
+
+    /* Pairing card */
     .pair-card {
-      background: #1b2024;
-      border: 1px solid #2a3040;
-      border-radius: 14px;
-      padding: 20px 18px;
-      text-align: left;
+      background: var(--card); border: 1px solid var(--card-border);
+      border-radius: 16px; padding: 22px 18px; text-align: left;
     }
-    .pair-title {
-      font-size: 16px;
-      font-weight: 700;
-      color: #e8ecf1;
-      margin-bottom: 6px;
-    }
-    .pair-hint {
-      font-size: 12px;
-      line-height: 1.5;
-      color: #6b7685;
-      margin-bottom: 16px;
-    }
+    .pair-title { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+    .pair-hint { font-size: 13px; line-height: 1.5; color: var(--muted); margin-bottom: 16px; }
     .pair-input {
-      width: 100%;
-      padding: 13px 14px;
-      border-radius: 10px;
-      border: 1px solid #2a3040;
-      background: #0d0e11;
-      color: #e8ecf1;
-      font-size: 15px;
-      letter-spacing: 0.5px;
-      margin-bottom: 10px;
-      outline: none;
+      width: 100%; padding: 14px; border-radius: 12px;
+      border: 1px solid var(--card-border); background: #0d1016; color: var(--text);
+      font-size: 15px; letter-spacing: 0.5px; margin-bottom: 12px; outline: none;
+      transition: border-color 0.15s ease;
     }
-    .pair-input::placeholder { color: #4a5360; }
-    .pair-input:focus { border-color: #5b8cff; }
+    .pair-input::placeholder { color: var(--dim); }
+    .pair-input:focus { border-color: var(--accent); }
     .pair-submit { width: 100%; }
-    .pair-error {
-      color: #ff4d4d;
-      font-size: 12px;
-      margin-top: 10px;
-    }
+    .pair-error { color: #ff6b6b; font-size: 12px; margin-top: 10px; }
     .pair-reset {
-      background: none;
-      border: none;
-      color: #5b8cff;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      margin-top: 8px;
-      padding: 4px;
-      text-decoration: underline;
+      background: none; border: none; color: var(--accent); font-size: 12px;
+      font-weight: 700; cursor: pointer; margin-top: 10px; padding: 4px; text-decoration: underline;
     }
   </style>
 </head>
 <body>
   <div class="pwa">
-    <div class="brand">Lights Out</div>
+    <div class="brand">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5b8cff" d="M12,3a9,9 0 1 0 9,9c0,-0.46 -0.04,-0.92 -0.1,-1.36a5.389,5.389 0 0 1 -4.4,2.26a5.403,5.403 0 0 1 -3.14,-9.8c-0.44,-0.06 -0.9,-0.1 -1.36,-0.1z"/></svg>
+      <span class="brand-text">Lights Out</span>
+    </div>
 
-    <div class="timer-display">
-      <div class="timer-name" id="timer-name">Witching Hour</div>
-      <div class="timer-main" id="timer-main">--:--</div>
-      <div class="timer-label" id="timer-label">Idle</div>
+    <div class="ring-wrap">
+      <svg class="ring" viewBox="0 0 120 120">
+        <circle class="ring-track" cx="60" cy="60" r="54"></circle>
+        <circle class="ring-progress" id="ring-progress" cx="60" cy="60" r="54"
+                stroke-dasharray="339.292" stroke-dashoffset="339.292"></circle>
+      </svg>
+      <div class="ring-center">
+        <div class="timer-name" id="timer-name">Witching Hour</div>
+        <div class="timer-main" id="timer-main">--:--</div>
+        <div class="timer-label" id="timer-label">Idle</div>
+      </div>
     </div>
 
     <div class="status-pill" id="status-pill">
       <span class="status-dot" id="status-dot"></span>
-      <span class="status-text" id="status-text">Connecting...</span>
+      <span class="status-text" id="status-text">Connecting…</span>
     </div>
 
     <!-- Pairing (shown when no token is stored yet) -->
@@ -268,8 +208,11 @@
     </div>
 
     <div class="streak" id="streak-section" style="display:none">
-      <div class="streak-label">Night Streak</div>
-      <div class="streak-number" id="streak-count">0</div>
+      <span class="streak-flame">&#x1F525;</span>
+      <div class="streak-meta">
+        <div class="streak-label">Night Streak</div>
+        <div class="streak-number" id="streak-count">0</div>
+      </div>
     </div>
 
     <div class="disconnected" id="disconnected" style="display:none">
@@ -289,26 +232,31 @@
     const disconnected = document.getElementById('disconnected');
     const streakSection = document.getElementById('streak-section');
     const streakCount = document.getElementById('streak-count');
+    const ringProgress = document.getElementById('ring-progress');
     const pairCard = document.getElementById('pair-card');
     const pairInput = document.getElementById('pair-input');
     const pairSubmit = document.getElementById('pair-submit');
     const pairError = document.getElementById('pair-error');
     const pairReset = document.getElementById('pair-reset');
 
+    const RING_C = 2 * Math.PI * 54; // circumference for r=54
+    const PHASE_COLORS = { focus: '#5b8cff', dim: '#d4a50a', lastlight: '#ff4d4d', idle: '#5b8cff' };
+
+    // Sets the ring arc (fraction = time remaining) and its phase color.
+    function setRing(fraction, phase) {
+      const f = Math.max(0, Math.min(1, fraction || 0));
+      ringProgress.style.strokeDashoffset = String(RING_C * (1 - f));
+      document.documentElement.style.setProperty('--ring', PHASE_COLORS[phase] || PHASE_COLORS.idle);
+    }
+
     let ws = null;
     let reconnectTimer = null;
 
-    // Resolve the pairing token: prefer the one in the URL (QR/link from the
-    // desktop), then fall back to a previously remembered token. This makes the
-    // installed PWA work when launched from the home screen, where the
-    // manifest start_url ('/') has no token. The token never needs to stay in
-    // the URL after the first visit.
     const TOKEN_KEY = 'lightsout_pair_token';
     function resolveToken() {
       const fromUrl = new URLSearchParams(location.search).get('t');
       if (fromUrl) {
         try { localStorage.setItem(TOKEN_KEY, fromUrl); } catch {}
-        // Strip the token from the address bar / history.
         try { history.replaceState(null, '', location.pathname); } catch {}
         return fromUrl;
       }
@@ -318,8 +266,6 @@
     }
     let pairToken = resolveToken();
 
-    // In-page pairing fallback (replaces a native window.prompt): shown only
-    // when no token is present in the URL or remembered from a prior visit.
     function showPairing() {
       pairCard.style.display = '';
       statusPill.style.display = 'none';
@@ -358,23 +304,11 @@
         disconnected.style.display = 'none';
         statusText.textContent = 'Idle';
       };
-
       ws.onmessage = (e) => {
-        try {
-          const data = JSON.parse(e.data);
-          handleUpdate(data);
-        } catch {}
+        try { handleUpdate(JSON.parse(e.data)); } catch {}
       };
-
-      ws.onclose = () => {
-        disconnected.style.display = '';
-        scheduleReconnect();
-      };
-
-      ws.onerror = () => {
-        disconnected.style.display = '';
-        scheduleReconnect();
-      };
+      ws.onclose = () => { disconnected.style.display = ''; scheduleReconnect(); };
+      ws.onerror = () => { disconnected.style.display = ''; scheduleReconnect(); };
     }
 
     function scheduleReconnect() {
@@ -383,9 +317,7 @@
     }
 
     function send(data) {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify(data));
-      }
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
     }
 
     function handleUpdate(data) {
@@ -400,7 +332,11 @@
           ? (paused ? 'Paused' : `until ${data.action || 'shutdown'}`)
           : 'Idle';
 
-        // Status pill
+        // Progress ring: fraction of time remaining, colored by phase.
+        const total = Number(data.totalSeconds) || 0;
+        const remaining = Number(data.remainingSeconds) || 0;
+        setRing(running && total > 0 ? remaining / total : 0, running ? phase : 'idle');
+
         statusPill.className = 'status-pill';
         if (!running) { statusText.textContent = 'Idle'; }
         else if (paused) { statusPill.classList.add('paused'); statusText.textContent = 'Paused'; }
@@ -411,11 +347,9 @@
           statusText.textContent = labels[phase] || 'Running';
         }
 
-        // Show/hide controls
         idleControls.style.display = (running || paused) ? 'none' : '';
         activeControls.style.display = (running || paused) ? '' : 'none';
 
-        // Pause/Resume
         const btnPause = document.getElementById('btn-pause');
         if (btnPause) btnPause.textContent = paused ? 'Resume' : 'Pause';
       }
@@ -437,29 +371,17 @@
       return `${m}:${String(s).padStart(2,'0')}`;
     }
 
-    // Quick start buttons
     document.querySelectorAll('[data-min]').forEach(btn => {
       btn.addEventListener('click', () => {
         send({ action: 'start', durationSeconds: parseInt(btn.dataset.min) * 60, timerAction: 'shutdown' });
       });
     });
+    document.getElementById('btn-pause')?.addEventListener('click', () => send({ action: 'togglePause' }));
+    document.getElementById('btn-snooze')?.addEventListener('click', () => send({ action: 'snooze', seconds: 300 }));
+    document.getElementById('btn-cancel')?.addEventListener('click', () => send({ action: 'cancel' }));
 
-    // Timer action buttons
-    document.getElementById('btn-pause')?.addEventListener('click', () => {
-      send({ action: 'togglePause' });
-    });
-    document.getElementById('btn-snooze')?.addEventListener('click', () => {
-      send({ action: 'snooze', seconds: 300 });
-    });
-    document.getElementById('btn-cancel')?.addEventListener('click', () => {
-      send({ action: 'cancel' });
-    });
-
-    if (pairToken) {
-      connect();
-    } else {
-      showPairing();
-    }
+    if (pairToken) connect();
+    else showPairing();
   </script>
 </body>
 </html>
