@@ -1,10 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
     <style name="Theme.LightsOutCompanion" parent="Theme.AppCompat.DayNight.DarkActionBar">
-        <item name="colorPrimary">@color/accent</item>
+        <item name="colorPrimary">@color/bg_bar</item>
         <item name="colorPrimaryDark">@color/bg</item>
         <item name="colorAccent">@color/accent</item>
         <item name="android:windowBackground">@color/bg</item>
         <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="actionBarStyle">@style/LightsOutActionBar</item>
+    </style>
+
+    <style name="LightsOutActionBar" parent="Widget.AppCompat.ActionBar.Solid">
+        <item name="background">@color/bg_bar</item>
+        <item name="elevation">0dp</item>
+        <item name="titleTextStyle">@style/LightsOutActionBarTitle</item>
+    </style>
+
+    <style name="LightsOutActionBarTitle" parent="TextAppearance.AppCompat.Widget.ActionBar.Title">
+        <item name="android:textColor">@color/text</item>
+        <item name="android:textSize">17sp</item>
+        <item name="android:textStyle">bold</item>
     </style>
 </resources>

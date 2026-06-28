@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
+import android.util.Log
+import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -55,7 +57,14 @@ class MainActivity : AppCompatActivity() {
         // (wireless) adb. Safe here: this is a single-purpose LAN control app.
         WebView.setWebContentsDebuggingEnabled(true)
         webView.webViewClient = WebViewClient()
-        webView.webChromeClient = WebChromeClient()
+        // Forward page console output to logcat (tag "LightsOutWeb") so the
+        // companion page can be debugged over adb without chrome://inspect.
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(msg: ConsoleMessage): Boolean {
+                Log.d("LightsOutWeb", "${msg.message()} @${msg.sourceId()}:${msg.lineNumber()}")
+                return true
+            }
+        }
 
         connectBtn.setOnClickListener {
             val url = normalizeUrl(urlInput.text?.toString())
