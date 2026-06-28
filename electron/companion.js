@@ -208,15 +208,37 @@ function requestHandler(req, res) {
   } else if (req.url === '/manifest.json') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
+      id: '/',
       name: 'Lights Out Companion',
       short_name: 'Lights Out',
+      description: 'Control the Lights Out sleep timer on your PC from your phone.',
       start_url: '/',
+      scope: '/',
       display: 'standalone',
+      orientation: 'portrait',
       background_color: '#0d0e11',
-      theme_color: '#5b8cff',
-      icons: [{ src: '/icon', sizes: '192x192', type: 'image/png' }]
+      theme_color: '#0d0e11',
+      // A real 512px PNG so the Add-to-Home-Screen shortcut is crisp. Declared
+      // both 'any' and 'maskable' so Android adaptive icons render cleanly.
+      // Note: over plain LAN HTTP this stays a shortcut (not a standalone
+      // WebAPK) because installability requires a secure context.
+      icons: [
+        { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+        { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+      ]
     }));
+  } else if (req.url === '/icon-512.png') {
+    const iconPath = path.join(__dirname, 'assets', 'icon-512.png');
+    try {
+      const icon = fs.readFileSync(iconPath);
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
+      res.end(icon);
+    } catch {
+      res.writeHead(404);
+      res.end();
+    }
   } else if (req.url === '/icon') {
+    // Legacy icon route kept for backward compatibility.
     const iconPath = path.join(__dirname, 'assets', 'icon.ico');
     try {
       const icon = fs.readFileSync(iconPath);
