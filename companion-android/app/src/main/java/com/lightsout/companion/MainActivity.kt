@@ -8,9 +8,9 @@ import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
-import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
@@ -29,7 +29,7 @@ import java.net.URL
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
-    private lateinit var setup: LinearLayout
+    private lateinit var setup: View
     private lateinit var urlInput: EditText
 
     private val prefs by lazy { getSharedPreferences("lightsout", MODE_PRIVATE) }
@@ -69,7 +69,7 @@ class MainActivity : AppCompatActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (webView.visibility == WebView.VISIBLE && webView.canGoBack()) {
+                if (webView.visibility == View.VISIBLE && webView.canGoBack()) {
                     webView.goBack()
                 } else {
                     isEnabled = false
@@ -83,14 +83,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showWeb(url: String) {
-        setup.visibility = LinearLayout.GONE
-        webView.visibility = WebView.VISIBLE
+        setup.visibility = View.GONE
+        webView.visibility = View.VISIBLE
         webView.loadUrl(url)
     }
 
     private fun showSetup(prefill: String?) {
-        webView.visibility = WebView.GONE
-        setup.visibility = LinearLayout.VISIBLE
+        webView.visibility = View.GONE
+        setup.visibility = View.VISIBLE
         if (prefill != null) urlInput.setText(prefill)
     }
 
