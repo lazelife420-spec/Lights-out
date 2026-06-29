@@ -1,4 +1,4 @@
-# Lights Out
+# Lights Out PC — Bedtime Mode for Windows
 
 I built a Windows shutdown timer I would actually use every night.
 
@@ -64,7 +64,7 @@ profiles and the clock.
 
 ### Short version (for social / forum posts)
 
-> Lights Out - a free Windows bedtime shutdown timer that lives in your tray.
+> Lights Out PC - a free Windows bedtime shutdown timer that lives in your tray.
 > Shows the clock while idle, starts a 28-min or 1-hour timer in one click, winds
 > down with ambient visuals, and never force-shuts-down unless you ask it to.
 > No account, no ads. Installer + portable + SHA256 checksums, all public.

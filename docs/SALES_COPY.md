@@ -15,7 +15,7 @@ Windows shutdown, with a spine.
 H1:
 
 ```text
-Lights Out™
+Lights Out PC™ — Bedtime Mode for Windows
 Make your PC keep the bedtime promise.
 ```
 

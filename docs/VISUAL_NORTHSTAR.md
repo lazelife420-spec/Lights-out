@@ -1,7 +1,7 @@
 # Lights Out PC — Visual Northstar
 
-**Branch:** `feature/lights-out-visual-northstar`
-**Status:** In progress — Last Light slice first
+**Branch:** `feature/lights-out-visual-northstar` (merged)
+**Status:** ✅ Shipped in v10.1.0–v10.3.0 — all three slices live in `electron/index.html`
 **Reference:** Three approved mockups (uploaded 2026-06-24)
 **Constraints:** No timer logic changes. No shutdown behavior changes. No tag. No release. Smoke must stay green.
 
@@ -92,9 +92,9 @@
 
 | Slice | Screen | Scope | Status |
 |---|---|---|---|
-| 1 | Last Light overlay | CSS + HTML structure only inside existing overlay; no timer/IPC logic change | **In progress** |
-| 2 | Lobby / Tonight's Run | Left sidebar shell + hero card + trust badges + mode card refactor | Pending |
-| 3 | Morning Proof | Hero expansion of existing proof-card | Pending |
+| 1 | Last Light overlay | CSS + HTML structure only inside existing overlay; no timer/IPC logic change | ✅ Shipped |
+| 2 | Lobby / Tonight's Run | Left sidebar shell + hero card + trust badges + mode card refactor | ✅ Shipped |
+| 3 | Morning Proof | Hero expansion of existing proof-card | ✅ Shipped |
 
 ---
 
