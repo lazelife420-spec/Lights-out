@@ -33,7 +33,7 @@ async function notifyPartner(eventType, details = {}) {
   if (!partners.length) return [];
 
   const results = [];
-  const timerName = details.timerName || 'Witching Hour';
+  const timerName = details.timerName || 'Last Call';
   const remaining = details.remainingSeconds ? `${Math.floor(details.remainingSeconds / 60)}m left` : '';
   const phase = details.phase || '';
   const timestamp = new Date().toLocaleTimeString();

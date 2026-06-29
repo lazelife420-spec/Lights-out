@@ -129,7 +129,7 @@
                 stroke-dasharray="339.292" stroke-dashoffset="339.292"></circle>
       </svg>
       <div class="ring-center">
-        <div class="timer-name" id="timer-name">Witching Hour</div>
+        <div class="timer-name" id="timer-name">Last Call</div>
         <div class="timer-main" id="timer-main">--:--</div>
         <div class="timer-label" id="timer-label">Idle</div>
         <div class="target" id="target"></div>
@@ -190,6 +190,9 @@
       <div class="timer-actions">
         <button class="btn btn-secondary" id="btn-pause">Pause</button>
         <button class="btn btn-amber" id="btn-snooze">Snooze +5</button>
+      </div>
+      <div class="snooze-tax-indicator" id="snooze-tax-indicator" style="display:none;text-align:center;padding:8px;margin-top:6px;border-radius:10px;background:rgba(255,77,77,0.08);border:1px solid rgba(255,77,77,0.18)">
+        <span id="snooze-tax-msg" style="font-size:11px;color:#ff6b6b"></span>
       </div>
       <button class="btn btn-danger" id="btn-cancel">Cancel Timer</button>
     </div>
@@ -312,7 +315,7 @@
         const paused = data.paused;
         const phase = data.phase || 'idle';
 
-        timerName.textContent = data.timerName || 'Witching Hour';
+        timerName.textContent = data.timerName || 'Last Call';
         timerMain.textContent = formatTime(data.remainingSeconds);
         timerLabel.textContent = running ? (paused ? 'Paused' : `until ${data.action || 'shutdown'}`) : 'Idle';
         targetEl.textContent = (running && !paused && data.remainingSeconds > 0)
@@ -337,6 +340,24 @@
 
         const btnPause = document.getElementById('btn-pause');
         if (btnPause) btnPause.textContent = paused ? 'Resume' : 'Pause';
+
+        // Override Tax indicator.
+        const taxInd = document.getElementById('snooze-tax-indicator');
+        const taxMsg = document.getElementById('snooze-tax-msg');
+        if (taxInd && taxMsg && data.overrideTax) {
+          const tax = data.overrideTax;
+          const cost = tax.nextSnoozeCost;
+          if (cost && cost.level > 0) {
+            taxInd.style.display = '';
+            const msgs = [];
+            if (cost.level >= 2) msgs.push(`Tomorrow: -${tax.tomorrowDebt + 15}m`);
+            if (cost.requireReason) msgs.push('Reason required');
+            else msgs.push(`Snooze #${cost.snoozeNumber} will be logged`);
+            taxMsg.textContent = `\u26A0 ${msgs.join(' \u00B7 ')}`;
+          } else {
+            taxInd.style.display = 'none';
+          }
+        }
       }
 
       if (data.type === 'streaks') {

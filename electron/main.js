@@ -25,6 +25,8 @@ const emergencyOverride = require('./emergencyOverride');
 const runReceipts = require('./runReceipts');
 const idleDetection = require('./idleDetection');
 const bedtimeReminder = require('./bedtimeReminder');
+const overrideTax = require('./overrideTax');
+const autopilot = require('./autopilot');
 
 const APP_ICON = path.join(__dirname, 'assets', 'icon.ico');
 const TRAY_ICON = path.join(__dirname, 'assets', 'tray-32.png');
@@ -419,6 +421,16 @@ function startTimer(input, legacyAction) {
   const options = normalizeTimerOptions(input, legacyAction);
   clearTimerInterval();
 
+  // Override Tax: reset session snooze count for this new run.
+  overrideTax.resetSession();
+
+  // Override Tax: apply yesterday's debt (timer tightening from past snooze abuse).
+  const debtSeconds = overrideTax.consumeDebt() * 60;
+  if (debtSeconds > 0 && options.durationSeconds > debtSeconds + 300) {
+    // Only apply if it leaves at least 5 min — never make the timer useless.
+    options.durationSeconds -= debtSeconds;
+  }
+
   timerState.running = true;
   timerState.paused = false;
   timerState.totalSeconds = options.durationSeconds;
@@ -529,16 +541,27 @@ function resumeTimer() {
   return { success: true, state: { ...timerState } };
 }
 
-function snoozeTimer(seconds = 300) {
+function snoozeTimer(seconds = 300, reason) {
   if (!timerState.running && !timerState.paused) return { success: false };
   const addSeconds = Math.max(1, Math.round(Number(seconds) || 300));
+
+  // Override Tax: record snooze and apply escalating costs.
+  const taxResult = overrideTax.recordSnooze(reason);
+
   timerState.totalSeconds += addSeconds;
   timerState.remainingSeconds += addSeconds;
   timerState.endsAt = new Date(Date.now() + timerState.remainingSeconds * 1000).toISOString();
-  emitTimerUpdate('snoozed', { addedSeconds: addSeconds });
+  emitTimerUpdate('snoozed', { addedSeconds: addSeconds, tax: taxResult });
   if (activeReceiptId) runReceipts.receiptSnoozed(activeReceiptId);
-  sendAccountability('TIMER_SNOOZED', { addedSeconds: addSeconds });
-  return { success: true, state: { ...timerState } };
+
+  // Override Tax: notify accountability partner on escalated snoozes.
+  if (taxResult.level >= 1) {
+    sendAccountability('TIMER_SNOOZED', { addedSeconds: addSeconds, snoozeNumber: taxResult.snoozeNumber, taxLevel: taxResult.level });
+  } else {
+    sendAccountability('TIMER_SNOOZED', { addedSeconds: addSeconds });
+  }
+
+  return { success: true, state: { ...timerState }, tax: taxResult };
 }
 
 function cancelTimer() {
@@ -839,7 +862,7 @@ function sendAccountability(eventType, extra = {}) {
   const appSettings = settingsStore.getSection('app') || {};
   accountability.notifyPartner(eventType, {
     config: accConfig,
-    timerName: appSettings.timerName || 'Witching Hour',
+    timerName: appSettings.timerName || 'Last Call',
     remainingSeconds: timerState.remainingSeconds,
     phase: timerState.phase,
     ...extra
@@ -916,6 +939,7 @@ function handleCompanionMessage(msg, client) {
 
 function broadcastCompanionState() {
   const appSettings = settingsStore.getSection('app') || {};
+  const taxStats = overrideTax.getStats();
   companion.broadcast({
     type: 'state',
     running: timerState.running,
@@ -924,8 +948,13 @@ function broadcastCompanionState() {
     totalSeconds: timerState.totalSeconds,
     action: timerState.action,
     phase: timerState.phase,
-    timerName: appSettings.timerName || 'Witching Hour',
-    dryRun: timerState.dryRun
+    timerName: appSettings.timerName || 'Last Call',
+    dryRun: timerState.dryRun,
+    overrideTax: {
+      sessionSnoozeCount: taxStats.sessionSnoozeCount,
+      tomorrowDebt: taxStats.tomorrowDebt,
+      nextSnoozeCost: overrideTax.assessSnoozeCost()
+    }
   });
 }
 
@@ -1139,7 +1168,7 @@ ipcMain.handle('start-timer', async (event, options, legacyAction) => startTimer
 ipcMain.handle('cancel-timer', async () => cancelTimer());
 ipcMain.handle('pause-timer', async () => pauseTimer());
 ipcMain.handle('resume-timer', async () => resumeTimer());
-ipcMain.handle('snooze-timer', async (event, seconds) => snoozeTimer(seconds));
+ipcMain.handle('snooze-timer', async (event, seconds, reason) => snoozeTimer(seconds, reason));
 ipcMain.handle('execute-action', async (event, action, options = {}) => executePowerAction({ ...options, action }));
 
 let systemInfoCache = null;
@@ -1480,6 +1509,35 @@ ipcMain.handle('clear-receipts', async () => {
 ipcMain.handle('get-receipt-stats', async () => {
   return runReceipts.getReceiptStats();
 });
+// Override Tax IPC.
+ipcMain.handle('assess-snooze-cost', async () => {
+  return overrideTax.assessSnoozeCost();
+});
+ipcMain.handle('get-override-tax-stats', async () => {
+  return overrideTax.getStats();
+});
+ipcMain.handle('get-override-tax-config', async () => {
+  return overrideTax.getConfig();
+});
+ipcMain.handle('update-override-tax-config', async (e, updates) => {
+  return overrideTax.updateConfig(updates);
+});
+
+// Autopilot Bedtime IPC.
+ipcMain.handle('get-autopilot-status', async () => {
+  return autopilot.getStatus();
+});
+ipcMain.handle('get-learned-bedtime', async () => {
+  return autopilot.learnBedtime();
+});
+ipcMain.handle('enable-autopilot', async (e, enabled) => {
+  const app = settingsStore.getSection('app') || {};
+  settingsStore.updateSection('app', { ...app, autopilotEnabled: Boolean(enabled) });
+  if (enabled) autopilot.schedule(startTimer, mainWindow);
+  else autopilot.cancel();
+  return autopilot.getStatus();
+});
+
 ipcMain.handle('get-idle-seconds', async () => {
   try { return await idleDetection.getIdleSeconds(); } catch { return 0; }
 });
@@ -1971,6 +2029,9 @@ app.whenReady().then(async () => {
       }
     }
   });
+
+  // Autopilot Bedtime: schedule learned bedtime auto-start.
+  autopilot.schedule(startTimer, mainWindow);
 
   // Calendar Auto-Start: check for upcoming events and auto-start timer.
   setInterval(checkCalendarAutoStart, 60000);

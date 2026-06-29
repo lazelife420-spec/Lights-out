@@ -641,7 +641,7 @@ const state = {
   // Tracks whether clock mode was dismissed by profile application (restore on cancel).
   _clockDismissedByProfile: false,
   // Custom timer name
-  timerName: 'Witching Hour',
+  timerName: 'Last Call',
   // Profiles state
   profiles: [],
   currentProfileId: null,
@@ -1348,15 +1348,93 @@ async function snooze(seconds = 5 * 60) {
   if (!state.running && !state.paused) return;
 
   try {
-    const result = await api.snoozeTimer(seconds);
+    // Override Tax: assess cost before allowing snooze.
+    const cost = await api.assessSnoozeCost?.();
+    if (cost && cost.level > 0) {
+      // Show escalation warning — user must acknowledge cost.
+      const proceed = await showSnoozeTaxModal(cost, seconds);
+      if (!proceed) return; // user backed out
+    }
+
+    const reason = cost?.requireReason ? state._snoozeTaxReason : undefined;
+    const result = await api.snoozeTimer(seconds, reason);
     if (result?.state) {
       applyTimerPayload({ type: 'snoozed', ...result.state });
     }
     render();
-    notify(`Snoozed +${Math.round(seconds / 60)} minutes`, 'success');
+
+    // Notify with escalation context.
+    if (result?.tax?.level >= 2) {
+      notify(`Snooze #${result.tax.snoozeNumber} — tomorrow tightens by ${result.tax.tomorrowDebt}m`, 'warning');
+    } else if (result?.tax?.level >= 1) {
+      notify(`Snooze #${result.tax.snoozeNumber} logged`, 'warning');
+    } else {
+      notify(`Snoozed +${Math.round(seconds / 60)} minutes`, 'success');
+    }
   } catch (error) {
     notify(`Snooze failed: ${error.message || error}`, 'error');
   }
+}
+
+// Override Tax: snooze escalation modal.
+function showSnoozeTaxModal(cost, seconds) {
+  return new Promise((resolve) => {
+    state._snoozeTaxReason = '';
+
+    const modal = document.getElementById('snooze-tax-modal');
+    if (!modal) { resolve(true); return; } // no modal in DOM, allow snooze
+
+    // Populate consequences.
+    const list = document.getElementById('snooze-tax-consequences');
+    if (list) {
+      list.innerHTML = cost.consequences.map(c => `
+        <div style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--bg-card)">
+          <span style="font-size:16px">${c.icon}</span>
+          <div>
+            <span style="font-size:11px;color:var(--text-primary)">${c.message}</span>
+            <span style="font-size:9px;color:${c.severity === 'high' ? '#ff4d4d' : 'var(--text-muted)'};display:block;margin-top:1px">${c.severity?.toUpperCase() || ''}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Title.
+    const title = document.getElementById('snooze-tax-title');
+    if (title) title.textContent = `Snooze #${cost.snoozeNumber} has a cost`;
+
+    // Reason input visibility.
+    const reasonWrap = document.getElementById('snooze-tax-reason-wrap');
+    const reasonInput = document.getElementById('snooze-tax-reason');
+    if (reasonWrap) reasonWrap.style.display = cost.requireReason ? '' : 'none';
+
+    modal.classList.add('active');
+
+    // Button handlers (one-time).
+    const confirmBtn = document.getElementById('btn-snooze-tax-confirm');
+    const cancelBtn = document.getElementById('btn-snooze-tax-cancel');
+
+    function cleanup() {
+      modal.classList.remove('active');
+      confirmBtn?.removeEventListener('click', onConfirm);
+      cancelBtn?.removeEventListener('click', onCancel);
+    }
+    function onConfirm() {
+      if (cost.requireReason && reasonInput) {
+        state._snoozeTaxReason = reasonInput.value.trim();
+        if (!state._snoozeTaxReason) {
+          reasonInput.focus();
+          reasonInput.style.borderColor = '#ff4d4d';
+          return; // must give a reason
+        }
+      }
+      cleanup();
+      resolve(true);
+    }
+    function onCancel() { cleanup(); resolve(false); }
+
+    confirmBtn?.addEventListener('click', onConfirm);
+    cancelBtn?.addEventListener('click', onCancel);
+  });
 }
 
 let outcomeTimer = null;
@@ -3071,7 +3149,7 @@ function collectAppSettings() {
     clockHandColor: state.clockHandColor || els.czClockHands?.value || '#76c9ff',
     clockSeconds: state.clockSeconds !== false,
     clockSweep: state.clockSweep !== false,
-    timerName: els.timerName?.textContent?.trim() || state.timerName || 'Witching Hour',
+    timerName: els.timerName?.textContent?.trim() || state.timerName || 'Last Call',
     nsActiveTab: document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || 'lib',
     nsSelectedMode: document.querySelector('.ns-mode-card.selected')?.dataset?.nsMode || ''
   };

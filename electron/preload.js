@@ -7,8 +7,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   cancelTimer: () => ipcRenderer.invoke('cancel-timer'),
   pauseTimer: () => ipcRenderer.invoke('pause-timer'),
   resumeTimer: () => ipcRenderer.invoke('resume-timer'),
-  snoozeTimer: (seconds) => ipcRenderer.invoke('snooze-timer', seconds),
+  snoozeTimer: (seconds, reason) => ipcRenderer.invoke('snooze-timer', seconds, reason),
   executeAction: (action, options) => ipcRenderer.invoke('execute-action', action, options),
+  
+  // Override Tax
+  assessSnoozeCost: () => ipcRenderer.invoke('assess-snooze-cost'),
+  getOverrideTaxStats: () => ipcRenderer.invoke('get-override-tax-stats'),
+  getOverrideTaxConfig: () => ipcRenderer.invoke('get-override-tax-config'),
+  updateOverrideTaxConfig: (updates) => ipcRenderer.invoke('update-override-tax-config', updates),
+  
+  // Autopilot Bedtime
+  getAutopilotStatus: () => ipcRenderer.invoke('get-autopilot-status'),
+  getLearnedBedtime: () => ipcRenderer.invoke('get-learned-bedtime'),
+  enableAutopilot: (enabled) => ipcRenderer.invoke('enable-autopilot', enabled),
   
   // System info
   getSystemInfo: () => ipcRenderer.invoke('get-system-info'),
