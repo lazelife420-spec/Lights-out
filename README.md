@@ -1,18 +1,23 @@
 # Lights Out
 
 **A Windows bedtime shutdown timer that gets out of your way until it matters.**
+A [Proof Foundry](https://prooffoundry.com) product.
 
 Set a time. Press START. Lights Out walks you through a calm wind-down, then a
 cinematic Last Light final countdown before your PC shuts off. Emergency cancel
 is always available. No surprise force-quits. No cloud account. No drama.
 
-[![Download v10.1.0](https://img.shields.io/badge/Download-v10.1.0-blue?style=for-the-badge)](https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.1.0)
+[![Download v10.3.0](https://img.shields.io/badge/Download-v10.3.0-blue?style=for-the-badge)](https://github.com/lazelife420-spec/Lights-out/releases/tag/v10.3.0)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+[![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?style=for-the-badge)](https://github.com/lazelife420-spec/Lights-out/releases/latest)
+
+**Website:** [prooffoundry.com/lights-out](https://prooffoundry.com/lights-out/)
 
 ## Download
 
-**[→ Lights Out v10.1.0 — installer, portable EXE, SHA256 checksums](https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.1.0)**
+**[→ Lights Out v10.3.0 — installer, portable EXE, SHA256 checksums](https://github.com/lazelife420-spec/Lights-out/releases/tag/v10.3.0)**
 
-- `Lights.Out.Setup.10.1.0.exe` — NSIS installer, standard Windows install
+- `Lights.Out.Setup.10.3.0.exe` — NSIS installer, standard Windows install
 - `LightsOut.exe` — portable, runs from any folder, no install needed
 - `SHA256SUMS.txt` — checksums for both artifacts
 
@@ -46,20 +51,17 @@ calendar, and Wi-Fi features only reach out when you configure them.
 Every release ships an installer, a portable build, and SHA256 checksums, built
 and published by CI. No hand-edited binaries. No mystery downloads.
 
-- Latest release: https://github.com/Z3r0DayZion-install/lights-out/releases/latest
-- v10.1.0 release: https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.1.0
-- Smoke suite: 57/57 passing
+- Latest release: https://github.com/lazelife420-spec/Lights-out/releases/latest
+- v10.3.0 release: https://github.com/lazelife420-spec/Lights-out/releases/tag/v10.3.0
+- Smoke suite: 72/72 passing
 
-## Surfaces
+## Surface
 
-There are two surfaces in this repo:
-
-- **`electron/`** - the primary shipping UI, a cockpit-style dashboard (Electron).
-- **`source/SleepTimer-Tonight.ps1`** - the original PowerShell / WinForms app,
-  kept as a fallback and for Windows system integration. Compiles to `SleepTimer.exe`.
-
-New feature work targets the Electron edition. See [`AGENTS.md`](AGENTS.md) for the
-full contributor handoff and which runtime owns a given task.
+The app is a single Electron edition under **`electron/`** - a cockpit-style
+dashboard. (A legacy PowerShell / WinForms "classic" app was removed on
+2026-06-29; PowerShell is now invoked only as system calls from the Electron
+main process, not as a separate app.) See [`AGENTS.md`](AGENTS.md) for the full
+contributor handoff.
 
 ## Features
 
@@ -82,7 +84,7 @@ full contributor handoff and which runtime owns a given task.
   by duration or a specific date/time, and right-click a profile to Start, Edit, or
   Delete it. Plus **calendar scheduling** (.ics import).
 - **Last Light finale** - a cinematic timer-zero sequence with countdown ring,
-  atmospheric panels, and UNPLUG visual (v10.1.0 northstar design). Power action
+  atmospheric panels, and UNPLUG visual (v10.3.0 northstar design). Power action
   fires automatically; emergency cancel (`Ctrl+Shift+S`) is always available.
 - **Morning Proof hero** - after a completed session, a full-width card shows
   real stats: session length, action, snooze count, total runs. No fake data.
@@ -94,9 +96,7 @@ full contributor handoff and which runtime owns a given task.
 ## Why it is safe by default
 
 - Opens idle, never as an instant countdown.
-- Force shutdown is an explicit, clearly named action, never the default. It is
-  opt-in (Settings) or via the explicitly named
-  `Lights Out - Force Shutdown Within 1 Hour.bat`.
+- Force shutdown is an explicit, opt-in action (Settings), never the default.
 - "Run at login" means start minimized and idle, nothing more.
 - **System actions are opt-in.** Night Light, media pause, and window lockout
   during wind-down are all OFF by default. The app never touches your OS unless
@@ -132,4 +132,8 @@ for every push.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) © 2026 Proof Foundry. Free to use, modify, and distribute.
+
+---
+
+<sub>Lights Out™ — a [Proof Foundry](https://prooffoundry.com) product. Built for Windows 10/11.</sub>

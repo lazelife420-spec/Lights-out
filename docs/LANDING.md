@@ -1,4 +1,4 @@
-# Lights Out
+# Lights Out PC — Bedtime Mode for Windows
 
 I built a Windows shutdown timer I would actually use every night.
 
@@ -12,7 +12,7 @@ No ads.
 
 Installer, portable build, SHA256 checksums, and proof-backed releases are all public.
 
-**Download:** https://github.com/Z3r0DayZion-install/lights-out/releases/latest
+**Download:** https://github.com/lazelife420-spec/Lights-out/releases/latest
 
 ![Lights Out cockpit - analog/hybrid clock face and the new desk-lamp logo](release/screenshots/v10.0.4/01_clock_face_hybrid.png)
 
@@ -46,8 +46,8 @@ verify exactly what you downloaded. Builds are produced and published by CI, and
 each release is gated on `node --check`, a smoke suite, and a successful package
 step.
 
-**Latest: v10.1.0** - adds the northstar visual UI: cinematic Last Light overlay, Lobby shell with sidebar, and Morning Proof hero with real session stats. Settings persistence for new UI state. Smoke suite expanded to 57 assertions.
-Release notes: https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.1.0
+**Latest: v10.3.0** - adds Ritual Mode and smarter wind-down intelligence on top of the northstar visual UI (cinematic Last Light overlay, Lobby shell, Morning Proof hero with real session stats). Builds on the Override Tax and Autopilot Bedtime work from v10.2.0. Smoke suite at 72 assertions.
+Release notes: https://github.com/lazelife420-spec/Lights-out/releases/tag/v10.3.0
 
 Previously, v10.0.9 restored the Streaks tab panel and fixed a cancel-timer error where guided breathing cleanup could show a red error toast.
 
@@ -64,8 +64,8 @@ profiles and the clock.
 
 ### Short version (for social / forum posts)
 
-> Lights Out - a free Windows bedtime shutdown timer that lives in your tray.
+> Lights Out PC - a free Windows bedtime shutdown timer that lives in your tray.
 > Shows the clock while idle, starts a 28-min or 1-hour timer in one click, winds
 > down with ambient visuals, and never force-shuts-down unless you ask it to.
 > No account, no ads. Installer + portable + SHA256 checksums, all public.
-> https://github.com/Z3r0DayZion-install/lights-out/releases/latest
+> https://github.com/lazelife420-spec/Lights-out/releases/latest

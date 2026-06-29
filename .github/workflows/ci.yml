@@ -26,37 +26,16 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Syntax check
+        # Check every shipped JS file so the gate can't drift out of sync with
+        # the module list (scripts/ are dev tooling, excluded).
         run: |
-          node --check main.js
-          node --check preload.js
-          node --check renderer.js
-          node --check settings.js
-          node --check smartLights.js
-          node --check profiles.js
-          node --check calendar.js
-          node --check lastLight.js
-          node --check streaks.js
-          node --check alarm.js
-          node --check updater.js
-          node --check calendarProviders.js
-          node --check companion.js
-          node --check media.js
-          node --check unsavedGuard.js
-          node --check family.js
-          node --check wifiGuard.js
-          node --check contentBlocker.js
-          node --check accountability.js
-          node --check focusSessions.js
-          node --check screenTime.js
-          node --check sleepDebt.js
-          node --check emergencyOverride.js
-          node --check runReceipts.js
-          node --check ambientVisuals.js
-          node --check idleDetection.js
-          node --check bedtimeReminder.js
+          for f in *.js; do
+            echo "node --check $f"
+            node --check "$f"
+          done
 
       - name: Unit tests
         run: npm test
@@ -78,7 +57,7 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Regenerate icons
         run: npm run icons

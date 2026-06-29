@@ -1,18 +1,17 @@
-# Lights Out™ — A Proof Foundry Product
+# Lights Out PC™ — A Proof Foundry Product
 
 # Roadmap
 
 ## Current Truth
 
-Lights Out™ is live at v10.1.0 — proof-first software forged for builders.
+Lights Out PC™ ("Bedtime Mode for Windows") is live at v10.3.0 — proof-first software forged for builders.
 
-Recent shipped fixes:
+Recent shipped milestones:
 
-- v10.0.8 fixed the in-app updater download target so it selects the real installer asset.
-- Remote control hardening landed on `main`: remote control is gated behind pairing token and safer host binding.
-- v10.0.9 restored the Streaks tab panel and fixed the cancel-timer guided-breathing error toast.
 - v10.0.10 fixed a packaged-app startup crash (remoteControl.js was missing from the electron-builder file manifest) and corrected settings saves for WiFi Guard, Content Blocker, and Accountability.
-- v10.1.0 shipped the northstar visual UI: cinematic Last Light overlay, Lobby shell with icon sidebar, Morning Proof hero with real stat pills, and settings persistence for all new UI state.
+- v10.1.0 shipped the northstar visual UI: cinematic Last Light "Exit the Grid" finale with UNPLUG confirm, Lobby "Tonight's Run" shell with icon sidebar, Morning Proof "Mission complete" hero with real stat pills, and settings persistence for all new UI state.
+- v10.2.0 added Override Tax (escalating snooze cost) and Autopilot Bedtime.
+- v10.3.0 added Ritual Mode and smarter wind-down intelligence, plus a hardened network layer (companion WebSocket frame codec, family LAN discovery parser, and wifiGuard input sanitizers all unit-tested).
 
 Current strongest product promise:
 
@@ -54,7 +53,7 @@ Lights Out should feel like a nightly cockpit, not a generic timer.
 
 Roadmap:
 
-- Saved profiles for routines like Movie Night, Hard Stop, Witchcraft, Beastmode.
+- Tonight's-mode cards for routines like Weeknight, Movie, Bedtime, Hard Stop, and Custom.
 - Better profile sorting and pinned favorites.
 - Optional profile notes.
 - Last-used routine memory.
@@ -137,9 +136,12 @@ Proof gates:
 - Regenerate revokes old token.
 - Disable stops listener.
 
-## Suggested Release Sequence
+## Release Sequence
 
-### v10.1.0 - Runtime Trust Polish
+> Historical planning. v10.1.0 through v10.3.0 have shipped; v11.0.0 remains the
+> forward target.
+
+### v10.1.0 - Runtime Trust Polish ✅ shipped
 
 Goal: make the app feel unbreakable.
 
@@ -157,7 +159,7 @@ Ship only if:
 - Build passes.
 - Runtime screenshots prove each changed workflow.
 
-### v10.2.0 - Streaks That Feel Alive
+### v10.2.0 - Streaks That Feel Alive ✅ shipped
 
 Goal: make habit progress visible without fake wellness claims.
 
@@ -175,7 +177,7 @@ Ship only if:
 - Empty state is honest.
 - Seeded-data screenshots pass.
 
-### v10.3.0 - Profiles Upgrade
+### v10.3.0 - Profiles Upgrade ✅ shipped
 
 Goal: make routines fast to reuse.
 
@@ -192,7 +194,7 @@ Ship only if:
 - Create/load/export/import all pass.
 - No profile data loss.
 
-### v11.0.0 - Serious Night Mode
+### v11.0.0 - Serious Night Mode ⟶ next
 
 Goal: a full night shutdown cockpit for Windows power users.
 

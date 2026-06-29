@@ -774,10 +774,12 @@ function restoreAfterTimer() {
   if (cbConfig && cbConfig.enabled && cbConfig.unblockOnComplete !== false) {
     contentBlocker.unblockSites().catch(() => {});
   }
-  // Undo progressive lockout: restore normal window behavior.
+  // Undo progressive lockout: restore normal window behavior. The window is
+  // created with autoHideMenuBar:true, so re-show the bar (Alt-accessible) here
+  // rather than leaving it force-hidden from the dim-phase lockout.
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.setAlwaysOnTop(false);
-    mainWindow.setMenuBarVisibility(false);
+    mainWindow.setMenuBarVisibility(true);
   }
 }
 
