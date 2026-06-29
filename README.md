@@ -1,18 +1,23 @@
 # Lights Out
 
 **A Windows bedtime shutdown timer that gets out of your way until it matters.**
+A [Proof Foundry](https://prooffoundry.com) product.
 
 Set a time. Press START. Lights Out walks you through a calm wind-down, then a
 cinematic Last Light final countdown before your PC shuts off. Emergency cancel
 is always available. No surprise force-quits. No cloud account. No drama.
 
-[![Download v10.1.0](https://img.shields.io/badge/Download-v10.1.0-blue?style=for-the-badge)](https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.1.0)
+[![Download v10.3.0](https://img.shields.io/badge/Download-v10.3.0-blue?style=for-the-badge)](https://github.com/lazelife420-spec/Lights-out/releases/tag/v10.3.0)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+[![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?style=for-the-badge)](https://github.com/lazelife420-spec/Lights-out/releases/latest)
+
+**Website:** [prooffoundry.com/lights-out](https://prooffoundry.com/lights-out/)
 
 ## Download
 
-**[→ Lights Out v10.1.0 — installer, portable EXE, SHA256 checksums](https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.1.0)**
+**[→ Lights Out v10.3.0 — installer, portable EXE, SHA256 checksums](https://github.com/lazelife420-spec/Lights-out/releases/tag/v10.3.0)**
 
-- `Lights.Out.Setup.10.1.0.exe` — NSIS installer, standard Windows install
+- `Lights.Out.Setup.10.3.0.exe` — NSIS installer, standard Windows install
 - `LightsOut.exe` — portable, runs from any folder, no install needed
 - `SHA256SUMS.txt` — checksums for both artifacts
 
@@ -46,9 +51,9 @@ calendar, and Wi-Fi features only reach out when you configure them.
 Every release ships an installer, a portable build, and SHA256 checksums, built
 and published by CI. No hand-edited binaries. No mystery downloads.
 
-- Latest release: https://github.com/Z3r0DayZion-install/lights-out/releases/latest
-- v10.1.0 release: https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.1.0
-- Smoke suite: 57/57 passing
+- Latest release: https://github.com/lazelife420-spec/Lights-out/releases/latest
+- v10.3.0 release: https://github.com/lazelife420-spec/Lights-out/releases/tag/v10.3.0
+- Smoke suite: 72/72 passing
 
 ## Surface
 
@@ -79,7 +84,7 @@ contributor handoff.
   by duration or a specific date/time, and right-click a profile to Start, Edit, or
   Delete it. Plus **calendar scheduling** (.ics import).
 - **Last Light finale** - a cinematic timer-zero sequence with countdown ring,
-  atmospheric panels, and UNPLUG visual (v10.1.0 northstar design). Power action
+  atmospheric panels, and UNPLUG visual (v10.3.0 northstar design). Power action
   fires automatically; emergency cancel (`Ctrl+Shift+S`) is always available.
 - **Morning Proof hero** - after a completed session, a full-width card shows
   real stats: session length, action, snooze count, total runs. No fake data.
@@ -127,4 +132,8 @@ for every push.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) © 2026 Proof Foundry. Free to use, modify, and distribute.
+
+---
+
+<sub>Lights Out™ — a [Proof Foundry](https://prooffoundry.com) product. Built for Windows 10/11.</sub>

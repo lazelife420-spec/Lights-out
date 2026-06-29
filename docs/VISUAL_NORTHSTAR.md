@@ -124,7 +124,7 @@
 
 ## 5. Smoke contract
 
-All slices must pass `npm run smoke` (currently 57/57) before PR.
+All slices must pass `npm run smoke` (currently 72/72) before PR.
 No IPC handlers added or removed.
 No timer state changes.
 `#btn-start`, `#btn-stop`, `#btn-pause`, `#btn-snooze`, `#btn-mini` must remain present.
