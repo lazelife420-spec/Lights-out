@@ -50,16 +50,13 @@ and published by CI. No hand-edited binaries. No mystery downloads.
 - v10.1.0 release: https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.1.0
 - Smoke suite: 57/57 passing
 
-## Surfaces
+## Surface
 
-There are two surfaces in this repo:
-
-- **`electron/`** - the primary shipping UI, a cockpit-style dashboard (Electron).
-- **`source/SleepTimer-Tonight.ps1`** - the original PowerShell / WinForms app,
-  kept as a fallback and for Windows system integration. Compiles to `SleepTimer.exe`.
-
-New feature work targets the Electron edition. See [`AGENTS.md`](AGENTS.md) for the
-full contributor handoff and which runtime owns a given task.
+The app is a single Electron edition under **`electron/`** - a cockpit-style
+dashboard. (A legacy PowerShell / WinForms "classic" app was removed on
+2026-06-29; PowerShell is now invoked only as system calls from the Electron
+main process, not as a separate app.) See [`AGENTS.md`](AGENTS.md) for the full
+contributor handoff.
 
 ## Features
 
@@ -94,9 +91,7 @@ full contributor handoff and which runtime owns a given task.
 ## Why it is safe by default
 
 - Opens idle, never as an instant countdown.
-- Force shutdown is an explicit, clearly named action, never the default. It is
-  opt-in (Settings) or via the explicitly named
-  `Lights Out - Force Shutdown Within 1 Hour.bat`.
+- Force shutdown is an explicit, opt-in action (Settings), never the default.
 - "Run at login" means start minimized and idle, nothing more.
 - **System actions are opt-in.** Night Light, media pause, and window lockout
   during wind-down are all OFF by default. The app never touches your OS unless
