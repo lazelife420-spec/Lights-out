@@ -478,6 +478,24 @@ const els = {
   btnAccTest: document.getElementById('btn-acc-test'),
   accTestResult: document.getElementById('acc-test-result'),
 
+  // Override Tax
+  chkOverrideTax: document.getElementById('chk-override-tax'),
+  overrideTaxConfig: document.getElementById('override-tax-config'),
+  taxFreeSnoozes: document.getElementById('tax-free-snoozes'),
+  taxTightenMin: document.getElementById('tax-tighten-min'),
+  taxMaxTighten: document.getElementById('tax-max-tighten'),
+  taxReasonAfter: document.getElementById('tax-reason-after'),
+  taxSessionCount: document.getElementById('tax-session-count'),
+  taxTomorrowDebt: document.getElementById('tax-tomorrow-debt'),
+
+  // Autopilot Bedtime
+  chkAutopilot: document.getElementById('chk-autopilot'),
+  autopilotConfig: document.getElementById('autopilot-config'),
+  autopilotLearned: document.getElementById('autopilot-learned'),
+  autopilotConfidence: document.getElementById('autopilot-confidence'),
+  autopilotSample: document.getElementById('autopilot-sample'),
+  autopilotOverrideTime: document.getElementById('autopilot-override-time'),
+
   // Guided Breathing
   breathingOverlay: document.getElementById('breathing-overlay'),
   breathingCircle: document.getElementById('breathing-circle'),
@@ -2006,6 +2024,78 @@ if (els.btnAccTest) {
     } catch { els.accTestResult.textContent = 'Error'; }
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Override Tax: settings panel wiring
+// ─────────────────────────────────────────────────────────────────────────────
+
+if (els.chkOverrideTax) {
+  els.chkOverrideTax.addEventListener('change', async () => {
+    const enabled = els.chkOverrideTax.checked;
+    if (els.overrideTaxConfig) els.overrideTaxConfig.style.display = enabled ? '' : 'none';
+    await api.updateOverrideTaxConfig?.({ enabled });
+  });
+}
+
+// Sync tax config inputs on change.
+for (const [elId, key] of [['taxFreeSnoozes', 'freeSnoozes'], ['taxTightenMin', 'tightenMinutes'], ['taxMaxTighten', 'maxTighten'], ['taxReasonAfter', 'requireReasonAfter']]) {
+  if (els[elId]) {
+    els[elId].addEventListener('change', async () => {
+      await api.updateOverrideTaxConfig?.({ [key]: Number(els[elId].value) });
+    });
+  }
+}
+
+// Refresh tax stats periodically.
+async function refreshTaxStats() {
+  try {
+    const stats = await api.getOverrideTaxStats?.();
+    if (stats) {
+      if (els.taxSessionCount) els.taxSessionCount.textContent = stats.sessionSnoozeCount;
+      if (els.taxTomorrowDebt) els.taxTomorrowDebt.textContent = `${stats.tomorrowDebt} min`;
+    }
+  } catch {}
+}
+setInterval(refreshTaxStats, 5000);
+refreshTaxStats();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Autopilot Bedtime: settings panel wiring
+// ─────────────────────────────────────────────────────────────────────────────
+
+if (els.chkAutopilot) {
+  els.chkAutopilot.addEventListener('change', async () => {
+    const enabled = els.chkAutopilot.checked;
+    if (els.autopilotConfig) els.autopilotConfig.style.display = enabled ? '' : 'none';
+    await api.enableAutopilot?.(enabled);
+    if (enabled) refreshAutopilotStatus();
+  });
+}
+
+if (els.autopilotOverrideTime) {
+  els.autopilotOverrideTime.addEventListener('change', async () => {
+    const val = els.autopilotOverrideTime.value || null;
+    await api.saveAppSettings?.({ autopilotBedtime: val });
+  });
+}
+
+async function refreshAutopilotStatus() {
+  try {
+    const status = await api.getAutopilotStatus?.();
+    if (!status) return;
+    if (els.chkAutopilot) els.chkAutopilot.checked = status.enabled;
+    if (els.autopilotConfig) els.autopilotConfig.style.display = status.enabled ? '' : 'none';
+    if (status.learned) {
+      if (els.autopilotLearned) els.autopilotLearned.textContent = status.learned.bedtime;
+      if (els.autopilotConfidence) {
+        els.autopilotConfidence.textContent = status.learned.confidence;
+        els.autopilotConfidence.style.color = status.learned.confidence === 'high' ? '#4caf50' : status.learned.confidence === 'medium' ? '#ff9800' : '#ff4d4d';
+      }
+      if (els.autopilotSample) els.autopilotSample.textContent = `${status.learned.sampleSize} nights`;
+    }
+  } catch {}
+}
+refreshAutopilotStatus();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Guided Breathing: 4-7-8 technique with ring pulse

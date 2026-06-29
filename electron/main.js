@@ -245,7 +245,13 @@ function refreshTrayMenu() {
         click: () => (timerState.paused ? resumeTimer() : pauseTimer())
       },
       {
-        label: 'Snooze +5 min',
+        label: (() => {
+          const cost = overrideTax.assessSnoozeCost();
+          if (cost.level === 0) return 'Snooze +5 min';
+          if (cost.level === 1) return 'Snooze +5 min (logged)';
+          if (cost.level >= 2) return `Snooze +5 min (tightens -${cost.tomorrowDebt + 15}m)`;
+          return 'Snooze +5 min';
+        })(),
         click: () => snoozeTimer(300)
       },
       {

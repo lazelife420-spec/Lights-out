@@ -1,5 +1,36 @@
 # Changelog
 
+## v10.2.0 — Override Tax + Autopilot (2026-06-28)
+
+### New
+- **Override Tax** — escalating cost for hitting snooze. First snooze is free; 2nd
+  is logged and accountability partner notified; 3rd+ shortens tomorrow's timer by
+  15 min; 4th+ requires a typed reason. Configurable via settings panel: free snoozes,
+  tighten amount, max cap, reason threshold. Tray menu shows live cost level.
+- **Override Tax settings panel** — full UI to enable/disable, adjust parameters,
+  and view live session stats (snooze count, tomorrow's debt)
+- **Snooze escalation modal** — renderer popup shows consequences list before
+  allowing non-free snoozes, with required reason input for high-level overrides
+- **Autopilot Bedtime** — learns your bedtime from streak history (median + std dev),
+  schedules auto-start at habitual time with 5-min warning. Fully opt-in.
+- **Autopilot settings panel** — shows learned bedtime, confidence, sample size;
+  optional manual override time input
+- **Companion phone tax indicator** — phone UI shows snooze cost warning when the
+  next snooze would be penalized
+- **Last Call** — default timer name renamed from "Witching Hour" to "Last Call"
+- **Expanded smoke suite** — 68 assertions (+11 over v10.1.0) covering Override Tax
+  module, IPC, modal, renderer integration, and Autopilot wiring
+
+### Changed
+- `snoozeTimer` now accepts a `reason` parameter for Override Tax compliance
+- Tray snooze label dynamically reflects current cost level
+- Companion state broadcast includes Override Tax stats
+
+### Internal
+- New modules: `overrideTax.js`, `autopilot.js`
+- New test: `test/overrideTax.test.js` (11 assertions)
+- Build files list includes new modules
+
 ## v10.1.0 — Visual Northstar (2026-06-24)
 
 ### New

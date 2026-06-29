@@ -741,7 +741,7 @@
         <button class="footer-action" id="btn-widget" title="Desktop widget">&#x1F4CA;</button>
         <button class="footer-action" id="btn-companion" title="Companion PWA">&#x1F4F1;</button>
         <span class="badge update-badge" id="badge-update" style="display:none" title="Update available">UPDATE</span>
-        <span id="version">v10.1.0</span>
+        <span id="version">v10.2.0</span>
       </div>
     </footer>
 
@@ -1155,6 +1155,85 @@
           </div>
         </div>
 
+        <!-- Override Tax Section -->
+        <div class="option-section override-tax-section">
+          <h3>&#x23F0; Override Tax</h3>
+          <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Escalating cost for hitting snooze. Makes it harder to stay up the more you try.</p>
+
+          <div class="option-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="chk-override-tax" checked>
+              Enable Override Tax
+            </label>
+          </div>
+
+          <div id="override-tax-config">
+            <div class="option-group">
+              <label>Free snoozes per session</label>
+              <input type="number" id="tax-free-snoozes" min="0" max="10" value="1" style="width:60px">
+              <small style="display:block;font-size:9px;color:var(--text-muted);margin-top:2px">First N snoozes have no penalty.</small>
+            </div>
+            <div class="option-group">
+              <label>Tomorrow tightens by (minutes)</label>
+              <input type="number" id="tax-tighten-min" min="5" max="60" value="15" style="width:60px">
+              <small style="display:block;font-size:9px;color:var(--text-muted);margin-top:2px">Each escalated snooze shortens tomorrow's timer by this much.</small>
+            </div>
+            <div class="option-group">
+              <label>Max tighten cap (minutes)</label>
+              <input type="number" id="tax-max-tighten" min="15" max="120" value="60" style="width:60px">
+            </div>
+            <div class="option-group">
+              <label>Require reason after snooze #</label>
+              <input type="number" id="tax-reason-after" min="2" max="10" value="3" style="width:60px">
+            </div>
+            <div class="option-group" style="padding:8px;border-radius:8px;background:var(--bg-card)">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:11px;color:var(--text-secondary)">Session snoozes:</span>
+                <span id="tax-session-count" style="font-size:13px;font-weight:700;color:var(--text-primary)">0</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+                <span style="font-size:11px;color:var(--text-secondary)">Tomorrow's debt:</span>
+                <span id="tax-tomorrow-debt" style="font-size:13px;font-weight:700;color:#ff9800">0 min</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Autopilot Bedtime Section -->
+        <div class="option-section autopilot-section">
+          <h3>&#x1F916; Autopilot Bedtime</h3>
+          <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Learns your pattern and auto-starts the timer at your habitual bedtime. You get a 5-minute warning.</p>
+
+          <div class="option-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="chk-autopilot">
+              Enable Autopilot
+            </label>
+          </div>
+
+          <div id="autopilot-config" style="display:none">
+            <div class="option-group" style="padding:10px;border-radius:8px;background:var(--bg-card)">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:11px;color:var(--text-secondary)">Learned bedtime:</span>
+                <span id="autopilot-learned" style="font-size:14px;font-weight:700;color:var(--accent)">--:--</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+                <span style="font-size:11px;color:var(--text-secondary)">Confidence:</span>
+                <span id="autopilot-confidence" style="font-size:11px;color:var(--text-muted)">--</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+                <span style="font-size:11px;color:var(--text-secondary)">Based on:</span>
+                <span id="autopilot-sample" style="font-size:11px;color:var(--text-muted)">-- nights</span>
+              </div>
+            </div>
+            <div class="option-group" style="margin-top:8px">
+              <label>Override bedtime (leave blank to use learned)</label>
+              <input type="time" id="autopilot-override-time" style="width:120px">
+              <small style="display:block;font-size:9px;color:var(--text-muted);margin-top:2px">Set a fixed time instead of using the learned pattern.</small>
+            </div>
+          </div>
+        </div>
+
         <!-- Customization Section -->
         <div class="option-section customize-section">
           <h3>&#x1F3A8; Customize</h3>
@@ -1540,7 +1619,7 @@
       <div class="modal-body about-body">
         <img class="about-wordmark" src="assets/brand/lights-out-wordmark-transparent.svg" alt="Lights Out" draggable="false">
         <p class="about-tagline">Bedtime shutdown timer for Windows.</p>
-        <p class="about-version">Version 10.1.0</p>
+        <p class="about-version">Version 10.2.0</p>
         <div class="about-updater" id="about-updater">
           <div class="updater-status" id="updater-status" data-state="idle">
             <span class="updater-dot"></span>

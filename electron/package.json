@@ -1,6 +1,6 @@
 {
   "name": "lights-out-electron",
-  "version": "10.1.0",
+  "version": "10.2.0",
   "description": "Lights Out - Sleep Timer (Electron Edition)",
   "main": "main.js",
   "scripts": {
@@ -51,6 +51,8 @@
       "ambientVisuals.js",
       "idleDetection.js",
       "bedtimeReminder.js",
+      "overrideTax.js",
+      "autopilot.js",
       "widget.html",
       "assets/**"
     ],

@@ -150,7 +150,7 @@ check('tray: menu keeps show-hide, settings, timer controls, and quick starts', 
   assertMatch(mainSrc, /label: mainWindow && mainWindow\.isVisible\(\) \? 'Hide to Tray' : 'Show Lights Out'/, 'tray show/hide label missing');
   assertMatch(mainSrc, /label: 'Open Settings'[\s\S]*mainWindow\.webContents\.send\('open-settings'\);/s, 'tray settings action missing');
   assertMatch(mainSrc, /label: timerState\.paused \? 'Resume' : 'Pause'/, 'tray pause/resume action missing');
-  assertMatch(mainSrc, /label: 'Snooze \+5 min'/, 'tray snooze action missing');
+  assertMatch(mainSrc, /Snooze \+5 min/, 'tray snooze action missing');
   assertMatch(mainSrc, /label: 'Cancel Timer'/, 'tray cancel action missing');
   assertMatch(mainSrc, /label: 'Start 28 min'/, 'tray 28 min quick start missing');
   assertMatch(mainSrc, /label: 'Start 1 hour'/, 'tray 1 hour quick start missing');
@@ -326,6 +326,21 @@ check('autopilot: preload exposes autopilot API', () => {
 check('autopilot: settings default is OFF', () => {
   const settingsSrc = fs.readFileSync(path.join(root, 'settings.js'), 'utf8');
   assertMatch(settingsSrc, /autopilotEnabled: false/, 'autopilotEnabled default should be false');
+});
+
+check('override-tax: settings UI elements in HTML', () => {
+  assert(htmlSrc.includes('id="chk-override-tax"'), 'chk-override-tax missing');
+  assert(htmlSrc.includes('id="tax-free-snoozes"'), 'tax-free-snoozes missing');
+  assert(htmlSrc.includes('id="tax-tighten-min"'), 'tax-tighten-min missing');
+  assert(htmlSrc.includes('id="tax-session-count"'), 'tax-session-count missing');
+  assert(htmlSrc.includes('id="tax-tomorrow-debt"'), 'tax-tomorrow-debt missing');
+});
+
+check('autopilot: settings UI elements in HTML', () => {
+  assert(htmlSrc.includes('id="chk-autopilot"'), 'chk-autopilot missing');
+  assert(htmlSrc.includes('id="autopilot-learned"'), 'autopilot-learned missing');
+  assert(htmlSrc.includes('id="autopilot-confidence"'), 'autopilot-confidence missing');
+  assert(htmlSrc.includes('id="autopilot-override-time"'), 'autopilot-override-time missing');
 });
 
 // Cleanup.
