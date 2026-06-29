@@ -97,6 +97,22 @@
     .custom-input .unit { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; }
     .btn-custom { flex: 0 0 96px; }
 
+    .comp-stats { display: none; padding: 14px 16px; margin-top: 8px; border-radius: 14px; background: var(--card); border: 1px solid var(--card-border); }
+    .comp-stats-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .comp-stats-label { font-size: 10px; color: var(--muted); font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; }
+    .comp-autopilot-badge { display: none; font-size: 9px; padding: 3px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+    .comp-stats-body { display: flex; gap: 14px; align-items: center; }
+    .comp-score-col { text-align: center; min-width: 56px; }
+    .comp-score { font-size: 26px; font-weight: 700; color: var(--text); line-height: 1.1; }
+    .comp-score-label { font-size: 9px; color: var(--muted); margin-top: 2px; }
+    .comp-metrics { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+    .comp-metric { display: flex; justify-content: space-between; font-size: 11px; }
+    .comp-metric-label { color: var(--muted); }
+    .comp-metric-value { font-weight: 600; }
+    .comp-metric--warn { color: #ff9800; }
+    .comp-metric--good { color: #4caf50; }
+    .comp-metric--danger { color: #ff6b6b; }
+
     .disconnected { color: var(--muted); font-size: 12px; margin-top: 22px; }
     .streak { margin-top: 18px; padding: 14px; border-radius: 14px; background: var(--card); border: 1px solid var(--card-border); display: flex; align-items: center; justify-content: center; gap: 12px; }
     .streak-flame { font-size: 22px; }
@@ -104,15 +120,20 @@
     .streak-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
     .streak-number { font-size: 26px; font-weight: 800; color: #e2b53a; line-height: 1.1; }
 
-    .pair-card { background: var(--card); border: 1px solid var(--card-border); border-radius: 16px; padding: 22px 18px; text-align: left; }
-    .pair-title { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
-    .pair-hint { font-size: 13px; line-height: 1.5; color: var(--muted); margin-bottom: 16px; }
-    .pair-input { width: 100%; padding: 14px; border-radius: 12px; border: 1px solid var(--card-border); background: #0d1016; color: var(--text); font-size: 15px; letter-spacing: 0.5px; margin-bottom: 12px; outline: none; transition: border-color 0.15s ease; }
-    .pair-input::placeholder { color: var(--dim); }
-    .pair-input:focus { border-color: var(--accent); }
-    .pair-submit { width: 100%; }
+    .pair-card { background: var(--card); border: 1px solid var(--card-border); border-radius: 18px; padding: 26px 20px; text-align: left; }
+    .pair-icon { width: 52px; height: 52px; border-radius: 14px; background: var(--accent-soft); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+    .pair-icon svg { width: 24px; height: 24px; color: var(--accent); }
+    .pair-title { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 6px; letter-spacing: -0.2px; }
+    .pair-hint { font-size: 13px; line-height: 1.55; color: var(--muted); margin-bottom: 18px; }
+    .pair-input-row { display: flex; gap: 10px; }
+    .pair-input { flex: 1; padding: 13px 14px; border-radius: 12px; border: 1px solid var(--card-border); background: #0d1016; color: var(--text); font-size: 15px; letter-spacing: 0.8px; outline: none; transition: border-color 0.15s ease; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+    .pair-input::placeholder { color: var(--dim); letter-spacing: 0; font-family: -apple-system, sans-serif; }
+    .pair-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(91,140,255,0.12); }
+    .pair-submit { padding: 13px 22px; white-space: nowrap; }
     .pair-error { color: #ff6b6b; font-size: 12px; margin-top: 10px; }
-    .pair-reset { background: none; border: none; color: var(--accent); font-size: 12px; font-weight: 700; cursor: pointer; margin-top: 10px; padding: 4px; text-decoration: underline; }
+    .pair-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
+    .pair-footer { font-size: 11px; color: var(--dim); line-height: 1.4; }
+    .pair-reset { background: none; border: none; color: var(--accent); font-size: 12px; font-weight: 700; cursor: pointer; padding: 4px; text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -143,11 +164,19 @@
 
     <!-- Pairing (shown when no token is stored yet) -->
     <div class="pair-card" id="pair-card" style="display:none">
+      <div class="pair-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+      </div>
       <div class="pair-title">Pair this phone</div>
-      <div class="pair-hint">Scan the QR code in the desktop app's Remote Control settings, or type the pairing code shown beneath it.</div>
-      <input class="pair-input" id="pair-input" type="text" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Pairing code" aria-label="Pairing code">
-      <button class="btn btn-primary pair-submit" id="pair-submit">Pair</button>
+      <div class="pair-hint">Scan the QR code in the desktop app's <strong>Remote Control</strong> settings, or type the pairing code shown beneath it.</div>
+      <div class="pair-input-row">
+        <input class="pair-input" id="pair-input" type="text" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste pairing code" aria-label="Pairing code">
+        <button class="btn btn-primary pair-submit" id="pair-submit">Pair</button>
+      </div>
       <div class="pair-error" id="pair-error" style="display:none">Enter the pairing code to continue.</div>
+      <div class="pair-meta">
+        <span class="pair-footer">Phone &amp; PC must be on the same Wi-Fi</span>
+      </div>
     </div>
 
     <!-- Start controls (shown when idle) -->
@@ -206,20 +235,20 @@
     </div>
 
     <!-- Stats Summary (phone view) -->
-    <div id="companion-stats" style="display:none;padding:12px 16px;margin-top:8px;border-radius:12px;background:var(--card,rgba(255,255,255,0.04))">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <span style="font-size:11px;color:var(--muted,#999);font-weight:600">TONIGHT</span>
-        <span id="comp-autopilot-badge" style="font-size:9px;padding:2px 8px;border-radius:10px;background:rgba(91,140,255,0.12);color:#5b8cff;display:none">Autopilot ON</span>
+    <div class="comp-stats" id="companion-stats">
+      <div class="comp-stats-header">
+        <span class="comp-stats-label">Tonight</span>
+        <span class="comp-autopilot-badge" id="comp-autopilot-badge">Autopilot ON</span>
       </div>
-      <div style="display:flex;gap:12px;align-items:center">
-        <div style="text-align:center">
-          <div id="comp-score" style="font-size:24px;font-weight:700;color:#fff">--</div>
-          <div id="comp-score-label" style="font-size:9px;color:var(--muted,#999)">Sleep Score</div>
+      <div class="comp-stats-body">
+        <div class="comp-score-col">
+          <div class="comp-score" id="comp-score">--</div>
+          <div class="comp-score-label" id="comp-score-label">Sleep Score</div>
         </div>
-        <div style="flex:1;display:flex;flex-direction:column;gap:4px">
-          <div style="display:flex;justify-content:space-between;font-size:10px"><span style="color:var(--muted,#999)">Debt</span><span id="comp-debt" style="color:#ff9800">--</span></div>
-          <div style="display:flex;justify-content:space-between;font-size:10px"><span style="color:var(--muted,#999)">Streak</span><span id="comp-streak" style="color:#4caf50">--</span></div>
-          <div style="display:flex;justify-content:space-between;font-size:10px"><span style="color:var(--muted,#999)">Tax debt</span><span id="comp-tax-debt" style="color:#ff6b6b">--</span></div>
+        <div class="comp-metrics">
+          <div class="comp-metric"><span class="comp-metric-label">Debt</span><span class="comp-metric-value comp-metric--warn" id="comp-debt">--</span></div>
+          <div class="comp-metric"><span class="comp-metric-label">Streak</span><span class="comp-metric-value comp-metric--good" id="comp-streak">--</span></div>
+          <div class="comp-metric"><span class="comp-metric-label">Tax debt</span><span class="comp-metric-value comp-metric--danger" id="comp-tax-debt">--</span></div>
         </div>
       </div>
     </div>

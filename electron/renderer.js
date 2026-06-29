@@ -2853,9 +2853,31 @@ function renderReceiptsModal(receipts, stats) {
   });
 
   els.selAction.addEventListener('change', () => setAction(els.selAction.value));
+
+  // Persist these timer toggles the moment they change so they survive a
+  // relaunch even if the user closes the Options modal without hitting Save
+  // (the quick-menu toggles already behave this way).
+  const persistTimerToggles = () => {
+    try { api.saveAppSettings({ app: collectAppSettings() }); } catch (_) { /* no-op */ }
+  };
   els.chkDryRun?.addEventListener('change', () => {
     state.dryRun = els.chkDryRun.checked;
     render();
+    persistTimerToggles();
+  });
+  els.chkForceShutdown?.addEventListener('change', () => {
+    state.forceShutdown = els.chkForceShutdown.checked;
+    render();
+    persistTimerToggles();
+  });
+  els.chkMute?.addEventListener('change', () => {
+    state.muteSystem = els.chkMute.checked;
+    render();
+    persistTimerToggles();
+  });
+  els.graceMinutes?.addEventListener('change', () => {
+    state.graceMinutes = clamp(Number(els.graceMinutes.value) || 0, 0, 10);
+    persistTimerToggles();
   });
 
   document.querySelectorAll('.tonight-card').forEach(card => {
