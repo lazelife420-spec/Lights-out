@@ -21,4 +21,11 @@
         <item name="android:textSize">17sp</item>
         <item name="android:textStyle">bold</item>
     </style>
+
+    <!-- Tint SwitchCompat track + thumb in the accent color. -->
+    <style name="SettingsSwitch" parent="Theme.AppCompat.Light">
+        <item name="colorAccent">@color/accent</item>
+        <item name="colorControlActivated">@color/accent</item>
+        <item name="android:colorControlActivated">@color/accent</item>
+    </style>
 </resources>

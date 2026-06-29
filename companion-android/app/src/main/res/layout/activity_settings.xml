@@ -1,77 +1,125 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bg"
-    android:fillViewport="true">
+    android:fillViewport="true"
+    android:scrollbarStyle="outsideOverlay">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:paddingHorizontal="24dp"
-        android:paddingVertical="28dp">
+        android:paddingHorizontal="18dp"
+        android:paddingVertical="24dp">
 
+        <!-- Section: Connection -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/settings_title"
-            android:textColor="@color/text"
-            android:textSize="24sp"
+            android:text="@string/settings_section_connection"
+            android:textColor="@color/text_muted"
+            android:textSize="11sp"
             android:textStyle="bold"
-            android:layout_marginBottom="20dp" />
+            android:letterSpacing="1.2"
+            android:textAllCaps="true"
+            android:paddingHorizontal="6dp"
+            android:layout_marginBottom="10dp" />
 
-        <androidx.appcompat.widget.SwitchCompat
-            android:id="@+id/switch_notifications"
+        <!-- Notifications card -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/setting_notifications"
-            android:textColor="@color/text"
-            android:textSize="16sp"
-            android:paddingVertical="12dp" />
+            android:orientation="vertical"
+            android:background="@drawable/settings_card"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="6dp"
+            android:layout_marginBottom="14dp"
+            android:elevation="2dp">
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switch_notifications"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/setting_notifications"
+                android:textColor="@color/text"
+                android:textSize="15sp"
+                android:paddingVertical="14dp"
+                android:minHeight="48dp"
+                android:theme="@style/SettingsSwitch" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/settings_divider" />
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switch_headsup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/setting_headsup"
+                android:textColor="@color/text"
+                android:textSize="15sp"
+                android:paddingVertical="14dp"
+                android:minHeight="48dp"
+                android:theme="@style/SettingsSwitch" />
+        </LinearLayout>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/setting_notifications_desc"
             android:textColor="@color/text_muted"
-            android:textSize="13sp"
-            android:lineSpacingMultiplier="1.3"
-            android:layout_marginBottom="16dp" />
+            android:textSize="12sp"
+            android:lineSpacingMultiplier="1.35"
+            android:paddingHorizontal="6dp"
+            android:layout_marginBottom="22dp" />
 
-        <androidx.appcompat.widget.SwitchCompat
-            android:id="@+id/switch_headsup"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/setting_headsup"
-            android:textColor="@color/text"
-            android:textSize="16sp"
-            android:paddingVertical="12dp" />
-
+        <!-- Section: Display -->
         <TextView
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/setting_headsup_desc"
+            android:text="@string/settings_section_display"
             android:textColor="@color/text_muted"
-            android:textSize="13sp"
-            android:lineSpacingMultiplier="1.3"
-            android:layout_marginBottom="16dp" />
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:letterSpacing="1.2"
+            android:textAllCaps="true"
+            android:paddingHorizontal="6dp"
+            android:layout_marginBottom="10dp" />
 
-        <androidx.appcompat.widget.SwitchCompat
-            android:id="@+id/switch_keep_awake"
+        <!-- Keep screen on card -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/setting_keep_awake"
-            android:textColor="@color/text"
-            android:textSize="16sp"
-            android:paddingVertical="12dp" />
+            android:orientation="vertical"
+            android:background="@drawable/settings_card"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="6dp"
+            android:layout_marginBottom="14dp"
+            android:elevation="2dp">
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switch_keep_awake"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/setting_keep_awake"
+                android:textColor="@color/text"
+                android:textSize="15sp"
+                android:paddingVertical="14dp"
+                android:minHeight="48dp"
+                android:theme="@style/SettingsSwitch" />
+        </LinearLayout>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/setting_keep_awake_desc"
             android:textColor="@color/text_muted"
-            android:textSize="13sp"
-            android:lineSpacingMultiplier="1.3" />
+            android:textSize="12sp"
+            android:lineSpacingMultiplier="1.35"
+            android:paddingHorizontal="6dp" />
+
     </LinearLayout>
 </ScrollView>

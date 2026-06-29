@@ -21,6 +21,8 @@
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
+    <string name="settings_section_connection">Connection</string>
+    <string name="settings_section_display">Display</string>
     <string name="setting_notifications">Background notifications</string>
     <string name="setting_notifications_desc">Keep a connection alive so timer updates reach your phone even when the app is closed.</string>
     <string name="setting_headsup">Loud alerts for Last Call</string>
