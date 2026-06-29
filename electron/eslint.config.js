@@ -88,5 +88,17 @@ module.exports = [
       globals: { ...globals.node }
     },
     rules: sharedRules
+  },
+
+  // Playwright Electron integration specs: Node file scope, but page.evaluate
+  // callbacks execute in the renderer and reference browser globals.
+  {
+    files: ['e2e/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: 'commonjs',
+      globals: { ...globals.node, ...globals.browser }
+    },
+    rules: sharedRules
   }
 ];

@@ -9,6 +9,12 @@
   to 0, so the target volume was never reached. Now interpolates the real value.
 
 ### Internal
+- **Electron integration tests** — added a Playwright-driven lane (`npm run test:e2e`,
+  specs in `electron/e2e/`) that launches the real app and verifies the window
+  opens, the preload bridge is wired, the idle-startup safety invariant holds
+  (no auto-started countdown), and a full start → pause → resume → cancel cycle
+  works over real IPC in dry-run (so no power action can ever fire). Runs in CI
+  on `windows-latest` (the real target OS, no display shim needed).
 - **ESLint** — added a flat config (`eslint.config.js`) with per-surface globals
   (main/Node, renderer/browser, dual-context UMD scripts, tests) and `npm run lint`
   / `npm run lint:fix`. `no-undef` is intentionally off for the renderer monolith
