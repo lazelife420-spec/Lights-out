@@ -13,4 +13,51 @@
     <string name="scan_title">Scan pairing QR</string>
     <string name="scan_hint">Point the camera at the QR code in the desktop app\'s Remote Control settings.</string>
     <string name="camera_needed">Camera permission is needed to scan the QR code.</string>
+
+    <!-- Reliability / error view -->
+    <string name="error_unreachable_title">Can\'t reach your PC</string>
+    <string name="error_unreachable_body">Make sure the desktop app is open with Remote Control enabled, and that your phone is on the same Wi-Fi.</string>
+    <string name="retry">Retry</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="setting_notifications">Background notifications</string>
+    <string name="setting_notifications_desc">Keep a connection alive so timer updates reach your phone even when the app is closed.</string>
+    <string name="setting_headsup">Loud alerts for Last Call</string>
+    <string name="setting_headsup_desc">Pop a heads-up alert with sound and vibration when the timer reaches Last Light or finishes.</string>
+    <string name="setting_keep_awake">Keep screen on</string>
+    <string name="setting_keep_awake_desc">Prevent the screen from sleeping while the companion is open.</string>
+
+    <!-- Notification channels -->
+    <string name="channel_status">Companion status</string>
+    <string name="channel_status_desc">Ongoing connection and timer status.</string>
+    <string name="channel_alerts">Timer alerts</string>
+    <string name="channel_alerts_desc">Wind-down, Last Call, and completion alerts.</string>
+
+    <!-- Ongoing status notification -->
+    <string name="status_connected_title">Lights Out connected</string>
+    <string name="status_idle">Idle · no timer running</string>
+    <string name="status_reconnecting_title">Lights Out</string>
+    <string name="status_reconnecting_body">Reconnecting to your PC…</string>
+    <string name="status_paused">Paused</string>
+    <string name="phase_label">%1$s</string>
+    <string name="until_action">until %1$s</string>
+
+    <!-- Phase labels -->
+    <string name="phase_focus">Running</string>
+    <string name="phase_dim">Winding down</string>
+    <string name="phase_lastlight">Last Light</string>
+
+    <!-- Notification actions -->
+    <string name="action_snooze">Snooze 5m</string>
+    <string name="action_cancel">Cancel</string>
+
+    <!-- Alert notifications -->
+    <string name="alert_winddown_title">Winding down</string>
+    <string name="alert_winddown_body">%1$s is winding down. Time to wrap up.</string>
+    <string name="alert_lastcall_title">Last Call</string>
+    <string name="alert_lastcall_body">Lights out soon — %1$s is about to run.</string>
+    <string name="alert_complete_title">Lights out</string>
+    <string name="alert_complete_body">The timer finished and %1$s ran.</string>
+    <string name="alert_complete_dryrun">The timer finished (dry run — no action taken).</string>
 </resources>

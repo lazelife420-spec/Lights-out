@@ -4,16 +4,20 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.util.Log
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.view.View
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.Toast
@@ -21,6 +25,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import java.net.URL
 
 /**
@@ -36,10 +41,18 @@ import java.net.URL
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
+    private lateinit var swipe: SwipeRefreshLayout
+    private lateinit var errorView: View
     private lateinit var setup: View
     private lateinit var urlInput: EditText
 
     private val prefs by lazy { getSharedPreferences("lightsout", MODE_PRIVATE) }
+    private val prefsHelper by lazy { Prefs(this) }
+    private var loadFailed = false
+
+    private val notifyPermLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* Notifications are best-effort; the connection still works without them. */ }
 
     // Scanner returns the pairing URL; persist it and connect.
     private val scanLauncher = registerForActivityResult(
@@ -69,10 +82,17 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         webView = findViewById(R.id.webview)
+        swipe = findViewById(R.id.swipe)
+        errorView = findViewById(R.id.error_view)
         setup = findViewById(R.id.setup)
         urlInput = findViewById(R.id.url_input)
         val connectBtn = findViewById<Button>(R.id.connect_button)
         val scanBtn = findViewById<Button>(R.id.scan_button)
+        val retryBtn = findViewById<Button>(R.id.retry_button)
+
+        swipe.setColorSchemeColors(ContextCompat.getColor(this, R.color.accent))
+        swipe.setOnRefreshListener { reload() }
+        retryBtn.setOnClickListener { reload() }
 
         scanBtn.setOnClickListener {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
@@ -94,7 +114,30 @@ class MainActivity : AppCompatActivity() {
         // Allow inspecting the page from desktop Chrome via chrome://inspect over
         // (wireless) adb. Safe here: this is a single-purpose LAN control app.
         WebView.setWebContentsDebuggingEnabled(true)
-        webView.webViewClient = WebViewClient()
+        webView.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                loadFailed = false
+            }
+
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: WebResourceError?
+            ) {
+                if (request?.isForMainFrame == true) {
+                    loadFailed = true
+                    showError()
+                }
+            }
+
+            override fun onPageFinished(view: WebView?, url: String?) {
+                swipe.isRefreshing = false
+                if (!loadFailed) {
+                    errorView.visibility = View.GONE
+                    swipe.visibility = View.VISIBLE
+                }
+            }
+        }
         // Forward page console output to logcat (tag "LightsOutWeb") so the
         // companion page can be debugged over adb without chrome://inspect.
         webView.webChromeClient = object : WebChromeClient() {
@@ -116,7 +159,7 @@ class MainActivity : AppCompatActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (webView.visibility == View.VISIBLE && webView.canGoBack()) {
+                if (swipe.visibility == View.VISIBLE && webView.canGoBack()) {
                     webView.goBack()
                 } else {
                     isEnabled = false
@@ -135,14 +178,60 @@ class MainActivity : AppCompatActivity() {
 
     private fun showWeb(url: String) {
         setup.visibility = View.GONE
-        webView.visibility = View.VISIBLE
+        errorView.visibility = View.GONE
+        swipe.visibility = View.VISIBLE
+        loadFailed = false
         webView.loadUrl(url)
+        ensureNotificationPermission()
+        CompanionService.start(this, url)
+        applyKeepScreenOn()
     }
 
     private fun showSetup(prefill: String?) {
-        webView.visibility = View.GONE
+        swipe.visibility = View.GONE
+        errorView.visibility = View.GONE
         setup.visibility = View.VISIBLE
         if (prefill != null) urlInput.setText(prefill)
+        CompanionService.stop(this)
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
+    private fun showError() {
+        swipe.isRefreshing = false
+        swipe.visibility = View.GONE
+        errorView.visibility = View.VISIBLE
+    }
+
+    private fun reload() {
+        val url = prefs.getString(KEY_URL, null)
+        if (url == null) { showSetup(null); return }
+        loadFailed = false
+        errorView.visibility = View.GONE
+        swipe.visibility = View.VISIBLE
+        webView.loadUrl(url)
+    }
+
+    private fun applyKeepScreenOn() {
+        if (prefsHelper.keepScreenOn) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    private fun ensureNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        if (!prefsHelper.notificationsEnabled) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            notifyPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (swipe.visibility == View.VISIBLE) applyKeepScreenOn()
     }
 
     /**
@@ -171,11 +260,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        return if (item.itemId == R.id.action_change_pc) {
-            showSetup(prefs.getString(KEY_URL, null))
-            true
-        } else {
-            super.onOptionsItemSelected(item)
+        return when (item.itemId) {
+            R.id.action_change_pc -> {
+                showSetup(prefs.getString(KEY_URL, null))
+                true
+            }
+            R.id.action_settings -> {
+                startActivity(Intent(this, SettingsActivity::class.java))
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
         }
     }
 

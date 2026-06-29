@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased — Android companion: background notifications
+
+### Added
+- **Native background service** (`CompanionService`) — a foreground service holds
+  its own WebSocket to the desktop companion (independent of the WebView) and
+  mirrors timer state to the Android notification shade, so alerts arrive even
+  when the app is backgrounded or the screen is off.
+- **Notifications** — an ongoing low-priority status notification (live countdown,
+  phase, connection state) with **Snooze 5m** / **Cancel** action buttons that send
+  commands to the desktop, plus heads-up **Last Call** and **completion** alerts
+  (sound + vibration) and a quieter **wind-down** alert. Two channels:
+  `companion_status` (low) and `companion_alerts` (high).
+- **Auto-reconnect** — `CompanionClient` reconnects with exponential backoff
+  (1s→30s) and keeps the LAN socket alive with WS pings.
+- **Reliability UX** — pull-to-refresh on the WebView and a "Can't reach your PC"
+  retry screen on load failure (replacing a blank WebView).
+- **Settings screen** — toggles for background notifications, loud Last Call
+  alerts, and keep-screen-on (persisted via `Prefs`).
+- **Release signing** — `app/build.gradle` reads a gitignored `keystore.properties`;
+  `assembleRelease` now produces a signed, installable APK.
+
+### Internal
+- New `POST_NOTIFICATIONS` / `FOREGROUND_SERVICE` / `FOREGROUND_SERVICE_DATA_SYNC`
+  permissions; `CompanionService` declared with `foregroundServiceType="dataSync"`.
+- Added OkHttp (WebSocket) and `swiperefreshlayout` dependencies.
+
 ## Unreleased — Code quality + hardening
 
 ### Fixed
