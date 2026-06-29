@@ -4465,3 +4465,51 @@ body.mini-mode.ns-lobby .dashboard { padding-left: var(--section-gap); }
 
 /* Mini-mode: hide proof hero */
 body.mini-mode .ns-proof-section { display: none !important; }
+
+/* ── Remote Control pairing polish ─────────────────────────────────────── */
+.pairing-qr-wrap {
+  text-align: center;
+  margin: 4px 0 14px;
+}
+.pairing-qr-card {
+  display: inline-block;
+  background: #fff;
+  padding: 12px;
+  border-radius: 16px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.40);
+  line-height: 0;
+}
+.pairing-qr-card img {
+  display: block;
+  border-radius: 8px;
+}
+.pairing-qr-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 10px 0 0;
+}
+.pairing-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 10px 0 5px;
+}
+.pairing-code {
+  display: block;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+  word-break: break-all;
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 9px 11px;
+  border-radius: 8px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.pairing-code:hover {
+  border-color: rgba(91, 140, 255, 0.35);
+}
+.pairing-code--token {
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  color: var(--accent, #5b8cff);
+  text-align: center;
+}
