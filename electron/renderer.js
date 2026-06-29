@@ -1083,7 +1083,10 @@ if (notifDrawerClose && notifDrawer) {
 
 function setSidebarSelection(tab) {
   document.querySelectorAll('.ns-nav-item').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.nsTab === tab);
+    const isActive = btn.dataset.nsTab === tab;
+    btn.classList.toggle('active', isActive);
+    if (isActive) btn.setAttribute('aria-current', 'page');
+    else btn.removeAttribute('aria-current');
   });
 }
 
@@ -2847,6 +2850,9 @@ function renderReceiptsModal(receipts, stats) {
     });
   });
 
+  // Northstar hero card PLAY button starts the timer.
+  document.getElementById('ns-play-btn')?.addEventListener('click', () => startTimer());
+
   // Home streak callout jumps to the Streaks tab for the full breakdown.
   els.streakCallout?.addEventListener('click', () => {
     document.querySelector('.tab-btn[data-tab="streaks"]')?.click();
@@ -3062,8 +3068,25 @@ function renderReceiptsModal(receipts, stats) {
     }
 
     if (event.key === 'Escape') {
+      // Close the topmost active modal/drawer.
       if (els.optionsModal.classList.contains('active')) {
         els.optionsModal.classList.remove('active');
+      } else if (els.profilesModal?.classList.contains('active')) {
+        els.profilesModal.classList.remove('active');
+      } else if (els.receiptsModal?.classList.contains('active')) {
+        els.receiptsModal.classList.remove('active');
+      } else if (els.aboutModal?.classList.contains('active')) {
+        els.aboutModal.classList.remove('active');
+      } else if (document.getElementById('notif-drawer')?.style.display !== 'none') {
+        document.getElementById('notif-drawer').style.display = 'none';
+      } else if (document.getElementById('ritual-overlay')?.classList.contains('active')) {
+        document.getElementById('ritual-overlay').classList.remove('active');
+      } else if (document.getElementById('warning-modal')?.classList.contains('active')) {
+        document.getElementById('warning-modal').classList.remove('active');
+      } else if (document.getElementById('override-modal')?.classList.contains('active')) {
+        document.getElementById('override-modal').classList.remove('active');
+      } else if (document.getElementById('snooze-tax-modal')?.classList.contains('active')) {
+        document.getElementById('snooze-tax-modal').classList.remove('active');
       } else if (state.running || state.paused) {
         cancelTimer();
       }

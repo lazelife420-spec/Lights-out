@@ -31,6 +31,21 @@
   --shadow-glow: 0 0 20px rgba(91,140,255,0.15);
 }
 
+/* Global focus ring for keyboard navigation */
+button:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid rgba(107, 211, 255, 0.9);
+  outline-offset: 2px;
+}
+
+/* Disabled / coming-soon state */
+button[aria-disabled="true"],
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 /* ───────────────────────────────────────────────────────────────────────────
    ONBOARDING FIRST-RUN WIZARD
    ─────────────────────────────────────────────────────────────────────────── */

@@ -403,6 +403,37 @@ check('stats-dashboard: module and IPC', () => {
   assertMatch(preloadSrc, /getFullDashboard:/, 'preload getFullDashboard missing');
 });
 
+// 18. Runtime UX truth: every visible nav/control has a real action or is disabled.
+check('ux: ns-play-btn is wired to startTimer', () => {
+  assertMatch(rendererSrc, /getElementById\('ns-play-btn'\)\?\.addEventListener\('click', \(\) => startTimer\(\)\)/, 'ns-play-btn not wired');
+});
+
+check('ux: ns-play-btn has aria-label', () => {
+  assertMatch(htmlSrc, /id="ns-play-btn"[^>]*aria-label="Start tonight/, 'ns-play-btn aria-label missing');
+});
+
+check('ux: Escape closes all modals (profiles, receipts, about, notif-drawer)', () => {
+  assertMatch(rendererSrc, /els\.profilesModal\?\.classList\.contains\('active'\)/, 'Escape does not check profilesModal');
+  assertMatch(rendererSrc, /els\.receiptsModal\?\.classList\.contains\('active'\)/, 'Escape does not check receiptsModal');
+  assertMatch(rendererSrc, /els\.aboutModal\?\.classList\.contains\('active'\)/, 'Escape does not check aboutModal');
+  assertMatch(rendererSrc, /getElementById\('notif-drawer'\)\?\.style\.display !== 'none'/, 'Escape does not check notif-drawer');
+});
+
+check('ux: sidebar sets aria-current on active item', () => {
+  assertMatch(rendererSrc, /btn\.setAttribute\('aria-current', 'page'\)/, 'aria-current not set on active sidebar item');
+  assertMatch(rendererSrc, /btn\.removeAttribute\('aria-current'\)/, 'aria-current not removed on inactive sidebar item');
+});
+
+const cssSrc = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+check('ux: global focus-visible ring defined', () => {
+  assertMatch(cssSrc, /button:focus-visible[\s\S]*outline:.*rgba\(107, 211, 255/, 'global button:focus-visible missing');
+});
+
+check('ux: disabled button styling defined', () => {
+  assertMatch(cssSrc, /button\[aria-disabled="true"\][\s\S]*opacity:/, 'disabled button style missing');
+  assertMatch(cssSrc, /cursor: not-allowed/, 'disabled cursor style missing');
+});
+
 // Cleanup.
 try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
 
