@@ -117,7 +117,7 @@ async function setSystemVolume(percent) {
   const vol = Math.max(0, Math.min(100, percent));
   try {
     await executePS(
-      `$wsh = New-Object -ComObject WScript.Shell; 1..50 | ForEach-Object { $wsh.SendKeys([char]174) }; 1..([math]::Floor($vol / 2)) | ForEach-Object { $wsh.SendKeys([char]175) }`
+      `$wsh = New-Object -ComObject WScript.Shell; 1..50 | ForEach-Object { $wsh.SendKeys([char]174) }; 1..([math]::Floor(${vol} / 2)) | ForEach-Object { $wsh.SendKeys([char]175) }`
     );
   } catch { /* best-effort */ }
 }

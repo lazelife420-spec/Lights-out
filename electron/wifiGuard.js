@@ -16,6 +16,16 @@ function validIps(list) {
   return (list || []).filter(ip => typeof ip === 'string' && net.isIP(ip) !== 0);
 }
 
+// MACs may also arrive from imported/shared config and are sent to router APIs.
+// Accept only well-formed MAC addresses (colon/hyphen separated, or bare 12-hex)
+// so a crafted value can never ride along into a router request body.
+const MAC_RE = /^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$|^[0-9a-f]{12}$/i;
+function validMacs(list) {
+  return (list || [])
+    .filter(mac => typeof mac === 'string' && MAC_RE.test(mac.trim()))
+    .map(mac => mac.trim());
+}
+
 // Escape values before embedding them in a SOAP/XML body so credentials or MAC
 // strings containing <, >, & or quotes cannot break out of their element.
 function xmlEscape(value) {
@@ -37,7 +47,7 @@ async function tplinkBlock(routerIp, username, password, deviceMacs) {
   const base = `http://${routerIp}`;
   try {
     // Login.
-    const loginRes = await httpPost(`${base}/cgi-bin/luci/admin/login`, {
+    await httpPost(`${base}/cgi-bin/luci/admin/login`, {
       username, password, operation: 'write'
     });
     // Set parental control rules for each MAC.
@@ -72,7 +82,7 @@ async function asusBlock(routerIp, username, password, deviceMacs) {
   const base = `http://${routerIp}`;
   try {
     // ASUS uses a token-based auth on their web UI.
-    const loginRes = await httpPost(`${base}/login.cgi`, {
+    await httpPost(`${base}/login.cgi`, {
       login_authorization: Buffer.from(`${username}:${password}`).toString('base64')
     });
     for (const mac of deviceMacs) {
@@ -236,16 +246,17 @@ async function enableWiFiAdapter() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function blockInternet(config) {
-  const { provider, routerIp, routerUser, routerPass, deviceMacs, deviceIps, webhookUrl, webhookHeaders } = config;
+  const { provider, routerIp, routerUser, routerPass, deviceIps, webhookUrl, webhookHeaders } = config;
+  const deviceMacs = validMacs(config.deviceMacs);
   switch (provider) {
     case 'tplink':
-      return tplinkBlock(routerIp, routerUser, routerPass, deviceMacs || []);
+      return tplinkBlock(routerIp, routerUser, routerPass, deviceMacs);
     case 'asus':
-      return asusBlock(routerIp, routerUser, routerPass, deviceMacs || []);
+      return asusBlock(routerIp, routerUser, routerPass, deviceMacs);
     case 'netgear':
-      return netgearBlock(routerIp, routerUser, routerPass, deviceMacs || []);
+      return netgearBlock(routerIp, routerUser, routerPass, deviceMacs);
     case 'webhook':
-      return webhookBlock(webhookUrl, deviceMacs || [], webhookHeaders || {});
+      return webhookBlock(webhookUrl, deviceMacs, webhookHeaders || {});
     case 'firewall':
       return firewallBlock(deviceIps || []);
     case 'adapter':
@@ -256,16 +267,17 @@ async function blockInternet(config) {
 }
 
 async function unblockInternet(config) {
-  const { provider, routerIp, routerUser, routerPass, deviceMacs, deviceIps, webhookUrl, webhookHeaders } = config;
+  const { provider, routerIp, routerUser, routerPass, deviceIps, webhookUrl, webhookHeaders } = config;
+  const deviceMacs = validMacs(config.deviceMacs);
   switch (provider) {
     case 'tplink':
-      return tplinkUnblock(routerIp, routerUser, routerPass, deviceMacs || []);
+      return tplinkUnblock(routerIp, routerUser, routerPass, deviceMacs);
     case 'asus':
-      return asusUnblock(routerIp, routerUser, routerPass, deviceMacs || []);
+      return asusUnblock(routerIp, routerUser, routerPass, deviceMacs);
     case 'netgear':
-      return netgearUnblock(routerIp, routerUser, routerPass, deviceMacs || []);
+      return netgearUnblock(routerIp, routerUser, routerPass, deviceMacs);
     case 'webhook':
-      return webhookUnblock(webhookUrl, deviceMacs || [], webhookHeaders || {});
+      return webhookUnblock(webhookUrl, deviceMacs, webhookHeaders || {});
     case 'firewall':
       return firewallUnblock(deviceIps || []);
     case 'adapter':
@@ -356,5 +368,8 @@ module.exports = {
   firewallCleanup,
   scanDevices,
   disableWiFiAdapter,
-  enableWiFiAdapter
+  enableWiFiAdapter,
+  // Exposed for unit testing of the input-validation guards.
+  __validIps: validIps,
+  __validMacs: validMacs
 };

@@ -14,7 +14,7 @@ defaults:
 
 jobs:
   verify:
-    name: Lint & Smoke
+    name: Lint, Test & Smoke
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -28,35 +28,17 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
+      # Auto-discovers every first-party JS file so the list can never drift as
+      # new modules are added.
       - name: Syntax check
         run: |
-          node --check main.js
-          node --check preload.js
-          node --check renderer.js
-          node --check settings.js
-          node --check smartLights.js
-          node --check profiles.js
-          node --check calendar.js
-          node --check lastLight.js
-          node --check streaks.js
-          node --check alarm.js
-          node --check updater.js
-          node --check calendarProviders.js
-          node --check companion.js
-          node --check media.js
-          node --check unsavedGuard.js
-          node --check family.js
-          node --check wifiGuard.js
-          node --check contentBlocker.js
-          node --check accountability.js
-          node --check focusSessions.js
-          node --check screenTime.js
-          node --check sleepDebt.js
-          node --check emergencyOverride.js
-          node --check runReceipts.js
-          node --check ambientVisuals.js
-          node --check idleDetection.js
-          node --check bedtimeReminder.js
+          for f in *.js test/*.js scripts/*.js; do
+            echo "checking $f"
+            node --check "$f"
+          done
+
+      - name: Lint
+        run: npm run lint
 
       - name: Unit tests
         run: npm test

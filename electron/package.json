@@ -9,6 +9,8 @@
     "dist": "electron-builder --win",
     "icons": "node scripts/make-icons.js",
     "smoke": "node scripts/smoke-test.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "test": "node --test"
   },
   "author": "Lights Out",
@@ -95,6 +97,8 @@
   "devDependencies": {
     "electron": "^30.0.0",
     "electron-builder": "^24.0.0",
+    "eslint": "^9.39.4",
+    "globals": "^17.7.0",
     "png-to-ico": "^3.0.1",
     "ws": "^8.21.0"
   }
