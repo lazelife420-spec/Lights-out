@@ -356,5 +356,9 @@ module.exports = {
   firewallCleanup,
   scanDevices,
   disableWiFiAdapter,
-  enableWiFiAdapter
+  enableWiFiAdapter,
+  // Exposed for unit testing the input sanitizers that guard PowerShell
+  // firewall-rule interpolation and SOAP/XML router request bodies.
+  validIps,
+  xmlEscape
 };
