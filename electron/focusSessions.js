@@ -2,8 +2,6 @@
 // Reuses the wind-down engine but inverted: focus phase is deep work,
 // break phase is a short rest. Same ring, same phases, same sounds.
 
-const { spawn } = require('child_process');
-
 // Default focus presets.
 const PRESETS = {
   pomodoro:   { focus: 25 * 60, break: 5 * 60, longBreak: 15 * 60, cycles: 4 },

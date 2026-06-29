@@ -14,7 +14,6 @@ const MAX_CLIENTS = 8;              // companion is a personal LAN tool; cap con
 const MAX_MESSAGE = 64 * 1024;      // reject any single frame larger than this
 const MAX_BUFFER = 256 * 1024;      // reject a client that buffers without completing a frame
 let server = null;
-let wss = null;
 let clients = new Set();
 const emitter = new EventEmitter();
 

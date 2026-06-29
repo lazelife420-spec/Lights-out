@@ -144,17 +144,20 @@ These are the most useful follow-on projects for an agent.
 
 ### For Electron changes
 
-1. Syntax-check:
-   `node --check .\electron\main.js`
-   `node --check .\electron\renderer.js`
-   `node --check .\electron\preload.js`
-2. Run smoke:
+1. Lint + syntax-check:
    `cd electron`
+   `npm run lint`
+2. Run unit + smoke:
+   `cd electron`
+   `npm test`
    `npm run smoke`
-3. Run:
+3. Run the Electron integration tests (real app, dry-run only):
+   `cd electron`
+   `npm run test:e2e`
+4. Run manually when useful:
    `cd electron`
    `npm start`
-4. Package when the change is meaningful:
+5. Package when the change is meaningful:
    `npm run build`
 
 Current smoke expectations include:

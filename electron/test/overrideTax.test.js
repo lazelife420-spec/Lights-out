@@ -163,7 +163,7 @@ test('history: prunes entries older than 90 days', () => {
     level: 0
   });
   overrideTax.recordSnooze(); // triggers prune
-  const stats = overrideTax.getStats();
+  overrideTax.getStats();
   // Old entry should be pruned.
   assert.ok(!data.history.some(h => new Date(h.date) < new Date(Date.now() - 91 * 86400000)));
 });

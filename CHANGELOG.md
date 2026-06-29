@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased — Code quality + hardening
+
+### Fixed
+- **System volume bug** (`media.js`) — `setSystemVolume` built a PowerShell
+  command referencing `$vol`, an undefined PowerShell variable, instead of
+  interpolating the JS-computed value. The volume-up step count always evaluated
+  to 0, so the target volume was never reached. Now interpolates the real value.
+
+### Internal
+- **Electron integration tests** — added a Playwright-driven lane (`npm run test:e2e`,
+  specs in `electron/e2e/`) that launches the real app and verifies the window
+  opens, the preload bridge is wired, the idle-startup safety invariant holds
+  (no auto-started countdown), and a full start → pause → resume → cancel cycle
+  works over real IPC in dry-run (so no power action can ever fire). Runs in CI
+  on `windows-latest` (the real target OS, no display shim needed).
+- **ESLint** — added a flat config (`eslint.config.js`) with per-surface globals
+  (main/Node, renderer/browser, dual-context UMD scripts, tests) and `npm run lint`
+  / `npm run lint:fix`. `no-undef` is intentionally off for the renderer monolith
+  (cross-`<script>` globals make ESLint's scope analysis unreliable there).
+- **CI** — the verify job now actually lints, and the syntax-check step
+  auto-discovers every first-party JS file (`*.js test/*.js scripts/*.js`) so the
+  list can no longer drift as new modules are added.
+- **WiFi Guard hardening** — MAC addresses from imported/shared config are now
+  validated (`validMacs`, colon/hyphen/bare-hex forms only) at the block/unblock
+  boundary, matching the existing `net.isIP` rigor for firewall IPs. Guards are
+  exported for unit testing.
+- **New tests** — `test/wifiGuard.test.js` covers the IP and MAC validation
+  guards; unit suite is now 29 assertions (was 24).
+- **Dead-code cleanup** — removed unused imports/locals across `alarm.js`,
+  `contentBlocker.js`, `calendarProviders.js`, `smartLights.js`, `focusSessions.js`,
+  `companion.js`, `overrideTax.js`, `accountability.js`, `calendar.js`,
+  `screenTime.js`, `ambientVisuals.js`, and `wifiGuard.js`.
+
 ## v10.3.0 — Ritual Mode + Intelligence (2026-06-28)
 
 ### New

@@ -28,10 +28,7 @@ function expandIcsLines(lines) {
 function convertFromIcsDateTime(value, propLine = '') {
   if (!value) return null;
   value = value.trim();
-  
-  // Check for TZID in property line (best-effort local time handling)
-  const tzidMatch = propLine.match(/TZID=([^:;]+)/);
-  
+
   // Date-only format: 20240115
   if (value.match(/^\d{8}$/)) {
     const year = parseInt(value.substring(0, 4), 10);

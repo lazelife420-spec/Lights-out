@@ -18,6 +18,10 @@ system-tune-backup-*/
 electron/assets/_ui_*.png
 visual_smoke/
 
+# Playwright (Electron e2e) artifacts
+electron/test-results/
+electron/playwright-report/
+
 # OS / editor cruft
 Thumbs.db
 .DS_Store
