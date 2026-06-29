@@ -30,6 +30,7 @@ const autopilot = require('./autopilot');
 const ritualMode = require('./ritualMode');
 const statsDashboard = require('./statsDashboard');
 const smartSuggestions = require('./smartSuggestions');
+const processGuardian = require('./processGuardian');
 
 const APP_ICON = path.join(__dirname, 'assets', 'icon.ico');
 const TRAY_ICON = path.join(__dirname, 'assets', 'tray-32.png');
@@ -72,6 +73,7 @@ async function ensureTrayIcons() {
 
 let mainWindow;
 let widgetWindow = null;
+let overlayWindow = null;
 let tray = null;
 let miniMode = false;
 let widgetMode = false;
@@ -432,6 +434,9 @@ function startTimer(input, legacyAction) {
 
   // Override Tax: reset session snooze count for this new run.
   overrideTax.resetSession();
+
+  // Reset multi-trigger smart lights so every trigger fires again this session.
+  smartLights.resetTriggers();
 
   // Override Tax: apply yesterday's debt (timer tightening from past snooze abuse).
   const debtSeconds = overrideTax.consumeDebt() * 60;
@@ -1631,6 +1636,20 @@ ipcMain.handle('discover-hue-bridge', async () => smartLights.findHueBridge());
 ipcMain.handle('register-hue-bridge', async (event, bridgeIp) => smartLights.registerHueBridge(bridgeIp));
 ipcMain.handle('get-hue-lights', async (event, bridgeIp, username) => smartLights.getHueLights(bridgeIp, username));
 ipcMain.handle('get-hue-groups', async (event, bridgeIp, username) => smartLights.getHueGroups(bridgeIp, username));
+
+// ── Smart-light multi-trigger CRUD ───────────────────────────────────────
+ipcMain.handle('get-smartlight-triggers', async () => smartLights.getTriggers());
+ipcMain.handle('add-smartlight-trigger', async (event, trigger) => {
+  if (!trigger || !trigger.id || !trigger.provider) return { ok: false, error: 'Invalid trigger' };
+  smartLights.addTrigger(trigger);
+  settingsStore.updateSection('smartLights', smartLights.getConfig());
+  return { ok: true };
+});
+ipcMain.handle('remove-smartlight-trigger', async (event, id) => {
+  smartLights.removeTrigger(id);
+  settingsStore.updateSection('smartLights', smartLights.getConfig());
+  return { ok: true };
+});
 
 // Profiles IPC handlers
 ipcMain.handle('profiles-get-all', async () => profiles.getAll());

@@ -902,6 +902,57 @@
               </div>
             </div>
 
+            <!-- ── Timed Triggers ─────────────────────────────────────────── -->
+            <div class="option-group" style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06)">
+              <label style="display:flex;justify-content:space-between;align-items:center">
+                <span>&#x23F0; Timed triggers</span>
+                <button type="button" id="btn-add-trigger" class="btn-small">+ Add</button>
+              </label>
+              <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Fire independent smart-home actions at specific countdown thresholds. e.g. turn off gaming lights at 30 min, dim ceiling at 20 min, kill TV at 10 min.</p>
+
+              <!-- Trigger list -->
+              <div id="trigger-list" style="margin-bottom:6px"></div>
+
+              <!-- Add/edit trigger form (hidden until +Add is clicked) -->
+              <div id="trigger-form" style="display:none;background:var(--bg-card);border-radius:8px;padding:12px;margin-top:8px">
+                <input type="hidden" id="trigger-edit-id">
+                <div style="display:flex;gap:8px;margin-bottom:8px">
+                  <input type="text" id="trigger-label" placeholder="e.g. Dim ceiling lights" style="flex:1;background:var(--bg);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;outline:none">
+                  <select id="trigger-at-min" style="background:var(--bg);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;outline:none;width:80px">
+                    <option value="1800">30 min</option>
+                    <option value="1200" selected>20 min</option>
+                    <option value="600">10 min</option>
+                    <option value="300">5 min</option>
+                    <option value="120">2 min</option>
+                    <option value="60">1 min</option>
+                    <option value="0">At end</option>
+                  </select>
+                </div>
+                <div style="display:flex;gap:8px;margin-bottom:8px">
+                  <select id="trigger-provider" style="flex:1;background:var(--bg);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;outline:none">
+                    <option value="hue">Philips Hue</option>
+                    <option value="http">HTTP Webhook</option>
+                    <option value="homeassistant">Home Assistant</option>
+                    <option value="ifttt">IFTTT</option>
+                    <option value="mqtt">MQTT</option>
+                  </select>
+                  <select id="trigger-action" style="flex:1;background:var(--bg);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;outline:none">
+                    <option value="off">Turn off</option>
+                    <option value="on">Turn on</option>
+                    <option value="dim">Dim to</option>
+                    <option value="warm">Warm shift</option>
+                  </select>
+                </div>
+                <div id="trigger-hue-opts" style="margin-bottom:8px">
+                  <input type="text" id="trigger-hue-group" placeholder="Hue group ID (optional)" style="width:100%;background:var(--bg);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;outline:none">
+                </div>
+                <div style="display:flex;gap:6px">
+                  <button type="button" id="btn-save-trigger" class="btn-small" style="background:var(--accent);color:#0b0e14;flex:1">Save trigger</button>
+                  <button type="button" id="btn-cancel-trigger" class="btn-small">Cancel</button>
+                </div>
+              </div>
+            </div>
+
             <div class="option-group lights-actions">
               <button type="button" id="btn-test-lights" class="btn-secondary">Test Connection</button>
               <span id="light-test-result"></span>
