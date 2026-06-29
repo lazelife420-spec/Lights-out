@@ -343,6 +343,31 @@ check('autopilot: settings UI elements in HTML', () => {
   assert(htmlSrc.includes('id="autopilot-override-time"'), 'autopilot-override-time missing');
 });
 
+// 16. Ritual Mode integration.
+check('ritual-mode: module exists and IPC registered', () => {
+  assert(mainSrc.includes("require('./ritualMode')"), 'ritualMode not required in main');
+  assertMatch(mainSrc, /ipcMain\.handle\('ritual-start'/, 'ritual-start IPC missing');
+  assertMatch(mainSrc, /ipcMain\.handle\('ritual-advance'/, 'ritual-advance IPC missing');
+  assertMatch(mainSrc, /ipcMain\.handle\('ritual-cancel'/, 'ritual-cancel IPC missing');
+});
+check('ritual-mode: preload exposes ritual API', () => {
+  assertMatch(preloadSrc, /ritualStart:/, 'preload ritualStart missing');
+  assertMatch(preloadSrc, /ritualAdvance:/, 'preload ritualAdvance missing');
+  assertMatch(preloadSrc, /onRitualStep:/, 'preload onRitualStep missing');
+});
+check('ritual-mode: UI overlay in HTML', () => {
+  assert(htmlSrc.includes('id="ritual-overlay"'), 'ritual-overlay missing');
+  assert(htmlSrc.includes('id="btn-ritual"'), 'btn-ritual missing');
+  assert(htmlSrc.includes('id="btn-ritual-next"'), 'btn-ritual-next missing');
+});
+
+// 17. Stats Dashboard.
+check('stats-dashboard: module and IPC', () => {
+  assert(mainSrc.includes("require('./statsDashboard')"), 'statsDashboard not required');
+  assertMatch(mainSrc, /ipcMain\.handle\('get-full-dashboard'/, 'get-full-dashboard IPC missing');
+  assertMatch(preloadSrc, /getFullDashboard:/, 'preload getFullDashboard missing');
+});
+
 // Cleanup.
 try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
 

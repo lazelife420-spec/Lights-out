@@ -27,6 +27,9 @@ const idleDetection = require('./idleDetection');
 const bedtimeReminder = require('./bedtimeReminder');
 const overrideTax = require('./overrideTax');
 const autopilot = require('./autopilot');
+const ritualMode = require('./ritualMode');
+const statsDashboard = require('./statsDashboard');
+const smartSuggestions = require('./smartSuggestions');
 
 const APP_ICON = path.join(__dirname, 'assets', 'icon.ico');
 const TRAY_ICON = path.join(__dirname, 'assets', 'tray-32.png');
@@ -960,6 +963,13 @@ function broadcastCompanionState() {
       sessionSnoozeCount: taxStats.sessionSnoozeCount,
       tomorrowDebt: taxStats.tomorrowDebt,
       nextSnoozeCost: overrideTax.assessSnoozeCost()
+    },
+    stats: {
+      sleepScore: streaks.getSleepScore(),
+      sleepDebt: sleepDebt.getDebtSummary(),
+      streak: (streaks.getSummary() || {}).streak || 0,
+      tomorrowDebt: taxStats.tomorrowDebt,
+      autopilotEnabled: (appSettings.autopilotEnabled === true)
     }
   });
 }
@@ -1544,6 +1554,39 @@ ipcMain.handle('enable-autopilot', async (e, enabled) => {
   return autopilot.getStatus();
 });
 
+// Ritual Mode IPC.
+ipcMain.handle('ritual-start', async (e, customSteps) => {
+  return ritualMode.startRitual(customSteps);
+});
+ipcMain.handle('ritual-advance', async () => {
+  return ritualMode.advanceStep(false);
+});
+ipcMain.handle('ritual-skip', async () => {
+  return ritualMode.skipStep();
+});
+ipcMain.handle('ritual-cancel', async () => {
+  return ritualMode.cancelRitual();
+});
+ipcMain.handle('ritual-state', async () => {
+  return ritualMode.getState();
+});
+ipcMain.handle('ritual-config', async () => {
+  return ritualMode.getConfig();
+});
+ipcMain.handle('ritual-update-config', async (e, updates) => {
+  return ritualMode.updateConfig(updates);
+});
+
+// Stats Dashboard IPC.
+ipcMain.handle('get-full-dashboard', async () => {
+  return statsDashboard.getFullDashboard();
+});
+
+// Smart Suggestions IPC.
+ipcMain.handle('get-suggestions', async () => {
+  return smartSuggestions.getSuggestions();
+});
+
 ipcMain.handle('get-idle-seconds', async () => {
   try { return await idleDetection.getIdleSeconds(); } catch { return 0; }
 });
@@ -2038,6 +2081,37 @@ app.whenReady().then(async () => {
 
   // Autopilot Bedtime: schedule learned bedtime auto-start.
   autopilot.schedule(startTimer, mainWindow);
+
+  // Ritual Mode: forward steps to renderer and execute side effects.
+  ritualMode.onStep((step, state) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('ritual-step', { step, state });
+    }
+    // Execute step side effects.
+    if (step.id === 'block') {
+      const cbConfig = settingsStore.getSection('contentBlocker');
+      if (cbConfig && cbConfig.enabled) {
+        const sites = contentBlocker.DEFAULT_BLOCKLIST;
+        contentBlocker.blockSites(sites).catch(() => {});
+      }
+    } else if (step.id === 'dim') {
+      const appSettings = settingsStore.getSection('app') || {};
+      if (appSettings.nightLightOnDim) applyDimPhase(0, 0);
+    } else if (step.id === 'timer') {
+      const config = ritualMode.getConfig();
+      startTimer({ durationSeconds: config.timerDuration, action: config.timerAction, source: 'ritual' });
+    } else if (step.id === 'lights') {
+      const lightsConfig = settingsStore.getSection('smartLights');
+      if (lightsConfig && lightsConfig.enabled) {
+        smartLights.applyScene('night').catch(() => {});
+      }
+    }
+  });
+  ritualMode.onComplete((state) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('ritual-complete', state);
+    }
+  });
 
   // Calendar Auto-Start: check for upcoming events and auto-start timer.
   setInterval(checkCalendarAutoStart, 60000);

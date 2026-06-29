@@ -21,6 +21,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getLearnedBedtime: () => ipcRenderer.invoke('get-learned-bedtime'),
   enableAutopilot: (enabled) => ipcRenderer.invoke('enable-autopilot', enabled),
   
+  // Ritual Mode
+  ritualStart: (steps) => ipcRenderer.invoke('ritual-start', steps),
+  ritualAdvance: () => ipcRenderer.invoke('ritual-advance'),
+  ritualSkip: () => ipcRenderer.invoke('ritual-skip'),
+  ritualCancel: () => ipcRenderer.invoke('ritual-cancel'),
+  ritualState: () => ipcRenderer.invoke('ritual-state'),
+  ritualConfig: () => ipcRenderer.invoke('ritual-config'),
+  ritualUpdateConfig: (u) => ipcRenderer.invoke('ritual-update-config', u),
+  onRitualStep: (cb) => ipcRenderer.on('ritual-step', (_, d) => cb(d)),
+  onRitualComplete: (cb) => ipcRenderer.on('ritual-complete', (_, d) => cb(d)),
+  
+  // Stats Dashboard
+  getFullDashboard: () => ipcRenderer.invoke('get-full-dashboard'),
+  getSuggestions: () => ipcRenderer.invoke('get-suggestions'),
+  
+  // Autopilot events
+  onAutopilotWarning: (cb) => ipcRenderer.on('autopilot-warning', (_, d) => cb(d)),
+  onAutopilotStarted: (cb) => ipcRenderer.on('autopilot-started', (_, d) => cb(d)),
+  
   // System info
   getSystemInfo: () => ipcRenderer.invoke('get-system-info'),
   getAppSettings: () => ipcRenderer.invoke('get-app-settings'),

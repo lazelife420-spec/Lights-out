@@ -205,6 +205,25 @@
       </div>
     </div>
 
+    <!-- Stats Summary (phone view) -->
+    <div id="companion-stats" style="display:none;padding:12px 16px;margin-top:8px;border-radius:12px;background:var(--card,rgba(255,255,255,0.04))">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:11px;color:var(--muted,#999);font-weight:600">TONIGHT</span>
+        <span id="comp-autopilot-badge" style="font-size:9px;padding:2px 8px;border-radius:10px;background:rgba(91,140,255,0.12);color:#5b8cff;display:none">Autopilot ON</span>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center">
+        <div style="text-align:center">
+          <div id="comp-score" style="font-size:24px;font-weight:700;color:#fff">--</div>
+          <div id="comp-score-label" style="font-size:9px;color:var(--muted,#999)">Sleep Score</div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:4px">
+          <div style="display:flex;justify-content:space-between;font-size:10px"><span style="color:var(--muted,#999)">Debt</span><span id="comp-debt" style="color:#ff9800">--</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:10px"><span style="color:var(--muted,#999)">Streak</span><span id="comp-streak" style="color:#4caf50">--</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:10px"><span style="color:var(--muted,#999)">Tax debt</span><span id="comp-tax-debt" style="color:#ff6b6b">--</span></div>
+        </div>
+      </div>
+    </div>
+
     <div class="disconnected" id="disconnected" style="display:none">
       Not connected to desktop app
       <br><button class="pair-reset" id="pair-reset">Enter pairing code</button>
@@ -362,6 +381,35 @@
 
       if (data.type === 'streaks') {
         if (data.streak > 0) { streakSection.style.display = ''; streakCount.textContent = data.streak; }
+      }
+
+      // Stats summary (delivered with timer updates).
+      if (data.stats) {
+        const statsEl = document.getElementById('companion-stats');
+        if (statsEl) statsEl.style.display = '';
+        const score = data.stats.sleepScore;
+        if (score && score.score !== null) {
+          const el = document.getElementById('comp-score');
+          const lbl = document.getElementById('comp-score-label');
+          if (el) el.textContent = score.score;
+          if (lbl) lbl.textContent = score.label || 'Sleep Score';
+        }
+        if (data.stats.sleepDebt) {
+          const el = document.getElementById('comp-debt');
+          if (el) el.textContent = `${data.stats.sleepDebt.netDebt || 0}h`;
+        }
+        if (data.stats.streak !== undefined) {
+          const el = document.getElementById('comp-streak');
+          if (el) el.textContent = `${data.stats.streak} nights`;
+        }
+        if (data.stats.tomorrowDebt !== undefined) {
+          const el = document.getElementById('comp-tax-debt');
+          if (el) el.textContent = `${data.stats.tomorrowDebt}m`;
+        }
+        if (data.stats.autopilotEnabled) {
+          const badge = document.getElementById('comp-autopilot-badge');
+          if (badge) badge.style.display = '';
+        }
       }
     }
 

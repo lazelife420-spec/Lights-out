@@ -1,5 +1,28 @@
 # Changelog
 
+## v10.3.0 — Ritual Mode + Intelligence (2026-06-28)
+
+### New
+- **Ritual Mode** — guided bedtime ritual chains multiple systems together:
+  breathing → content block → dim → timer → smart lights. Each step auto-advances
+  or awaits acknowledgment. Fully skippable and configurable. "Begin Ritual" button
+  on the main lobby.
+- **Stats Dashboard** (`statsDashboard.js`) — single IPC that aggregates sleep score,
+  debt, override history, streak, screen time, and recent receipts for the STATS panel
+- **Smart Suggestions** (`smartSuggestions.js`) — analyzes sleep debt, override history,
+  streak patterns to recommend bedtime adjustments and timer durations
+- **Notification Center** — in-app notification feed with badge counter. Bell button in
+  footer opens a scrollable drawer with all recent notifications (timestamped, colored by
+  type). Notifications auto-accumulate from all `notify()` calls.
+- **Companion stats view** — phone UI now shows sleep score, debt, streak, override tax
+  debt, and autopilot badge in a dedicated section
+- **Companion full stats broadcast** — state updates now include aggregated stats payload
+
+### Internal
+- New modules: `ritualMode.js`, `statsDashboard.js`, `smartSuggestions.js`
+- Smoke suite: 72/72 (+4 over v10.2.0)
+- Build files list updated for all new modules
+
 ## v10.2.0 — Override Tax + Autopilot (2026-06-28)
 
 ### New

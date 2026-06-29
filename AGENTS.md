@@ -36,7 +36,7 @@ As of 2026-06-24, the important behavior is:
 - the explicitly named force-shutdown batch file is still the only obvious "hard stop" shortcut
 - "Run at login" now means "start minimized and idle"
 - login startup should never silently imply force shutdown
-- the primary shipping app is the Electron line, last tagged release is `v10.2.0` (Override Tax + Autopilot); `main` is at the tagged commit
+- the primary shipping app is the Electron line, last tagged release is `v10.3.0` (Ritual Mode + Intelligence); `main` is at the tagged commit
 - PowerShell remains present as a fallback runtime and backend integration layer, not the main feature lane
 - `SleepTimer.exe` was rebuilt after the login-startup behavior change
 - Electron build packaging succeeds with `npm run build`

@@ -496,6 +496,18 @@ const els = {
   autopilotSample: document.getElementById('autopilot-sample'),
   autopilotOverrideTime: document.getElementById('autopilot-override-time'),
 
+  // Ritual Mode
+  ritualOverlay: document.getElementById('ritual-overlay'),
+  ritualStepIcon: document.getElementById('ritual-step-icon'),
+  ritualStepTitle: document.getElementById('ritual-step-title'),
+  ritualStepDesc: document.getElementById('ritual-step-desc'),
+  ritualProgress: document.getElementById('ritual-progress'),
+  ritualStepContent: document.getElementById('ritual-step-content'),
+  btnRitualSkip: document.getElementById('btn-ritual-skip'),
+  btnRitualNext: document.getElementById('btn-ritual-next'),
+  btnRitualCancel: document.getElementById('btn-ritual-cancel'),
+  btnRitual: document.getElementById('btn-ritual'),
+
   // Guided Breathing
   breathingOverlay: document.getElementById('breathing-overlay'),
   breathingCircle: document.getElementById('breathing-circle'),
@@ -1002,8 +1014,69 @@ function showToast(message, type = 'info', duration = 3000) {
   }, duration);
 }
 
+const notificationFeed = [];
+const MAX_NOTIFICATIONS = 50;
+
 function notify(message, type = 'info') {
   showToast(message, type);
+  notificationFeed.unshift({ message, type, time: new Date().toISOString() });
+  if (notificationFeed.length > MAX_NOTIFICATIONS) notificationFeed.length = MAX_NOTIFICATIONS;
+  renderNotificationBadge();
+}
+
+function renderNotificationBadge() {
+  const badge = document.getElementById('notif-badge');
+  const unread = notificationFeed.filter(n => !n.read).length;
+  if (badge) {
+    badge.textContent = unread > 9 ? '9+' : unread || '';
+    badge.style.display = unread ? '' : 'none';
+  }
+}
+
+function renderNotificationFeed() {
+  const list = document.getElementById('notif-list');
+  if (!list) return;
+  if (!notificationFeed.length) {
+    list.innerHTML = '<p style="text-align:center;color:var(--text-muted);font-size:11px;padding:20px 0">No notifications yet.</p>';
+    return;
+  }
+  list.innerHTML = notificationFeed.slice(0, 30).map(n => {
+    const time = new Date(n.time);
+    const ago = formatTimeAgo(time);
+    const typeColor = { success: '#4caf50', warning: '#ff9800', error: '#ff4d4d', info: 'var(--text-muted)' }[n.type] || 'var(--text-muted)';
+    return `<div class="notif-item" style="padding:8px 10px;border-bottom:1px solid var(--bg-card);display:flex;align-items:flex-start;gap:8px">
+      <span style="width:6px;height:6px;border-radius:50%;background:${typeColor};margin-top:5px;flex-shrink:0"></span>
+      <div style="flex:1;min-width:0">
+        <p style="margin:0;font-size:11px;color:var(--text-primary);word-break:break-word">${escapeHtml(n.message)}</p>
+        <span style="font-size:9px;color:var(--text-muted)">${ago}</span>
+      </div>
+    </div>`;
+  }).join('');
+  // Mark all as read.
+  notificationFeed.forEach(n => n.read = true);
+  renderNotificationBadge();
+}
+
+function formatTimeAgo(date) {
+  const sec = Math.round((Date.now() - date.getTime()) / 1000);
+  if (sec < 60) return 'just now';
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+  return `${Math.floor(sec / 86400)}d ago`;
+}
+
+// Notification drawer open/close.
+const btnNotif = document.getElementById('btn-notif');
+const notifDrawer = document.getElementById('notif-drawer');
+const notifDrawerClose = document.getElementById('notif-drawer-close');
+if (btnNotif && notifDrawer) {
+  btnNotif.addEventListener('click', () => {
+    notifDrawer.style.display = notifDrawer.style.display === 'none' ? '' : 'none';
+    if (notifDrawer.style.display !== 'none') renderNotificationFeed();
+  });
+}
+if (notifDrawerClose && notifDrawer) {
+  notifDrawerClose.addEventListener('click', () => { notifDrawer.style.display = 'none'; });
 }
 
 function formatIdleClockTime(now, compact = false) {
@@ -2096,6 +2169,92 @@ async function refreshAutopilotStatus() {
   } catch {}
 }
 refreshAutopilotStatus();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ritual Mode: guided bedtime ritual flow
+// ─────────────────────────────────────────────────────────────────────────────
+
+const RITUAL_ICONS = {
+  breathe: '\u{1F4A8}', block: '\u{1F6AB}', dim: '\u{1F319}',
+  timer: '\u{23F0}', lights: '\u{1F4A1}'
+};
+const RITUAL_DESCS = {
+  breathe: 'Take a moment to breathe deeply and relax.',
+  block: 'Blocking distracting websites and apps.',
+  dim: 'Dimming your environment for sleep.',
+  timer: 'Starting your wind-down countdown.',
+  lights: 'Setting lights to night mode.'
+};
+
+if (els.btnRitual) {
+  els.btnRitual.addEventListener('click', async () => {
+    const result = await api.ritualStart?.();
+    if (result?.active) showRitualOverlay(result);
+  });
+}
+
+if (els.btnRitualNext) {
+  els.btnRitualNext.addEventListener('click', async () => {
+    const state = await api.ritualAdvance?.();
+    if (state?.active) updateRitualOverlay(state);
+    else hideRitualOverlay();
+  });
+}
+
+if (els.btnRitualSkip) {
+  els.btnRitualSkip.addEventListener('click', async () => {
+    const state = await api.ritualSkip?.();
+    if (state?.active) updateRitualOverlay(state);
+    else hideRitualOverlay();
+  });
+}
+
+if (els.btnRitualCancel) {
+  els.btnRitualCancel.addEventListener('click', async () => {
+    await api.ritualCancel?.();
+    hideRitualOverlay();
+  });
+}
+
+api.onRitualStep?.((data) => {
+  if (data?.state?.active) updateRitualOverlay(data.state);
+});
+
+api.onRitualComplete?.(() => {
+  hideRitualOverlay();
+  notify('Bedtime ritual complete. Sweet dreams.', 'success');
+});
+
+function showRitualOverlay(state) {
+  if (!els.ritualOverlay) return;
+  els.ritualOverlay.style.display = '';
+  updateRitualOverlay(state);
+}
+
+function updateRitualOverlay(state) {
+  if (!els.ritualOverlay || !state) return;
+  const step = state.currentStepInfo;
+  if (!step) { hideRitualOverlay(); return; }
+
+  els.ritualStepIcon.textContent = RITUAL_ICONS[step.id] || '\u{1F319}';
+  els.ritualStepTitle.textContent = step.label;
+  els.ritualStepDesc.textContent = RITUAL_DESCS[step.id] || '';
+  els.btnRitualSkip.style.display = step.skippable ? '' : 'none';
+  els.btnRitualNext.textContent = step.auto ? 'Done' : 'Next';
+
+  // Progress dots.
+  if (els.ritualProgress) {
+    els.ritualProgress.innerHTML = Array.from({ length: state.totalSteps }, (_, i) => {
+      const done = i < state.currentStep;
+      const active = i === state.currentStep;
+      return `<span style="width:8px;height:8px;border-radius:50%;background:${done ? 'var(--accent)' : active ? '#fff' : 'var(--bg-card)'};border:1px solid ${active ? 'var(--accent)' : 'transparent'}"></span>`;
+    }).join('');
+  }
+}
+
+function hideRitualOverlay() {
+  if (els.ritualOverlay) els.ritualOverlay.style.display = 'none';
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Guided Breathing: 4-7-8 technique with ring pulse
