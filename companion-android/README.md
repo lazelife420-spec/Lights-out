@@ -71,10 +71,18 @@ ADB, just hit Run and skip the manual install.)
 ## First run
 
 1. Open **Lights Out** on the phone.
-2. In the desktop app's Remote Control settings, **scan the QR** with your phone
-   camera to get the `http://…:58732/?t=…` link, then **paste it** into the app and
-   tap **Connect**. (Or type `PC-IP:58732/?t=TOKEN`.)
-3. To repoint at a different PC later: **⋮ menu → Change PC / URL**.
+2. In the desktop app, enable **Remote Control** (it shows a pairing QR).
+3. Tap **Scan QR code** and point the camera at it — the app pairs and connects
+   automatically. (Or paste/type the `http://PC-IP:58732/?t=TOKEN` link and tap
+   **Connect**.)
+4. To repoint at a different PC later: **⋮ menu → Change PC / URL**.
+
+QR scanning uses CameraX + on-device ML Kit barcode scanning (no network, no
+Play Services dependency). Camera permission is requested on first scan.
+
+> Note: ML Kit's bundled native libraries aren't 16 KB-page aligned, so on
+> Android 15 a debuggable build shows a one-time "App Compatibility" warning. It
+> is harmless on current devices and does not appear in release builds.
 
 ## Debugging
 

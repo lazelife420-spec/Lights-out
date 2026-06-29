@@ -70,8 +70,32 @@
                 android:textSize="14sp"
                 android:gravity="center"
                 android:lineSpacingMultiplier="1.4"
-                android:layout_marginBottom="28dp"
+                android:layout_marginBottom="24dp"
                 android:paddingHorizontal="6dp" />
+
+            <Button
+                android:id="@+id/scan_button"
+                android:layout_width="match_parent"
+                android:layout_height="54dp"
+                android:background="@drawable/btn_accent"
+                android:text="@string/scan_qr"
+                android:textColor="#0B0E14"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.04"
+                android:stateListAnimator="@null"
+                android:textAllCaps="false"
+                android:drawableStart="@drawable/ic_scan"
+                android:drawablePadding="10dp"
+                android:paddingHorizontal="20dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/or_paste"
+                android:textColor="@color/text_dim"
+                android:textSize="12sp"
+                android:layout_marginVertical="16dp" />
 
             <EditText
                 android:id="@+id/url_input"
@@ -88,18 +112,17 @@
                 android:paddingHorizontal="16dp"
                 android:paddingVertical="15dp"
                 android:textSize="15sp"
-                android:layout_marginBottom="14dp" />
+                android:layout_marginBottom="12dp" />
 
             <Button
                 android:id="@+id/connect_button"
                 android:layout_width="match_parent"
-                android:layout_height="54dp"
-                android:background="@drawable/btn_accent"
+                android:layout_height="50dp"
+                android:background="@drawable/bg_input"
                 android:text="@string/connect"
-                android:textColor="#0B0E14"
-                android:textSize="15sp"
+                android:textColor="@color/accent"
+                android:textSize="14sp"
                 android:textStyle="bold"
-                android:letterSpacing="0.04"
                 android:stateListAnimator="@null"
                 android:textAllCaps="false" />
 

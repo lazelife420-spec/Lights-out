@@ -1,6 +1,9 @@
 package com.lightsout.companion
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -15,7 +18,9 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import java.net.URL
 
 /**
@@ -36,6 +41,28 @@ class MainActivity : AppCompatActivity() {
 
     private val prefs by lazy { getSharedPreferences("lightsout", MODE_PRIVATE) }
 
+    // Scanner returns the pairing URL; persist it and connect.
+    private val scanLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            val url = normalizeUrl(result.data?.getStringExtra(ScannerActivity.EXTRA_URL))
+            if (url != null) {
+                prefs.edit().putString(KEY_URL, url).apply()
+                showWeb(url)
+            } else {
+                Toast.makeText(this, R.string.invalid_url, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private val cameraPermLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) launchScanner()
+        else Toast.makeText(this, R.string.camera_needed, Toast.LENGTH_LONG).show()
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,6 +72,17 @@ class MainActivity : AppCompatActivity() {
         setup = findViewById(R.id.setup)
         urlInput = findViewById(R.id.url_input)
         val connectBtn = findViewById<Button>(R.id.connect_button)
+        val scanBtn = findViewById<Button>(R.id.scan_button)
+
+        scanBtn.setOnClickListener {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                == PackageManager.PERMISSION_GRANTED
+            ) {
+                launchScanner()
+            } else {
+                cameraPermLauncher.launch(Manifest.permission.CAMERA)
+            }
+        }
 
         with(webView.settings) {
             javaScriptEnabled = true
@@ -89,6 +127,10 @@ class MainActivity : AppCompatActivity() {
 
         val saved = prefs.getString(KEY_URL, null)
         if (saved != null) showWeb(saved) else showSetup(null)
+    }
+
+    private fun launchScanner() {
+        scanLauncher.launch(Intent(this, ScannerActivity::class.java))
     }
 
     private fun showWeb(url: String) {
