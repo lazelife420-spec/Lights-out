@@ -34,7 +34,7 @@ app.whenReady().then(async () => {
       document.getElementById('action-bar-running').style.display = '';
       document.getElementById('timer-main').textContent = '18:42';
       document.getElementById('timer-label').textContent = 'until shutdown';
-      document.getElementById('timer-name').textContent = 'Witching Hour';
+      document.getElementById('timer-name').textContent = 'Last Call';
       // Show status pill as "Winding Down"
       var pill = document.querySelector('.status-pill');
       if (pill) { pill.textContent = 'Winding Down'; pill.className = 'status-pill phase-dim'; }

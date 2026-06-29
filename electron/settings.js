@@ -84,12 +84,15 @@ const DEFAULTS = {
     focusBlocklist: [],
     onboarded: false,
     bedtime: '22:30',
-    timerName: 'Witching Hour',
+    timerName: 'Last Call',
     bedtimeReminderEnabled: true,
     bedtimeReminderMinutes: 15,
     idleDetectionEnabled: false,
     idleThresholdSeconds: 300,
     calendarAutoStart: false,
+    // Autopilot Bedtime: learns your pattern and auto-starts the timer. OFF by default.
+    autopilotEnabled: false,
+    autopilotBedtime: null,   // null = use learned bedtime or configured bedtime
     // Wind-down system actions. Default OFF so the app never touches the OS unasked.
     nightLightOnDim: false,
     pauseMediaOnDim: false,

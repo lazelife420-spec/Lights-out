@@ -101,7 +101,7 @@ async function executeOverride(reason, timerState) {
     if (accConfig.enabled) {
       await accountability.notifyPartner('OVERRIDE', {
         config: accConfig,
-        timerName: settingsStore.getSection('app')?.timerName || 'Witching Hour',
+        timerName: settingsStore.getSection('app')?.timerName || 'Last Call',
         remainingSeconds: timerState?.remainingSeconds,
         phase: timerState?.phase
       });

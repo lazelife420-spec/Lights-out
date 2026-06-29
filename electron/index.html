@@ -287,7 +287,7 @@
             <circle class="ring-progress" cx="100" cy="100" r="90"/>
           </svg>
           <div class="timer-display">
-            <div class="timer-name" id="timer-name" contenteditable="true" spellcheck="false" data-placeholder="Name this session">Witching Hour</div>
+            <div class="timer-name" id="timer-name" contenteditable="true" spellcheck="false" data-placeholder="Name this session">Last Call</div>
             <svg class="analog-clock" id="analog-clock" viewBox="0 0 100 100" style="display:none" aria-hidden="true">
               <circle class="analog-rim" cx="50" cy="50" r="46.5"/>
               <g class="analog-ticks" id="analog-ticks"></g>
@@ -1489,6 +1489,26 @@
       <div class="override-actions">
         <button class="btn-danger" id="btn-override-confirm">Override (I accept the consequences)</button>
         <button class="btn-primary" id="btn-override-cancel">Never mind, wind down</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Override Tax: Snooze Escalation Modal -->
+  <div class="modal" id="snooze-tax-modal">
+    <div class="modal-content" style="max-width:340px">
+      <div style="text-align:center;margin-bottom:12px">
+        <span style="font-size:28px">&#x23F0;</span>
+        <h2 id="snooze-tax-title" style="font-size:15px;margin:6px 0 4px">Snooze has a cost</h2>
+        <p style="font-size:10px;color:var(--text-muted);margin:0">You can still snooze, but it won't be free.</p>
+      </div>
+      <div id="snooze-tax-consequences" style="margin-bottom:12px"></div>
+      <div id="snooze-tax-reason-wrap" style="display:none;margin-bottom:12px">
+        <label style="font-size:10px;color:var(--text-secondary);display:block;margin-bottom:4px">Why are you staying up?</label>
+        <input type="text" id="snooze-tax-reason" placeholder="Type a reason..." style="width:100%;font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--bg-card);background:var(--bg-body);color:var(--text-primary)">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-danger" id="btn-snooze-tax-confirm" style="flex:1;font-size:11px">Snooze anyway</button>
+        <button class="btn-primary" id="btn-snooze-tax-cancel" style="flex:1;font-size:11px">Go to sleep</button>
       </div>
     </div>
   </div>
