@@ -1457,7 +1457,14 @@ ipcMain.handle('get-override-consequences', async () => {
   return emergencyOverride.getOverrideConsequences(timerState);
 });
 ipcMain.handle('execute-override', async (e, reason) => {
-  return emergencyOverride.executeOverride(reason, timerState);
+  const result = await emergencyOverride.executeOverride(reason, timerState);
+  // Overriding means "stay up" — authoritatively stop the timer and its pending
+  // power action here in the main process, rather than depending on the renderer
+  // to also call cancel. A snapshot of the pre-cancel state is returned so the UI
+  // can still show what was overridden.
+  const overridden = { ...timerState };
+  if (timerState.running || timerState.paused) cancelTimer();
+  return { ...result, timerState: overridden };
 });
 
 // Run Receipts IPC.

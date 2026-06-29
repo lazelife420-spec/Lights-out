@@ -10,6 +10,27 @@ const HOSTS_PATH = 'C:\\Windows\\System32\\drivers\\etc\\hosts';
 const MARKER_START = '# === LIGHTS OUT BLOCK START ===';
 const MARKER_END = '# === LIGHTS OUT BLOCK END ===';
 
+// Each hosts entry is a single label-dotted hostname, optionally with a port-free
+// leading wildcard the OS hosts file does not support anyway. Blocklist entries can
+// arrive from imported config or the renderer, so anything that is not a clean
+// hostname (whitespace, newlines, IPs, shell/hosts-file metacharacters) is dropped
+// before it can reach the hosts file or the PowerShell command string.
+const HOSTNAME_RE = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
+
+function sanitizeSites(list) {
+  if (!Array.isArray(list)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const raw of list) {
+    if (typeof raw !== 'string') continue;
+    const site = raw.trim().toLowerCase();
+    if (!HOSTNAME_RE.test(site) || seen.has(site)) continue;
+    seen.add(site);
+    out.push(site);
+  }
+  return out;
+}
+
 // Default blocklist: social media, video, and doom-scrolling sites.
 const DEFAULT_BLOCKLIST = [
   'tiktok.com', 'www.tiktok.com',
@@ -62,7 +83,11 @@ async function writeHosts(content) {
 // Block all sites in the blocklist by adding entries to the hosts file.
 // Preserves any existing non-Lights-Out entries.
 async function blockSites(blocklist) {
-  const sites = blocklist && blocklist.length > 0 ? blocklist : DEFAULT_BLOCKLIST;
+  // Validate every entry up front so a crafted hostname (e.g. one containing a
+  // newline + arbitrary IP mapping) can never be written into the hosts file,
+  // including via the direct-write fallback in writeHosts.
+  const requested = sanitizeSites(blocklist);
+  const sites = requested.length > 0 ? requested : DEFAULT_BLOCKLIST;
   let content = readHosts();
 
   // Remove any existing Lights Out block section first.
@@ -143,5 +168,7 @@ module.exports = {
   unblockSites,
   isBlocked,
   getActiveBlocklist,
-  DEFAULT_BLOCKLIST
+  DEFAULT_BLOCKLIST,
+  // Exposed for unit testing of the hosts-injection guard.
+  __sanitizeSites: sanitizeSites
 };

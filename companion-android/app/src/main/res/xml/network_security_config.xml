@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- The desktop companion is served over plain HTTP on the local network, so
+         cleartext traffic must be permitted. Connections stay on your LAN. -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
