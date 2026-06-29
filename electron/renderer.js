@@ -303,6 +303,18 @@ const els = {
   httpTemplate: document.getElementById('http-template'),
   btnTestLights: document.getElementById('btn-test-lights'),
   lightTestResult: document.getElementById('light-test-result'),
+  // Multi-trigger elements
+  triggerList: document.getElementById('trigger-list'),
+  triggerForm: document.getElementById('trigger-form'),
+  triggerEditId: document.getElementById('trigger-edit-id'),
+  triggerLabel: document.getElementById('trigger-label'),
+  triggerAtMin: document.getElementById('trigger-at-min'),
+  triggerProvider: document.getElementById('trigger-provider'),
+  triggerAction: document.getElementById('trigger-action'),
+  triggerHueGroup: document.getElementById('trigger-hue-group'),
+  btnAddTrigger: document.getElementById('btn-add-trigger'),
+  btnSaveTrigger: document.getElementById('btn-save-trigger'),
+  btnCancelTrigger: document.getElementById('btn-cancel-trigger'),
   // Profiles elements
   profilesGrid: document.getElementById('profiles-grid'),
   btnManageProfiles: document.getElementById('btn-manage-profiles'),
@@ -3150,6 +3162,91 @@ function renderReceiptsModal(receipts, stats) {
       }
     });
   }
+
+  // ── Multi-trigger UI handlers ────────────────────────────────────────────
+  let triggerFormVisible = false;
+
+  function loadTriggerList() {
+    api.getSmartLightTriggers().then(triggers => {
+      if (!els.triggerList) return;
+      if (!triggers || !triggers.length) {
+        els.triggerList.innerHTML = '<p style="font-size:11px;color:var(--text-muted);text-align:center;padding:6px 0">No triggers yet. Add one above.</p>';
+        return;
+      }
+      els.triggerList.innerHTML = triggers.map(t => {
+        const minLabel = t.atSecondsRemaining > 0 ? `${Math.round(t.atSecondsRemaining / 60)} min` : 'At end';
+        const actionLabel = { off: 'Turn off', on: 'Turn on', dim: 'Dim', warm: 'Warm', scene: 'Scene' }[t.action] || t.action;
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;margin-bottom:4px;background:rgba(255,255,255,0.03);border-radius:6px;font-size:11px">
+          <span style="color:var(--text)"><strong style="color:var(--accent)">${minLabel}</strong> &middot; ${escapeHtml(t.label || t.id)} &middot; <span style="color:var(--text-muted)">${actionLabel} (${t.provider})</span></span>
+          <span style="display:flex;gap:6px">
+            <button type="button" class="trigger-edit" data-id="${t.id}" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:11px;text-decoration:underline">Edit</button>
+            <button type="button" class="trigger-remove" data-id="${t.id}" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:11px;text-decoration:underline">Remove</button>
+          </span>
+        </div>`;
+      }).join('');
+      // Wire edit/remove buttons
+      els.triggerList.querySelectorAll('.trigger-edit').forEach(btn => {
+        btn.addEventListener('click', () => editTrigger(btn.dataset.id, triggers.find(t => t.id === btn.dataset.id)));
+      });
+      els.triggerList.querySelectorAll('.trigger-remove').forEach(btn => {
+        btn.addEventListener('click', () => removeTrigger(btn.dataset.id));
+      });
+    }).catch(() => {});
+  }
+
+  function editTrigger(id, t) {
+    if (!t) return;
+    els.triggerEditId.value = id;
+    els.triggerLabel.value = t.label || '';
+    els.triggerAtMin.value = String(t.atSecondsRemaining || 0);
+    els.triggerProvider.value = t.provider || 'hue';
+    els.triggerAction.value = t.action || 'off';
+    els.triggerHueGroup.value = t.hueGroupId || '';
+    els.triggerForm.style.display = '';
+    triggerFormVisible = true;
+  }
+
+  async function removeTrigger(id) {
+    await api.removeSmartLightTrigger(id);
+    loadTriggerList();
+  }
+
+  function hideTriggerForm() {
+    els.triggerEditId.value = '';
+    els.triggerForm.style.display = 'none';
+    triggerFormVisible = false;
+  }
+
+  els.btnAddTrigger?.addEventListener('click', () => {
+    els.triggerEditId.value = '';
+    els.triggerLabel.value = '';
+    els.triggerAtMin.value = '1200';
+    els.triggerProvider.value = 'hue';
+    els.triggerAction.value = 'off';
+    els.triggerHueGroup.value = '';
+    els.triggerForm.style.display = '';
+    triggerFormVisible = true;
+    try { els.triggerLabel.focus(); } catch {}
+  });
+
+  els.btnCancelTrigger?.addEventListener('click', hideTriggerForm);
+
+  els.btnSaveTrigger?.addEventListener('click', async () => {
+    const id = els.triggerEditId.value || crypto.randomUUID();
+    const trigger = {
+      id,
+      label: els.triggerLabel.value.trim() || 'Unnamed trigger',
+      atSecondsRemaining: Number(els.triggerAtMin.value) || 0,
+      provider: els.triggerProvider.value,
+      action: els.triggerAction.value,
+      hueGroupId: els.triggerHueGroup.value.trim() || undefined
+    };
+    await api.addSmartLightTrigger(trigger);
+    hideTriggerForm();
+    loadTriggerList();
+  });
+
+  loadTriggerList();
 
   // Profiles event handlers
   if (els.btnManageProfiles) {

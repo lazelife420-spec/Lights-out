@@ -34,6 +34,10 @@ let config = {
   // IFTTT settings
   iftttWebhookKey: '',
   iftttEventName: 'lights_out'
+  // Multi-trigger: each fires once at a specific remaining-seconds threshold.
+  // Example: { id:'gaming-off', label:'Kill gaming lights', atSecondsRemaining:1800,
+  //            provider:'hue', hueGroupId:'2', action:'off' }
+, triggers: []
 };
 
 // Runtime state
@@ -41,7 +45,8 @@ let state = {
   dimStarted: false,
   originalLightState: null,
   dimStartTime: null,
-  dimDurationMs: 0
+  dimDurationMs: 0,
+  firedTriggerIds: new Set()
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -495,7 +500,8 @@ function loadConfig(newConfig) {
     httpUrl: newConfig.httpUrl || config.httpUrl,
     httpMethod: newConfig.httpMethod || config.httpMethod,
     httpHeaders: newConfig.httpHeaders || config.httpHeaders,
-    httpBodyTemplate: newConfig.httpBodyTemplate || config.httpBodyTemplate
+    httpBodyTemplate: newConfig.httpBodyTemplate || config.httpBodyTemplate,
+    triggers: Array.isArray(newConfig.triggers) ? newConfig.triggers : config.triggers
   };
 }
 
@@ -505,6 +511,146 @@ function getConfig() {
 
 function shouldStartDim(remainingSeconds) {
   return config.enabled && !state.dimStarted && remainingSeconds <= config.dimMinutes * 60;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Multi-trigger engine — fire independent smart-home actions at configurable
+// countdown thresholds. Each trigger fires once per timer session.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Check all unfired triggers against the current remaining seconds.
+ * Call this every tick. Returns an array of trigger ids that just fired.
+ */
+function processTriggers(remainingSeconds) {
+  if (!config.enabled || !Array.isArray(config.triggers)) return [];
+  const fired = [];
+  for (const t of config.triggers) {
+    if (!t || !t.id || state.firedTriggerIds.has(t.id)) continue;
+    if (remainingSeconds > (t.atSecondsRemaining || 0)) continue;
+    state.firedTriggerIds.add(t.id);
+    fireTrigger(t);
+    fired.push(t.id);
+  }
+  return fired;
+}
+
+function fireTrigger(t) {
+  try {
+    switch (t.provider) {
+      case 'hue':
+        return fireHueTrigger(t);
+      case 'http':
+        return fireHttpTrigger(t);
+      case 'homeassistant':
+        return fireHATrigger(t);
+      case 'ifttt':
+        return fireIFTTTTrigger(t);
+      case 'mqtt':
+        return fireMQTTTrigger(t);
+      default:
+        console.warn('Unknown trigger provider:', t.provider);
+    }
+  } catch (e) {
+    console.error('Trigger failed:', t.id, e.message);
+  }
+}
+
+function fireHueTrigger(t) {
+  if (!config.hueBridgeIp || !config.hueUsername) return;
+  const ls = {};
+  if (t.action === 'off') { ls.on = false; }
+  else if (t.action === 'on') { ls.on = true; ls.bri = t.brightness != null ? t.brightness : 254; }
+  else if (t.action === 'dim') { ls.on = true; ls.bri = t.brightness != null ? t.brightness : 80; ls.transitiontime = t.transitionSeconds ? t.transitionSeconds * 10 : 10; }
+  else if (t.action === 'warm') { ls.on = true; ls.bri = t.brightness != null ? t.brightness : 150; ls.ct = t.colorTemp || 450; ls.transitiontime = t.transitionSeconds ? t.transitionSeconds * 10 : 10; }
+  else if (t.action === 'scene' && t.hueSceneId) { ls.scene = t.hueSceneId; }
+
+  if (t.hueGroupId) {
+    setHueGroupState(config.hueBridgeIp, config.hueUsername, t.hueGroupId, ls);
+  } else if (t.hueLightIds && t.hueLightIds.length > 0) {
+    t.hueLightIds.forEach(id => setHueLightState(config.hueBridgeIp, config.hueUsername, id, ls));
+  }
+}
+
+function fireHttpTrigger(t) {
+  if (!t.httpUrl) return;
+  const body = (t.httpBody || '{"brightness": {{BRIGHTNESS}}, "on": {{ON}}}')
+    .replace(/\{\{BRIGHTNESS\}\}/g, t.brightness != null ? t.brightness : 0)
+    .replace(/\{\{ON\}\}/g, t.action === 'off' ? 'false' : 'true');
+  const url = new URL(t.httpUrl);
+  const client = url.protocol === 'https:' ? https : http;
+  const req = client.request({
+    hostname: url.hostname, port: url.port || (url.protocol === 'https:' ? 443 : 80),
+    path: url.pathname + url.search, method: t.httpMethod || 'POST',
+    headers: { 'Content-Type': 'application/json' }, timeout: 5000
+  }, () => {});
+  req.on('error', () => {});
+  req.write(body);
+  req.end();
+}
+
+function fireHATrigger(t) {
+  if (!config.haUrl || !config.haToken || !t.haEntityId) return;
+  const svc = t.action === 'off' ? 'turn_off' : 'turn_on';
+  const url = `${config.haUrl.replace(/\/$/, '')}/api/services/light/${svc}`;
+  const body = t.action === 'off'
+    ? { entity_id: t.haEntityId }
+    : { entity_id: t.haEntityId, brightness: t.brightness != null ? t.brightness : 254, transition: t.transitionSeconds || 1 };
+  fetch(url, {
+    method: 'POST', headers: { 'Authorization': `Bearer ${config.haToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body), signal: AbortSignal.timeout(5000)
+  }).catch(() => {});
+}
+
+function fireIFTTTTrigger(t) {
+  if (!config.iftttWebhookKey) return;
+  const event = t.iftttEvent || config.iftttEventName || 'lights_out';
+  const url = `https://maker.ifttt.com/trigger/${event}/with/key/${config.iftttWebhookKey}`;
+  fetch(url, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value1: t.brightness || 0, value2: t.action === 'off' ? 'off' : 'on' }),
+    signal: AbortSignal.timeout(5000)
+  }).catch(() => {});
+}
+
+function fireMQTTTrigger(t) {
+  if (!config.mqttBroker) return;
+  const net = require('net');
+  const payload = JSON.stringify({
+    brightness: t.brightness, on: t.action !== 'off', trigger: t.id, source: 'lightsout'
+  });
+  const topic = t.mqttTopic || config.mqttTopic || 'lights/out/command';
+  const topicBuf = Buffer.from(topic), payloadBuf = Buffer.from(payload);
+  const len = 2 + topicBuf.length + payloadBuf.length;
+  const packet = Buffer.alloc(5 + len);
+  packet[0] = 0x30; packet[1] = len;
+  packet[2] = (topicBuf.length >> 8) & 0xFF; packet[3] = topicBuf.length & 0xFF;
+  topicBuf.copy(packet, 4); payloadBuf.copy(packet, 4 + topicBuf.length);
+  const c = net.createConnection({ host: config.mqttBroker, port: config.mqttPort || 1883 });
+  c.on('connect', () => { c.write(packet); setTimeout(() => c.end(), 200); });
+  c.setTimeout(3000);
+  c.on('timeout', () => c.destroy());
+  c.on('error', () => c.destroy());
+}
+
+function resetTriggers() {
+  state.firedTriggerIds.clear();
+}
+
+function addTrigger(trigger) {
+  if (!trigger || !trigger.id) return false;
+  config.triggers = config.triggers.filter(t => t.id !== trigger.id);
+  config.triggers.push(trigger);
+  config.triggers.sort((a, b) => (b.atSecondsRemaining || 0) - (a.atSecondsRemaining || 0));
+  return true;
+}
+
+function removeTrigger(id) {
+  config.triggers = config.triggers.filter(t => t.id !== id);
+}
+
+function getTriggers() {
+  return [...config.triggers];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -528,6 +674,13 @@ module.exports = {
   invokeSmartLightOff,
   resetSmartLightState,
   shouldStartDim,
+  
+  // Multi-trigger engine
+  processTriggers,
+  resetTriggers,
+  addTrigger,
+  removeTrigger,
+  getTriggers,
   
   // Testing
   testSmartLightConnection,

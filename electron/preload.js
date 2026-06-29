@@ -100,6 +100,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getHueLights: (bridgeIp, username) => ipcRenderer.invoke('get-hue-lights', bridgeIp, username),
   getHueGroups: (bridgeIp, username) => ipcRenderer.invoke('get-hue-groups', bridgeIp, username),
 
+  // Smart-light multi-trigger CRUD
+  getSmartLightTriggers: () => ipcRenderer.invoke('get-smartlight-triggers'),
+  addSmartLightTrigger: (trigger) => ipcRenderer.invoke('add-smartlight-trigger', trigger),
+  removeSmartLightTrigger: (id) => ipcRenderer.invoke('remove-smartlight-trigger', id),
+
   // Profiles
   getAllProfiles: () => ipcRenderer.invoke('profiles-get-all'),
   getProfileById: (id) => ipcRenderer.invoke('profiles-get-by-id', id),
