@@ -423,6 +423,7 @@ const els = {
   btnCancelCustomSeq: document.getElementById('btn-cancel-custom-seq'),
   // Widget
   btnWidget: document.getElementById('btn-widget'),
+  btnCompanion: document.getElementById('btn-companion'),
   // Remote control
   chkRemoteControl: document.getElementById('chk-remote-control'),
   remoteControlConfig: document.getElementById('remote-control-config'),
@@ -544,6 +545,7 @@ const els = {
   proofIcon: document.getElementById('proof-icon'),
   proofBadge: document.getElementById('proof-badge'),
   proofBody: document.getElementById('proof-body'),
+  btnWarningLedger: document.getElementById('btn-warning-ledger'),
   btnProofDetails: document.getElementById('btn-proof-details'),
   btnProofCopy: document.getElementById('btn-proof-copy'),
   receiptsModal: document.getElementById('receipts-modal'),
@@ -1077,6 +1079,74 @@ if (btnNotif && notifDrawer) {
 }
 if (notifDrawerClose && notifDrawer) {
   notifDrawerClose.addEventListener('click', () => { notifDrawer.style.display = 'none'; });
+}
+
+function setSidebarSelection(tab) {
+  document.querySelectorAll('.ns-nav-item').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.nsTab === tab);
+  });
+}
+
+function activateTopTab(tab) {
+  const button = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+  if (!button) return false;
+  button.click();
+  return true;
+}
+
+async function openReceiptsLedger() {
+  try {
+    const [receipts, stats] = await Promise.all([
+      api.listReceipts?.(50),
+      api.getReceiptStats?.()
+    ]);
+    renderReceiptsModal(receipts || [], stats);
+    if (els.receiptsModal) els.receiptsModal.classList.add('active');
+    return true;
+  } catch (e) {
+    console.error('Failed to load receipts:', e);
+    notify('Ledger is unavailable right now', 'warning');
+    return false;
+  }
+}
+
+function openSettingsPanel() {
+  syncCustomizeUI();
+  updateLastLightUIFromState();
+  els.optionsModal?.classList.add('active');
+}
+
+function openHelpPanel() {
+  els.aboutModal?.classList.add('active');
+  refreshUpdaterStatus();
+  notify('Open Settings for controls and About for version/update details.', 'info', 4200);
+}
+
+async function handleSidebarNavigation(tab, { persist = true } = {}) {
+  let handled = false;
+
+  if (tab === 'lib') handled = activateTopTab('library');
+  if (tab === 'sch') handled = activateTopTab('schedule');
+  if (tab === 'set') {
+    openSettingsPanel();
+    handled = true;
+  }
+  if (tab === 'help') {
+    openHelpPanel();
+    handled = true;
+  }
+  if (tab === 'stats') handled = activateTopTab('streaks');
+
+  if (!handled) {
+    notify('Coming soon', 'info');
+    return false;
+  }
+
+  setSidebarSelection(tab);
+  if (persist) {
+    try { api.saveAppSettings({ app: { nsActiveTab: tab } }); } catch (_) {}
+  }
+  return true;
 }
 
 function formatIdleClockTime(now, compact = false) {
@@ -1806,6 +1876,7 @@ function wireEvents() {
   els.btnMini?.addEventListener('click', toggleMiniMode);
   els.btnWidget?.addEventListener('click', () => {
     api.toggleWidget?.();
+    notify('Desktop widget toggled', 'info');
   });
   els.btnCompanion?.addEventListener('click', async () => {
     try {
@@ -1814,9 +1885,13 @@ function wireEvents() {
         await api.openExternal?.(rc.url);
         notify(`Companion at ${rc.url}`, 'info');
       } else {
-        notify('Enable Remote Control in settings first', 'info');
+        openSettingsPanel();
+        setSidebarSelection('set');
+        notify('Enable Remote Control in settings before opening the Companion PWA', 'info');
       }
-    } catch {}
+    } catch {
+      notify('Companion setup is unavailable right now', 'warning');
+    }
   });
 
   // Family mode scan and remote controls.
@@ -2575,18 +2650,11 @@ async function renderMorningProof(receipt) {
 
 // View receipts modal.
 if (els.btnProofDetails) {
-  els.btnProofDetails.addEventListener('click', async () => {
-    try {
-      const [receipts, stats] = await Promise.all([
-        api.listReceipts?.(50),
-        api.getReceiptStats?.()
-      ]);
-      renderReceiptsModal(receipts || [], stats);
-      if (els.receiptsModal) els.receiptsModal.classList.add('active');
-    } catch (e) {
-      console.error('Failed to load receipts:', e);
-    }
-  });
+  els.btnProofDetails.addEventListener('click', () => openReceiptsLedger());
+}
+
+if (els.btnWarningLedger) {
+  els.btnWarningLedger.addEventListener('click', () => openReceiptsLedger());
 }
 
 if (els.receiptsModalClose) {
@@ -2734,15 +2802,14 @@ function renderReceiptsModal(receipts, stats) {
       }
 
       if (item.id === 'open-options') {
-        syncCustomizeUI();
-        updateLastLightUIFromState();
-        els.optionsModal.classList.add('active');
+        openSettingsPanel();
+        setSidebarSelection('set');
         return;
       }
 
       if (item.id === 'open-about') {
-        els.aboutModal.classList.add('active');
-        refreshUpdaterStatus();
+        openHelpPanel();
+        setSidebarSelection('help');
         return;
       }
 
@@ -2772,6 +2839,9 @@ function renderReceiptsModal(receipts, stats) {
       document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById(`tab-${btn.dataset.tab}`)?.classList.add('active');
+      if (btn.dataset.tab === 'library') setSidebarSelection('lib');
+      if (btn.dataset.tab === 'schedule') setSidebarSelection('sch');
+      if (btn.dataset.tab === 'streaks') setSidebarSelection('stats');
       if (btn.dataset.tab === 'streaks') loadStreaks();
       if (btn.dataset.tab === 'focus') loadSleepDebt();
     });
@@ -3461,9 +3531,7 @@ function applyAppSettings(app) {
   }
   // Restore northstar sidebar tab.
   if (app.nsActiveTab) {
-    document.querySelectorAll('.ns-nav-item').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.nsTab === app.nsActiveTab);
-    });
+    handleSidebarNavigation(app.nsActiveTab, { persist: false });
   }
   // Restore northstar selected mode card.
   if (app.nsSelectedMode) {
@@ -3920,9 +3988,7 @@ document.getElementById('ns-play-btn')?.addEventListener('click', () => {
 // Northstar sidebar tab: toggle active class + persist.
 document.querySelectorAll('.ns-nav-item').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.ns-nav-item').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    try { api.saveAppSettings({ app: { nsActiveTab: btn.dataset.nsTab } }); } catch (_) {}
+    handleSidebarNavigation(btn.dataset.nsTab);
   });
 });
 

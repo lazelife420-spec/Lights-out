@@ -1316,6 +1316,12 @@ input:disabled {
   border-color: var(--accent-blue);
   color: var(--accent-blue);
 }
+.footer-action:focus-visible {
+  outline: 2px solid rgba(107, 211, 255, 0.9);
+  outline-offset: 2px;
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
 
 #version {
   font-size: 10px;
@@ -4005,6 +4011,13 @@ body.ns-lobby .dashboard {
 
 .ns-nav-item:hover {
   background: rgba(255,255,255,0.06);
+  color: var(--text-secondary);
+}
+
+.ns-nav-item:focus-visible {
+  outline: 2px solid rgba(107, 211, 255, 0.9);
+  outline-offset: 2px;
+  background: rgba(255,255,255,0.08);
   color: var(--text-secondary);
 }
 
