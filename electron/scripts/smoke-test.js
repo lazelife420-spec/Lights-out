@@ -148,6 +148,26 @@ check('startup: portable temp cleanup only targets stale Lights Out extractions'
   assertMatch(mainSrc, /app\.whenReady\(\)\.then\(async \(\) => \{[\s\S]*cleanupStalePortableExtracts\(\);/s, 'portable cleanup not called at startup');
 });
 
+check('tray: initialization and cleanup', () => {
+  assertMatch(mainSrc, /let tray = null;/, 'tray variable missing');
+  assertMatch(mainSrc, /async function createTray\(\) \{/, 'createTray function missing');
+  assertMatch(mainSrc, /tray = new Tray\(trayIcons\.idle\);/, 'tray creation missing');
+});
+
+check('tray: hide/show and toggle logic', () => {
+  assertMatch(mainSrc, /function toggleMainWindow\(\) \{/, 'toggleMainWindow function missing');
+  assertMatch(mainSrc, /if \(mainWindow\.isVisible\(\)\) \{[\s\S]*mainWindow\.hide\(\);/s, 'toggleMainWindow hide logic missing');
+  assertMatch(mainSrc, /\} else \{[\s\S]*mainWindow\.show\(\);/s, 'toggleMainWindow show logic missing');
+  assertMatch(mainSrc, /tray\.on\('click', toggleMainWindow\);/, 'tray click event not wired to toggle');
+});
+
+check('mini-mode: toggle and resizing', () => {
+  assertMatch(mainSrc, /let miniMode = false;/, 'miniMode variable missing');
+  assertMatch(mainSrc, /ipcMain\.on\('toggle-mini-mode', \(\) => \{[\s\S]*miniMode = !miniMode;/s, 'miniMode toggle missing');
+  assertMatch(mainSrc, /if \(miniMode\) \{[\s\S]*mainWindow\.setSize\(260, 320\);/s, 'mini-mode resize missing');
+  assertMatch(mainSrc, /mainWindow\.webContents\.send\('mini-mode-changed', miniMode\);/, 'mini-mode-changed event missing');
+});
+
 check('tray: close-to-tray behavior remains the default window close action', () => {
   assertMatch(mainSrc, /mainWindow\.on\('close', event => \{\s+if \(app\.isQuitting\) return;\s+event\.preventDefault\(\);\s+mainWindow\.hide\(\);\s+refreshTrayMenu\(\);\s+\}\);/s, 'window close no longer hides to tray');
 });
@@ -233,11 +253,39 @@ check('renderer: running-state controls still swap start-stop-pause visibility a
   assertMatch(rendererSrc, /els\.btnPause\.querySelector\('span:last-child'\)\.textContent = state\.paused \? 'Resume' : 'Pause';/, 'renderer pause/resume label changed');
 });
 
-check('renderer: keyboard shortcuts still cover space, escape, presets, and Ctrl+M', () => {
+check('renderer: keyboard shortcuts - Space (Start/Pause)', () => {
   assertMatch(rendererSrc, /if \(event\.key === ' ' \|\| event\.code === 'Space'\) \{[\s\S]*if \(state\.running \|\| state\.paused\) togglePause\(\);[\s\S]*else startTimer\(\);/s, 'space shortcut changed');
+});
+
+check('renderer: keyboard shortcuts - Escape (Cancel/Modals)', () => {
   assertMatch(rendererSrc, /if \(event\.key === 'Escape'\) \{[\s\S]*else if \(state\.running \|\| state\.paused\) \{[\s\S]*cancelTimer\(\);/s, 'escape cancel shortcut changed');
-  assertMatch(rendererSrc, /const presets = \{ '1': 5, '2': 10, '3': 15, '4': 30, '5': 60, '6': 120 \};/, 'preset shortcut map changed');
+});
+
+check('renderer: keyboard shortcuts - Ctrl+M (Mini Mode)', () => {
   assertMatch(rendererSrc, /case 'm':[\s\S]*toggleMiniMode\(\);/s, 'Ctrl+M mini-mode shortcut changed');
+});
+
+check('renderer: keyboard shortcuts - Ctrl+Shift+S (Show/Hide)', () => {
+  // Ctrl+Shift+S is mapped to show/hide in main.js, not emergency cancel
+  // This is verified in main.js at line 1968: globalShortcut.register('Ctrl+Shift+S', toggleMainWindow);
+  assertMatch(mainSrc, /globalShortcut\.register\('Ctrl\+Shift\+S', toggleMainWindow\)/, 'Ctrl+Shift+S show/hide mapping missing in main.js');
+});
+
+check('renderer: keyboard shortcuts - Ctrl+Shift+X (Emergency Cancel)', () => {
+  // Emergency cancel is on Ctrl+Shift+X in main.js
+  assertMatch(mainSrc, /globalShortcut\.register\('Ctrl\+Shift\+X', \(\) => \{[\s\S]*cancelTimer\(\);/s, 'Ctrl+Shift+X emergency cancel mapping missing in main.js');
+});
+
+check('renderer: keyboard shortcuts - Presets (1-9)', () => {
+  assertMatch(rendererSrc, /const presets = \{ '1': 5, '2': 10, '3': 15, '4': 30, '5': 60, '6': 120 \};/, 'preset shortcut map changed');
+});
+
+check('ux: focus-visible and accessibility', () => {
+  const cssSrc = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  // Accept grouped selectors like "button:focus-visible, [role=\"button\"]:focus-visible" as valid
+  assertMatch(cssSrc, /button:focus-visible[^{]*\{[\s\S]*outline:/, 'focus-visible outline missing in CSS');
+  assertMatch(htmlSrc, /aria-label=/, 'accessibility aria-labels missing in HTML');
+  assertMatch(cssSrc, /button\[aria-disabled="true"\]/, 'disabled button styling missing in CSS');
 });
 
 check('renderer fallback: preview mode stays safe and idle by default', () => {
@@ -431,7 +479,91 @@ check('ux: global focus-visible ring defined', () => {
 
 check('ux: disabled button styling defined', () => {
   assertMatch(cssSrc, /button\[aria-disabled="true"\][\s\S]*opacity:/, 'disabled button style missing');
-  assertMatch(cssSrc, /cursor: not-allowed/, 'disabled cursor style missing');
+  assertMatch(cssSrc, /button\[aria-disabled="true"\][\s\S]*cursor: not-allowed/, 'disabled button cursor missing');
+});
+
+check('warning: dialog timing and emergency cancel', () => {
+  assertMatch(mainSrc, /if \(timerState\.gracePeriod > 0 && timerState\.remainingSeconds === timerState\.gracePeriod \* 60\) \{/, 'warning dialog trigger timing regressed');
+  assertMatch(mainSrc, /emitTimerUpdate\('warning', \{[\s\S]*message: `\$\{formatAction\(timerState\.action\)\} in \$\{timerState\.gracePeriod\} minutes`/s, 'warning message content regressed');
+  assertMatch(mainSrc, /ipcMain\.handle\('cancel-timer'/, 'emergency cancel IPC handler missing');
+});
+
+check('session: receipt and morning proof rendering', () => {
+  assertMatch(mainSrc, /const receipt = runReceipts\.createRunReceipt\(timerState\);/, 'run receipt creation missing in main');
+  assertMatch(htmlSrc, /id="morning-proof-section"/, 'morning proof section missing in HTML');
+  assertMatch(htmlSrc, /id="proof-card"/, 'proof card missing in HTML');
+  // The canonical function is renderMorningProof(receipt), not showMorningProof(receipt)
+  assertMatch(rendererSrc, /function renderMorningProof\(receipt\) \{/, 'renderMorningProof function missing in renderer');
+});
+
+check('session: recovery banner and tax safety', () => {
+  assertMatch(mainSrc, /function getRecoverableTimer\(\) \{/, 'recoverable timer logic missing');
+  // The canonical function is promptTimerRecovery(snapshot), not showRecoveryBanner(snapshot)
+  assertMatch(rendererSrc, /function promptTimerRecovery\(snapshot\) \{/, 'promptTimerRecovery function missing in renderer');
+  assertMatch(mainSrc, /const taxResult = overrideTax\.recordSnooze\(reason\);/, 'override tax recording missing');
+  assertMatch(mainSrc, /emitTimerUpdate\('snoozed', \{ addedSeconds: addSeconds, tax: taxResult \}\);/, 'snooze tax update broadcast missing');
+});
+
+// 19. Priority 2 & 3: Tray and Mini-Mode Expansion
+check('tray: quick-action menu items are present', () => {
+  assertMatch(mainSrc, /label: 'Start 28 min'/, 'tray 28 min quick start missing');
+  assertMatch(mainSrc, /label: 'Start 1 hour'/, 'tray 1 hour quick start missing');
+  // Snooze label can vary with override-tax level, so check for the base pattern
+  assertMatch(mainSrc, /Snooze \+5 min/, 'tray snooze action missing');
+});
+
+check('tray: no duplicate tray icons on state change', () => {
+  assertMatch(mainSrc, /Only rebuild the tray context menu on real state transitions, not every[\s\S]*if \(type !== 'tick'\) refreshTrayMenu\(\);/s, 'per-tick tray menu rebuild guard missing');
+});
+
+check('mini-mode: toggle and window resize logic', () => {
+  assertMatch(mainSrc, /let miniMode = false;/, 'miniMode variable missing');
+  assertMatch(mainSrc, /ipcMain\.on\('toggle-mini-mode'[\s\S]*miniMode = !miniMode;/s, 'miniMode toggle missing');
+  assertMatch(mainSrc, /if \(miniMode\) \{[\s\S]*mainWindow\.setSize\(260, 320\);/s, 'mini-mode resize missing');
+});
+
+check('mini-mode: state broadcast to renderer', () => {
+  assertMatch(mainSrc, /mainWindow\.webContents\.send\('mini-mode-changed', miniMode\);/, 'mini-mode-changed event missing');
+});
+
+check('keyboard: global shortcuts registered for quick actions', () => {
+  assertMatch(mainSrc, /globalShortcut\.register\('Ctrl\+Shift\+L'[\s\S]*startTimer/, 'Ctrl+Shift+L quick timer missing');
+  assertMatch(mainSrc, /globalShortcut\.register\('Ctrl\+Shift\+Space'[\s\S]*pauseTimer\(\)|resumeTimer\(\)/, 'Ctrl+Shift+Space pause/resume missing');
+  assertMatch(mainSrc, /globalShortcut\.register\('Ctrl\+Shift\+Z'[\s\S]*snoozeTimer\(300\)/, 'Ctrl+Shift+Z snooze missing');
+});
+
+check('keyboard: Escape closes modals in renderer', () => {
+  assertMatch(rendererSrc, /if \(event\.key === 'Escape'\) \{[\s\S]*profilesModal.*classList.*remove\('active'\)/s, 'Escape close profiles missing');
+  assertMatch(rendererSrc, /if \(event\.key === 'Escape'\) \{[\s\S]*receiptsModal.*classList.*remove\('active'\)/s, 'Escape close receipts missing');
+});
+
+check('keyboard: disabled controls do not activate', () => {
+  assertMatch(cssSrc, /button\[aria-disabled="true"\][\s\S]*pointer-events: none/, 'disabled button pointer-events missing');
+});
+
+// 20. Priority 4: Warning and Session Proof
+check('warning: emergency cancel is always available', () => {
+  assertMatch(mainSrc, /ipcMain\.handle\('cancel-timer'/, 'cancel-timer IPC missing');
+  assertMatch(rendererSrc, /if \(event\.key === 'Escape'\)[\s\S]*cancelTimer\(\)/, 'Escape cancel in renderer missing');
+});
+
+check('session: receipt creation on timer start', () => {
+  assertMatch(mainSrc, /const receipt = runReceipts\.createRunReceipt\(timerState\);/, 'receipt creation missing');
+});
+
+check('session: morning proof section renders on app load', () => {
+  assertMatch(htmlSrc, /id="morning-proof-section"/, 'morning-proof-section missing');
+  assertMatch(rendererSrc, /function renderMorningProof\(receipt\) \{/, 'renderMorningProof missing');
+});
+
+check('session: recovery banner flow on resume', () => {
+  assertMatch(rendererSrc, /function promptTimerRecovery\(snapshot\) \{/, 'promptTimerRecovery missing');
+  assertMatch(mainSrc, /function getRecoverableTimer\(\) \{/, 'getRecoverableTimer missing');
+});
+
+check('session: override tax applied to snooze', () => {
+  assertMatch(mainSrc, /const taxResult = overrideTax\.recordSnooze\(reason\);/, 'override tax recording missing');
+  assertMatch(mainSrc, /emitTimerUpdate\('snoozed', \{ addedSeconds: addSeconds, tax: taxResult \}\);/, 'snooze tax broadcast missing');
 });
 
 // Cleanup.
