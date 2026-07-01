@@ -106,3 +106,23 @@ cleanup could show a red error toast.
 ## v10.0.8 — Updater download target (2026-06-14)
 
 Fixed in-app updater download target so it selects the real installer asset.
+
+## v10.4.0 — Easy Connect Companion (2026-07-01)
+
+### New
+- **Easy Connect for phone companion** — redesigned pairing flow:
+  - **Three connection modes**: `Off` (disabled), `This PC only` (local binding), and `Same Wi-Fi` (LAN binding)
+  - **QR Code pairing**: Scan from the desktop app to pair instantly in `Same Wi-Fi` mode
+  - **Short pairing codes**: 6-character codes for manual fallback
+  - **Desktop status pill**: Real-time status indication (`Off`, `This PC only`, `Same Wi-Fi`)
+  - **Mobile-first companion UX**: Improved layout, connection state feedback (`Connecting`, `Connected`, `Disconnected`, `Pairing expired`), and action confirmations
+  - **One-click copy**: Copy the manual pairing URL to clipboard
+- **Security hardening**:
+  - Token-protected WebSocket handshake with 401/403 rejection
+  - Explicit host binding control per mode
+  - Hard safety check in message handlers to reject commands when mode is `Off`
+
+### Internal
+- New integration test: `test/companion-integration.test.js`
+- Smoke suite: 116/116 (+6 over v10.3.0)
+- Updated `main.js`, `renderer.js`, `companion.js`, `companion.html`, and `styles.css`

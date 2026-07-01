@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="/icon-512.png">
   <link rel="icon" type="image/png" href="/icon-512.png">
   <link rel="manifest" href="/manifest.json">
-  <title>Lights Out</title>
+  <title>Lights Out PC Companion</title>
   <style>
     :root {
       --bg: #0d0e11;
@@ -22,6 +22,8 @@
       --card: #14181f;
       --card-border: #232a36;
       --ring: #5b8cff;        /* recolored per phase in JS */
+      --danger: #ff4d4d;
+      --success: #4caf50;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body { height: 100%; }
@@ -59,6 +61,10 @@
 
     .status-pill { display: inline-flex; align-items: center; gap: 7px; padding: 7px 16px; border-radius: 999px; background: #161b22; border: 1px solid var(--card-border); font-size: 12px; font-weight: 600; color: var(--muted); margin: 16px 0 22px; }
     .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+    .status-pill.connected { background: rgba(76,175,80,0.10); border-color: rgba(76,175,80,0.25); color: #5ec763; }
+    .status-pill.connected .status-dot { background: #4caf50; }
+    .status-pill.disconnected { background: rgba(255,77,77,0.10); border-color: rgba(255,77,77,0.3); color: #ff6b6b; }
+    .status-pill.disconnected .status-dot { background: #ff4d4d; }
     .status-pill.running { background: rgba(76,175,80,0.10); border-color: rgba(76,175,80,0.25); color: #5ec763; }
     .status-pill.running .status-dot { background: #4caf50; animation: pulse 1.6s ease infinite; }
     .status-pill.paused { background: rgba(212,165,10,0.10); border-color: rgba(212,165,10,0.28); color: #e2b53a; }
@@ -81,11 +87,14 @@
     .quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .btn { padding: 16px 16px; border: none; border-radius: 14px; font-size: 15px; font-weight: 700; cursor: pointer; letter-spacing: 0.2px; transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease; }
     .btn:active { transform: scale(0.96); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
     .btn-primary { background: linear-gradient(180deg, #6b97ff 0%, #5b8cff 100%); color: #0b0e14; box-shadow: 0 6px 18px rgba(91,140,255,0.28); }
     .btn-secondary { background: #1a1f27; color: #c2cad8; border: 1px solid var(--card-border); }
     .btn-secondary:active { background: #20262f; }
     .btn-danger { background: rgba(255,77,77,0.12); color: #ff6b6b; border: 1px solid rgba(255,77,77,0.22); }
     .btn-amber { background: rgba(212,165,10,0.12); color: #e2b53a; border: 1px solid rgba(212,165,10,0.24); }
+    .feedback-toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 14px; z-index: 1000; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+    .feedback-toast.show { opacity: 1; }
     .timer-actions { display: flex; gap: 10px; }
     .timer-actions .btn { flex: 1; }
 
@@ -143,10 +152,10 @@
 
     <!-- Pairing (shown when no token is stored yet) -->
     <div class="pair-card" id="pair-card" style="display:none">
-      <div class="pair-title">Pair this phone</div>
+      <div class="pair-title">Connect to this PC?</div>
       <div class="pair-hint">Scan the QR code in the desktop app's Remote Control settings, or type the pairing code shown beneath it.</div>
       <input class="pair-input" id="pair-input" type="text" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Pairing code" aria-label="Pairing code">
-      <button class="btn btn-primary pair-submit" id="pair-submit">Pair</button>
+      <button class="btn btn-primary pair-submit" id="pair-submit">Connect</button>
       <div class="pair-error" id="pair-error" style="display:none">Enter the pairing code to continue.</div>
     </div>
 
@@ -225,9 +234,10 @@
     </div>
 
     <div class="disconnected" id="disconnected" style="display:none">
-      Not connected to desktop app
-      <br><button class="pair-reset" id="pair-reset">Enter pairing code</button>
+      <span id="disconnected-msg">Disconnected</span>
+      <br><button class="pair-reset" id="pair-reset">Reconnect</button>
     </div>
+    <div id="toast" class="feedback-toast"></div>
   </div>
 
   <script>
@@ -311,21 +321,75 @@
     pairInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyPairToken(); });
     pairReset.addEventListener('click', () => { pairInput.value = ''; showPairing(); });
 
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+
     function connect() {
-      if (!pairToken) { disconnected.style.display = ''; return; }
+      if (!pairToken) { showPairing(); return; }
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      
+      statusPill.className = 'status-pill';
+      statusText.textContent = 'Connecting…';
+      
       ws = new WebSocket(`${proto}//${location.host}/?t=${encodeURIComponent(pairToken)}`);
-      ws.onopen = () => { disconnected.style.display = 'none'; statusText.textContent = 'Idle'; };
-      ws.onmessage = (e) => { try { handleUpdate(JSON.parse(e.data)); } catch {} };
-      ws.onclose = () => { disconnected.style.display = ''; scheduleReconnect(); };
-      ws.onerror = () => { disconnected.style.display = ''; scheduleReconnect(); };
+      
+      ws.onopen = () => {
+        disconnected.style.display = 'none';
+        statusPill.className = 'status-pill connected';
+        statusText.textContent = 'Connected';
+        showToast('Connected to PC');
+        enableControls(true);
+      };
+      
+      ws.onmessage = (e) => {
+        try { handleUpdate(JSON.parse(e.data)); } catch {}
+      };
+      
+      ws.onclose = (e) => {
+        enableControls(false);
+        statusPill.className = 'status-pill disconnected';
+        if (e.code === 1006 || e.code === 1000) {
+          statusText.textContent = 'Disconnected';
+          document.getElementById('disconnected-msg').textContent = 'Disconnected from PC';
+        } else {
+          statusText.textContent = 'Pairing expired';
+          document.getElementById('disconnected-msg').textContent = 'Pairing expired or invalid';
+          localStorage.removeItem(TOKEN_KEY);
+          pairToken = '';
+        }
+        disconnected.style.display = '';
+        scheduleReconnect();
+      };
+      
+      ws.onerror = () => {
+        enableControls(false);
+        statusPill.className = 'status-pill disconnected';
+        statusText.textContent = 'Connection failed';
+        document.getElementById('disconnected-msg').textContent = 'Wrong network or PC offline';
+        disconnected.style.display = '';
+        scheduleReconnect();
+      };
+    }
+
+    function enableControls(enabled) {
+      document.querySelectorAll('.btn').forEach(btn => {
+        if (btn.id !== 'pair-submit' && btn.id !== 'pair-reset') {
+          btn.disabled = !enabled;
+        }
+      });
     }
     function scheduleReconnect() { if (reconnectTimer) clearTimeout(reconnectTimer); reconnectTimer = setTimeout(connect, 3000); }
     function send(data) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); }
 
     function startTimer(seconds) {
+      if (!confirm(`Start ${selectedAction} timer for ${Math.round(seconds/60)} minutes?`)) return;
       const s = Math.max(60, Math.min(24 * 60 * 60, Math.round(seconds)));
       send({ action: 'start', durationSeconds: s, timerAction: selectedAction });
+      showToast('Timer started');
     }
 
     function handleUpdate(data) {
@@ -443,9 +507,20 @@
     customMin.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('custom-start').click(); });
 
     // Running controls
-    document.getElementById('btn-pause')?.addEventListener('click', () => send({ action: 'togglePause' }));
-    document.getElementById('btn-snooze')?.addEventListener('click', () => send({ action: 'snooze', seconds: 300 }));
-    document.getElementById('btn-cancel')?.addEventListener('click', () => send({ action: 'cancel' }));
+    document.getElementById('btn-pause')?.addEventListener('click', () => {
+      send({ action: 'togglePause' });
+      showToast('Toggle pause');
+    });
+    document.getElementById('btn-snooze')?.addEventListener('click', () => {
+      send({ action: 'snooze', seconds: 300 });
+      showToast('Snoozed +5 min');
+    });
+    document.getElementById('btn-cancel')?.addEventListener('click', () => {
+      if (confirm('Emergency cancel the timer?')) {
+        send({ action: 'cancel' });
+        showToast('Timer cancelled');
+      }
+    });
 
     if (pairToken) connect();
     else showPairing();

@@ -1015,6 +1015,11 @@ async function checkCalendarAutoStart() {
 
 function handleCompanionMessage(msg, client) {
   if (!msg || !msg.action) return;
+  
+  // Hard safety: if companion mode is OFF, reject all messages even if they reached here.
+  const rc = settingsStore.getSection('remoteControl') || {};
+  if (!rc.mode || rc.mode === 'off') return;
+
   switch (msg.action) {
     case 'start':
       startTimer({
@@ -1099,12 +1104,23 @@ function getRemoteControlState() {
   const rc = settingsStore.getSection('remoteControl') || {};
   const ips = family.getLocalIPs();
   const lanIp = ips[0] || '127.0.0.1';
+  const mode = rc.mode || (rc.enabled ? 'wifi' : 'off');
+  
+  let url = '';
+  if (mode === 'wifi' && rc.token) {
+    url = `http://${lanIp}:${companion.PWA_PORT}/?t=${rc.token}`;
+  } else if (mode === 'local' && rc.token) {
+    url = `http://127.0.0.1:${companion.PWA_PORT}/?t=${rc.token}`;
+  }
+
   return {
-    enabled: !!rc.enabled,
+    enabled: mode !== 'off',
+    mode,
     token: rc.token || '',
+    shortCode: rc.token ? rc.token.slice(0, 6).toUpperCase() : '',
     port: companion.PWA_PORT,
     lanIp,
-    url: (rc.enabled && rc.token) ? `http://${lanIp}:${companion.PWA_PORT}/?t=${rc.token}` : ''
+    url
   };
 }
 
@@ -1117,9 +1133,18 @@ function startRemoteControl() {
   // Always rebuild from a clean state so token changes take effect.
   stopRemoteControl();
   const rc = settingsStore.getSection('remoteControl') || {};
-  if (!rc.enabled || !rc.token) return false;
-  companion.start({ token: rc.token, host: '0.0.0.0' });
-  family.start({ enabled: true, token: rc.token, peerName: require('os').hostname() }, familyCommandHandler);
+  const mode = rc.mode || (rc.enabled ? 'wifi' : 'off');
+  
+  if (mode === 'off' || !rc.token) return false;
+  
+  if (mode === 'wifi') {
+    companion.start({ token: rc.token, host: '0.0.0.0' });
+    family.start({ enabled: true, token: rc.token, peerName: require('os').hostname() }, familyCommandHandler);
+  } else if (mode === 'local') {
+    companion.start({ token: rc.token, host: '127.0.0.1' });
+    // Family mode (LAN discovery) is disabled in "This PC only" mode.
+  }
+  
   return true;
 }
 
@@ -1467,11 +1492,11 @@ ipcMain.handle('generate-qr', async (e, text) => {
     return '';
   }
 });
-ipcMain.handle('set-remote-control-enabled', async (e, enabled) => {
+ipcMain.handle('set-remote-control-mode', async (e, mode) => {
   const rc = settingsStore.getSection('remoteControl') || {};
-  const patch = { enabled: !!enabled };
+  const patch = { mode };
   // Generate a pairing token the first time remote control is turned on.
-  if (enabled && !rc.token) patch.token = remoteControl.generateToken();
+  if (mode !== 'off' && !rc.token) patch.token = remoteControl.generateToken();
   settingsStore.updateSection('remoteControl', patch);
   startRemoteControl();
   return getRemoteControlState();

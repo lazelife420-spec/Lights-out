@@ -941,26 +941,52 @@
 
         <!-- Remote Control Section -->
         <div class="option-section remote-control-section">
-          <h3>&#x1F4F1; Remote Control</h3>
-          <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Control this PC from your phone or other PCs on your network. Off by default and protected by a pairing code.</p>
-          <div class="option-group">
-            <label class="checkbox-label">
-              <input type="checkbox" id="chk-remote-control">
-              <span>Enable phone &amp; family remote control</span>
-            </label>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <h3>&#x1F4F1; Phone Companion</h3>
+            <span id="companion-status-pill" class="status-pill status-off">Off</span>
           </div>
+          <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Control this PC from your phone. Off by default and protected by a pairing code.</p>
+          
+          <div class="mode-selector" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
+            <button type="button" class="btn-mode" data-mode="off" id="btn-mode-off">Off</button>
+            <button type="button" class="btn-mode" data-mode="local" id="btn-mode-local">This PC only</button>
+            <button type="button" class="btn-mode" data-mode="wifi" id="btn-mode-wifi">Same Wi-Fi</button>
+          </div>
+
           <div id="remote-control-config" style="display:none;margin-top:8px">
-            <p style="font-size:10px;color:#d4a50a;background:rgba(212,165,10,0.10);border:1px solid rgba(212,165,10,0.25);border-radius:6px;padding:6px 8px;margin:0 0 8px">&#x26A0;&#xFE0F; Local Wi-Fi only &mdash; the connection is not encrypted. Use this on home or other networks you trust, not public Wi-Fi.</p>
             <div id="remote-qr-wrap" style="display:none;text-align:center;margin:0 0 10px">
               <img id="remote-qr" alt="Pairing QR code" width="180" height="180" style="background:#fff;border-radius:10px;padding:8px">
               <p style="font-size:11px;color:var(--text-secondary);margin:6px 0 0">&#x1F4F1; Scan with your phone camera to pair instantly</p>
             </div>
-            <p style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Or open this address on your phone (same Wi-Fi):</p>
-            <code id="remote-url" style="display:block;font-size:11px;word-break:break-all;background:var(--bg-card);padding:6px;border-radius:6px"></code>
-            <p style="font-size:11px;color:var(--text-muted);margin:8px 0 4px">Pairing code:</p>
-            <code id="remote-token" style="display:block;font-size:12px;background:var(--bg-card);padding:6px;border-radius:6px"></code>
-            <button type="button" id="btn-regen-token" class="btn-secondary" style="margin-top:8px">Regenerate Code</button>
-            <p style="font-size:10px;color:var(--text-muted);margin-top:8px">Anyone with this address and code can start, pause, snooze, or cancel timers (never a forced shutdown). Regenerate to revoke old links.</p>
+            
+            <div class="companion-details" style="background:var(--bg-card);padding:10px;border-radius:8px;border:1px solid var(--border-color)">
+              <div style="margin-bottom:10px">
+                <p style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Manual URL fallback:</p>
+                <div style="display:flex;gap:4px">
+                  <code id="remote-url" style="flex:1;font-size:11px;word-break:break-all;background:rgba(0,0,0,0.2);padding:6px;border-radius:4px;border:1px solid rgba(255,255,255,0.05)"></code>
+                  <button type="button" id="btn-copy-url" class="btn-icon-small" title="Copy URL">&#x1F4CB;</button>
+                </div>
+              </div>
+              
+              <div style="display:flex;justify-content:space-between;align-items:flex-end">
+                <div style="flex:1">
+                  <p style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Short pairing code:</p>
+                  <code id="remote-short-code" style="font-size:18px;letter-spacing:2px;font-weight:bold;color:var(--accent-color)"></code>
+                </div>
+                <button type="button" id="btn-regen-token" class="btn-secondary" style="font-size:10px;padding:4px 8px">Regenerate</button>
+              </div>
+            </div>
+
+            <div style="margin-top:12px;padding:8px;background:rgba(212,165,10,0.05);border-radius:6px;border:1px solid rgba(212,165,10,0.1)">
+              <p style="font-size:10px;color:#d4a50a;margin-bottom:4px">&#x2753; Having trouble?</p>
+              <ul style="font-size:10px;color:var(--text-muted);margin:0;padding-left:14px">
+                <li>Phone and PC must be on the same Wi-Fi network.</li>
+                <li>VPN or firewall can block local connections.</li>
+                <li>Use manual URL if QR scanning fails.</li>
+              </ul>
+            </div>
+            
+            <button type="button" id="btn-turn-off-companion" class="btn-danger-outline" style="width:100%;margin-top:12px;font-size:11px">Turn off companion</button>
           </div>
         </div>
 

@@ -1910,12 +1910,26 @@ function wireEvents() {
   });
 
 function renderRemoteControl(rc) {
-  if (!rc || !els.chkRemoteControl) return;
-  els.chkRemoteControl.checked = !!rc.enabled;
-  if (els.remoteControlConfig) els.remoteControlConfig.style.display = rc.enabled ? '' : 'none';
+  if (!rc) return;
+  const mode = rc.mode || 'off';
+  
+  // Update mode buttons
+  document.querySelectorAll('.btn-mode').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === mode);
+  });
+
+  // Update status pill
+  if (els.companionStatusPill) {
+    els.companionStatusPill.className = `status-pill status-${mode}`;
+    els.companionStatusPill.textContent = mode === 'off' ? 'Off' : (mode === 'local' ? 'This PC only' : 'Same Wi-Fi');
+  }
+
+  if (els.remoteControlConfig) els.remoteControlConfig.style.display = mode === 'off' ? 'none' : '';
   if (els.remoteUrl) els.remoteUrl.textContent = rc.url || '';
-  if (els.remoteToken) els.remoteToken.textContent = rc.token || '';
-  updateRemoteQr(rc.url);
+  if (els.remoteShortCode) els.remoteShortCode.textContent = rc.shortCode || '';
+  
+  // Only show QR for Same Wi-Fi mode
+  updateRemoteQr(mode === 'wifi' ? rc.url : '');
 }
 
 // Generate (or clear) the pairing QR for the current companion URL so the phone
@@ -1942,13 +1956,33 @@ async function loadRemoteControlState() {
 }
 
 function setupRemoteControlHandlers() {
-  els.chkRemoteControl?.addEventListener('change', async () => {
-    try {
-      const rc = await api.setRemoteControlEnabled?.(els.chkRemoteControl.checked);
-      renderRemoteControl(rc);
-      notify(els.chkRemoteControl.checked ? 'Remote control enabled' : 'Remote control disabled', 'info');
-    } catch { notify('Failed to update remote control', 'error'); }
+  document.querySelectorAll('.btn-mode').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const mode = btn.dataset.mode;
+      try {
+        const rc = await api.setRemoteControlMode?.(mode);
+        renderRemoteControl(rc);
+        notify(`Companion mode: ${mode}`, 'info');
+      } catch { notify('Failed to update companion mode', 'error'); }
+    });
   });
+
+  els.btnTurnOffCompanion?.addEventListener('click', async () => {
+    try {
+      const rc = await api.setRemoteControlMode?.('off');
+      renderRemoteControl(rc);
+      notify('Companion turned off', 'info');
+    } catch { notify('Failed to turn off companion', 'error'); }
+  });
+
+  els.btnCopyUrl?.addEventListener('click', () => {
+    const url = els.remoteUrl?.textContent;
+    if (url) {
+      navigator.clipboard.writeText(url);
+      notify('URL copied to clipboard', 'success');
+    }
+  });
+
   els.btnRegenToken?.addEventListener('click', async () => {
     try {
       renderRemoteControl(await api.regenerateRemoteToken?.());

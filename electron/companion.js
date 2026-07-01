@@ -46,8 +46,12 @@ function upgradeHandler(req, socket, head) {
   if (req.headers.upgrade?.toLowerCase() !== 'websocket') { socket.destroy(); return; }
 
   // Reject any client that does not present the correct pairing token.
-  if (!remoteControl.tokensMatch(tokenFromUrl(req.url), expectedToken)) {
-    socket.destroy(); return;
+  if (!expectedToken || !remoteControl.tokensMatch(tokenFromUrl(req.url), expectedToken)) {
+    // Send a 401/403 like response before destroying if possible, 
+    // but for WebSockets, just destroying the socket is the standard way to reject during handshake.
+    socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+    socket.destroy(); 
+    return;
   }
 
   const key = req.headers['sec-websocket-key'];
