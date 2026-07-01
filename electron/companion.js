@@ -67,45 +67,44 @@ function updateStatus(patch = {}) {
 // Minimal WebSocket server (no external deps)
 // ─────────────────────────────────────────────────────────────────────────────
 
+function writeHttpResponse(socket, status, headers = {}, body = '') {
+  const head = Object.entries(headers).map(([k, v]) => `${k}: ${v}`).join('\r\n');
+  const prefix = head ? `${head}\r\n` : '';
+  try {
+    socket.write(`HTTP/1.1 ${status}\r\n${prefix}Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
+  } catch { /* socket may already be gone */ }
+  try { socket.end(); } catch {}
+}
+
 function upgradeHandler(req, socket, head) {
   if (req.headers.upgrade?.toLowerCase() !== 'websocket') { socket.destroy(); return; }
 
   const key = req.headers['sec-websocket-key'];
   if (!key) { socket.destroy(); return; }
 
-  const accept = computeAccept(key);
+  const token = tokenFromUrl(req.url);
 
-  // Reject any client that does not present the correct pairing token.
-  // We complete the handshake so the browser receives a proper WebSocket close
-  // code (1008 policy violation) rather than an ambiguous 1006 abnormal close.
-  if (!expectedToken || !remoteControl.tokensMatch(tokenFromUrl(req.url), expectedToken)) {
-    socket.write(
-      'HTTP/1.1 101 Switching Protocols\r\n' +
-      'Upgrade: websocket\r\n' +
-      'Connection: Upgrade\r\n' +
-      `Sec-WebSocket-Accept: ${accept}\r\n\r\n`
-    );
-    const body = Buffer.alloc(2);
-    body.writeUInt16BE(1008, 0); // Policy violation: bad or missing token.
-    try {
-      socket.write(encodeFrame(0x8, body));
-    } catch {}
-    socket.destroy();
+  // Reject any client that does not present the correct pairing token before
+  // the WebSocket handshake, so the browser sees a proper HTTP 401/403 instead
+  // of an ambiguous WebSocket close code.
+  if (!expectedToken) {
+    writeHttpResponse(socket, '401 Unauthorized', { 'WWW-Authenticate': 'Bearer' }, 'Unauthorized');
+    return;
+  }
+  if (!token) {
+    writeHttpResponse(socket, '401 Unauthorized', { 'WWW-Authenticate': 'Bearer' }, 'Unauthorized');
+    return;
+  }
+  if (!remoteControl.tokensMatch(token, expectedToken)) {
+    writeHttpResponse(socket, '403 Forbidden', {}, 'Forbidden');
     return;
   }
 
+  const accept = computeAccept(key);
+
   // Cap concurrent clients so a misbehaving LAN device can't exhaust sockets.
   if (clients.size >= MAX_CLIENTS) {
-    socket.write(
-      'HTTP/1.1 101 Switching Protocols\r\n' +
-      'Upgrade: websocket\r\n' +
-      'Connection: Upgrade\r\n' +
-      `Sec-WebSocket-Accept: ${accept}\r\n\r\n`
-    );
-    const body = Buffer.alloc(2);
-    body.writeUInt16BE(1008, 0);
-    try { socket.write(encodeFrame(0x8, body)); } catch {}
-    socket.destroy();
+    writeHttpResponse(socket, '503 Service Unavailable', {}, 'Service Unavailable');
     return;
   }
 
@@ -245,10 +244,10 @@ function broadcast(data) {
 function requestHandler(req, res) {
   const pathOnly = String(req.url || '').split('?')[0];
   if (pathOnly === '/' || pathOnly === '/index.html') {
-    // Serve the static shell unauthenticated. It contains no secrets, and the
-    // WebSocket control plane (upgradeHandler) is what enforces the pairing
-    // token. Gating the page itself broke the installed-PWA launch, whose
-    // manifest start_url ('/') carries no token.
+    // Serve the static shell as an inert pairing-only view. It contains no
+    // secrets and all controls are disabled until the WebSocket control plane
+    // (upgradeHandler) validates the pairing token. This lets a phone load the
+    // app to type a pairing code manually while keeping remote actions gated.
     const htmlPath = path.join(__dirname, 'companion.html');
     try {
       const html = fs.readFileSync(htmlPath, 'utf8');

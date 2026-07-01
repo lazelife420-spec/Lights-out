@@ -328,10 +328,20 @@ check('companion: copy, regenerate, and off buttons wired', () => {
   assertMatch(rendererSrc, /els\.btnTurnOffCompanion\?\.addEventListener\('click', async \(\) => \{/, 'turn off companion button not wired');
 });
 
-check('companion: status pill listens to pushed state from main', () => {
+check('companion: status pill is visible near the heading and listens to pushed state', () => {
+  assert(htmlSrc.includes('id="companion-status-pill"'), 'companion status pill missing in HTML');
   assertMatch(rendererSrc, /api\.onRemoteControlStatus\?\.\(renderRemoteControl\)/, 'renderer not subscribed to remote-control-status pushes');
   assertMatch(rendererSrc, /renderRemoteControl\(rc\)/, 'renderRemoteControl missing');
-  assertMatch(rendererSrc, /statusLabel\s*\|\|/, 'statusLabel not used');
+  assertMatch(rendererSrc, /els\.companionStatusPill\.textContent = rc\.statusLabel \|\| \(mode === 'off' \? 'Off' : \(mode === 'local' \? 'This PC only' : 'Same Wi-Fi'\)\)/, 'status pill text must use Off / This PC only / Same Wi-Fi labels');
+});
+
+check('companion: status pill class updates by mode and connection state', () => {
+  assertMatch(rendererSrc, /const statusClass = rc\.failed \? 'status-failed' : rc\.connected \? 'status-connected' : `status-\${mode}`/, 'status pill class must reflect failed/connected/mode');
+});
+
+check('companion: Off hides QR and manual LAN URL', () => {
+  assertMatch(rendererSrc, /if \(els\.remoteControlConfig\) els\.remoteControlConfig\.style\.display = mode === 'off' \? 'none' : '';/, 'Off mode should hide the remote control config');
+  assertMatch(rendererSrc, /updateRemoteQr\(mode === 'wifi' \? rc\.url : ''\)/, 'QR should only render for wifi mode');
 });
 
 check('companion: phone page has explicit connection states', () => {
@@ -343,6 +353,21 @@ check('companion: phone page has explicit connection states', () => {
   assert(companionHtml.includes('Wrong network or PC offline'), 'companion page missing offline state');
 });
 
+check('morning proof: Mission Complete overlay has accessible close affordances', () => {
+  assert(htmlSrc.includes('id="btn-proof-close"'), 'visible Close button missing');
+  assert(htmlSrc.includes('id="btn-proof-dismiss"'), 'dismiss X button missing');
+  assert(/btn-proof-dismiss[^>]*aria-label="[^"]*"/.test(htmlSrc), 'dismiss X should have an aria-label');
+  assertMatch(rendererSrc, /function dismissMorningProof\(\)/, 'dismissMorningProof helper missing');
+  assertMatch(rendererSrc, /document\.getElementById\('btn-proof-close'\)\?\.addEventListener\('click', dismissMorningProof\)/, 'Close button not wired to dismiss');
+  assertMatch(rendererSrc, /document\.getElementById\('btn-proof-dismiss'\)\?\.addEventListener\('click', dismissMorningProof\)/, 'dismiss X not wired to dismiss');
+  assertMatch(rendererSrc, /e\.key === 'Escape'[^}]*morningProofSection\.style\.display !== 'none'/, 'Escape handler for Mission Complete overlay missing');
+});
+
+check('morning proof: Play Tonight Again still works', () => {
+  assertMatch(rendererSrc, /document\.getElementById\('btn-proof-again'\)\?\.addEventListener\('click', \(\) => \{/, 'Play Tonight Again button missing');
+  assertMatch(rendererSrc, /document\.getElementById\('btn-start'\)\?\.click\(\)/, 'Play Tonight Again should delegate to start button');
+});
+
 check('companion: default settings are off with no token', () => {
   const settingsSrc = fs.readFileSync(path.join(root, 'settings.js'), 'utf8');
   assertMatch(settingsSrc, /remoteControl:\s*\{[\s\S]*enabled:\s*false,[\s\S]*token:\s*''\s*\}/, 'remoteControl defaults should be off with empty token');
@@ -352,6 +377,25 @@ check('companion: main mode contract maps to correct host binding', () => {
   assertMatch(mainSrc, /if \(mode === 'wifi'\) \{[\s\S]*companion\.start\(\{ token: rc\.token, host: '0\.0\.0\.0' \}\)/s, 'wifi mode should bind 0.0.0.0');
   assertMatch(mainSrc, /\} else if \(mode === 'local'\) \{[\s\S]*companion\.start\(\{ token: rc\.token, host: '127\.0\.0\.1' \}\)/s, 'local mode should bind 127.0.0.1');
   assertMatch(mainSrc, /if \(mode === 'off' \|\| !rc\.token\) return false;/, 'off mode should not start listener');
+});
+
+check('companion: same-wifi URL includes token and host for Android APK', () => {
+  // The URL must carry the token and a host parameter so packaged Android
+  // companions (which load the UI locally) know where to connect.
+  const wifiUrlMatch = mainSrc.match(/if \(mode === 'wifi' && rc\.token\) \{[\s\S]*?url = `([^`]+)`/);
+  assert(wifiUrlMatch, 'wifi URL construction not found');
+  const wifiUrl = wifiUrlMatch[1];
+  assert(wifiUrl.includes('t=${rc.token}'), 'wifi URL missing token');
+  assert(wifiUrl.includes('host='), 'wifi URL missing host parameter');
+  assert(wifiUrl.includes('encodeURIComponent'), 'wifi URL must encode the host parameter');
+  assert(wifiUrl.includes('${lanIp}:${companion.PWA_PORT}'), 'wifi URL host must include the selected LAN IP and port');
+});
+
+check('companion: QR URL has no host in off or local mode', () => {
+  // Off and local modes intentionally omit the LAN host parameter.
+  const localUrlMatch = mainSrc.match(/\} else if \(mode === 'local' && rc\.token\) \{[\s\S]*?url = `([^`]+)`/);
+  assert(localUrlMatch, 'local URL construction not found');
+  assert(!localUrlMatch[1].includes('host='), 'local URL should not include a host parameter');
 });
 
 // 8. Run Receipts module logic.

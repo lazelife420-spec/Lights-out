@@ -30,9 +30,9 @@ test('Companion integration: Token authentication', async (t) => {
     }).on('error', reject);
   });
 
-  // 2. Invalid token upgrade request (WebSocket part) should complete the
-  // handshake, then immediately close with 1008 policy violation so the phone
-  // can distinguish bad token from network failure.
+  // 2. Invalid token upgrade request (WebSocket part) must be rejected before
+  // the handshake with HTTP 403 so the browser can distinguish a bad token from
+  // a network failure.
   await new Promise((resolve) => {
     const req = http.request({
       port: companion.PWA_PORT,
@@ -47,28 +47,13 @@ test('Companion integration: Token authentication', async (t) => {
     });
 
     req.on('response', (res) => {
-      assert.fail('Should not receive a plain HTTP response for an upgrade request');
-      resolve();
+      assert.equal(res.statusCode, 403, 'Invalid token should return 403');
+      res.resume();
+      res.on('close', resolve);
     });
 
-    req.on('upgrade', (res, socket, head) => {
-      assert.equal(res.statusCode, 101, 'Server should complete the WebSocket handshake');
-      let buf = Buffer.alloc(0);
-      const onData = (chunk) => {
-        buf = buf.length ? Buffer.concat([buf, chunk]) : chunk;
-        // Minimum close frame: FIN + opcode 0x8, masked bit clear, length 2, 2-byte code.
-        if (buf.length >= 4) {
-          socket.off('data', onData);
-          const opcode = buf[0] & 0x0f;
-          const closeCode = buf.readUInt16BE(2);
-          assert.equal(opcode, 0x8, 'Should receive a close frame');
-          assert.equal(closeCode, 1008, 'Invalid token should close with 1008 policy violation');
-          socket.destroy();
-          resolve();
-        }
-      };
-      socket.on('data', onData);
-      socket.on('close', () => resolve());
+    req.on('upgrade', () => {
+      assert.fail('Should not complete WebSocket handshake for invalid token');
     });
 
     req.on('error', () => {

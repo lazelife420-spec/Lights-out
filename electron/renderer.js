@@ -555,6 +555,8 @@ const els = {
   btnWarningLedger: document.getElementById('btn-warning-ledger'),
   btnProofDetails: document.getElementById('btn-proof-details'),
   btnProofCopy: document.getElementById('btn-proof-copy'),
+  btnProofClose: document.getElementById('btn-proof-close'),
+  btnProofDismiss: document.getElementById('btn-proof-dismiss'),
   receiptsModal: document.getElementById('receipts-modal'),
   receiptsModalClose: document.getElementById('receipts-modal-close'),
   receiptStats: document.getElementById('receipt-stats'),
@@ -1929,7 +1931,7 @@ function renderRemoteControl(rc) {
   if (els.companionStatusPill) {
     const statusClass = rc.failed ? 'status-failed' : rc.connected ? 'status-connected' : `status-${mode}`;
     els.companionStatusPill.className = `status-pill ${statusClass}`;
-    els.companionStatusPill.textContent = rc.statusLabel || (mode === 'off' ? 'Off' : (mode === 'local' ? 'This PC only' : 'Same Wi-Fi enabled'));
+    els.companionStatusPill.textContent = rc.statusLabel || (mode === 'off' ? 'Off' : (mode === 'local' ? 'This PC only' : 'Same Wi-Fi'));
   }
 
   if (els.remoteControlConfig) els.remoteControlConfig.style.display = mode === 'off' ? 'none' : '';
@@ -2744,9 +2746,21 @@ document.getElementById('btn-proof-again')?.addEventListener('click', () => {
 });
 
 // Northstar proof hero: Dismiss — hides the card.
-document.getElementById('btn-proof-dismiss')?.addEventListener('click', () => {
+function dismissMorningProof() {
   if (els.morningProofSection) els.morningProofSection.style.display = 'none';
-});
+}
+
+document.getElementById('btn-proof-dismiss')?.addEventListener('click', dismissMorningProof);
+document.getElementById('btn-proof-close')?.addEventListener('click', dismissMorningProof);
+
+// Escape closes the Mission Complete overlay when it is visible.
+if (els.morningProofSection) {
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && els.morningProofSection.style.display !== 'none') {
+      dismissMorningProof();
+    }
+  });
+}
 
 // Clear receipts.
 if (els.btnClearReceipts) {

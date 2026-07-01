@@ -149,29 +149,38 @@ function encodeCloseFrame(code) {
       assert(!status.connected, 'no clients yet');
     });
 
-    await check('companion: HTTP page served without token', async () => {
+    await check('companion: HTTP page served as inert pairing shell without token', async () => {
       const res = await httpGet(`http://127.0.0.1:${companion.PWA_PORT}/`);
-      assert(res.status === 200, `expected 200, got ${res.status}`);
+      assert(res.status === 200, `expected 200 pairing shell, got ${res.status}`);
       assert(res.body.includes('Lights Out PC Companion'), 'page title missing');
+      assert(res.body.includes('pair-input'), 'pairing input missing');
     });
 
-    await check('companion: WebSocket without token rejected with 1008', async () => {
+    await check('companion: HTTP page with invalid token still served as inert shell', async () => {
+      const res = await httpGet(`http://127.0.0.1:${companion.PWA_PORT}/?t=${badToken}`);
+      assert(res.status === 200, `expected 200 pairing shell, got ${res.status}`);
+      assert(res.body.includes('pair-input'), 'pairing input missing');
+    });
+
+    await check('companion: HTTP page with valid token served as inert shell', async () => {
+      const res = await httpGet(`http://127.0.0.1:${companion.PWA_PORT}/?t=${token}`);
+      assert(res.status === 200, `expected 200, got ${res.status}`);
+      assert(res.body.includes('pair-input'), 'pairing input missing');
+    });
+
+    await check('companion: WebSocket without token rejected with 401', async () => {
       const result = await wsUpgrade({ port: companion.PWA_PORT, host: '127.0.0.1', path: '/' });
-      assert(result.status === 101, 'server should complete handshake before rejecting');
-      assert(result.opcode === 0x8, 'should receive a close frame');
-      assert(result.closeCode === 1008, `expected 1008, got ${result.closeCode}`);
+      assert(result.status === 401, `expected 401, got ${result.status}`);
       if (result.socket) result.socket.destroy();
     });
 
-    await check('companion: WebSocket with invalid token rejected with 1008', async () => {
+    await check('companion: WebSocket with invalid token rejected with 403', async () => {
       const result = await wsUpgrade({
         port: companion.PWA_PORT,
         host: '127.0.0.1',
         path: `/?t=${badToken}`
       });
-      assert(result.status === 101, 'server should complete handshake before rejecting');
-      assert(result.opcode === 0x8, 'should receive a close frame');
-      assert(result.closeCode === 1008, `expected 1008, got ${result.closeCode}`);
+      assert(result.status === 403, `expected 403, got ${result.status}`);
       if (result.socket) result.socket.destroy();
     });
 
@@ -204,9 +213,7 @@ function encodeCloseFrame(code) {
         host: '127.0.0.1',
         path: `/?t=${token}`
       });
-      assert(result.status === 101, 'server should complete handshake before rejecting');
-      assert(result.opcode === 0x8, 'should receive a close frame');
-      assert(result.closeCode === 1008, `old token should be rejected with 1008, got ${result.closeCode}`);
+      assert(result.status === 403, `old token should be rejected with 403, got ${result.status}`);
       if (result.socket) result.socket.destroy();
     });
 

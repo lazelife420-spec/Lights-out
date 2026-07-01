@@ -1110,7 +1110,9 @@ function getRemoteControlState() {
 
   let url = '';
   if (mode === 'wifi' && rc.token) {
-    url = `http://${lanIp}:${companion.PWA_PORT}/?t=${rc.token}`;
+    // Include the desktop host as a separate parameter so packaged Android
+    // companions (which load the UI locally) know where to open the WebSocket.
+    url = `http://${lanIp}:${companion.PWA_PORT}/?t=${rc.token}&host=${encodeURIComponent(`${lanIp}:${companion.PWA_PORT}`)}`;
   } else if (mode === 'local' && rc.token) {
     url = `http://127.0.0.1:${companion.PWA_PORT}/?t=${rc.token}`;
   }

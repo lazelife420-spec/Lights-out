@@ -4511,6 +4511,25 @@ body.mini-mode .ns-proof-section { display: none !important; }
 .status-connected { background: rgba(76, 175, 80, 0.15); color: var(--accent-green); }
 .status-failed { background: rgba(255, 77, 77, 0.15); color: var(--accent-red); }
 
+/* Companion status pill is intentionally more visible than other inline pills. */
+.remote-control-section #companion-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  min-width: 80px;
+  justify-content: center;
+}
+.remote-control-section #companion-status-pill::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.8;
+}
+
 .companion-connected-badge {
   display: none;
   font-size: 10px;
