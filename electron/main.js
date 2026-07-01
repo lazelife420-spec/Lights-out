@@ -1054,6 +1054,7 @@ function broadcastCompanionState() {
     action: timerState.action,
     phase: timerState.phase,
     timerName: appSettings.timerName || 'Last Call',
+    pcName: require('os').hostname(),
     dryRun: timerState.dryRun,
     overrideTax: {
       sessionSnoozeCount: taxStats.sessionSnoozeCount,
@@ -1105,13 +1106,18 @@ function getRemoteControlState() {
   const ips = family.getLocalIPs();
   const lanIp = ips[0] || '127.0.0.1';
   const mode = rc.mode || (rc.enabled ? 'wifi' : 'off');
-  
+  const pcName = require('os').hostname();
+
   let url = '';
   if (mode === 'wifi' && rc.token) {
     url = `http://${lanIp}:${companion.PWA_PORT}/?t=${rc.token}`;
   } else if (mode === 'local' && rc.token) {
     url = `http://127.0.0.1:${companion.PWA_PORT}/?t=${rc.token}`;
   }
+
+  const status = companion.getStatus();
+  const connected = status.connected && status.clients > 0;
+  const failed = status.failed;
 
   return {
     enabled: mode !== 'off',
@@ -1120,8 +1126,27 @@ function getRemoteControlState() {
     shortCode: rc.token ? rc.token.slice(0, 6).toUpperCase() : '',
     port: companion.PWA_PORT,
     lanIp,
-    url
+    url,
+    pcName,
+    clients: status.clients || 0,
+    connected,
+    failed,
+    statusLabel: getCompanionStatusLabel(mode, connected, failed, status.clients)
   };
+}
+
+function getCompanionStatusLabel(mode, connected, failed, clients) {
+  if (mode === 'off') return 'Off';
+  if (mode === 'local') return 'This PC only';
+  if (failed) return 'Connection failed';
+  if (connected) return 'Phone connected';
+  if (clients > 0) return 'Phone connected';
+  return 'Waiting for phone';
+}
+
+function broadcastRemoteControlState() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('remote-control-status', getRemoteControlState());
 }
 
 function stopRemoteControl() {
@@ -1499,12 +1524,16 @@ ipcMain.handle('set-remote-control-mode', async (e, mode) => {
   if (mode !== 'off' && !rc.token) patch.token = remoteControl.generateToken();
   settingsStore.updateSection('remoteControl', patch);
   startRemoteControl();
-  return getRemoteControlState();
+  const state = getRemoteControlState();
+  broadcastRemoteControlState();
+  return state;
 });
 ipcMain.handle('regenerate-remote-token', async () => {
   settingsStore.updateSection('remoteControl', { token: remoteControl.generateToken() });
   startRemoteControl();
-  return getRemoteControlState();
+  const state = getRemoteControlState();
+  broadcastRemoteControlState();
+  return state;
 });
 ipcMain.handle('get-family-peers', async () => {
   return family.getPeers();
@@ -2142,6 +2171,11 @@ app.whenReady().then(async () => {
         console.error('Failed to broadcast streaks to companion:', e);
       }
     }, 500);
+  });
+  companion.onStatus(() => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('remote-control-status', getRemoteControlState());
+    }
   });
 
   // Broadcast timer state to connected companion clients periodically.

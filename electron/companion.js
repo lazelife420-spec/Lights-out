@@ -14,13 +14,22 @@ const MAX_CLIENTS = 8;              // companion is a personal LAN tool; cap con
 const MAX_MESSAGE = 64 * 1024;      // reject any single frame larger than this
 const MAX_BUFFER = 256 * 1024;      // reject a client that buffers without completing a frame
 let server = null;
-let wss = null;
 let clients = new Set();
 const emitter = new EventEmitter();
 
 // Pairing token required from every client. Empty = no listener may bind.
 let expectedToken = '';
 let bindHost = '127.0.0.1';
+
+// Connection status exposed to the desktop UI. Updated on each connect/disconnect.
+let status = {
+  running: false,
+  port: PWA_PORT,
+  host: '127.0.0.1',
+  clients: 0,
+  connected: false,
+  failed: false
+};
 
 // Computes the RFC 6455 Sec-WebSocket-Accept value for a client key. The magic
 // GUID must be exactly this string — a wrong GUID produces an accept that every
@@ -38,6 +47,22 @@ function tokenFromUrl(url) {
   catch { return ''; }
 }
 
+function computeStatus(patch = {}) {
+  return {
+    ...status,
+    running: !!server,
+    clients: clients.size,
+    connected: clients.size > 0,
+    ...patch
+  };
+}
+
+function updateStatus(patch = {}) {
+  status = computeStatus(patch);
+  emitter.emit('status', status);
+  return status;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Minimal WebSocket server (no external deps)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -45,22 +70,44 @@ function tokenFromUrl(url) {
 function upgradeHandler(req, socket, head) {
   if (req.headers.upgrade?.toLowerCase() !== 'websocket') { socket.destroy(); return; }
 
-  // Reject any client that does not present the correct pairing token.
-  if (!expectedToken || !remoteControl.tokensMatch(tokenFromUrl(req.url), expectedToken)) {
-    // Send a 401/403 like response before destroying if possible, 
-    // but for WebSockets, just destroying the socket is the standard way to reject during handshake.
-    socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-    socket.destroy(); 
-    return;
-  }
-
   const key = req.headers['sec-websocket-key'];
   if (!key) { socket.destroy(); return; }
 
-  // Cap concurrent clients so a misbehaving LAN device can't exhaust sockets.
-  if (clients.size >= MAX_CLIENTS) { socket.destroy(); return; }
-
   const accept = computeAccept(key);
+
+  // Reject any client that does not present the correct pairing token.
+  // We complete the handshake so the browser receives a proper WebSocket close
+  // code (1008 policy violation) rather than an ambiguous 1006 abnormal close.
+  if (!expectedToken || !remoteControl.tokensMatch(tokenFromUrl(req.url), expectedToken)) {
+    socket.write(
+      'HTTP/1.1 101 Switching Protocols\r\n' +
+      'Upgrade: websocket\r\n' +
+      'Connection: Upgrade\r\n' +
+      `Sec-WebSocket-Accept: ${accept}\r\n\r\n`
+    );
+    const body = Buffer.alloc(2);
+    body.writeUInt16BE(1008, 0); // Policy violation: bad or missing token.
+    try {
+      socket.write(encodeFrame(0x8, body));
+    } catch {}
+    socket.destroy();
+    return;
+  }
+
+  // Cap concurrent clients so a misbehaving LAN device can't exhaust sockets.
+  if (clients.size >= MAX_CLIENTS) {
+    socket.write(
+      'HTTP/1.1 101 Switching Protocols\r\n' +
+      'Upgrade: websocket\r\n' +
+      'Connection: Upgrade\r\n' +
+      `Sec-WebSocket-Accept: ${accept}\r\n\r\n`
+    );
+    const body = Buffer.alloc(2);
+    body.writeUInt16BE(1008, 0);
+    try { socket.write(encodeFrame(0x8, body)); } catch {}
+    socket.destroy();
+    return;
+  }
 
   socket.write(
     'HTTP/1.1 101 Switching Protocols\r\n' +
@@ -79,9 +126,10 @@ function upgradeHandler(req, socket, head) {
     consumeFrames(client);
   });
 
-  socket.on('close', () => { client.alive = false; clients.delete(client); });
-  socket.on('error', () => { client.alive = false; clients.delete(client); });
+  socket.on('close', () => { client.alive = false; clients.delete(client); updateStatus(); });
+  socket.on('error', () => { client.alive = false; clients.delete(client); updateStatus(); });
 
+  updateStatus();
   emitter.emit('connect', client);
 }
 
@@ -283,6 +331,7 @@ function start(opts = {}) {
   // server emits an unhandled 'error' that crashes the whole main process.
   server.on('error', (err) => {
     server = null;
+    updateStatus({ failed: true, running: false });
     if (err && err.code === 'EADDRINUSE') {
       console.warn(`Companion PWA port ${PWA_PORT} is already in use - companion features disabled for this instance.`);
     } else {
@@ -292,12 +341,16 @@ function start(opts = {}) {
 
   server.listen(PWA_PORT, bindHost, () => {
     console.log(`Companion PWA running on ${bindHost}:${PWA_PORT}`);
+    updateStatus({ running: true, host: bindHost, failed: false, connected: clients.size > 0 });
   });
 }
 
 function stop() {
   if (server) {
-    server.close();
+    // Close the server without waiting for the callback; we destroy all clients
+    // below so the port is released quickly. Waiting for the native callback can
+    // hang if a client socket is stuck in a half-closed state.
+    try { server.close(); } catch {}
     server = null;
   }
   expectedToken = '';
@@ -305,15 +358,12 @@ function stop() {
     try { client.socket.destroy(); } catch {}
   }
   clients.clear();
+  updateStatus({ running: false, clients: 0, connected: false, failed: false });
+  return Promise.resolve();
 }
 
 function getStatus() {
-  return {
-    running: !!server,
-    port: PWA_PORT,
-    clients: clients.size,
-    host: bindHost
-  };
+  return computeStatus();
 }
 
 function onMessage(callback) {
@@ -324,6 +374,10 @@ function onConnect(callback) {
   emitter.on('connect', callback);
 }
 
+function onStatus(callback) {
+  emitter.on('status', callback);
+}
+
 module.exports = {
   start,
   stop,
@@ -331,6 +385,7 @@ module.exports = {
   getStatus,
   onMessage,
   onConnect,
+  onStatus,
   PWA_PORT,
   // Exposed for unit testing the WebSocket handshake.
   computeAccept

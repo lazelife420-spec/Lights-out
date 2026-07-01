@@ -311,6 +311,49 @@ check('renderer: footer and ledger controls provide real feedback', () => {
   assertMatch(rendererSrc, /if \(els\.btnProofDetails\) \{[\s\S]*openReceiptsLedger\(\)/s, 'proof ledger button wiring missing');
 });
 
+// Companion Easy Connect UI contract.
+check('companion: mode buttons present in settings', () => {
+  assert(htmlSrc.includes('data-mode="off"'), 'off mode button missing');
+  assert(htmlSrc.includes('data-mode="local"'), 'local mode button missing');
+  assert(htmlSrc.includes('data-mode="wifi"'), 'wifi mode button missing');
+});
+
+check('companion: QR only shown for same-wifi mode', () => {
+  assertMatch(rendererSrc, /updateRemoteQr\(mode === 'wifi' \? rc\.url : ''\)/, 'QR should only render for wifi mode');
+});
+
+check('companion: copy, regenerate, and off buttons wired', () => {
+  assertMatch(rendererSrc, /els\.btnCopyUrl\?\.addEventListener\('click', /, 'copy URL button not wired');
+  assertMatch(rendererSrc, /els\.btnRegenToken\?\.addEventListener\('click', async \(\) => \{/, 'regenerate token button not wired');
+  assertMatch(rendererSrc, /els\.btnTurnOffCompanion\?\.addEventListener\('click', async \(\) => \{/, 'turn off companion button not wired');
+});
+
+check('companion: status pill listens to pushed state from main', () => {
+  assertMatch(rendererSrc, /api\.onRemoteControlStatus\?\.\(renderRemoteControl\)/, 'renderer not subscribed to remote-control-status pushes');
+  assertMatch(rendererSrc, /renderRemoteControl\(rc\)/, 'renderRemoteControl missing');
+  assertMatch(rendererSrc, /statusLabel\s*\|\|/, 'statusLabel not used');
+});
+
+check('companion: phone page has explicit connection states', () => {
+  const companionHtml = fs.readFileSync(path.join(root, 'companion.html'), 'utf8');
+  assert(companionHtml.includes('Connecting…'), 'companion page missing Connecting state');
+  assert(companionHtml.includes('Connected to'), 'companion page missing Connected to PC state');
+  assert(companionHtml.includes('Disconnected'), 'companion page missing Disconnected state');
+  assert(companionHtml.includes('Pairing expired'), 'companion page missing Pairing expired state');
+  assert(companionHtml.includes('Wrong network or PC offline'), 'companion page missing offline state');
+});
+
+check('companion: default settings are off with no token', () => {
+  const settingsSrc = fs.readFileSync(path.join(root, 'settings.js'), 'utf8');
+  assertMatch(settingsSrc, /remoteControl:\s*\{[\s\S]*enabled:\s*false,[\s\S]*token:\s*''\s*\}/, 'remoteControl defaults should be off with empty token');
+});
+
+check('companion: main mode contract maps to correct host binding', () => {
+  assertMatch(mainSrc, /if \(mode === 'wifi'\) \{[\s\S]*companion\.start\(\{ token: rc\.token, host: '0\.0\.0\.0' \}\)/s, 'wifi mode should bind 0.0.0.0');
+  assertMatch(mainSrc, /\} else if \(mode === 'local'\) \{[\s\S]*companion\.start\(\{ token: rc\.token, host: '127\.0\.0\.1' \}\)/s, 'local mode should bind 127.0.0.1');
+  assertMatch(mainSrc, /if \(mode === 'off' \|\| !rc\.token\) return false;/, 'off mode should not start listener');
+});
+
 // 8. Run Receipts module logic.
 const rrPath = path.join(root, 'runReceipts.js');
 if (fs.existsSync(rrPath)) {

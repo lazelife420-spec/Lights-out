@@ -4507,7 +4507,16 @@ body.mini-mode .ns-proof-section { display: none !important; }
 }
 .status-off { background: rgba(107, 118, 133, 0.15); color: var(--text-muted); }
 .status-local { background: rgba(74, 158, 255, 0.15); color: var(--accent-blue); }
-.status-wifi { background: rgba(76, 175, 80, 0.15); color: var(--accent-green); }
+.status-wifi { background: rgba(212, 165, 10, 0.15); color: var(--accent-amber); }
+.status-connected { background: rgba(76, 175, 80, 0.15); color: var(--accent-green); }
+.status-failed { background: rgba(255, 77, 77, 0.15); color: var(--accent-red); }
+
+.companion-connected-badge {
+  display: none;
+  font-size: 10px;
+  color: var(--accent-green);
+  margin-top: 4px;
+}
 
 .mode-selector .btn-mode {
   background: var(--bg-card);

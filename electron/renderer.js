@@ -134,10 +134,12 @@ const fallbackApi = (() => {
     getWeeklyReport: async () => null,
     getSleepScore: async () => ({ score: null, label: 'Preview', breakdown: {} }),
     getCompanionStatus: async () => ({ running: false, port: 0, clients: 0, url: '' }),
-    getRemoteControl: async () => ({ enabled: false, token: '', port: 0, lanIp: '', url: '' }),
-    setRemoteControlEnabled: async () => ({ enabled: false, token: '', url: '' }),
-    regenerateRemoteToken: async () => ({ enabled: false, token: '', url: '' }),
+    getRemoteControl: async () => ({ enabled: false, mode: 'off', token: '', port: 0, lanIp: '', url: '', pcName: 'Preview PC', clients: 0, connected: false, failed: false, statusLabel: 'Off' }),
+    setRemoteControlEnabled: async () => ({ enabled: false, mode: 'off', token: '', url: '', statusLabel: 'Off' }),
+    setRemoteControlMode: async () => ({ enabled: false, mode: 'off', token: '', url: '', statusLabel: 'Off' }),
+    regenerateRemoteToken: async () => ({ enabled: false, mode: 'off', token: '', url: '', statusLabel: 'Off' }),
     generateQr: async () => '',
+    onRemoteControlStatus: () => {},
     getFamilyPeers: async () => [],
     familyRemoteStart: async () => ({ success: true }),
     familyRemotePause: async () => ({ success: true }),
@@ -432,6 +434,11 @@ const els = {
   remoteQr: document.getElementById('remote-qr'),
   remoteQrWrap: document.getElementById('remote-qr-wrap'),
   btnRegenToken: document.getElementById('btn-regen-token'),
+  btnTurnOffCompanion: document.getElementById('btn-turn-off-companion'),
+  btnCopyUrl: document.getElementById('btn-copy-url'),
+  companionStatusPill: document.getElementById('companion-status-pill'),
+  companionConnectedBadge: document.getElementById('companion-connected-badge'),
+  remoteShortCode: document.getElementById('remote-short-code'),
 
   // Family mode
   btnFamilyScan: document.getElementById('btn-family-scan'),
@@ -1912,22 +1919,27 @@ function wireEvents() {
 function renderRemoteControl(rc) {
   if (!rc) return;
   const mode = rc.mode || 'off';
-  
+
   // Update mode buttons
   document.querySelectorAll('.btn-mode').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.mode === mode);
   });
 
-  // Update status pill
+  // Update status pill with the full state label from main.
   if (els.companionStatusPill) {
-    els.companionStatusPill.className = `status-pill status-${mode}`;
-    els.companionStatusPill.textContent = mode === 'off' ? 'Off' : (mode === 'local' ? 'This PC only' : 'Same Wi-Fi');
+    const statusClass = rc.failed ? 'status-failed' : rc.connected ? 'status-connected' : `status-${mode}`;
+    els.companionStatusPill.className = `status-pill ${statusClass}`;
+    els.companionStatusPill.textContent = rc.statusLabel || (mode === 'off' ? 'Off' : (mode === 'local' ? 'This PC only' : 'Same Wi-Fi enabled'));
   }
 
   if (els.remoteControlConfig) els.remoteControlConfig.style.display = mode === 'off' ? 'none' : '';
   if (els.remoteUrl) els.remoteUrl.textContent = rc.url || '';
   if (els.remoteShortCode) els.remoteShortCode.textContent = rc.shortCode || '';
-  
+  if (els.companionConnectedBadge) {
+    els.companionConnectedBadge.style.display = rc.connected ? '' : 'none';
+    els.companionConnectedBadge.textContent = rc.connected ? `${rc.clients} phone${rc.clients === 1 ? '' : 's'} connected` : '';
+  }
+
   // Only show QR for Same Wi-Fi mode
   updateRemoteQr(mode === 'wifi' ? rc.url : '');
 }
@@ -1989,6 +2001,8 @@ function setupRemoteControlHandlers() {
       notify('New pairing code generated', 'success');
     } catch { notify('Failed to regenerate code', 'error'); }
   });
+
+  api.onRemoteControlStatus?.(renderRemoteControl);
   loadRemoteControlState();
 }
 

@@ -81,6 +81,9 @@ full contributor handoff and which runtime owns a given task.
 - **Saved profiles** - save the current timer as a profile in one click, schedule
   by duration or a specific date/time, and right-click a profile to Start, Edit, or
   Delete it. Plus **calendar scheduling** (.ics import).
+- **Phone Companion Easy Connect** - control Lights Out from your phone on the same
+  Wi-Fi via a simple QR scan + pairing code. Off by default, token-protected, and never
+  exposes LAN access in "This PC only" mode.
 - **Last Light finale** - a cinematic timer-zero sequence with countdown ring,
   atmospheric panels, and UNPLUG visual (v10.1.0 northstar design). Power action
   fires automatically; emergency cancel (`Ctrl+Shift+S`) is always available.

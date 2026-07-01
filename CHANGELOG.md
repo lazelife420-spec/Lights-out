@@ -1,5 +1,31 @@
 # Changelog
 
+## v10.3.1 — Phone Companion Easy Connect (2026-06-29)
+
+### New
+- **Phone Companion Easy Connect** — settings panel now shows clear states:
+  `Off`, `This PC only`, `Waiting for phone`, `Phone connected`, or `Connection failed`.
+- **QR + manual pairing** — in `Same Wi-Fi` mode the desktop shows a scannable QR,
+  a manual URL fallback, and a short pairing code. `This PC only` mode binds
+  `127.0.0.1` and never exposes a phone QR. `Off` mode stops the listener entirely.
+- **Token-protected remote actions** — every phone command requires the pairing token;
+  invalid or missing tokens are rejected with a proper WebSocket policy-violation close.
+- **Real-time connection status** — the desktop status pill updates live when a phone
+  connects or disconnects, and shows how many phones are connected.
+- **Companion integration smoke test** — `npm run smoke:companion` starts the real
+  HTTP/WebSocket bridge and verifies off/local/wifi mode, token gating, token rotation,
+  and rejection semantics.
+
+### Changed
+- `companion.html` now shows explicit phone states: `Connecting…`, `Connected to [PC]`,
+  `Disconnected`, `Pairing expired`, and `Wrong network or PC offline`. All timer
+  actions require confirmation and are disabled while disconnected.
+
+### Internal
+- `companion.js` tracks connected client count and emits `status` events.
+- Main process broadcasts `remote-control-status` to the renderer on every state change.
+- Smoke suite: +9 companion-specific assertions.
+
 ## v10.3.0 — Ritual Mode + Intelligence (2026-06-28)
 
 ### New

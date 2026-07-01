@@ -61,10 +61,16 @@
 
     .status-pill { display: inline-flex; align-items: center; gap: 7px; padding: 7px 16px; border-radius: 999px; background: #161b22; border: 1px solid var(--card-border); font-size: 12px; font-weight: 600; color: var(--muted); margin: 16px 0 22px; }
     .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+    .status-pill.connecting { background: rgba(91,140,255,0.10); border-color: rgba(91,140,255,0.25); color: #7aa2ff; }
+    .status-pill.connecting .status-dot { background: #5b8cff; animation: pulse 1.2s ease infinite; }
     .status-pill.connected { background: rgba(76,175,80,0.10); border-color: rgba(76,175,80,0.25); color: #5ec763; }
     .status-pill.connected .status-dot { background: #4caf50; }
     .status-pill.disconnected { background: rgba(255,77,77,0.10); border-color: rgba(255,77,77,0.3); color: #ff6b6b; }
     .status-pill.disconnected .status-dot { background: #ff4d4d; }
+    .status-pill.expired { background: rgba(255,77,77,0.10); border-color: rgba(255,77,77,0.3); color: #ff6b6b; }
+    .status-pill.expired .status-dot { background: #ff4d4d; animation: pulse 1.2s ease infinite; }
+    .status-pill.offline { background: rgba(255,152,0,0.10); border-color: rgba(255,152,0,0.25); color: #ff9800; }
+    .status-pill.offline .status-dot { background: #ff9800; }
     .status-pill.running { background: rgba(76,175,80,0.10); border-color: rgba(76,175,80,0.25); color: #5ec763; }
     .status-pill.running .status-dot { background: #4caf50; animation: pulse 1.6s ease infinite; }
     .status-pill.paused { background: rgba(212,165,10,0.10); border-color: rgba(212,165,10,0.28); color: #e2b53a; }
@@ -74,6 +80,7 @@
     .status-pill.lastlight { background: rgba(255,77,77,0.10); border-color: rgba(255,77,77,0.3); color: #ff6b6b; }
     .status-pill.lastlight .status-dot { background: #ff4d4d; animation: pulse 0.85s ease infinite; }
     @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.8); } }
+    .pc-name { font-size: 11px; color: var(--muted); margin-top: -16px; margin-bottom: 18px; }
 
     .controls { display: flex; flex-direction: column; gap: 10px; }
     .section-label { font-size: 10px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--dim); text-align: left; margin: 2px 2px -2px; }
@@ -101,8 +108,8 @@
     /* Custom duration */
     .custom-row { display: flex; gap: 10px; }
     .custom-input { flex: 1; display: flex; align-items: center; gap: 8px; background: #12161d; border: 1px solid var(--card-border); border-radius: 14px; padding: 0 14px; }
-    .custom-input input { width: 100%; background: transparent; border: none; outline: none; color: var(--text); font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; padding: 14px 0; -moz-appearance: textfield; }
-    .custom-input input::-webkit-outer-spin-button, .custom-input input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .custom-input input { width: 100%; background: transparent; border: none; outline: none; color: var(--text); font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; padding: 14px 0; -moz-appearance: textfield; appearance: textfield; }
+    .custom-input input::-webkit-outer-spin-button, .custom-input input::-webkit-inner-spin-button { -webkit-appearance: none; appearance: none; margin: 0; }
     .custom-input .unit { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; }
     .btn-custom { flex: 0 0 96px; }
 
@@ -145,10 +152,11 @@
       </div>
     </div>
 
-    <div class="status-pill" id="status-pill">
+    <div class="status-pill connecting" id="status-pill">
       <span class="status-dot" id="status-dot"></span>
       <span class="status-text" id="status-text">Connecting…</span>
     </div>
+    <div class="pc-name" id="pc-name" style="display:none"></div>
 
     <!-- Pairing (shown when no token is stored yet) -->
     <div class="pair-card" id="pair-card" style="display:none">
@@ -264,6 +272,8 @@
     const RING_C = 2 * Math.PI * 54;
     const PHASE_COLORS = { focus: '#5b8cff', dim: '#d4a50a', lastlight: '#ff4d4d', idle: '#5b8cff' };
     let selectedAction = 'shutdown';
+    let pcName = '';
+    let connectionState = 'connecting'; // connecting | connected | disconnected | expired | offline
 
     function setRing(fraction, phase) {
       const f = Math.max(0, Math.min(1, fraction || 0));
@@ -296,12 +306,28 @@
     }
     let pairToken = resolveToken();
 
+    function setConnectionState(state, msg) {
+      connectionState = state;
+      statusPill.className = `status-pill ${state}`;
+      statusText.textContent = msg || state;
+      const pcEl = document.getElementById('pc-name');
+      if (pcEl) pcEl.style.display = (state === 'connected' && pcName) ? '' : 'none';
+      if (state === 'connected') {
+        disconnected.style.display = 'none';
+        pairCard.style.display = 'none';
+        enableControls(true);
+      } else {
+        enableControls(false);
+      }
+    }
+
     function showPairing() {
       pairCard.style.display = '';
       statusPill.style.display = 'none';
       idleControls.style.display = 'none';
       activeControls.style.display = 'none';
       disconnected.style.display = 'none';
+      document.getElementById('pc-name').style.display = 'none';
       pairError.style.display = 'none';
       setTimeout(() => { try { pairInput.focus(); } catch {} }, 80);
     }
@@ -331,44 +357,42 @@
     function connect() {
       if (!pairToken) { showPairing(); return; }
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      
-      statusPill.className = 'status-pill';
-      statusText.textContent = 'Connecting…';
-      
+
+      setConnectionState('connecting', 'Connecting…');
+      if (ws) { try { ws.close(); } catch {} }
+
       ws = new WebSocket(`${proto}//${location.host}/?t=${encodeURIComponent(pairToken)}`);
-      
+
       ws.onopen = () => {
-        disconnected.style.display = 'none';
-        statusPill.className = 'status-pill connected';
-        statusText.textContent = 'Connected';
+        setConnectionState('connected', pcName ? `Connected to ${pcName}` : 'Connected');
         showToast('Connected to PC');
-        enableControls(true);
       };
-      
+
       ws.onmessage = (e) => {
         try { handleUpdate(JSON.parse(e.data)); } catch {}
       };
-      
+
       ws.onclose = (e) => {
-        enableControls(false);
-        statusPill.className = 'status-pill disconnected';
-        if (e.code === 1006 || e.code === 1000) {
-          statusText.textContent = 'Disconnected';
-          document.getElementById('disconnected-msg').textContent = 'Disconnected from PC';
-        } else {
-          statusText.textContent = 'Pairing expired';
-          document.getElementById('disconnected-msg').textContent = 'Pairing expired or invalid';
+        // 1008 = policy violation / bad token, 1011 = server error, 1006 = abnormal close.
+        if (e.code === 1008) {
           localStorage.removeItem(TOKEN_KEY);
           pairToken = '';
+          setConnectionState('expired', 'Pairing expired');
+          document.getElementById('disconnected-msg').textContent = 'Pairing expired or invalid';
+          showPairing();
+        } else if (e.code === 1006) {
+          setConnectionState('offline', 'Wrong network or PC offline');
+          document.getElementById('disconnected-msg').textContent = 'Wrong network or PC offline';
+        } else {
+          setConnectionState('disconnected', 'Disconnected');
+          document.getElementById('disconnected-msg').textContent = 'Disconnected from PC';
         }
         disconnected.style.display = '';
         scheduleReconnect();
       };
-      
+
       ws.onerror = () => {
-        enableControls(false);
-        statusPill.className = 'status-pill disconnected';
-        statusText.textContent = 'Connection failed';
+        setConnectionState('offline', 'Wrong network or PC offline');
         document.getElementById('disconnected-msg').textContent = 'Wrong network or PC offline';
         disconnected.style.display = '';
         scheduleReconnect();
@@ -398,6 +422,12 @@
         const paused = data.paused;
         const phase = data.phase || 'idle';
 
+        if (data.pcName) {
+          pcName = data.pcName;
+          if (connectionState === 'connected') {
+            document.getElementById('pc-name').textContent = `Connected to ${pcName}`;
+          }
+        }
         timerName.textContent = data.timerName || 'Last Call';
         timerMain.textContent = formatTime(data.remainingSeconds);
         timerLabel.textContent = running ? (paused ? 'Paused' : `until ${data.action || 'shutdown'}`) : 'Idle';
@@ -408,14 +438,10 @@
         const remaining = Number(data.remainingSeconds) || 0;
         setRing(running && total > 0 ? remaining / total : 0, running ? phase : 'idle');
 
-        statusPill.className = 'status-pill';
-        if (!running) { statusText.textContent = 'Idle'; }
-        else if (paused) { statusPill.classList.add('paused'); statusText.textContent = 'Paused'; }
-        else {
-          const cls = phase === 'dim' ? 'dim' : phase === 'lastlight' ? 'lastlight' : 'running';
-          statusPill.classList.add(cls);
-          const labels = { focus: 'Focus', dim: 'Winding Down', lastlight: 'Last Light', idle: 'Running' };
-          statusText.textContent = labels[phase] || 'Running';
+        // Only override the connection pill when actually connected; otherwise leave the connection state visible.
+        if (connectionState === 'connected') {
+          statusPill.className = 'status-pill connected';
+          statusText.textContent = pcName ? `Connected to ${pcName}` : 'Connected';
         }
 
         idleControls.style.display = (running || paused) ? 'none' : '';
@@ -508,18 +534,30 @@
 
     // Running controls
     document.getElementById('btn-pause')?.addEventListener('click', () => {
-      send({ action: 'togglePause' });
-      showToast('Toggle pause');
+      const btn = document.getElementById('btn-pause');
+      const action = btn?.textContent === 'Resume' ? 'Resume' : 'Pause';
+      if (confirm(`${action} the timer?`)) {
+        send({ action: 'togglePause' });
+        showToast(`${action}d`);
+      }
     });
     document.getElementById('btn-snooze')?.addEventListener('click', () => {
-      send({ action: 'snooze', seconds: 300 });
-      showToast('Snoozed +5 min');
+      if (confirm('Snooze +5 minutes?')) {
+        send({ action: 'snooze', seconds: 300 });
+        showToast('Snoozed +5 min');
+      }
     });
     document.getElementById('btn-cancel')?.addEventListener('click', () => {
       if (confirm('Emergency cancel the timer?')) {
         send({ action: 'cancel' });
         showToast('Timer cancelled');
       }
+    });
+
+    // Reconnect action
+    pairReset.addEventListener('click', () => {
+      if (pairToken) connect();
+      else showPairing();
     });
 
     if (pairToken) connect();

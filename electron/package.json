@@ -10,6 +10,7 @@
     "icons": "node scripts/make-icons.js",
     "lint": "eslint .",
     "smoke": "node scripts/smoke-test.js",
+    "smoke:companion": "node scripts/companion-smoke.js",
     "smoke:packaged": "node scripts/packaged-smoke.js",
     "test": "node --test"
   },

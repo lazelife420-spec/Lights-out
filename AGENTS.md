@@ -166,6 +166,7 @@ Current smoke expectations include:
 - timer control IPC wiring
 - mini mode and keyboard shortcut guards
 - preview/fallback safe defaults
+- companion Easy Connect: off/local/wifi mode contract, QR gating, token-protected remote actions, and real-time connection status
 
 ### For static browser preview of Electron UI
 
