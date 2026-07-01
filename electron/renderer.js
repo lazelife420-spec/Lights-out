@@ -1125,6 +1125,7 @@ async function openReceiptsLedger() {
 function openSettingsPanel() {
   syncCustomizeUI();
   updateLastLightUIFromState();
+  loadRemoteControlState();
   els.optionsModal?.classList.add('active');
 }
 
@@ -1965,7 +1966,7 @@ async function updateRemoteQr(url) {
 }
 
 async function loadRemoteControlState() {
-  if (!els.chkRemoteControl) return;
+  if (!els.remoteControlConfig) return;
   try { renderRemoteControl(await api.getRemoteControl?.()); } catch {}
 }
 

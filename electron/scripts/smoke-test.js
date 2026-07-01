@@ -316,6 +316,12 @@ check('companion: mode buttons present in settings', () => {
   assert(htmlSrc.includes('data-mode="off"'), 'off mode button missing');
   assert(htmlSrc.includes('data-mode="local"'), 'local mode button missing');
   assert(htmlSrc.includes('data-mode="wifi"'), 'wifi mode button missing');
+  assert(htmlSrc.includes('Connect Phone'), 'Connect Phone button missing');
+});
+
+check('companion: settings panel loads remote control state on open', () => {
+  assertMatch(rendererSrc, /function openSettingsPanel\(\) \{[\s\S]*?loadRemoteControlState\(\)/s, 'openSettingsPanel must load remote control state');
+  assertMatch(rendererSrc, /async function loadRemoteControlState\(\) \{\s*if \(!els\.remoteControlConfig\) return;\s*try \{ renderRemoteControl\(await api\.getRemoteControl\?\.\(\)\); \} catch \{\}/, 'loadRemoteControlState should not bail on missing checkbox');
 });
 
 check('companion: QR only shown for same-wifi mode', () => {

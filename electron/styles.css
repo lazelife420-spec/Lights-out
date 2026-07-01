@@ -4559,6 +4559,12 @@ body.mini-mode .ns-proof-section { display: none !important; }
   box-shadow: 0 0 12px rgba(74, 158, 255, 0.3);
 }
 
+.mode-selector .btn-mode-primary {
+  border-color: var(--accent-green);
+  color: var(--accent-green);
+  font-weight: 600;
+}
+
 .btn-icon-small {
   background: var(--bg-elevated);
   border: 1px solid var(--border-color);
