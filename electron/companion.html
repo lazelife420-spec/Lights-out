@@ -161,10 +161,11 @@
     <!-- Pairing (shown when no token is stored yet) -->
     <div class="pair-card" id="pair-card" style="display:none">
       <div class="pair-title">Connect to this PC?</div>
-      <div class="pair-hint">Scan the QR code in the desktop app's Remote Control settings, or type the pairing code shown beneath it.</div>
+      <div class="pair-hint">Scan the QR code in the desktop app's Remote Control settings, or type the PC address and pairing code shown beneath it.</div>
+      <input class="pair-input" id="pair-host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="PC address (e.g. 192.168.1.5:58732)" aria-label="PC address" style="margin-bottom:8px">
       <input class="pair-input" id="pair-input" type="text" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Pairing code" aria-label="Pairing code">
       <button class="btn btn-primary pair-submit" id="pair-submit">Connect</button>
-      <div class="pair-error" id="pair-error" style="display:none">Enter the pairing code to continue.</div>
+      <div class="pair-error" id="pair-error" style="display:none">Enter the PC address and pairing code to continue.</div>
     </div>
 
     <!-- Start controls (shown when idle) -->
@@ -264,6 +265,7 @@
     const actionSeg = document.getElementById('action-seg');
     const customMin = document.getElementById('custom-min');
     const pairCard = document.getElementById('pair-card');
+    const hostInput = document.getElementById('pair-host');
     const pairInput = document.getElementById('pair-input');
     const pairSubmit = document.getElementById('pair-submit');
     const pairError = document.getElementById('pair-error');
@@ -293,6 +295,17 @@
     let reconnectTimer = null;
 
     const TOKEN_KEY = 'lightsout_pair_token';
+    const HOST_KEY = 'lightsout_pair_host';
+    function resolveHost() {
+      const fromUrl = new URLSearchParams(location.search).get('host');
+      if (fromUrl) {
+        try { localStorage.setItem(HOST_KEY, fromUrl); } catch {}
+        return fromUrl;
+      }
+      let stored = '';
+      try { stored = localStorage.getItem(HOST_KEY) || ''; } catch {}
+      return stored;
+    }
     function resolveToken() {
       const fromUrl = new URLSearchParams(location.search).get('t');
       if (fromUrl) {
@@ -304,6 +317,7 @@
       try { stored = localStorage.getItem(TOKEN_KEY) || ''; } catch {}
       return stored;
     }
+    let pairHost = resolveHost();
     let pairToken = resolveToken();
 
     function setConnectionState(state, msg) {
@@ -329,6 +343,7 @@
       disconnected.style.display = 'none';
       document.getElementById('pc-name').style.display = 'none';
       pairError.style.display = 'none';
+      try { hostInput.value = pairHost || ''; } catch {}
       setTimeout(() => { try { pairInput.focus(); } catch {} }, 80);
     }
     function hidePairing() {
@@ -336,9 +351,12 @@
       statusPill.style.display = '';
     }
     function applyPairToken() {
+      const host = (hostInput.value || '').trim();
       const entered = (pairInput.value || '').trim();
-      if (!entered) { pairError.style.display = ''; try { pairInput.focus(); } catch {} return; }
+      if (!host || !entered) { pairError.style.display = ''; try { (host ? pairInput : hostInput).focus(); } catch {} return; }
+      try { localStorage.setItem(HOST_KEY, host); } catch {}
       try { localStorage.setItem(TOKEN_KEY, entered); } catch {}
+      pairHost = host;
       pairToken = entered;
       hidePairing();
       connect();
@@ -356,12 +374,13 @@
 
     function connect() {
       if (!pairToken) { showPairing(); return; }
+      const host = pairHost || location.host;
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
 
       setConnectionState('connecting', 'Connecting…');
       if (ws) { try { ws.close(); } catch {} }
 
-      ws = new WebSocket(`${proto}//${location.host}/?t=${encodeURIComponent(pairToken)}`);
+      ws = new WebSocket(`${proto}//${host}/?t=${encodeURIComponent(pairToken)}`);
 
       ws.onopen = () => {
         setConnectionState('connected', pcName ? `Connected to ${pcName}` : 'Connected');
