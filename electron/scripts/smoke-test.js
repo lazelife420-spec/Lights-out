@@ -424,6 +424,13 @@ check('companion: dead setRemoteControlEnabled IPC surface removed', () => {
   assertMatch(preloadSrc, /setRemoteControlMode: \(mode\) => ipcRenderer\.invoke\('set-remote-control-mode', mode\)/, 'the real set-remote-control-mode bridge must still be exposed');
 });
 
+check('ipc: execute-action power-action channel removed (unvalidated, unused renderer-facing surface)', () => {
+  assert(!/executeAction/.test(preloadSrc), 'preload should not expose an executeAction bridge');
+  assert(!/'execute-action'/.test(preloadSrc), 'preload should not reference the execute-action channel');
+  assert(!/ipcMain\.handle\('execute-action'/.test(mainSrc), 'main should not register a handler for execute-action');
+  assert(!/executeAction/.test(rendererSrc), 'renderer (including the offline-preview fallback) should not reference executeAction');
+});
+
 check('companion: same-wifi URL includes token and host for Android APK', () => {
   // The URL must carry the token and a host parameter so packaged Android
   // companions (which load the UI locally) know where to connect.

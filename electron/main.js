@@ -1327,7 +1327,6 @@ ipcMain.handle('cancel-timer', async () => cancelTimer());
 ipcMain.handle('pause-timer', async () => pauseTimer());
 ipcMain.handle('resume-timer', async () => resumeTimer());
 ipcMain.handle('snooze-timer', async (event, seconds, reason) => snoozeTimer(seconds, reason));
-ipcMain.handle('execute-action', async (event, action, options = {}) => executePowerAction({ ...options, action }));
 
 let systemInfoCache = null;
 let systemInfoCachedAt = 0;

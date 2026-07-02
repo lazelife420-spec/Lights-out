@@ -8,8 +8,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   pauseTimer: () => ipcRenderer.invoke('pause-timer'),
   resumeTimer: () => ipcRenderer.invoke('resume-timer'),
   snoozeTimer: (seconds, reason) => ipcRenderer.invoke('snooze-timer', seconds, reason),
-  executeAction: (action, options) => ipcRenderer.invoke('execute-action', action, options),
-  
+
   // Override Tax
   assessSnoozeCost: () => ipcRenderer.invoke('assess-snooze-cost'),
   getOverrideTaxStats: () => ipcRenderer.invoke('get-override-tax-stats'),
