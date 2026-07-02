@@ -1,5 +1,7 @@
 const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, globalShortcut, shell, screen } = require('electron');
+const os = require('os');
 const path = require('path');
+const fs = require('fs');
 const { spawn } = require('child_process');
 const smartLights = require('./smartLights');
 const profiles = require('./profiles');
@@ -36,6 +38,64 @@ const TRAY_ICON = path.join(__dirname, 'assets', 'tray-32.png');
 
 // Pre-built tray icon variants (generated on first use).
 let trayIcons = null;
+
+function writeStartupLog(message, extra) {
+  try {
+    const logPath = path.join(app.getPath('userData'), 'startup.log');
+    const line = `[${new Date().toISOString()}] ${message}${extra ? ` ${JSON.stringify(extra)}` : ''}\n`;
+    fs.appendFileSync(logPath, line, 'utf8');
+  } catch {
+    // Best effort only; startup diagnostics should never block launch.
+  }
+}
+
+function getPortableExtractionRoot() {
+  const exePath = process.execPath;
+  const exeDir = path.dirname(exePath);
+  const tmpRoot = path.resolve(os.tmpdir());
+  const rel = path.relative(tmpRoot, exeDir);
+  const exeName = path.basename(exePath).toLowerCase();
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+  if (exeName !== 'lights out.exe') return null;
+  if (!fs.existsSync(path.join(exeDir, 'resources', 'app.asar'))) return null;
+  return exeDir;
+}
+
+function cleanupStalePortableExtracts() {
+  const currentRoot = getPortableExtractionRoot();
+  if (!currentRoot) return;
+
+  const tmpRoot = path.resolve(os.tmpdir());
+  const currentName = path.basename(currentRoot);
+  let removed = 0;
+
+  try {
+    const entries = fs.readdirSync(tmpRoot, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !/^3F/i.test(entry.name) || entry.name === currentName) continue;
+      const candidate = path.join(tmpRoot, entry.name);
+      const candidateExe = path.join(candidate, 'Lights Out.exe');
+      const candidateAsar = path.join(candidate, 'resources', 'app.asar');
+      if (!fs.existsSync(candidateExe) || !fs.existsSync(candidateAsar)) continue;
+      try {
+        fs.rmSync(candidate, { recursive: true, force: true });
+        removed++;
+      } catch (error) {
+        writeStartupLog('Failed to remove stale portable extraction', {
+          candidate,
+          message: error.message
+        });
+      }
+    }
+  } catch (error) {
+    writeStartupLog('Portable extraction cleanup scan failed', { message: error.message });
+    return;
+  }
+
+  if (removed > 0) {
+    writeStartupLog('Removed stale portable extractions', { removed });
+  }
+}
 
 async function ensureTrayIcons() {
   if (trayIcons) return trayIcons;
@@ -127,6 +187,30 @@ function parseLaunchOptions(argv) {
 }
 
 function createWindow() {
+  let startupActionsApplied = false;
+
+  function applyLaunchPresentation(source) {
+    if (!mainWindow || mainWindow.isDestroyed() || startupActionsApplied) return;
+    startupActionsApplied = true;
+    writeStartupLog('Applying launch presentation', { source, minimized: launchOptions.minimized });
+
+    if (launchOptions.minimized) {
+      mainWindow.minimize();
+      mainWindow.hide();
+    } else {
+      mainWindow.show();
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+
+    if (launchOptions.timerMinutes > 0 && !launchOptions.noAutoStart) {
+      startTimer({
+        durationSeconds: launchOptions.timerMinutes * 60,
+        action: launchOptions.action
+      });
+    }
+  }
+
   const windowConfig = miniMode ? {
     width: 260,
     height: 320,
@@ -148,6 +232,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     ...windowConfig,
     frame: true,
+    title: 'Lights Out',
     titleBarStyle: 'default',
     autoHideMenuBar: true,
     show: false,
@@ -161,7 +246,9 @@ function createWindow() {
   });
 
   mainWindow.miniMode = miniMode;
-  mainWindow.loadFile('index.html');
+  mainWindow.loadFile('index.html').catch(error => {
+    writeStartupLog('loadFile failed', { message: error.message });
+  });
 
   // Hardening: never open arbitrary content in-app. External http(s) links go
   // to the default browser; everything else is denied.
@@ -176,21 +263,25 @@ function createWindow() {
     }
   });
 
-  mainWindow.once('ready-to-show', () => {
-    if (launchOptions.minimized) {
-      mainWindow.minimize();
-      mainWindow.hide();
-    } else {
-      mainWindow.show();
-    }
-
-    if (launchOptions.timerMinutes > 0 && !launchOptions.noAutoStart) {
-      startTimer({
-        durationSeconds: launchOptions.timerMinutes * 60,
-        action: launchOptions.action
-      });
-    }
+  mainWindow.once('ready-to-show', () => applyLaunchPresentation('ready-to-show'));
+  mainWindow.webContents.once('did-finish-load', () => {
+    writeStartupLog('Renderer finished load');
+    setTimeout(() => applyLaunchPresentation('did-finish-load-fallback'), 150);
   });
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    writeStartupLog('Renderer failed load', { errorCode, errorDescription, validatedURL });
+  });
+  mainWindow.webContents.on('render-process-gone', (event, details) => {
+    writeStartupLog('Renderer process gone', details);
+  });
+  mainWindow.webContents.on('unresponsive', () => {
+    writeStartupLog('Renderer unresponsive');
+  });
+
+  setTimeout(() => {
+    if (!mainWindow || mainWindow.isDestroyed() || launchOptions.minimized || startupActionsApplied) return;
+    applyLaunchPresentation('startup-timeout-fallback');
+  }, 3000);
 
   mainWindow.on('close', event => {
     if (app.isQuitting) return;
@@ -924,6 +1015,11 @@ async function checkCalendarAutoStart() {
 
 function handleCompanionMessage(msg, client) {
   if (!msg || !msg.action) return;
+  
+  // Hard safety: if companion mode is OFF, reject all messages even if they reached here.
+  const rc = settingsStore.getSection('remoteControl') || {};
+  if (!rc.mode || rc.mode === 'off') return;
+
   switch (msg.action) {
     case 'start':
       startTimer({
@@ -958,6 +1054,7 @@ function broadcastCompanionState() {
     action: timerState.action,
     phase: timerState.phase,
     timerName: appSettings.timerName || 'Last Call',
+    pcName: require('os').hostname(),
     dryRun: timerState.dryRun,
     overrideTax: {
       sessionSnoozeCount: taxStats.sessionSnoozeCount,
@@ -1008,13 +1105,50 @@ function getRemoteControlState() {
   const rc = settingsStore.getSection('remoteControl') || {};
   const ips = family.getLocalIPs();
   const lanIp = ips[0] || '127.0.0.1';
+  const mode = rc.mode || (rc.enabled ? 'wifi' : 'off');
+  const pcName = require('os').hostname();
+
+  let url = '';
+  if (mode === 'wifi' && rc.token) {
+    // Include the desktop host as a separate parameter so packaged Android
+    // companions (which load the UI locally) know where to open the WebSocket.
+    url = `http://${lanIp}:${companion.PWA_PORT}/?t=${rc.token}&host=${encodeURIComponent(`${lanIp}:${companion.PWA_PORT}`)}`;
+  } else if (mode === 'local' && rc.token) {
+    url = `http://127.0.0.1:${companion.PWA_PORT}/?t=${rc.token}`;
+  }
+
+  const status = companion.getStatus();
+  const connected = status.connected && status.clients > 0;
+  const failed = status.failed;
+
   return {
-    enabled: !!rc.enabled,
+    enabled: mode !== 'off',
+    mode,
     token: rc.token || '',
+    shortCode: rc.token ? rc.token.slice(0, 6).toUpperCase() : '',
     port: companion.PWA_PORT,
     lanIp,
-    url: (rc.enabled && rc.token) ? `http://${lanIp}:${companion.PWA_PORT}/?t=${rc.token}` : ''
+    url,
+    pcName,
+    clients: status.clients || 0,
+    connected,
+    failed,
+    statusLabel: getCompanionStatusLabel(mode, connected, failed, status.clients)
   };
+}
+
+function getCompanionStatusLabel(mode, connected, failed, clients) {
+  if (mode === 'off') return 'Off';
+  if (mode === 'local') return 'This PC only';
+  if (failed) return 'Connection failed';
+  if (connected) return 'Phone connected';
+  if (clients > 0) return 'Phone connected';
+  return 'Waiting for phone';
+}
+
+function broadcastRemoteControlState() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('remote-control-status', getRemoteControlState());
 }
 
 function stopRemoteControl() {
@@ -1026,9 +1160,18 @@ function startRemoteControl() {
   // Always rebuild from a clean state so token changes take effect.
   stopRemoteControl();
   const rc = settingsStore.getSection('remoteControl') || {};
-  if (!rc.enabled || !rc.token) return false;
-  companion.start({ token: rc.token, host: '0.0.0.0' });
-  family.start({ enabled: true, token: rc.token, peerName: require('os').hostname() }, familyCommandHandler);
+  const mode = rc.mode || (rc.enabled ? 'wifi' : 'off');
+  
+  if (mode === 'off' || !rc.token) return false;
+  
+  if (mode === 'wifi') {
+    companion.start({ token: rc.token, host: '0.0.0.0' });
+    family.start({ enabled: true, token: rc.token, peerName: require('os').hostname() }, familyCommandHandler);
+  } else if (mode === 'local') {
+    companion.start({ token: rc.token, host: '127.0.0.1' });
+    // Family mode (LAN discovery) is disabled in "This PC only" mode.
+  }
+  
   return true;
 }
 
@@ -1376,19 +1519,23 @@ ipcMain.handle('generate-qr', async (e, text) => {
     return '';
   }
 });
-ipcMain.handle('set-remote-control-enabled', async (e, enabled) => {
+ipcMain.handle('set-remote-control-mode', async (e, mode) => {
   const rc = settingsStore.getSection('remoteControl') || {};
-  const patch = { enabled: !!enabled };
+  const patch = { mode };
   // Generate a pairing token the first time remote control is turned on.
-  if (enabled && !rc.token) patch.token = remoteControl.generateToken();
+  if (mode !== 'off' && !rc.token) patch.token = remoteControl.generateToken();
   settingsStore.updateSection('remoteControl', patch);
   startRemoteControl();
-  return getRemoteControlState();
+  const state = getRemoteControlState();
+  broadcastRemoteControlState();
+  return state;
 });
 ipcMain.handle('regenerate-remote-token', async () => {
   settingsStore.updateSection('remoteControl', { token: remoteControl.generateToken() });
   startRemoteControl();
-  return getRemoteControlState();
+  const state = getRemoteControlState();
+  broadcastRemoteControlState();
+  return state;
 });
 ipcMain.handle('get-family-peers', async () => {
   return family.getPeers();
@@ -1963,7 +2110,11 @@ if (!gotTheLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (!mainWindow) return;
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      writeStartupLog('Second instance requested window recreation');
+      createWindow();
+      return;
+    }
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.show();
     mainWindow.focus();
@@ -1972,6 +2123,8 @@ if (!gotTheLock) {
 }
 
 app.whenReady().then(async () => {
+  cleanupStalePortableExtracts();
+
   // Load persisted settings and rehydrate the smart-lights module.
   settingsStore.load();
   smartLights.loadConfig(settingsStore.getSection('smartLights'));
@@ -2020,6 +2173,11 @@ app.whenReady().then(async () => {
         console.error('Failed to broadcast streaks to companion:', e);
       }
     }, 500);
+  });
+  companion.onStatus(() => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('remote-control-status', getRemoteControlState());
+    }
   });
 
   // Broadcast timer state to connected companion clients periodically.

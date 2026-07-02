@@ -142,6 +142,32 @@ check('startup: launch flags still parse minimized, no-auto-start, timer, and ac
   assertMatch(mainSrc, /if \(lower\.startsWith\('--action='\)\) options\.action = lower\.split\('='\)\[1\] \|\| 'shutdown';/, 'action flag parser changed');
 });
 
+check('startup: portable temp cleanup only targets stale Lights Out extractions', () => {
+  assertMatch(mainSrc, /function getPortableExtractionRoot\(\) \{[\s\S]*os\.tmpdir\(\)[\s\S]*exeName !== 'lights out\.exe'[\s\S]*resources', 'app\.asar'/s, 'portable extraction detector missing');
+  assertMatch(mainSrc, /function cleanupStalePortableExtracts\(\) \{[\s\S]*!\/\^3F\/i\.test\(entry\.name\)[\s\S]*candidateExe = path\.join\(candidate, 'Lights Out\.exe'\)[\s\S]*candidateAsar = path\.join\(candidate, 'resources', 'app\.asar'\)/s, 'portable cleanup scope changed');
+  assertMatch(mainSrc, /app\.whenReady\(\)\.then\(async \(\) => \{[\s\S]*cleanupStalePortableExtracts\(\);/s, 'portable cleanup not called at startup');
+});
+
+check('tray: initialization and cleanup', () => {
+  assertMatch(mainSrc, /let tray = null;/, 'tray variable missing');
+  assertMatch(mainSrc, /async function createTray\(\) \{/, 'createTray function missing');
+  assertMatch(mainSrc, /tray = new Tray\(trayIcons\.idle\);/, 'tray creation missing');
+});
+
+check('tray: hide/show and toggle logic', () => {
+  assertMatch(mainSrc, /function toggleMainWindow\(\) \{/, 'toggleMainWindow function missing');
+  assertMatch(mainSrc, /if \(mainWindow\.isVisible\(\)\) \{[\s\S]*mainWindow\.hide\(\);/s, 'toggleMainWindow hide logic missing');
+  assertMatch(mainSrc, /\} else \{[\s\S]*mainWindow\.show\(\);/s, 'toggleMainWindow show logic missing');
+  assertMatch(mainSrc, /tray\.on\('click', toggleMainWindow\);/, 'tray click event not wired to toggle');
+});
+
+check('mini-mode: toggle and resizing', () => {
+  assertMatch(mainSrc, /let miniMode = false;/, 'miniMode variable missing');
+  assertMatch(mainSrc, /ipcMain\.on\('toggle-mini-mode', \(\) => \{[\s\S]*miniMode = !miniMode;/s, 'miniMode toggle missing');
+  assertMatch(mainSrc, /if \(miniMode\) \{[\s\S]*mainWindow\.setSize\(260, 320\);/s, 'mini-mode resize missing');
+  assertMatch(mainSrc, /mainWindow\.webContents\.send\('mini-mode-changed', miniMode\);/, 'mini-mode-changed event missing');
+});
+
 check('tray: close-to-tray behavior remains the default window close action', () => {
   assertMatch(mainSrc, /mainWindow\.on\('close', event => \{\s+if \(app\.isQuitting\) return;\s+event\.preventDefault\(\);\s+mainWindow\.hide\(\);\s+refreshTrayMenu\(\);\s+\}\);/s, 'window close no longer hides to tray');
 });
@@ -181,7 +207,7 @@ check('ipc: timer and login handlers remain exposed from main', () => {
 
 // 7. Core UI controls exist (start/pause/resume/snooze/cancel/mini + customize).
 const htmlSrc = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-for (const id of ['btn-start', 'btn-stop', 'btn-pause', 'btn-snooze', 'btn-mini', 'cz-accent', 'cz-theme', 'cz-ring', 'cz-opacity', 'cz-volume', 'cz-clock-format', 'cz-clock-scale', 'cz-clock-dial', 'cz-clock-date', 'chk-lastlight', 'sel-lastlight-sequence', 'warning-modal', 'last-light-overlay', 'morning-proof-section', 'proof-card', 'receipts-modal']) {
+for (const id of ['btn-start', 'btn-stop', 'btn-pause', 'btn-snooze', 'btn-mini', 'btn-warning-ledger', 'btn-notif', 'btn-widget', 'btn-companion', 'cz-accent', 'cz-theme', 'cz-ring', 'cz-opacity', 'cz-volume', 'cz-clock-format', 'cz-clock-scale', 'cz-clock-dial', 'cz-clock-date', 'chk-lastlight', 'sel-lastlight-sequence', 'warning-modal', 'last-light-overlay', 'morning-proof-section', 'proof-card', 'receipts-modal']) {
   check(`ui: #${id} present`, () => {
     assert(htmlSrc.includes(`id="${id}"`), `missing #${id}`);
   });
@@ -194,6 +220,17 @@ check('ui: login wording stays aligned with safe startup behavior', () => {
 check('ui: warning modal keeps snooze and cancel choices', () => {
   assertMatch(htmlSrc, /id="warning-snooze"/, 'warning snooze button missing');
   assertMatch(htmlSrc, /id="warning-cancel"/, 'warning cancel button missing');
+});
+
+check('ui: icon-only navigation and footer buttons have accessible labels', () => {
+  assertMatch(htmlSrc, /data-ns-tab="lib"[^>]*aria-label="Open library"/, 'LIB aria-label missing');
+  assertMatch(htmlSrc, /data-ns-tab="sch"[^>]*aria-label="Open schedule"/, 'SCH aria-label missing');
+  assertMatch(htmlSrc, /data-ns-tab="set"[^>]*aria-label="Open settings"/, 'SET aria-label missing');
+  assertMatch(htmlSrc, /data-ns-tab="help"[^>]*aria-label="Open help and about"/, 'Help aria-label missing');
+  assertMatch(htmlSrc, /data-ns-tab="stats"[^>]*aria-label="Open stats"/, 'Stats aria-label missing');
+  assertMatch(htmlSrc, /id="btn-notif"[^>]*aria-label="Open notifications"/, 'Notifications aria-label missing');
+  assertMatch(htmlSrc, /id="btn-widget"[^>]*aria-label="Toggle desktop widget"/, 'Widget aria-label missing');
+  assertMatch(htmlSrc, /id="btn-companion"[^>]*aria-label="Open companion setup"/, 'Companion aria-label missing');
 });
 
 const preloadSrc = fs.readFileSync(path.join(root, 'preload.js'), 'utf8');
@@ -216,16 +253,166 @@ check('renderer: running-state controls still swap start-stop-pause visibility a
   assertMatch(rendererSrc, /els\.btnPause\.querySelector\('span:last-child'\)\.textContent = state\.paused \? 'Resume' : 'Pause';/, 'renderer pause/resume label changed');
 });
 
-check('renderer: keyboard shortcuts still cover space, escape, presets, and Ctrl+M', () => {
+check('renderer: keyboard shortcuts - Space (Start/Pause)', () => {
   assertMatch(rendererSrc, /if \(event\.key === ' ' \|\| event\.code === 'Space'\) \{[\s\S]*if \(state\.running \|\| state\.paused\) togglePause\(\);[\s\S]*else startTimer\(\);/s, 'space shortcut changed');
+});
+
+check('renderer: keyboard shortcuts - Escape (Cancel/Modals)', () => {
   assertMatch(rendererSrc, /if \(event\.key === 'Escape'\) \{[\s\S]*else if \(state\.running \|\| state\.paused\) \{[\s\S]*cancelTimer\(\);/s, 'escape cancel shortcut changed');
-  assertMatch(rendererSrc, /const presets = \{ '1': 5, '2': 10, '3': 15, '4': 30, '5': 60, '6': 120 \};/, 'preset shortcut map changed');
+});
+
+check('renderer: keyboard shortcuts - Ctrl+M (Mini Mode)', () => {
   assertMatch(rendererSrc, /case 'm':[\s\S]*toggleMiniMode\(\);/s, 'Ctrl+M mini-mode shortcut changed');
+});
+
+check('renderer: keyboard shortcuts - Ctrl+Shift+S (Show/Hide)', () => {
+  // Ctrl+Shift+S is mapped to show/hide in main.js, not emergency cancel
+  // This is verified in main.js at line 1968: globalShortcut.register('Ctrl+Shift+S', toggleMainWindow);
+  assertMatch(mainSrc, /globalShortcut\.register\('Ctrl\+Shift\+S', toggleMainWindow\)/, 'Ctrl+Shift+S show/hide mapping missing in main.js');
+});
+
+check('renderer: keyboard shortcuts - Ctrl+Shift+X (Emergency Cancel)', () => {
+  // Emergency cancel is on Ctrl+Shift+X in main.js
+  assertMatch(mainSrc, /globalShortcut\.register\('Ctrl\+Shift\+X', \(\) => \{[\s\S]*cancelTimer\(\);/s, 'Ctrl+Shift+X emergency cancel mapping missing in main.js');
+});
+
+check('renderer: keyboard shortcuts - Presets (1-9)', () => {
+  assertMatch(rendererSrc, /const presets = \{ '1': 5, '2': 10, '3': 15, '4': 30, '5': 60, '6': 120 \};/, 'preset shortcut map changed');
+});
+
+check('ux: focus-visible and accessibility', () => {
+  const cssSrc = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  // Accept grouped selectors like "button:focus-visible, [role=\"button\"]:focus-visible" as valid
+  assertMatch(cssSrc, /button:focus-visible[^{]*\{[\s\S]*outline:/, 'focus-visible outline missing in CSS');
+  assertMatch(htmlSrc, /aria-label=/, 'accessibility aria-labels missing in HTML');
+  assertMatch(cssSrc, /button\[aria-disabled="true"\]/, 'disabled button styling missing in CSS');
 });
 
 check('renderer fallback: preview mode stays safe and idle by default', () => {
   assertMatch(rendererSrc, /runAtLogin: false,[\s\S]*startupBehavior: 'Starts minimized and idle'/s, 'fallback startup behavior changed');
   assertMatch(rendererSrc, /state\.dryRun = true;/, 'fallback should remain dry-run');
+});
+
+check('renderer: visible sidebar navigation routes to a real tab or modal', () => {
+  assertMatch(rendererSrc, /function handleSidebarNavigation\(tab, \{ persist = true \} = \{\}\) \{/, 'sidebar navigation router missing');
+  assertMatch(rendererSrc, /if \(tab === 'lib'\) handled = activateTopTab\('library'\);/, 'LIB routing missing');
+  assertMatch(rendererSrc, /if \(tab === 'sch'\) handled = activateTopTab\('schedule'\);/, 'SCH routing missing');
+  assertMatch(rendererSrc, /if \(tab === 'set'\) \{[\s\S]*openSettingsPanel\(\);[\s\S]*handled = true;/s, 'SET routing missing');
+  assertMatch(rendererSrc, /if \(tab === 'help'\) \{[\s\S]*openHelpPanel\(\);[\s\S]*handled = true;/s, 'Help routing missing');
+  assertMatch(rendererSrc, /if \(tab === 'stats'\) handled = activateTopTab\('streaks'\);/, 'STATS routing missing');
+  assertMatch(rendererSrc, /document\.querySelectorAll\('\.ns-nav-item'\)\.forEach\(btn => \{[\s\S]*handleSidebarNavigation\(btn\.dataset\.nsTab\);/s, 'sidebar click handler missing');
+});
+
+check('renderer: footer and ledger controls provide real feedback', () => {
+  assertMatch(rendererSrc, /els\.btnWidget\?\.addEventListener\('click', \(\) => \{[\s\S]*api\.toggleWidget\?\.\(\);[\s\S]*notify\('Desktop widget toggled', 'info'\);/s, 'widget button feedback missing');
+  assertMatch(rendererSrc, /els\.btnCompanion\?\.addEventListener\('click', async \(\) => \{[\s\S]*notify\(`Companion at \$\{rc\.url\}`, 'info'\);[\s\S]*openSettingsPanel\(\);[\s\S]*notify\('Enable Remote Control in settings before opening the Companion PWA', 'info'\);[\s\S]*notify\('Companion setup is unavailable right now', 'warning'\);/s, 'companion button behavior missing');
+  assertMatch(rendererSrc, /const btnNotif = document\.getElementById\('btn-notif'\);[\s\S]*notifDrawer\.style\.display = notifDrawer\.style\.display === 'none' \? '' : 'none';/s, 'notifications button handler missing');
+  assertMatch(rendererSrc, /if \(els\.btnWarningLedger\) \{[\s\S]*openReceiptsLedger\(\)/s, 'warning ledger button wiring missing');
+  assertMatch(rendererSrc, /if \(els\.btnProofDetails\) \{[\s\S]*openReceiptsLedger\(\)/s, 'proof ledger button wiring missing');
+});
+
+// Companion Easy Connect UI contract.
+check('companion: mode buttons present in settings', () => {
+  assert(htmlSrc.includes('data-mode="off"'), 'off mode button missing');
+  assert(htmlSrc.includes('data-mode="local"'), 'local mode button missing');
+  assert(htmlSrc.includes('data-mode="wifi"'), 'wifi mode button missing');
+  assert(htmlSrc.includes('Connect Phone'), 'Connect Phone button missing');
+});
+
+check('companion: settings panel loads remote control state on open', () => {
+  assertMatch(rendererSrc, /function openSettingsPanel\(\) \{[\s\S]*?loadRemoteControlState\(\)/s, 'openSettingsPanel must load remote control state');
+  assertMatch(rendererSrc, /async function loadRemoteControlState\(\) \{\s*if \(!els\.remoteControlConfig\) return;\s*try \{ renderRemoteControl\(await api\.getRemoteControl\?\.\(\)\); \} catch \{\}/, 'loadRemoteControlState should not bail on missing checkbox');
+});
+
+check('companion: QR only shown for same-wifi mode', () => {
+  assertMatch(rendererSrc, /updateRemoteQr\(mode === 'wifi' \? rc\.url : ''\)/, 'QR should only render for wifi mode');
+});
+
+check('companion: copy, regenerate, and off buttons wired', () => {
+  assertMatch(rendererSrc, /els\.btnCopyUrl\?\.addEventListener\('click', /, 'copy URL button not wired');
+  assertMatch(rendererSrc, /els\.btnRegenToken\?\.addEventListener\('click', async \(\) => \{/, 'regenerate token button not wired');
+  assertMatch(rendererSrc, /els\.btnTurnOffCompanion\?\.addEventListener\('click', async \(\) => \{/, 'turn off companion button not wired');
+});
+
+check('companion: status pill is visible near the heading and listens to pushed state', () => {
+  assert(htmlSrc.includes('id="companion-status-pill"'), 'companion status pill missing in HTML');
+  assertMatch(rendererSrc, /api\.onRemoteControlStatus\?\.\(renderRemoteControl\)/, 'renderer not subscribed to remote-control-status pushes');
+  assertMatch(rendererSrc, /renderRemoteControl\(rc\)/, 'renderRemoteControl missing');
+  assertMatch(rendererSrc, /els\.companionStatusPill\.textContent = rc\.statusLabel \|\| \(mode === 'off' \? 'Off' : \(mode === 'local' \? 'This PC only' : 'Same Wi-Fi'\)\)/, 'status pill text must use Off / This PC only / Same Wi-Fi labels');
+});
+
+check('companion: status pill class updates by mode and connection state', () => {
+  assertMatch(rendererSrc, /const statusClass = rc\.failed \? 'status-failed' : rc\.connected \? 'status-connected' : `status-\${mode}`/, 'status pill class must reflect failed/connected/mode');
+});
+
+check('companion: Off hides QR and manual LAN URL', () => {
+  assertMatch(rendererSrc, /if \(els\.remoteControlConfig\) els\.remoteControlConfig\.style\.display = mode === 'off' \? 'none' : '';/, 'Off mode should hide the remote control config');
+  assertMatch(rendererSrc, /updateRemoteQr\(mode === 'wifi' \? rc\.url : ''\)/, 'QR should only render for wifi mode');
+});
+
+check('companion: phone page has explicit connection states', () => {
+  const companionHtml = fs.readFileSync(path.join(root, 'companion.html'), 'utf8');
+  assert(companionHtml.includes('Connecting…'), 'companion page missing Connecting state');
+  assert(companionHtml.includes('Connected to'), 'companion page missing Connected to PC state');
+  assert(companionHtml.includes('Disconnected'), 'companion page missing Disconnected state');
+  assert(companionHtml.includes('Pairing expired'), 'companion page missing Pairing expired state');
+  assert(companionHtml.includes('Wrong network or PC offline'), 'companion page missing offline state');
+});
+
+check('morning proof: Mission Complete overlay has accessible close affordances', () => {
+  assert(htmlSrc.includes('id="btn-proof-close"'), 'visible Close button missing');
+  assert(htmlSrc.includes('id="btn-proof-dismiss"'), 'dismiss X button missing');
+  assert(/btn-proof-dismiss[^>]*aria-label="[^"]*"/.test(htmlSrc), 'dismiss X should have an aria-label');
+  assertMatch(rendererSrc, /function dismissMorningProof\(\)/, 'dismissMorningProof helper missing');
+  assertMatch(rendererSrc, /document\.getElementById\('btn-proof-close'\)\?\.addEventListener\('click', dismissMorningProof\)/, 'Close button not wired to dismiss');
+  assertMatch(rendererSrc, /document\.getElementById\('btn-proof-dismiss'\)\?\.addEventListener\('click', dismissMorningProof\)/, 'dismiss X not wired to dismiss');
+  assertMatch(rendererSrc, /e\.key === 'Escape'[^}]*morningProofSection\.style\.display !== 'none'/, 'Escape handler for Mission Complete overlay missing');
+});
+
+check('morning proof: Play Tonight Again still works', () => {
+  assertMatch(rendererSrc, /document\.getElementById\('btn-proof-again'\)\?\.addEventListener\('click', \(\) => \{/, 'Play Tonight Again button missing');
+  assertMatch(rendererSrc, /document\.getElementById\('btn-start'\)\?\.click\(\)/, 'Play Tonight Again should delegate to start button');
+});
+
+check('companion: default settings are off with no token', () => {
+  const settingsSrc = fs.readFileSync(path.join(root, 'settings.js'), 'utf8');
+  assertMatch(settingsSrc, /remoteControl:\s*\{[\s\S]*enabled:\s*false,[\s\S]*token:\s*''\s*\}/, 'remoteControl defaults should be off with empty token');
+});
+
+check('companion: main mode contract maps to correct host binding', () => {
+  assertMatch(mainSrc, /if \(mode === 'wifi'\) \{[\s\S]*companion\.start\(\{ token: rc\.token, host: '0\.0\.0\.0' \}\)/s, 'wifi mode should bind 0.0.0.0');
+  assertMatch(mainSrc, /\} else if \(mode === 'local'\) \{[\s\S]*companion\.start\(\{ token: rc\.token, host: '127\.0\.0\.1' \}\)/s, 'local mode should bind 127.0.0.1');
+  assertMatch(mainSrc, /if \(mode === 'off' \|\| !rc\.token\) return false;/, 'off mode should not start listener');
+});
+
+check('companion: same-wifi URL includes token and host for Android APK', () => {
+  // The URL must carry the token and a host parameter so packaged Android
+  // companions (which load the UI locally) know where to connect.
+  const wifiUrlMatch = mainSrc.match(/url = `http:\/\/\$\{lanIp\}:\$\{companion\.PWA_PORT\}\/\?t=\$\{rc\.token\}&host=\$\{encodeURIComponent\(`\$\{lanIp\}:\$\{companion\.PWA_PORT\}`\)\}`;/);
+  assert(wifiUrlMatch, 'wifi URL construction not found or malformed');
+  const wifiUrl = wifiUrlMatch[0];
+  assert(wifiUrl.includes('t=${rc.token}'), 'wifi URL missing token');
+  assert(wifiUrl.includes('host='), 'wifi URL missing host parameter');
+  assert(wifiUrl.includes('encodeURIComponent'), 'wifi URL must encode the host parameter');
+  assert(wifiUrl.includes('${lanIp}:${companion.PWA_PORT}'), 'wifi URL host must include the selected LAN IP and port');
+});
+
+check('companion: QR URL has no host in off or local mode', () => {
+  // Off and local modes intentionally omit the LAN host parameter.
+  const localUrlMatch = mainSrc.match(/url = `http:\/\/127\.0\.0\.1:\$\{companion\.PWA_PORT\}\/\?t=\$\{rc\.token\}`;/);
+  assert(localUrlMatch, 'local URL construction not found');
+  assert(!localUrlMatch[0].includes('host='), 'local URL should not include a host parameter');
+});
+
+check('companion: same-wifi status shows Waiting for phone before client connects', () => {
+  // getCompanionStatusLabel must return 'Waiting for phone' when wifi mode is
+  // enabled but no client has connected yet.
+  assertMatch(mainSrc, /if \(mode === 'off'\) return 'Off';/, 'Off label missing');
+  assertMatch(mainSrc, /if \(mode === 'local'\) return 'This PC only';/, 'local label missing');
+  assertMatch(mainSrc, /if \(failed\) return 'Connection failed';/, 'failed label missing');
+  assertMatch(mainSrc, /if \(connected\) return 'Phone connected';/, 'connected label missing');
+  assertMatch(mainSrc, /if \(clients > 0\) return 'Phone connected';/, 'clients label missing');
+  assertMatch(mainSrc, /return 'Waiting for phone';/, 'Waiting for phone fallback missing');
 });
 
 // 8. Run Receipts module logic.
@@ -366,6 +553,121 @@ check('stats-dashboard: module and IPC', () => {
   assert(mainSrc.includes("require('./statsDashboard')"), 'statsDashboard not required');
   assertMatch(mainSrc, /ipcMain\.handle\('get-full-dashboard'/, 'get-full-dashboard IPC missing');
   assertMatch(preloadSrc, /getFullDashboard:/, 'preload getFullDashboard missing');
+});
+
+// 18. Runtime UX truth: every visible nav/control has a real action or is disabled.
+check('ux: ns-play-btn is wired to startTimer', () => {
+  assertMatch(rendererSrc, /getElementById\('ns-play-btn'\)\?\.addEventListener\('click', \(\) => startTimer\(\)\)/, 'ns-play-btn not wired');
+});
+
+check('ux: ns-play-btn has aria-label', () => {
+  assertMatch(htmlSrc, /id="ns-play-btn"[^>]*aria-label="Start tonight/, 'ns-play-btn aria-label missing');
+});
+
+check('ux: Escape closes all modals (profiles, receipts, about, notif-drawer)', () => {
+  assertMatch(rendererSrc, /els\.profilesModal\?\.classList\.contains\('active'\)/, 'Escape does not check profilesModal');
+  assertMatch(rendererSrc, /els\.receiptsModal\?\.classList\.contains\('active'\)/, 'Escape does not check receiptsModal');
+  assertMatch(rendererSrc, /els\.aboutModal\?\.classList\.contains\('active'\)/, 'Escape does not check aboutModal');
+  assertMatch(rendererSrc, /getElementById\('notif-drawer'\)\?\.style\.display !== 'none'/, 'Escape does not check notif-drawer');
+});
+
+check('ux: sidebar sets aria-current on active item', () => {
+  assertMatch(rendererSrc, /btn\.setAttribute\('aria-current', 'page'\)/, 'aria-current not set on active sidebar item');
+  assertMatch(rendererSrc, /btn\.removeAttribute\('aria-current'\)/, 'aria-current not removed on inactive sidebar item');
+});
+
+const cssSrc = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+check('ux: global focus-visible ring defined', () => {
+  assertMatch(cssSrc, /button:focus-visible[\s\S]*outline:.*rgba\(107, 211, 255/, 'global button:focus-visible missing');
+});
+
+check('ux: disabled button styling defined', () => {
+  assertMatch(cssSrc, /button\[aria-disabled="true"\][\s\S]*opacity:/, 'disabled button style missing');
+  assertMatch(cssSrc, /button\[aria-disabled="true"\][\s\S]*cursor: not-allowed/, 'disabled button cursor missing');
+});
+
+check('warning: dialog timing and emergency cancel', () => {
+  assertMatch(mainSrc, /if \(timerState\.gracePeriod > 0 && timerState\.remainingSeconds === timerState\.gracePeriod \* 60\) \{/, 'warning dialog trigger timing regressed');
+  assertMatch(mainSrc, /emitTimerUpdate\('warning', \{[\s\S]*message: `\$\{formatAction\(timerState\.action\)\} in \$\{timerState\.gracePeriod\} minutes`/s, 'warning message content regressed');
+  assertMatch(mainSrc, /ipcMain\.handle\('cancel-timer'/, 'emergency cancel IPC handler missing');
+});
+
+check('session: receipt and morning proof rendering', () => {
+  assertMatch(mainSrc, /const receipt = runReceipts\.createRunReceipt\(timerState\);/, 'run receipt creation missing in main');
+  assertMatch(htmlSrc, /id="morning-proof-section"/, 'morning proof section missing in HTML');
+  assertMatch(htmlSrc, /id="proof-card"/, 'proof card missing in HTML');
+  // The canonical function is renderMorningProof(receipt), not showMorningProof(receipt)
+  assertMatch(rendererSrc, /function renderMorningProof\(receipt\) \{/, 'renderMorningProof function missing in renderer');
+});
+
+check('session: recovery banner and tax safety', () => {
+  assertMatch(mainSrc, /function getRecoverableTimer\(\) \{/, 'recoverable timer logic missing');
+  // The canonical function is promptTimerRecovery(snapshot), not showRecoveryBanner(snapshot)
+  assertMatch(rendererSrc, /function promptTimerRecovery\(snapshot\) \{/, 'promptTimerRecovery function missing in renderer');
+  assertMatch(mainSrc, /const taxResult = overrideTax\.recordSnooze\(reason\);/, 'override tax recording missing');
+  assertMatch(mainSrc, /emitTimerUpdate\('snoozed', \{ addedSeconds: addSeconds, tax: taxResult \}\);/, 'snooze tax update broadcast missing');
+});
+
+// 19. Priority 2 & 3: Tray and Mini-Mode Expansion
+check('tray: quick-action menu items are present', () => {
+  assertMatch(mainSrc, /label: 'Start 28 min'/, 'tray 28 min quick start missing');
+  assertMatch(mainSrc, /label: 'Start 1 hour'/, 'tray 1 hour quick start missing');
+  // Snooze label can vary with override-tax level, so check for the base pattern
+  assertMatch(mainSrc, /Snooze \+5 min/, 'tray snooze action missing');
+});
+
+check('tray: no duplicate tray icons on state change', () => {
+  assertMatch(mainSrc, /Only rebuild the tray context menu on real state transitions, not every[\s\S]*if \(type !== 'tick'\) refreshTrayMenu\(\);/s, 'per-tick tray menu rebuild guard missing');
+});
+
+check('mini-mode: toggle and window resize logic', () => {
+  assertMatch(mainSrc, /let miniMode = false;/, 'miniMode variable missing');
+  assertMatch(mainSrc, /ipcMain\.on\('toggle-mini-mode'[\s\S]*miniMode = !miniMode;/s, 'miniMode toggle missing');
+  assertMatch(mainSrc, /if \(miniMode\) \{[\s\S]*mainWindow\.setSize\(260, 320\);/s, 'mini-mode resize missing');
+});
+
+check('mini-mode: state broadcast to renderer', () => {
+  assertMatch(mainSrc, /mainWindow\.webContents\.send\('mini-mode-changed', miniMode\);/, 'mini-mode-changed event missing');
+});
+
+check('keyboard: global shortcuts registered for quick actions', () => {
+  assertMatch(mainSrc, /globalShortcut\.register\('Ctrl\+Shift\+L'[\s\S]*startTimer/, 'Ctrl+Shift+L quick timer missing');
+  assertMatch(mainSrc, /globalShortcut\.register\('Ctrl\+Shift\+Space'[\s\S]*pauseTimer\(\)|resumeTimer\(\)/, 'Ctrl+Shift+Space pause/resume missing');
+  assertMatch(mainSrc, /globalShortcut\.register\('Ctrl\+Shift\+Z'[\s\S]*snoozeTimer\(300\)/, 'Ctrl+Shift+Z snooze missing');
+});
+
+check('keyboard: Escape closes modals in renderer', () => {
+  assertMatch(rendererSrc, /if \(event\.key === 'Escape'\) \{[\s\S]*profilesModal.*classList.*remove\('active'\)/s, 'Escape close profiles missing');
+  assertMatch(rendererSrc, /if \(event\.key === 'Escape'\) \{[\s\S]*receiptsModal.*classList.*remove\('active'\)/s, 'Escape close receipts missing');
+});
+
+check('keyboard: disabled controls do not activate', () => {
+  assertMatch(cssSrc, /button\[aria-disabled="true"\][\s\S]*pointer-events: none/, 'disabled button pointer-events missing');
+});
+
+// 20. Priority 4: Warning and Session Proof
+check('warning: emergency cancel is always available', () => {
+  assertMatch(mainSrc, /ipcMain\.handle\('cancel-timer'/, 'cancel-timer IPC missing');
+  assertMatch(rendererSrc, /if \(event\.key === 'Escape'\)[\s\S]*cancelTimer\(\)/, 'Escape cancel in renderer missing');
+});
+
+check('session: receipt creation on timer start', () => {
+  assertMatch(mainSrc, /const receipt = runReceipts\.createRunReceipt\(timerState\);/, 'receipt creation missing');
+});
+
+check('session: morning proof section renders on app load', () => {
+  assertMatch(htmlSrc, /id="morning-proof-section"/, 'morning-proof-section missing');
+  assertMatch(rendererSrc, /function renderMorningProof\(receipt\) \{/, 'renderMorningProof missing');
+});
+
+check('session: recovery banner flow on resume', () => {
+  assertMatch(rendererSrc, /function promptTimerRecovery\(snapshot\) \{/, 'promptTimerRecovery missing');
+  assertMatch(mainSrc, /function getRecoverableTimer\(\) \{/, 'getRecoverableTimer missing');
+});
+
+check('session: override tax applied to snooze', () => {
+  assertMatch(mainSrc, /const taxResult = overrideTax\.recordSnooze\(reason\);/, 'override tax recording missing');
+  assertMatch(mainSrc, /emitTimerUpdate\('snoozed', \{ addedSeconds: addSeconds, tax: taxResult \}\);/, 'snooze tax broadcast missing');
 });
 
 // Cleanup.

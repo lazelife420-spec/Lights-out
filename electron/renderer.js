@@ -134,10 +134,12 @@ const fallbackApi = (() => {
     getWeeklyReport: async () => null,
     getSleepScore: async () => ({ score: null, label: 'Preview', breakdown: {} }),
     getCompanionStatus: async () => ({ running: false, port: 0, clients: 0, url: '' }),
-    getRemoteControl: async () => ({ enabled: false, token: '', port: 0, lanIp: '', url: '' }),
-    setRemoteControlEnabled: async () => ({ enabled: false, token: '', url: '' }),
-    regenerateRemoteToken: async () => ({ enabled: false, token: '', url: '' }),
+    getRemoteControl: async () => ({ enabled: false, mode: 'off', token: '', port: 0, lanIp: '', url: '', pcName: 'Preview PC', clients: 0, connected: false, failed: false, statusLabel: 'Off' }),
+    setRemoteControlEnabled: async () => ({ enabled: false, mode: 'off', token: '', url: '', statusLabel: 'Off' }),
+    setRemoteControlMode: async () => ({ enabled: false, mode: 'off', token: '', url: '', statusLabel: 'Off' }),
+    regenerateRemoteToken: async () => ({ enabled: false, mode: 'off', token: '', url: '', statusLabel: 'Off' }),
     generateQr: async () => '',
+    onRemoteControlStatus: () => {},
     getFamilyPeers: async () => [],
     familyRemoteStart: async () => ({ success: true }),
     familyRemotePause: async () => ({ success: true }),
@@ -423,6 +425,7 @@ const els = {
   btnCancelCustomSeq: document.getElementById('btn-cancel-custom-seq'),
   // Widget
   btnWidget: document.getElementById('btn-widget'),
+  btnCompanion: document.getElementById('btn-companion'),
   // Remote control
   chkRemoteControl: document.getElementById('chk-remote-control'),
   remoteControlConfig: document.getElementById('remote-control-config'),
@@ -431,6 +434,11 @@ const els = {
   remoteQr: document.getElementById('remote-qr'),
   remoteQrWrap: document.getElementById('remote-qr-wrap'),
   btnRegenToken: document.getElementById('btn-regen-token'),
+  btnTurnOffCompanion: document.getElementById('btn-turn-off-companion'),
+  btnCopyUrl: document.getElementById('btn-copy-url'),
+  companionStatusPill: document.getElementById('companion-status-pill'),
+  companionConnectedBadge: document.getElementById('companion-connected-badge'),
+  remoteShortCode: document.getElementById('remote-short-code'),
 
   // Family mode
   btnFamilyScan: document.getElementById('btn-family-scan'),
@@ -544,8 +552,11 @@ const els = {
   proofIcon: document.getElementById('proof-icon'),
   proofBadge: document.getElementById('proof-badge'),
   proofBody: document.getElementById('proof-body'),
+  btnWarningLedger: document.getElementById('btn-warning-ledger'),
   btnProofDetails: document.getElementById('btn-proof-details'),
   btnProofCopy: document.getElementById('btn-proof-copy'),
+  btnProofClose: document.getElementById('btn-proof-close'),
+  btnProofDismiss: document.getElementById('btn-proof-dismiss'),
   receiptsModal: document.getElementById('receipts-modal'),
   receiptsModalClose: document.getElementById('receipts-modal-close'),
   receiptStats: document.getElementById('receipt-stats'),
@@ -1077,6 +1088,78 @@ if (btnNotif && notifDrawer) {
 }
 if (notifDrawerClose && notifDrawer) {
   notifDrawerClose.addEventListener('click', () => { notifDrawer.style.display = 'none'; });
+}
+
+function setSidebarSelection(tab) {
+  document.querySelectorAll('.ns-nav-item').forEach(btn => {
+    const isActive = btn.dataset.nsTab === tab;
+    btn.classList.toggle('active', isActive);
+    if (isActive) btn.setAttribute('aria-current', 'page');
+    else btn.removeAttribute('aria-current');
+  });
+}
+
+function activateTopTab(tab) {
+  const button = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+  if (!button) return false;
+  button.click();
+  return true;
+}
+
+async function openReceiptsLedger() {
+  try {
+    const [receipts, stats] = await Promise.all([
+      api.listReceipts?.(50),
+      api.getReceiptStats?.()
+    ]);
+    renderReceiptsModal(receipts || [], stats);
+    if (els.receiptsModal) els.receiptsModal.classList.add('active');
+    return true;
+  } catch (e) {
+    console.error('Failed to load receipts:', e);
+    notify('Ledger is unavailable right now', 'warning');
+    return false;
+  }
+}
+
+function openSettingsPanel() {
+  syncCustomizeUI();
+  updateLastLightUIFromState();
+  loadRemoteControlState();
+  els.optionsModal?.classList.add('active');
+}
+
+function openHelpPanel() {
+  els.aboutModal?.classList.add('active');
+  refreshUpdaterStatus();
+  notify('Open Settings for controls and About for version/update details.', 'info', 4200);
+}
+
+async function handleSidebarNavigation(tab, { persist = true } = {}) {
+  let handled = false;
+
+  if (tab === 'lib') handled = activateTopTab('library');
+  if (tab === 'sch') handled = activateTopTab('schedule');
+  if (tab === 'set') {
+    openSettingsPanel();
+    handled = true;
+  }
+  if (tab === 'help') {
+    openHelpPanel();
+    handled = true;
+  }
+  if (tab === 'stats') handled = activateTopTab('streaks');
+
+  if (!handled) {
+    notify('Coming soon', 'info');
+    return false;
+  }
+
+  setSidebarSelection(tab);
+  if (persist) {
+    try { api.saveAppSettings({ app: { nsActiveTab: tab } }); } catch (_) {}
+  }
+  return true;
 }
 
 function formatIdleClockTime(now, compact = false) {
@@ -1806,6 +1889,7 @@ function wireEvents() {
   els.btnMini?.addEventListener('click', toggleMiniMode);
   els.btnWidget?.addEventListener('click', () => {
     api.toggleWidget?.();
+    notify('Desktop widget toggled', 'info');
   });
   els.btnCompanion?.addEventListener('click', async () => {
     try {
@@ -1814,9 +1898,13 @@ function wireEvents() {
         await api.openExternal?.(rc.url);
         notify(`Companion at ${rc.url}`, 'info');
       } else {
-        notify('Enable Remote Control in settings first', 'info');
+        openSettingsPanel();
+        setSidebarSelection('set');
+        notify('Enable Remote Control in settings before opening the Companion PWA', 'info');
       }
-    } catch {}
+    } catch {
+      notify('Companion setup is unavailable right now', 'warning');
+    }
   });
 
   // Family mode scan and remote controls.
@@ -1832,12 +1920,31 @@ function wireEvents() {
   });
 
 function renderRemoteControl(rc) {
-  if (!rc || !els.chkRemoteControl) return;
-  els.chkRemoteControl.checked = !!rc.enabled;
-  if (els.remoteControlConfig) els.remoteControlConfig.style.display = rc.enabled ? '' : 'none';
+  if (!rc) return;
+  const mode = rc.mode || 'off';
+
+  // Update mode buttons
+  document.querySelectorAll('.btn-mode').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === mode);
+  });
+
+  // Update status pill with the full state label from main.
+  if (els.companionStatusPill) {
+    const statusClass = rc.failed ? 'status-failed' : rc.connected ? 'status-connected' : `status-${mode}`;
+    els.companionStatusPill.className = `status-pill ${statusClass}`;
+    els.companionStatusPill.textContent = rc.statusLabel || (mode === 'off' ? 'Off' : (mode === 'local' ? 'This PC only' : 'Same Wi-Fi'));
+  }
+
+  if (els.remoteControlConfig) els.remoteControlConfig.style.display = mode === 'off' ? 'none' : '';
   if (els.remoteUrl) els.remoteUrl.textContent = rc.url || '';
-  if (els.remoteToken) els.remoteToken.textContent = rc.token || '';
-  updateRemoteQr(rc.url);
+  if (els.remoteShortCode) els.remoteShortCode.textContent = rc.shortCode || '';
+  if (els.companionConnectedBadge) {
+    els.companionConnectedBadge.style.display = rc.connected ? '' : 'none';
+    els.companionConnectedBadge.textContent = rc.connected ? `${rc.clients} phone${rc.clients === 1 ? '' : 's'} connected` : '';
+  }
+
+  // Only show QR for Same Wi-Fi mode
+  updateRemoteQr(mode === 'wifi' ? rc.url : '');
 }
 
 // Generate (or clear) the pairing QR for the current companion URL so the phone
@@ -1859,24 +1966,46 @@ async function updateRemoteQr(url) {
 }
 
 async function loadRemoteControlState() {
-  if (!els.chkRemoteControl) return;
+  if (!els.remoteControlConfig) return;
   try { renderRemoteControl(await api.getRemoteControl?.()); } catch {}
 }
 
 function setupRemoteControlHandlers() {
-  els.chkRemoteControl?.addEventListener('change', async () => {
-    try {
-      const rc = await api.setRemoteControlEnabled?.(els.chkRemoteControl.checked);
-      renderRemoteControl(rc);
-      notify(els.chkRemoteControl.checked ? 'Remote control enabled' : 'Remote control disabled', 'info');
-    } catch { notify('Failed to update remote control', 'error'); }
+  document.querySelectorAll('.btn-mode').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const mode = btn.dataset.mode;
+      try {
+        const rc = await api.setRemoteControlMode?.(mode);
+        renderRemoteControl(rc);
+        notify(`Companion mode: ${mode}`, 'info');
+      } catch { notify('Failed to update companion mode', 'error'); }
+    });
   });
+
+  els.btnTurnOffCompanion?.addEventListener('click', async () => {
+    try {
+      const rc = await api.setRemoteControlMode?.('off');
+      renderRemoteControl(rc);
+      notify('Companion turned off', 'info');
+    } catch { notify('Failed to turn off companion', 'error'); }
+  });
+
+  els.btnCopyUrl?.addEventListener('click', () => {
+    const url = els.remoteUrl?.textContent;
+    if (url) {
+      navigator.clipboard.writeText(url);
+      notify('URL copied to clipboard', 'success');
+    }
+  });
+
   els.btnRegenToken?.addEventListener('click', async () => {
     try {
       renderRemoteControl(await api.regenerateRemoteToken?.());
       notify('New pairing code generated', 'success');
     } catch { notify('Failed to regenerate code', 'error'); }
   });
+
+  api.onRemoteControlStatus?.(renderRemoteControl);
   loadRemoteControlState();
 }
 
@@ -2575,18 +2704,11 @@ async function renderMorningProof(receipt) {
 
 // View receipts modal.
 if (els.btnProofDetails) {
-  els.btnProofDetails.addEventListener('click', async () => {
-    try {
-      const [receipts, stats] = await Promise.all([
-        api.listReceipts?.(50),
-        api.getReceiptStats?.()
-      ]);
-      renderReceiptsModal(receipts || [], stats);
-      if (els.receiptsModal) els.receiptsModal.classList.add('active');
-    } catch (e) {
-      console.error('Failed to load receipts:', e);
-    }
-  });
+  els.btnProofDetails.addEventListener('click', () => openReceiptsLedger());
+}
+
+if (els.btnWarningLedger) {
+  els.btnWarningLedger.addEventListener('click', () => openReceiptsLedger());
 }
 
 if (els.receiptsModalClose) {
@@ -2625,9 +2747,21 @@ document.getElementById('btn-proof-again')?.addEventListener('click', () => {
 });
 
 // Northstar proof hero: Dismiss — hides the card.
-document.getElementById('btn-proof-dismiss')?.addEventListener('click', () => {
+function dismissMorningProof() {
   if (els.morningProofSection) els.morningProofSection.style.display = 'none';
-});
+}
+
+document.getElementById('btn-proof-dismiss')?.addEventListener('click', dismissMorningProof);
+document.getElementById('btn-proof-close')?.addEventListener('click', dismissMorningProof);
+
+// Escape closes the Mission Complete overlay when it is visible.
+if (els.morningProofSection) {
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && els.morningProofSection.style.display !== 'none') {
+      dismissMorningProof();
+    }
+  });
+}
 
 // Clear receipts.
 if (els.btnClearReceipts) {
@@ -2734,15 +2868,14 @@ function renderReceiptsModal(receipts, stats) {
       }
 
       if (item.id === 'open-options') {
-        syncCustomizeUI();
-        updateLastLightUIFromState();
-        els.optionsModal.classList.add('active');
+        openSettingsPanel();
+        setSidebarSelection('set');
         return;
       }
 
       if (item.id === 'open-about') {
-        els.aboutModal.classList.add('active');
-        refreshUpdaterStatus();
+        openHelpPanel();
+        setSidebarSelection('help');
         return;
       }
 
@@ -2772,10 +2905,16 @@ function renderReceiptsModal(receipts, stats) {
       document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById(`tab-${btn.dataset.tab}`)?.classList.add('active');
+      if (btn.dataset.tab === 'library') setSidebarSelection('lib');
+      if (btn.dataset.tab === 'schedule') setSidebarSelection('sch');
+      if (btn.dataset.tab === 'streaks') setSidebarSelection('stats');
       if (btn.dataset.tab === 'streaks') loadStreaks();
       if (btn.dataset.tab === 'focus') loadSleepDebt();
     });
   });
+
+  // Northstar hero card PLAY button starts the timer.
+  document.getElementById('ns-play-btn')?.addEventListener('click', () => startTimer());
 
   // Home streak callout jumps to the Streaks tab for the full breakdown.
   els.streakCallout?.addEventListener('click', () => {
@@ -2992,8 +3131,25 @@ function renderReceiptsModal(receipts, stats) {
     }
 
     if (event.key === 'Escape') {
+      // Close the topmost active modal/drawer.
       if (els.optionsModal.classList.contains('active')) {
         els.optionsModal.classList.remove('active');
+      } else if (els.profilesModal?.classList.contains('active')) {
+        els.profilesModal.classList.remove('active');
+      } else if (els.receiptsModal?.classList.contains('active')) {
+        els.receiptsModal.classList.remove('active');
+      } else if (els.aboutModal?.classList.contains('active')) {
+        els.aboutModal.classList.remove('active');
+      } else if (document.getElementById('notif-drawer')?.style.display !== 'none') {
+        document.getElementById('notif-drawer').style.display = 'none';
+      } else if (document.getElementById('ritual-overlay')?.classList.contains('active')) {
+        document.getElementById('ritual-overlay').classList.remove('active');
+      } else if (document.getElementById('warning-modal')?.classList.contains('active')) {
+        document.getElementById('warning-modal').classList.remove('active');
+      } else if (document.getElementById('override-modal')?.classList.contains('active')) {
+        document.getElementById('override-modal').classList.remove('active');
+      } else if (document.getElementById('snooze-tax-modal')?.classList.contains('active')) {
+        document.getElementById('snooze-tax-modal').classList.remove('active');
       } else if (state.running || state.paused) {
         cancelTimer();
       }
@@ -3461,9 +3617,7 @@ function applyAppSettings(app) {
   }
   // Restore northstar sidebar tab.
   if (app.nsActiveTab) {
-    document.querySelectorAll('.ns-nav-item').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.nsTab === app.nsActiveTab);
-    });
+    handleSidebarNavigation(app.nsActiveTab, { persist: false });
   }
   // Restore northstar selected mode card.
   if (app.nsSelectedMode) {
@@ -3920,9 +4074,7 @@ document.getElementById('ns-play-btn')?.addEventListener('click', () => {
 // Northstar sidebar tab: toggle active class + persist.
 document.querySelectorAll('.ns-nav-item').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.ns-nav-item').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    try { api.saveAppSettings({ app: { nsActiveTab: btn.dataset.nsTab } }); } catch (_) {}
+    handleSidebarNavigation(btn.dataset.nsTab);
   });
 });
 
