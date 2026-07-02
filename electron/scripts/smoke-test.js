@@ -721,6 +721,27 @@ check('session: override tax applied to snooze', () => {
   assertMatch(mainSrc, /emitTimerUpdate\('snoozed', \{ addedSeconds: addSeconds, tax: taxResult \}\);/, 'snooze tax broadcast missing');
 });
 
+// 21. Version display sync (drift prevention)
+check('version: get-app-version IPC is sourced from package.json, not a second hardcoded string', () => {
+  assertMatch(mainSrc, /ipcMain\.handle\('get-app-version', async \(\) => updater\.currentVersion\)/, 'get-app-version handler must return updater.currentVersion (package.json-derived)');
+  assertMatch(preloadSrc, /getAppVersion: \(\) => ipcRenderer\.invoke\('get-app-version'\)/, 'preload must expose a getAppVersion bridge');
+});
+
+check('version: renderer overrides the static footer/About text from the runtime version', () => {
+  assertMatch(rendererSrc, /async function applyAppVersion\(\)/, 'applyAppVersion is missing');
+  assertMatch(rendererSrc, /api\.getAppVersion\?\.\(\)/, 'renderer must call api.getAppVersion()');
+  assertMatch(rendererSrc, /els\.version\.textContent = `v\$\{version\}`/, 'footer #version is not updated from the runtime version');
+  assertMatch(rendererSrc, /els\.aboutVersion\.textContent = `Version \$\{version\}`/, 'About modal version is not updated from the runtime version');
+  assertMatch(rendererSrc, /applyAppVersion\(\);\s*$/m, 'applyAppVersion must run on startup');
+});
+
+check('version: HTML fallback text matches electron/package.json (fails the build if someone bumps one and not the other)', () => {
+  const pkgVersion = require(path.join(root, 'package.json')).version;
+  const escaped = pkgVersion.replace(/\./g, '\\.');
+  assertMatch(htmlSrc, new RegExp(`id="version">v${escaped}<`), `footer #version fallback text does not match package.json version (${pkgVersion})`);
+  assertMatch(htmlSrc, new RegExp(`id="about-version">Version ${escaped}<`), `About modal fallback version text does not match package.json version (${pkgVersion})`);
+});
+
 // Cleanup.
 try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
 

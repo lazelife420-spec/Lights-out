@@ -213,6 +213,7 @@ const fallbackApi = (() => {
     checkForUpdate: async () => ({ available: false }),
     getUpdateStatus: async () => ({ available: false }),
     onUpdateAvailable: () => {},
+    getAppVersion: async () => null,
     exportAllData: async () => ({ success: false, error: 'Preview mode' }),
     importAllData: async () => ({ success: false, error: 'Preview mode' }),
     getCalendarProviders: async () => [],
@@ -572,6 +573,10 @@ const els = {
   btnStatsViewLedger: document.getElementById('btn-stats-view-ledger'),
   aboutModal: document.getElementById('about-modal'),
   aboutModalClose: document.getElementById('about-modal-close'),
+  // Version display (footer + About modal). HTML carries a static fallback string;
+  // applyAppVersion() overrides it at runtime from electron/package.json.
+  version: document.getElementById('version'),
+  aboutVersion: document.getElementById('about-version'),
   // Updater status (in About modal)
   updaterStatus: document.getElementById('updater-status'),
   updaterStatusText: document.getElementById('updater-status-text'),
@@ -4899,6 +4904,18 @@ async function refreshUpdaterStatus() {
   }
 }
 
+// Overrides the static "v10.3.0" text baked into index.html with the real
+// electron/package.json version. Leaves the static fallback in place (rather
+// than writing "undefined") when the bridge is unavailable, e.g. offline/static preview.
+async function applyAppVersion() {
+  try {
+    const version = await api.getAppVersion?.();
+    if (!version) return;
+    if (els.version) els.version.textContent = `v${version}`;
+    if (els.aboutVersion) els.aboutVersion.textContent = `Version ${version}`;
+  } catch { /* keep static fallback text */ }
+}
+
 els.btnCheckUpdate?.addEventListener('click', runUpdateCheck);
 
 // Media auto-paused notification.
@@ -4925,6 +4942,7 @@ setupCalendarHandlers();
 setupRemoteControlHandlers();
 setAction(state.action);
 loadInitialData().finally(render);
+applyAppVersion();
 refreshStreakCallout();
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -1431,6 +1431,10 @@ ipcMain.handle('get-update-status', async () => {
   return updater.getLastCheckResult();
 });
 
+// App version. Single source of truth is electron/package.json (via updater.currentVersion)
+// so the UI never carries a second, driftable copy of the version string.
+ipcMain.handle('get-app-version', async () => updater.currentVersion);
+
 // Data export/import
 ipcMain.handle('export-all-data', async () => {
   try {
