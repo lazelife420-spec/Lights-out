@@ -295,12 +295,29 @@ check('renderer fallback: preview mode stays safe and idle by default', () => {
 
 check('renderer: visible sidebar navigation routes to a real tab or modal', () => {
   assertMatch(rendererSrc, /function handleSidebarNavigation\(tab, \{ persist = true \} = \{\}\) \{/, 'sidebar navigation router missing');
-  assertMatch(rendererSrc, /if \(tab === 'lib'\) handled = activateTopTab\('library'\);/, 'LIB routing missing');
-  assertMatch(rendererSrc, /if \(tab === 'sch'\) handled = activateTopTab\('schedule'\);/, 'SCH routing missing');
+  assertMatch(rendererSrc, /if \(tab === 'lib'\) \{[\s\S]*applyMainPanelVisibility\('lib'\);[\s\S]*handled = true;/s, 'LIB routing missing');
+  assertMatch(rendererSrc, /if \(tab === 'sch'\) \{[\s\S]*applyMainPanelVisibility\('sch'\);[\s\S]*handled = true;/s, 'SCH routing missing');
   assertMatch(rendererSrc, /if \(tab === 'set'\) \{[\s\S]*openSettingsPanel\(\);[\s\S]*handled = true;/s, 'SET routing missing');
   assertMatch(rendererSrc, /if \(tab === 'help'\) \{[\s\S]*openHelpPanel\(\);[\s\S]*handled = true;/s, 'Help routing missing');
-  assertMatch(rendererSrc, /if \(tab === 'stats'\) handled = activateTopTab\('streaks'\);/, 'STATS routing missing');
+  assertMatch(rendererSrc, /if \(tab === 'stats'\) \{[\s\S]*applyMainPanelVisibility\('stats'\);[\s\S]*renderStatusPanel\(\);[\s\S]*handled = true;/s, 'STATS routing missing');
   assertMatch(rendererSrc, /document\.querySelectorAll\('\.ns-nav-item'\)\.forEach\(btn => \{[\s\S]*handleSidebarNavigation\(btn\.dataset\.nsTab\);/s, 'sidebar click handler missing');
+});
+
+check('renderer: LIB/SCH/STATS panels are mutually exclusive, single-visible destinations', () => {
+  assertMatch(rendererSrc, /function applyMainPanelVisibility\(panel\) \{/, 'panel visibility switcher missing');
+  assertMatch(rendererSrc, /els\.panelLib\.style\.display = panel === 'lib' \? '' : 'none';/, 'LIB panel toggle missing');
+  assertMatch(rendererSrc, /els\.panelSch\.style\.display = panel === 'sch' \? '' : 'none';/, 'SCH panel toggle missing');
+  assertMatch(rendererSrc, /els\.panelStats\.style\.display = panel === 'stats' \? '' : 'none';/, 'STATS panel toggle missing');
+  assertMatch(htmlSrc, /id="ns-panel-lib"/, 'LIB panel container missing from HTML');
+  assertMatch(htmlSrc, /id="ns-panel-sch"[^>]*style="display:none"/, 'SCH panel should start hidden in HTML');
+  assertMatch(htmlSrc, /id="ns-panel-stats"[^>]*style="display:none"/, 'STATS panel should start hidden in HTML');
+});
+
+check('renderer: STATS panel shows only real companion/session data, honest empty state', () => {
+  assertMatch(rendererSrc, /async function renderStatusPanel\(\) \{/, 'status panel renderer missing');
+  assertMatch(rendererSrc, /api\.getRemoteControl\?\.\(\)/, 'STATS should read real companion status, not fabricate it');
+  assertMatch(rendererSrc, /api\.listReceipts\?\.\(5\)/, 'STATS should read real receipt history, not fabricate it');
+  assertMatch(rendererSrc, /No session history yet\./, 'STATS must show an honest empty state when there is no history');
 });
 
 check('renderer: footer and ledger controls provide real feedback', () => {
