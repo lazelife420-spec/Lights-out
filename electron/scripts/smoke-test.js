@@ -376,6 +376,22 @@ check('companion: phone page has explicit connection states', () => {
   assert(companionHtml.includes('Wrong network or PC offline'), 'companion page missing offline state');
 });
 
+check('companion: host query cannot override location.host for the pairing token', () => {
+  const companionHtml = fs.readFileSync(path.join(root, 'companion.html'), 'utf8');
+  // location.host must be checked and returned before the URL `host` param is
+  // ever read, so a crafted link can't redirect the pairing token to a
+  // different origin when the page is served by the real PC.
+  assertMatch(companionHtml, /function resolveHost\(\) \{\s*\n(?:[^\n]*\n)*?\s*if \(location\.host\) return location\.host;/, 'resolveHost must prefer location.host before reading the URL host param');
+  assertMatch(companionHtml, /function isValidHost\(h\) \{/, 'host values must be validated before use');
+  assertMatch(companionHtml, /if \(fromUrl && isValidHost\(fromUrl\)\)/, 'URL host param must be validated, not trusted as-is');
+});
+
+check('companion: pair-reset has exactly one non-conflicting handler', () => {
+  const companionHtml = fs.readFileSync(path.join(root, 'companion.html'), 'utf8');
+  const matches = companionHtml.match(/pairReset\.addEventListener\('click'/g) || [];
+  assert(matches.length === 1, `pair-reset should have exactly one click handler, found ${matches.length}`);
+});
+
 check('morning proof: Mission Complete overlay has accessible close affordances', () => {
   assert(htmlSrc.includes('id="btn-proof-close"'), 'visible Close button missing');
   assert(htmlSrc.includes('id="btn-proof-dismiss"'), 'dismiss X button missing');
@@ -400,6 +416,12 @@ check('companion: main mode contract maps to correct host binding', () => {
   assertMatch(mainSrc, /if \(mode === 'wifi'\) \{[\s\S]*companion\.start\(\{ token: rc\.token, host: '0\.0\.0\.0' \}\)/s, 'wifi mode should bind 0.0.0.0');
   assertMatch(mainSrc, /\} else if \(mode === 'local'\) \{[\s\S]*companion\.start\(\{ token: rc\.token, host: '127\.0\.0\.1' \}\)/s, 'local mode should bind 127.0.0.1');
   assertMatch(mainSrc, /if \(mode === 'off' \|\| !rc\.token\) return false;/, 'off mode should not start listener');
+});
+
+check('companion: dead setRemoteControlEnabled IPC surface removed', () => {
+  assert(!/setRemoteControlEnabled/.test(preloadSrc), 'preload should not expose the removed set-remote-control-enabled channel');
+  assert(!/ipcMain\.handle\('set-remote-control-enabled'/.test(mainSrc), 'main should not register a handler for the removed channel');
+  assertMatch(preloadSrc, /setRemoteControlMode: \(mode\) => ipcRenderer\.invoke\('set-remote-control-mode', mode\)/, 'the real set-remote-control-mode bridge must still be exposed');
 });
 
 check('companion: same-wifi URL includes token and host for Android APK', () => {
@@ -575,6 +597,11 @@ check('stats-dashboard: module and IPC', () => {
 // 18. Runtime UX truth: every visible nav/control has a real action or is disabled.
 check('ux: ns-play-btn is wired to startTimer', () => {
   assertMatch(rendererSrc, /getElementById\('ns-play-btn'\)\?\.addEventListener\('click', \(\) => startTimer\(\)\)/, 'ns-play-btn not wired');
+});
+
+check('ux: ns-play-btn has exactly one click handler (no duplicate startTimer)', () => {
+  const matches = rendererSrc.match(/getElementById\('ns-play-btn'\)\?\.addEventListener\('click'/g) || [];
+  assert(matches.length === 1, `ns-play-btn should have exactly one click handler, found ${matches.length}`);
 });
 
 check('ux: ns-play-btn has aria-label', () => {
