@@ -135,7 +135,6 @@ const fallbackApi = (() => {
     getSleepScore: async () => ({ score: null, label: 'Preview', breakdown: {} }),
     getCompanionStatus: async () => ({ running: false, port: 0, clients: 0, url: '' }),
     getRemoteControl: async () => ({ enabled: false, mode: 'off', token: '', port: 0, lanIp: '', url: '', pcName: 'Preview PC', clients: 0, connected: false, failed: false, statusLabel: 'Off' }),
-    setRemoteControlEnabled: async () => ({ enabled: false, mode: 'off', token: '', url: '', statusLabel: 'Off' }),
     setRemoteControlMode: async () => ({ enabled: false, mode: 'off', token: '', url: '', statusLabel: 'Off' }),
     regenerateRemoteToken: async () => ({ enabled: false, mode: 'off', token: '', url: '', statusLabel: 'Off' }),
     generateQr: async () => '',
@@ -4132,11 +4131,6 @@ async function renderCustomSequences() {
     });
   });
 }
-
-// Northstar PLAY button delegates to existing START button (visual alias only).
-document.getElementById('ns-play-btn')?.addEventListener('click', () => {
-  document.getElementById('btn-start')?.click();
-});
 
 // Northstar sidebar tab: toggle active class + persist.
 document.querySelectorAll('.ns-nav-item').forEach(btn => {
