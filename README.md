@@ -6,13 +6,13 @@ Set a time. Press START. Lights Out walks you through a calm wind-down, then a
 cinematic Last Light final countdown before your PC shuts off. Emergency cancel
 is always available. No surprise force-quits. No cloud account. No drama.
 
-[![Download v10.1.0](https://img.shields.io/badge/Download-v10.1.0-blue?style=for-the-badge)](https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.1.0)
+[![Download v10.3.0](https://img.shields.io/badge/Download-v10.3.0-blue?style=for-the-badge)](https://github.com/lazelife420-spec/Lights-out/releases/tag/v10.3.0)
 
 ## Download
 
-**[→ Lights Out v10.1.0 — installer, portable EXE, SHA256 checksums](https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.1.0)**
+**[→ Lights Out v10.3.0 — installer, portable EXE, SHA256 checksums](https://github.com/lazelife420-spec/Lights-out/releases/tag/v10.3.0)**
 
-- `Lights.Out.Setup.10.1.0.exe` — NSIS installer, standard Windows install
+- `Lights.Out.Setup.10.3.0.exe` — NSIS installer, standard Windows install
 - `LightsOut.exe` — portable, runs from any folder, no install needed
 - `SHA256SUMS.txt` — checksums for both artifacts
 
@@ -46,9 +46,9 @@ calendar, and Wi-Fi features only reach out when you configure them.
 Every release ships an installer, a portable build, and SHA256 checksums, built
 and published by CI. No hand-edited binaries. No mystery downloads.
 
-- Latest release: https://github.com/Z3r0DayZion-install/lights-out/releases/latest
-- v10.1.0 release: https://github.com/Z3r0DayZion-install/lights-out/releases/tag/v10.1.0
-- Smoke suite: 57/57 passing
+- Latest release: https://github.com/lazelife420-spec/Lights-out/releases/latest
+- v10.3.0 release: https://github.com/lazelife420-spec/Lights-out/releases/tag/v10.3.0
+- Smoke suite: 131/131 passing
 
 ## Surfaces
 

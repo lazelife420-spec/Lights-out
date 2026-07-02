@@ -5,8 +5,8 @@
 const { net } = require('electron');
 const currentVersion = require('./package.json').version;
 
-const REPO_API = 'https://api.github.com/repos/Z3r0DayZion-install/lights-out/releases/latest';
-const REPO_DOWNLOAD = 'https://github.com/Z3r0DayZion-install/lights-out/releases/download';
+const REPO_API = 'https://api.github.com/repos/lazelife420-spec/Lights-out/releases/latest';
+const REPO_DOWNLOAD = 'https://github.com/lazelife420-spec/Lights-out/releases/download';
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
 // The NSIS installer asset, e.g. "Lights.Out.Setup.10.0.7.exe".
