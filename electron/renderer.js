@@ -1879,46 +1879,6 @@ function applyTonightCard(card) {
   notify(`Selected: ${card.querySelector('.card-title')?.textContent || 'Timer'}`, 'info');
 }
 
-function wireEvents() {
-  els.btnStart.addEventListener('click', () => startTimer());
-  els.btnStop.addEventListener('click', cancelTimer);
-  els.btnPause.addEventListener('click', togglePause);
-  els.btnSnooze.addEventListener('click', () => snooze(5 * 60));
-  els.btnMinimize.addEventListener('click', () => api.minimizeWindow());
-  els.btnClose.addEventListener('click', () => api.closeWindow());
-  els.btnMini?.addEventListener('click', toggleMiniMode);
-  els.btnWidget?.addEventListener('click', () => {
-    api.toggleWidget?.();
-    notify('Desktop widget toggled', 'info');
-  });
-  els.btnCompanion?.addEventListener('click', async () => {
-    try {
-      const rc = await api.getRemoteControl?.();
-      if (rc?.enabled && rc.url) {
-        await api.openExternal?.(rc.url);
-        notify(`Companion at ${rc.url}`, 'info');
-      } else {
-        openSettingsPanel();
-        setSidebarSelection('set');
-        notify('Enable Remote Control in settings before opening the Companion PWA', 'info');
-      }
-    } catch {
-      notify('Companion setup is unavailable right now', 'warning');
-    }
-  });
-
-  // Family mode scan and remote controls.
-  els.btnFamilyScan?.addEventListener('click', async () => {
-    try {
-      els.familyStatus.textContent = 'Scanning...';
-      const peers = await api.getFamilyPeers?.();
-      renderFamilyPeers(peers || []);
-      els.familyStatus.textContent = peers?.length ? `${peers.length} peer(s) found` : 'No peers found';
-    } catch {
-      els.familyStatus.textContent = 'Scan failed';
-    }
-  });
-
 function renderRemoteControl(rc) {
   if (!rc) return;
   const mode = rc.mode || 'off';
@@ -2008,6 +1968,46 @@ function setupRemoteControlHandlers() {
   api.onRemoteControlStatus?.(renderRemoteControl);
   loadRemoteControlState();
 }
+
+function wireEvents() {
+  els.btnStart.addEventListener('click', () => startTimer());
+  els.btnStop.addEventListener('click', cancelTimer);
+  els.btnPause.addEventListener('click', togglePause);
+  els.btnSnooze.addEventListener('click', () => snooze(5 * 60));
+  els.btnMinimize.addEventListener('click', () => api.minimizeWindow());
+  els.btnClose.addEventListener('click', () => api.closeWindow());
+  els.btnMini?.addEventListener('click', toggleMiniMode);
+  els.btnWidget?.addEventListener('click', () => {
+    api.toggleWidget?.();
+    notify('Desktop widget toggled', 'info');
+  });
+  els.btnCompanion?.addEventListener('click', async () => {
+    try {
+      const rc = await api.getRemoteControl?.();
+      if (rc?.enabled && rc.url) {
+        await api.openExternal?.(rc.url);
+        notify(`Companion at ${rc.url}`, 'info');
+      } else {
+        openSettingsPanel();
+        setSidebarSelection('set');
+        notify('Enable Remote Control in settings before opening the Companion PWA', 'info');
+      }
+    } catch {
+      notify('Companion setup is unavailable right now', 'warning');
+    }
+  });
+
+  // Family mode scan and remote controls.
+  els.btnFamilyScan?.addEventListener('click', async () => {
+    try {
+      els.familyStatus.textContent = 'Scanning...';
+      const peers = await api.getFamilyPeers?.();
+      renderFamilyPeers(peers || []);
+      els.familyStatus.textContent = peers?.length ? `${peers.length} peer(s) found` : 'No peers found';
+    } catch {
+      els.familyStatus.textContent = 'Scan failed';
+    }
+  });
 
 function renderFamilyPeers(peers) {
   if (!els.familyPeers) return;
