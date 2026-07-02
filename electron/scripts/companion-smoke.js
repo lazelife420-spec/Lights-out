@@ -123,6 +123,15 @@ function encodeCloseFrame(code) {
   return Buffer.concat([header, payload]);
 }
 
+// Build a masked client->server WebSocket text frame carrying a JSON payload.
+function encodeTextFrame(obj) {
+  const mask = Buffer.from([0x12, 0x34, 0x56, 0x78]);
+  const payload = Buffer.from(JSON.stringify(obj), 'utf8');
+  for (let i = 0; i < payload.length; i++) payload[i] ^= mask[i & 3];
+  const header = Buffer.from([0x81, 0x80 | payload.length, ...mask]);
+  return Buffer.concat([header, payload]);
+}
+
 (async () => {
   try {
     // Ensure a clean state even if a previous run crashed.
@@ -199,6 +208,73 @@ function encodeCloseFrame(code) {
         await wait(150);
         result.socket.destroy();
       }
+    });
+
+    await check('companion: protected action without token is rejected', async () => {
+      // Without a token the WebSocket handshake is rejected before any action
+      // can reach the protected control plane.
+      const result = await wsUpgrade({
+        port: companion.PWA_PORT,
+        host: '127.0.0.1',
+        path: '/'
+      });
+      assert(result.status === 401, `expected 401 before action, got ${result.status}`);
+      if (result.socket) result.socket.destroy();
+    });
+
+    await check('companion: protected action with bad token is rejected', async () => {
+      // A bad token is also rejected before the handshake, so no action can be sent.
+      const result = await wsUpgrade({
+        port: companion.PWA_PORT,
+        host: '127.0.0.1',
+        path: `/?t=${badToken}`
+      });
+      assert(result.status === 403, `expected 403 before action, got ${result.status}`);
+      if (result.socket) result.socket.destroy();
+    });
+
+    await check('companion: protected action with valid token is accepted', async () => {
+      const result = await wsUpgrade({
+        port: companion.PWA_PORT,
+        host: '127.0.0.1',
+        path: `/?t=${token}`
+      });
+      assert(result.status === 101, 'valid token should upgrade');
+      assert(result.socket, 'socket should exist');
+
+      let received = null;
+      const handler = (msg) => { received = msg; };
+      companion.onMessage(handler);
+      result.socket.write(encodeTextFrame({ action: 'togglePause' }));
+      await wait(400);
+      assert(received && received.action === 'togglePause', 'valid action should be emitted');
+      companion.offMessage(handler);
+
+      try { result.socket.write(encodeCloseFrame(1000)); } catch {}
+      await wait(150);
+      result.socket.destroy();
+    });
+
+    await check('companion: invalid action over valid socket is ignored', async () => {
+      const result = await wsUpgrade({
+        port: companion.PWA_PORT,
+        host: '127.0.0.1',
+        path: `/?t=${token}`
+      });
+      assert(result.status === 101, 'valid token should upgrade');
+      assert(result.socket, 'socket should exist');
+
+      let received = null;
+      const handler = (msg) => { received = msg; };
+      companion.onMessage(handler);
+      result.socket.write(encodeTextFrame({ action: 'forceShutdown' }));
+      await wait(400);
+      assert(received === null, 'dangerous action must be ignored');
+      companion.offMessage(handler);
+
+      try { result.socket.write(encodeCloseFrame(1000)); } catch {}
+      await wait(150);
+      result.socket.destroy();
     });
 
     const newToken = remoteControl.generateToken();

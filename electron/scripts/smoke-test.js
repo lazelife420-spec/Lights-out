@@ -388,9 +388,9 @@ check('companion: main mode contract maps to correct host binding', () => {
 check('companion: same-wifi URL includes token and host for Android APK', () => {
   // The URL must carry the token and a host parameter so packaged Android
   // companions (which load the UI locally) know where to connect.
-  const wifiUrlMatch = mainSrc.match(/if \(mode === 'wifi' && rc\.token\) \{[\s\S]*?url = `([^`]+)`/);
-  assert(wifiUrlMatch, 'wifi URL construction not found');
-  const wifiUrl = wifiUrlMatch[1];
+  const wifiUrlMatch = mainSrc.match(/url = `http:\/\/\$\{lanIp\}:\$\{companion\.PWA_PORT\}\/\?t=\$\{rc\.token\}&host=\$\{encodeURIComponent\(`\$\{lanIp\}:\$\{companion\.PWA_PORT\}`\)\}`;/);
+  assert(wifiUrlMatch, 'wifi URL construction not found or malformed');
+  const wifiUrl = wifiUrlMatch[0];
   assert(wifiUrl.includes('t=${rc.token}'), 'wifi URL missing token');
   assert(wifiUrl.includes('host='), 'wifi URL missing host parameter');
   assert(wifiUrl.includes('encodeURIComponent'), 'wifi URL must encode the host parameter');
@@ -399,9 +399,20 @@ check('companion: same-wifi URL includes token and host for Android APK', () => 
 
 check('companion: QR URL has no host in off or local mode', () => {
   // Off and local modes intentionally omit the LAN host parameter.
-  const localUrlMatch = mainSrc.match(/\} else if \(mode === 'local' && rc\.token\) \{[\s\S]*?url = `([^`]+)`/);
+  const localUrlMatch = mainSrc.match(/url = `http:\/\/127\.0\.0\.1:\$\{companion\.PWA_PORT\}\/\?t=\$\{rc\.token\}`;/);
   assert(localUrlMatch, 'local URL construction not found');
-  assert(!localUrlMatch[1].includes('host='), 'local URL should not include a host parameter');
+  assert(!localUrlMatch[0].includes('host='), 'local URL should not include a host parameter');
+});
+
+check('companion: same-wifi status shows Waiting for phone before client connects', () => {
+  // getCompanionStatusLabel must return 'Waiting for phone' when wifi mode is
+  // enabled but no client has connected yet.
+  assertMatch(mainSrc, /if \(mode === 'off'\) return 'Off';/, 'Off label missing');
+  assertMatch(mainSrc, /if \(mode === 'local'\) return 'This PC only';/, 'local label missing');
+  assertMatch(mainSrc, /if \(failed\) return 'Connection failed';/, 'failed label missing');
+  assertMatch(mainSrc, /if \(connected\) return 'Phone connected';/, 'connected label missing');
+  assertMatch(mainSrc, /if \(clients > 0\) return 'Phone connected';/, 'clients label missing');
+  assertMatch(mainSrc, /return 'Waiting for phone';/, 'Waiting for phone fallback missing');
 });
 
 // 8. Run Receipts module logic.

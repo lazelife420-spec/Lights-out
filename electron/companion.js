@@ -369,6 +369,10 @@ function onMessage(callback) {
   emitter.on('message', callback);
 }
 
+function offMessage(callback) {
+  emitter.off('message', callback);
+}
+
 function onConnect(callback) {
   emitter.on('connect', callback);
 }
@@ -383,6 +387,7 @@ module.exports = {
   broadcast,
   getStatus,
   onMessage,
+  offMessage,
   onConnect,
   onStatus,
   PWA_PORT,
