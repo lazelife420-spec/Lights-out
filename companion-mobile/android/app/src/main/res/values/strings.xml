@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Lights Out Companion</string>
+    <string name="title_activity_main">Lights Out Companion</string>
+    <string name="package_name">com.lightsout.companion</string>
+    <string name="custom_url_scheme">com.lightsout.companion</string>
+</resources>

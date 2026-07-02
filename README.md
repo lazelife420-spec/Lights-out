@@ -1,6 +1,6 @@
-# Lights Out
+# Lights Out PC
 
-**A Windows bedtime shutdown timer that gets out of your way until it matters.**
+**Bedtime Mode for Windows.**
 
 Set a time. Press START. Lights Out walks you through a calm wind-down, then a
 cinematic Last Light final countdown before your PC shuts off. Emergency cancel
@@ -16,7 +16,7 @@ is always available. No surprise force-quits. No cloud account. No drama.
 - `LightsOut.exe` — portable, runs from any folder, no install needed
 - `SHA256SUMS.txt` — checksums for both artifacts
 
-<img src="docs/release/screenshots/v10.0.4/01_clock_face_hybrid.png" width="520" alt="Lights Out cockpit — hybrid clock face and desk-lamp logo">
+<img src="docs/assets/lights-out-keyart-hero-ui.png" width="720" alt="Lights Out PC key art showing the glowing lamp, word-mark, tagline, and cockpit dashboard UI">
 
 ### Why I built it
 
@@ -81,6 +81,9 @@ full contributor handoff and which runtime owns a given task.
 - **Saved profiles** - save the current timer as a profile in one click, schedule
   by duration or a specific date/time, and right-click a profile to Start, Edit, or
   Delete it. Plus **calendar scheduling** (.ics import).
+- **Phone Companion Easy Connect** - control Lights Out from your phone on the same
+  Wi-Fi via a simple QR scan + pairing code. Off by default, token-protected, and never
+  exposes LAN access in "This PC only" mode.
 - **Last Light finale** - a cinematic timer-zero sequence with countdown ring,
   atmospheric panels, and UNPLUG visual (v10.1.0 northstar design). Power action
   fires automatically; emergency cancel (`Ctrl+Shift+S`) is always available.

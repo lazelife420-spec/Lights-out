@@ -1,5 +1,31 @@
 # Changelog
 
+## v10.3.1 — Phone Companion Easy Connect (2026-06-29)
+
+### New
+- **Phone Companion Easy Connect** — settings panel now shows clear states:
+  `Off`, `This PC only`, `Waiting for phone`, `Phone connected`, or `Connection failed`.
+- **QR + manual pairing** — in `Same Wi-Fi` mode the desktop shows a scannable QR,
+  a manual URL fallback, and a short pairing code. `This PC only` mode binds
+  `127.0.0.1` and never exposes a phone QR. `Off` mode stops the listener entirely.
+- **Token-protected remote actions** — every phone command requires the pairing token;
+  invalid or missing tokens are rejected with a proper WebSocket policy-violation close.
+- **Real-time connection status** — the desktop status pill updates live when a phone
+  connects or disconnects, and shows how many phones are connected.
+- **Companion integration smoke test** — `npm run smoke:companion` starts the real
+  HTTP/WebSocket bridge and verifies off/local/wifi mode, token gating, token rotation,
+  and rejection semantics.
+
+### Changed
+- `companion.html` now shows explicit phone states: `Connecting…`, `Connected to [PC]`,
+  `Disconnected`, `Pairing expired`, and `Wrong network or PC offline`. All timer
+  actions require confirmation and are disabled while disconnected.
+
+### Internal
+- `companion.js` tracks connected client count and emits `status` events.
+- Main process broadcasts `remote-control-status` to the renderer on every state change.
+- Smoke suite: +9 companion-specific assertions.
+
 ## v10.3.0 — Ritual Mode + Intelligence (2026-06-28)
 
 ### New
@@ -106,3 +132,23 @@ cleanup could show a red error toast.
 ## v10.0.8 — Updater download target (2026-06-14)
 
 Fixed in-app updater download target so it selects the real installer asset.
+
+## v10.4.0 — Easy Connect Companion (2026-07-01)
+
+### New
+- **Easy Connect for phone companion** — redesigned pairing flow:
+  - **Three connection modes**: `Off` (disabled), `This PC only` (local binding), and `Same Wi-Fi` (LAN binding)
+  - **QR Code pairing**: Scan from the desktop app to pair instantly in `Same Wi-Fi` mode
+  - **Short pairing codes**: 6-character codes for manual fallback
+  - **Desktop status pill**: Real-time status indication (`Off`, `This PC only`, `Same Wi-Fi`)
+  - **Mobile-first companion UX**: Improved layout, connection state feedback (`Connecting`, `Connected`, `Disconnected`, `Pairing expired`), and action confirmations
+  - **One-click copy**: Copy the manual pairing URL to clipboard
+- **Security hardening**:
+  - Token-protected WebSocket handshake with 401/403 rejection
+  - Explicit host binding control per mode
+  - Hard safety check in message handlers to reject commands when mode is `Off`
+
+### Internal
+- New integration test: `test/companion-integration.test.js`
+- Smoke suite: 116/116 (+6 over v10.3.0)
+- Updated `main.js`, `renderer.js`, `companion.js`, `companion.html`, and `styles.css`

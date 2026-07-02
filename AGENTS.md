@@ -148,13 +148,16 @@ These are the most useful follow-on projects for an agent.
    `node --check .\electron\main.js`
    `node --check .\electron\renderer.js`
    `node --check .\electron\preload.js`
-2. Run smoke:
+2. Lint:
+   `cd electron`
+   `npm run lint`
+3. Run smoke:
    `cd electron`
    `npm run smoke`
-3. Run:
+4. Run:
    `cd electron`
    `npm start`
-4. Package when the change is meaningful:
+5. Package when the change is meaningful:
    `npm run build`
 
 Current smoke expectations include:
@@ -163,6 +166,7 @@ Current smoke expectations include:
 - timer control IPC wiring
 - mini mode and keyboard shortcut guards
 - preview/fallback safe defaults
+- companion Easy Connect: off/local/wifi mode contract, QR gating, token-protected remote actions, and real-time connection status
 
 ### For static browser preview of Electron UI
 

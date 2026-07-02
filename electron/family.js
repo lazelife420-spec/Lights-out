@@ -235,16 +235,42 @@ function getPeers() {
   return [...knownPeers.values()];
 }
 
-function getLocalIPs() {
-  const os = require('os');
-  const interfaces = os.networkInterfaces();
-  const ips = [];
+// Pure helper exposed for unit testing. Filters out loopback, link-local, and
+// obvious virtual adapters, then ranks private LAN ranges.
+function filterAndRankLocalIPs(interfaces) {
+  const candidates = [];
+  const virtualKeywords = /vEthernet|Virtual|VMware|VirtualBox|Hyper-V|WSL|Docker|Tailscale|ZeroTier|hamachi/i;
+
+  function rank(ip) {
+    if (ip.startsWith('192.168.')) return 300;
+    if (ip.startsWith('10.')) return 200;
+    const parts = ip.split('.').map(Number);
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return 100;
+    return 0;
+  }
+
   for (const name of Object.keys(interfaces)) {
+    if (virtualKeywords.test(name)) continue;
     for (const iface of interfaces[name]) {
-      if (iface.family === 'IPv4' && !iface.internal) ips.push(iface.address);
+      if (iface.family !== 'IPv4' || iface.internal) continue;
+      const ip = iface.address;
+      if (ip.startsWith('127.')) continue;
+      if (ip.startsWith('169.254.')) continue;
+      candidates.push({ ip, name, score: rank(ip) });
     }
   }
-  return ips;
+
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates;
+}
+
+function getLocalIPs() {
+  const os = require('os');
+  const candidates = filterAndRankLocalIPs(os.networkInterfaces());
+  if (candidates.length) {
+    console.log(`Selected LAN IP: ${candidates[0].ip} (${candidates[0].name})`);
+  }
+  return candidates.map((c) => c.ip);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────────
@@ -261,6 +287,7 @@ module.exports = {
   stopCommandServer,
   getPeers,
   getLocalIPs,
+  filterAndRankLocalIPs,
   sendRemoteCommand,
   remoteStart,
   remotePause,

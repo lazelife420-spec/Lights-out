@@ -1,0 +1,27 @@
+{
+  "name": "companion-mobile",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "copy": "node -e \"require('fs').mkdirSync('www',{recursive:true});require('fs').copyFileSync('../electron/companion.html','www/index.html');require('fs').copyFileSync('../electron/assets/icon-512.png','www/icon-512.png');require('fs').writeFileSync('www/manifest.json',JSON.stringify({name:'Lights Out Companion',short_name:'Lights Out',start_url:'/',display:'standalone',background_color:'#0d0e11',theme_color:'#0d0e11',icons:[{src:'/icon-512.png',sizes:'512x512',type:'image/png'}]}));\"",
+    "icons": "npm run icons:generate",
+    "icons:generate": "node scripts/make-icons.js",
+    "icons:check": "node scripts/make-icons.js --check",
+    "sync": "npm run copy && npx cap sync",
+    "build:apk": "npm run icons && npm run sync && cd android && gradlew assembleDebug",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@capacitor/android": "^6.2.1",
+    "@capacitor/cli": "^6.2.1",
+    "@capacitor/core": "^6.2.1"
+  },
+  "devDependencies": {
+    "sharp": "^0.35.3"
+  }
+}
