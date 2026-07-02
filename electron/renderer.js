@@ -88,7 +88,6 @@ const fallbackApi = (() => {
       emit('snoozed', { addedSeconds: addSeconds });
       return { success: true };
     },
-    executeAction: async () => ({ success: true, dryRun: true }),
     getSystemInfo: async () => ({ battery: 'N/A', powerPlan: 'Preview' }),
     getAppSettings: async () => {
       let stored = {};
