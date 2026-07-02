@@ -216,6 +216,9 @@
     <!-- Main Dashboard -->
     <main class="dashboard">
 
+      <!-- LIB: Tonight / main lobby panel (default screen) -->
+      <div class="ns-main-panel" id="ns-panel-lib">
+
       <!-- Northstar: Tonight's Run hero card (shown in lobby/idle state) -->
       <section class="ns-hero-card" id="ns-hero-card" style="display:none" aria-label="Tonight's Run">
         <div class="ns-hero-body">
@@ -475,8 +478,11 @@
         </div>
       </section>
 
-      <!-- Tabs Section -->
-      <section class="tabs-section">
+      </div>
+      <!-- /LIB panel -->
+
+      <!-- SCH: Schedule panel (duration/clock mode, calendar controls) -->
+      <section class="tabs-section ns-main-panel" id="ns-panel-sch" style="display:none">
         <div class="tabs-header">
           <button class="tab-btn active" data-tab="library">Library</button>
           <button class="tab-btn" data-tab="schedule">Schedule</button>
@@ -728,6 +734,48 @@
         </div>
         </div>
       </section>
+
+      <!-- STATS: Status / proof / diagnostics panel -->
+      <div class="ns-main-panel" id="ns-panel-stats" style="display:none">
+        <section class="status-section">
+          <div class="status-card">
+            <div class="card-header">
+              <span class="icon">&#x1F4F1;</span>
+              <span>Companion Status</span>
+            </div>
+            <div class="card-body">
+              <div class="status-row">
+                <span>Mode</span>
+                <span id="stats-companion-mode">Off</span>
+              </div>
+              <div class="status-row">
+                <span>Status</span>
+                <span id="stats-companion-status">Off</span>
+              </div>
+              <div class="status-row">
+                <span>Network</span>
+                <span id="stats-companion-network">&mdash;</span>
+              </div>
+              <div class="status-row">
+                <span>Connected devices</span>
+                <span id="stats-companion-clients">0</span>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="status-section">
+          <div class="status-card">
+            <div class="card-header">
+              <span class="icon">&#x1F4CB;</span>
+              <span>Session History</span>
+            </div>
+            <div class="card-body" id="stats-session-summary">
+              <p class="empty-state">No session history yet.</p>
+            </div>
+          </div>
+        </section>
+        <button class="btn-secondary" id="btn-stats-view-ledger">View Full Ledger</button>
+      </div>
 
     </main>
 

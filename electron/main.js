@@ -231,9 +231,8 @@ function createWindow() {
 
   mainWindow = new BrowserWindow({
     ...windowConfig,
-    frame: true,
+    frame: false,
     title: 'Lights Out',
-    titleBarStyle: 'default',
     autoHideMenuBar: true,
     show: false,
     icon: APP_ICON,

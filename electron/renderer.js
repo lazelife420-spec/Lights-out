@@ -562,6 +562,16 @@ const els = {
   receiptStats: document.getElementById('receipt-stats'),
   receiptsList: document.getElementById('receipts-list'),
   btnClearReceipts: document.getElementById('btn-clear-receipts'),
+  // Northstar sidebar destinations (LIB/SCH/STATS)
+  panelLib: document.getElementById('ns-panel-lib'),
+  panelSch: document.getElementById('ns-panel-sch'),
+  panelStats: document.getElementById('ns-panel-stats'),
+  statsCompanionMode: document.getElementById('stats-companion-mode'),
+  statsCompanionStatus: document.getElementById('stats-companion-status'),
+  statsCompanionNetwork: document.getElementById('stats-companion-network'),
+  statsCompanionClients: document.getElementById('stats-companion-clients'),
+  statsSessionSummary: document.getElementById('stats-session-summary'),
+  btnStatsViewLedger: document.getElementById('btn-stats-view-ledger'),
   aboutModal: document.getElementById('about-modal'),
   aboutModalClose: document.getElementById('about-modal-close'),
   // Updater status (in About modal)
@@ -1135,11 +1145,62 @@ function openHelpPanel() {
   notify('Open Settings for controls and About for version/update details.', 'info', 4200);
 }
 
+// Exactly one of LIB / SCH / STATS is visible at a time. Each child element's
+// own conditional display logic (isIdle, has-streak, has-proof, etc.) keeps
+// working independently underneath — this only toggles the panel-level wrapper.
+function applyMainPanelVisibility(panel) {
+  if (els.panelLib) els.panelLib.style.display = panel === 'lib' ? '' : 'none';
+  if (els.panelSch) els.panelSch.style.display = panel === 'sch' ? '' : 'none';
+  if (els.panelStats) els.panelStats.style.display = panel === 'stats' ? '' : 'none';
+  if (panel === 'sch') activateTopTab('schedule');
+}
+
+// Pulls only data that already exists elsewhere in the app (companion status,
+// receipt history) — no new tracking, no fabricated numbers.
+async function renderStatusPanel() {
+  try {
+    const rc = await api.getRemoteControl?.();
+    const modeLabels = { off: 'Off', local: 'This PC only', wifi: 'Same Wi-Fi' };
+    const mode = rc?.mode || 'off';
+    if (els.statsCompanionMode) els.statsCompanionMode.textContent = modeLabels[mode] || 'Off';
+    if (els.statsCompanionStatus) els.statsCompanionStatus.textContent = rc?.statusLabel || 'Off';
+    if (els.statsCompanionNetwork) {
+      els.statsCompanionNetwork.textContent = mode === 'wifi' ? `${rc.lanIp}:${rc.port}`
+        : mode === 'local' ? `127.0.0.1:${rc.port}`
+        : '—';
+    }
+    if (els.statsCompanionClients) els.statsCompanionClients.textContent = String(rc?.clients || 0);
+  } catch {
+    if (els.statsCompanionStatus) els.statsCompanionStatus.textContent = 'Unavailable';
+  }
+
+  if (!els.statsSessionSummary) return;
+  try {
+    const receipts = await api.listReceipts?.(5);
+    if (!receipts || !receipts.length) {
+      els.statsSessionSummary.innerHTML = '<p class="empty-state">No session history yet.</p>';
+      return;
+    }
+    els.statsSessionSummary.innerHTML = receipts.map(r => {
+      const when = r.startedAt ? new Date(r.startedAt).toLocaleDateString() : '—';
+      return `<div class="status-row"><span>${escapeHtml(when)}</span><span>${escapeHtml(r.result || '')} &middot; ${escapeHtml(r.action || '')}</span></div>`;
+    }).join('');
+  } catch {
+    els.statsSessionSummary.innerHTML = '<p class="empty-state">No session history yet.</p>';
+  }
+}
+
 async function handleSidebarNavigation(tab, { persist = true } = {}) {
   let handled = false;
 
-  if (tab === 'lib') handled = activateTopTab('library');
-  if (tab === 'sch') handled = activateTopTab('schedule');
+  if (tab === 'lib') {
+    applyMainPanelVisibility('lib');
+    handled = true;
+  }
+  if (tab === 'sch') {
+    applyMainPanelVisibility('sch');
+    handled = true;
+  }
   if (tab === 'set') {
     openSettingsPanel();
     handled = true;
@@ -1148,7 +1209,11 @@ async function handleSidebarNavigation(tab, { persist = true } = {}) {
     openHelpPanel();
     handled = true;
   }
-  if (tab === 'stats') handled = activateTopTab('streaks');
+  if (tab === 'stats') {
+    applyMainPanelVisibility('stats');
+    renderStatusPanel();
+    handled = true;
+  }
 
   if (!handled) {
     notify('Coming soon', 'info');
@@ -1161,6 +1226,8 @@ async function handleSidebarNavigation(tab, { persist = true } = {}) {
   }
   return true;
 }
+
+els.btnStatsViewLedger?.addEventListener('click', () => openReceiptsLedger());
 
 function formatIdleClockTime(now, compact = false) {
   const use12Hour = state.clockFormat === '12h';
@@ -1879,46 +1946,6 @@ function applyTonightCard(card) {
   notify(`Selected: ${card.querySelector('.card-title')?.textContent || 'Timer'}`, 'info');
 }
 
-function wireEvents() {
-  els.btnStart.addEventListener('click', () => startTimer());
-  els.btnStop.addEventListener('click', cancelTimer);
-  els.btnPause.addEventListener('click', togglePause);
-  els.btnSnooze.addEventListener('click', () => snooze(5 * 60));
-  els.btnMinimize.addEventListener('click', () => api.minimizeWindow());
-  els.btnClose.addEventListener('click', () => api.closeWindow());
-  els.btnMini?.addEventListener('click', toggleMiniMode);
-  els.btnWidget?.addEventListener('click', () => {
-    api.toggleWidget?.();
-    notify('Desktop widget toggled', 'info');
-  });
-  els.btnCompanion?.addEventListener('click', async () => {
-    try {
-      const rc = await api.getRemoteControl?.();
-      if (rc?.enabled && rc.url) {
-        await api.openExternal?.(rc.url);
-        notify(`Companion at ${rc.url}`, 'info');
-      } else {
-        openSettingsPanel();
-        setSidebarSelection('set');
-        notify('Enable Remote Control in settings before opening the Companion PWA', 'info');
-      }
-    } catch {
-      notify('Companion setup is unavailable right now', 'warning');
-    }
-  });
-
-  // Family mode scan and remote controls.
-  els.btnFamilyScan?.addEventListener('click', async () => {
-    try {
-      els.familyStatus.textContent = 'Scanning...';
-      const peers = await api.getFamilyPeers?.();
-      renderFamilyPeers(peers || []);
-      els.familyStatus.textContent = peers?.length ? `${peers.length} peer(s) found` : 'No peers found';
-    } catch {
-      els.familyStatus.textContent = 'Scan failed';
-    }
-  });
-
 function renderRemoteControl(rc) {
   if (!rc) return;
   const mode = rc.mode || 'off';
@@ -2008,6 +2035,46 @@ function setupRemoteControlHandlers() {
   api.onRemoteControlStatus?.(renderRemoteControl);
   loadRemoteControlState();
 }
+
+function wireEvents() {
+  els.btnStart.addEventListener('click', () => startTimer());
+  els.btnStop.addEventListener('click', cancelTimer);
+  els.btnPause.addEventListener('click', togglePause);
+  els.btnSnooze.addEventListener('click', () => snooze(5 * 60));
+  els.btnMinimize.addEventListener('click', () => api.minimizeWindow());
+  els.btnClose.addEventListener('click', () => api.closeWindow());
+  els.btnMini?.addEventListener('click', toggleMiniMode);
+  els.btnWidget?.addEventListener('click', () => {
+    api.toggleWidget?.();
+    notify('Desktop widget toggled', 'info');
+  });
+  els.btnCompanion?.addEventListener('click', async () => {
+    try {
+      const rc = await api.getRemoteControl?.();
+      if (rc?.enabled && rc.url) {
+        await api.openExternal?.(rc.url);
+        notify(`Companion at ${rc.url}`, 'info');
+      } else {
+        openSettingsPanel();
+        setSidebarSelection('set');
+        notify('Enable Remote Control in settings before opening the Companion PWA', 'info');
+      }
+    } catch {
+      notify('Companion setup is unavailable right now', 'warning');
+    }
+  });
+
+  // Family mode scan and remote controls.
+  els.btnFamilyScan?.addEventListener('click', async () => {
+    try {
+      els.familyStatus.textContent = 'Scanning...';
+      const peers = await api.getFamilyPeers?.();
+      renderFamilyPeers(peers || []);
+      els.familyStatus.textContent = peers?.length ? `${peers.length} peer(s) found` : 'No peers found';
+    } catch {
+      els.familyStatus.textContent = 'Scan failed';
+    }
+  });
 
 function renderFamilyPeers(peers) {
   if (!els.familyPeers) return;

@@ -505,6 +505,19 @@ body.warm-shift .ambient-canvas {
   scrollbar-gutter: stable;
 }
 
+/* Northstar sidebar destinations: exactly one visible at a time. */
+.ns-main-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--section-gap);
+}
+
+.empty-state {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 8px 0;
+}
+
 /* Timer Section (hero) */
 .timer-section {
   display: flex;
