@@ -163,6 +163,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateAvailable: (callback) => {
     ipcRenderer.on('update-available', (event, data) => callback(data));
   },
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
   // Data export/import
   exportAllData: () => ipcRenderer.invoke('export-all-data'),
