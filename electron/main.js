@@ -1057,7 +1057,24 @@ function handleCompanionMessage(msg, client) {
   setTimeout(broadcastCompanionState, 300);
 }
 
+function updateSystemInfoCacheAsync() {
+  if (systemInfoCache && Date.now() - systemInfoCachedAt < SYSTEM_INFO_TTL_MS) {
+    return;
+  }
+  (async () => {
+    try {
+      const battery = await executePowerShell('(Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue).EstimatedChargeRemaining');
+      const powerPlan = await executePowerShell('(Get-CimInstance -Namespace "root\\cimv2\\power" -ClassName Win32_PowerPlan | Where-Object { $_.IsActive }).ElementName');
+      systemInfoCache = { battery: battery || 'N/A', powerPlan: powerPlan || 'Unknown' };
+      systemInfoCachedAt = Date.now();
+    } catch {
+      // ignore
+    }
+  })();
+}
+
 function broadcastCompanionState() {
+  updateSystemInfoCacheAsync();
   const appSettings = settingsStore.getSection('app') || {};
   const taxStats = overrideTax.getStats();
   companion.broadcast({
@@ -1071,6 +1088,10 @@ function broadcastCompanionState() {
     timerName: appSettings.timerName || 'Last Call',
     pcName: require('os').hostname(),
     dryRun: timerState.dryRun,
+    systemInfo: {
+      battery: systemInfoCache ? systemInfoCache.battery : 'N/A',
+      powerPlan: systemInfoCache ? systemInfoCache.powerPlan : 'Unknown'
+    },
     overrideTax: {
       sessionSnoozeCount: taxStats.sessionSnoozeCount,
       tomorrowDebt: taxStats.tomorrowDebt,
@@ -1166,9 +1187,32 @@ function broadcastRemoteControlState() {
   mainWindow.webContents.send('remote-control-status', getRemoteControlState());
 }
 
+async function configureFirewallRules(open) {
+  try {
+    if (open) {
+      await executePowerShell(
+        'New-NetFirewallRule -DisplayName "Lights Out Companion Port" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 58732 -Enabled True -Profile Private,Public -ErrorAction SilentlyContinue'
+      );
+      await executePowerShell(
+        'New-NetFirewallRule -DisplayName "Lights Out Companion Discovery" -Direction Inbound -Action Allow -Protocol UDP -LocalPort 58733 -Enabled True -Profile Private,Public -ErrorAction SilentlyContinue'
+      );
+    } else {
+      await executePowerShell(
+        'Remove-NetFirewallRule -DisplayName "Lights Out Companion Port" -ErrorAction SilentlyContinue'
+      );
+      await executePowerShell(
+        'Remove-NetFirewallRule -DisplayName "Lights Out Companion Discovery" -ErrorAction SilentlyContinue'
+      );
+    }
+  } catch (err) {
+    console.warn('Windows Firewall configuration skipped or failed:', err.message);
+  }
+}
+
 function stopRemoteControl() {
   try { companion.stop(); } catch {}
   try { family.stop(); } catch {}
+  configureFirewallRules(false);
 }
 
 function startRemoteControl() {
@@ -1182,9 +1226,11 @@ function startRemoteControl() {
   if (mode === 'wifi') {
     companion.start({ token: rc.token, host: '0.0.0.0' });
     family.start({ enabled: true, token: rc.token, peerName: require('os').hostname() }, familyCommandHandler);
+    configureFirewallRules(true);
   } else if (mode === 'local') {
     companion.start({ token: rc.token, host: '127.0.0.1' });
     // Family mode (LAN discovery) is disabled in "This PC only" mode.
+    configureFirewallRules(false);
   }
   
   return true;
