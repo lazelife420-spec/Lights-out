@@ -1552,7 +1552,16 @@
 
         <!-- Existing Profiles -->
         <div class="profiles-list-section">
-          <h3>Your Profiles</h3>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+            <h3>Your Profiles</h3>
+            <input type="text" id="profile-search" placeholder="Search profiles..." style="font-size:11px; padding: 4px 8px; border-radius: 4px; border:1px solid var(--border-soft); background:rgba(0,0,0,0.2); color:#fff; width: 140px;">
+          </div>
+          <div class="profile-filters" id="profile-filters" style="display:flex; gap:6px; margin-bottom: 12px;">
+            <button class="filter-btn active" data-filter="all" style="padding: 4px 8px; font-size:10px; border-radius: 4px; cursor:pointer; border:1px solid var(--border-soft); background:rgba(255,255,255,0.08); color:#fff;">All</button>
+            <button class="filter-btn" data-filter="duration" style="padding: 4px 8px; font-size:10px; border-radius: 4px; cursor:pointer; border:1px solid var(--border-soft); background:transparent; color:var(--text-muted);">Duration</button>
+            <button class="filter-btn" data-filter="clock" style="padding: 4px 8px; font-size:10px; border-radius: 4px; cursor:pointer; border:1px solid var(--border-soft); background:transparent; color:var(--text-muted);">Clock</button>
+            <button class="filter-btn" data-filter="pinned" style="padding: 4px 8px; font-size:10px; border-radius: 4px; cursor:pointer; border:1px solid var(--border-soft); background:transparent; color:var(--text-muted);">📌 Pinned</button>
+          </div>
           <div class="profiles-list" id="profiles-list">
             <!-- Profile items loaded dynamically -->
           </div>

@@ -687,6 +687,8 @@ const state = {
   // Profiles state
   profiles: [],
   currentProfileId: null,
+  profileSearchQuery: '',
+  profileActiveFilter: 'all',
   // Calendar state
   calendarEvents: [],
   calendarSource: null,
@@ -3392,6 +3394,30 @@ function renderReceiptsModal(receipts, stats) {
     });
   }
 
+  // Profile search listener
+  const searchInput = document.getElementById('profile-search');
+  searchInput?.addEventListener('input', () => {
+    state.profileSearchQuery = searchInput.value;
+    renderProfilesList();
+  });
+
+  // Profile filter button listeners
+  const filterContainer = document.getElementById('profile-filters');
+  filterContainer?.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      filterContainer.querySelectorAll('.filter-btn').forEach(b => {
+        b.classList.remove('active');
+        b.style.background = 'transparent';
+        b.style.color = 'var(--text-muted)';
+      });
+      btn.classList.add('active');
+      btn.style.background = 'rgba(255,255,255,0.08)';
+      btn.style.color = '#fff';
+      state.profileActiveFilter = btn.dataset.filter;
+      renderProfilesList();
+    });
+  });
+
   if (els.btnSaveProfile) {
     els.btnSaveProfile.addEventListener('click', saveNewProfile);
   }
@@ -4280,6 +4306,31 @@ async function loadProfiles() {
   }
 }
 
+function getSortedAndFilteredProfiles() {
+  let list = [...state.profiles];
+  const query = (state.profileSearchQuery || '').toLowerCase().trim();
+  const filter = state.profileActiveFilter || 'all';
+
+  if (query) {
+    list = list.filter(p => p.name.toLowerCase().includes(query));
+  }
+
+  if (filter === 'duration') {
+    list = list.filter(p => p.mode === 'duration');
+  } else if (filter === 'clock') {
+    list = list.filter(p => p.mode === 'clock');
+  } else if (filter === 'pinned') {
+    list = list.filter(p => p.pinned);
+  }
+
+  // Sort pinned first, then normal relative order
+  return list.sort((a, b) => {
+    const aPin = a.pinned ? 1 : 0;
+    const bPin = b.pinned ? 1 : 0;
+    return bPin - aPin;
+  });
+}
+
 function renderProfiles() {
   if (!els.profilesGrid) return;
 
@@ -4288,12 +4339,16 @@ function renderProfiles() {
     return;
   }
 
-  els.profilesGrid.innerHTML = state.profiles.map((profile, index) => {
+  const sorted = [...state.profiles].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+  els.profilesGrid.innerHTML = sorted.map((profile, index) => {
     const isActive = state.currentProfileId === profile.id;
     const hint = getProfileHint(profile);
     return `
-      <div class="profile-card ${isActive ? 'active' : ''}" data-profile-id="${profile.id}" title="Ctrl+${index + 1} to quick-load">
-        <div class="profile-name">${escapeHtml(profile.name)}</div>
+      <div class="profile-card ${isActive ? 'active' : ''} ${profile.pinned ? 'pinned' : ''}" data-profile-id="${profile.id}" title="Ctrl+${index + 1} to quick-load">
+        <div class="profile-name">
+          ${profile.pinned ? '<span class="pin-badge" style="color:var(--accent-amber); margin-right:4px;">📌</span>' : ''}
+          ${escapeHtml(profile.name)}
+        </div>
         <div class="profile-hint">${escapeHtml(hint)}</div>
       </div>
     `;
@@ -4424,6 +4479,27 @@ async function applyProfile(profileId, opts = {}) {
 
 function openProfilesModal() {
   if (!els.profilesModal) return;
+  
+  // Reset search and filter query
+  state.profileSearchQuery = '';
+  state.profileActiveFilter = 'all';
+  const searchInput = document.getElementById('profile-search');
+  if (searchInput) searchInput.value = '';
+  const filterContainer = document.getElementById('profile-filters');
+  if (filterContainer) {
+    filterContainer.querySelectorAll('.filter-btn').forEach(b => {
+      b.classList.remove('active');
+      b.style.background = 'transparent';
+      b.style.color = 'var(--text-muted)';
+    });
+    const defaultBtn = filterContainer.querySelector('[data-filter="all"]');
+    if (defaultBtn) {
+      defaultBtn.classList.add('active');
+      defaultBtn.style.background = 'rgba(255,255,255,0.08)';
+      defaultBtn.style.color = '#fff';
+    }
+  }
+
   els.profilesModal.classList.add('active');
   updateProfileSavePreview();
   renderProfilesList();
@@ -4453,12 +4529,14 @@ function closeProfilesModal() {
 function renderProfilesList() {
   if (!els.profilesList) return;
 
-  if (state.profiles.length === 0) {
-    els.profilesList.innerHTML = '<div class="empty-profiles">No profiles yet. Create your first one above!</div>';
+  const filtered = getSortedAndFilteredProfiles();
+
+  if (filtered.length === 0) {
+    els.profilesList.innerHTML = '<div class="empty-profiles">No profiles matching search/filter criteria.</div>';
     return;
   }
 
-  els.profilesList.innerHTML = state.profiles.map((profile, idx) => {
+  els.profilesList.innerHTML = filtered.map((profile, idx) => {
     const hint = getProfileHint(profile);
     return `
       <div class="profile-item" data-profile-id="${profile.id}">
@@ -4467,8 +4545,11 @@ function renderProfilesList() {
           <div class="profile-item-hint">${escapeHtml(hint)}</div>
         </div>
         <div class="profile-item-actions">
+          <button class="profile-item-btn pin-btn" data-action="pin" title="${profile.pinned ? 'Unpin' : 'Pin'}">
+            ${profile.pinned ? '📌' : '🧷'}
+          </button>
           <button class="profile-item-btn move-btn" data-action="up" data-idx="${idx}" title="Move up" ${idx === 0 ? 'disabled' : ''}>&#9650;</button>
-          <button class="profile-item-btn move-btn" data-action="down" data-idx="${idx}" title="Move down" ${idx === state.profiles.length - 1 ? 'disabled' : ''}>&#9660;</button>
+          <button class="profile-item-btn move-btn" data-action="down" data-idx="${idx}" title="Move down" ${idx === filtered.length - 1 ? 'disabled' : ''}>&#9660;</button>
           <button class="profile-item-btn load-btn" data-action="load">Load</button>
           <button class="profile-item-btn delete-btn" data-action="delete">Delete</button>
         </div>
@@ -4504,16 +4585,30 @@ function renderProfilesList() {
         closeProfilesModal();
       } else if (action === 'delete') {
         await deleteProfile(profileId);
+      } else if (action === 'pin') {
+        const profile = state.profiles.find(p => p.id === profileId);
+        if (profile) {
+          await api.updateProfile(profileId, { pinned: !profile.pinned });
+          await loadProfiles();
+          renderProfiles();
+          renderProfilesList();
+        }
       } else if (action === 'up' || action === 'down') {
         const idx = parseInt(btn.dataset.idx);
         const newIdx = action === 'up' ? idx - 1 : idx + 1;
-        if (newIdx < 0 || newIdx >= state.profiles.length) return;
-        const ids = state.profiles.map(p => p.id);
-        [ids[idx], ids[newIdx]] = [ids[newIdx], ids[idx]];
-        await api.reorderProfiles(ids);
-        await loadProfiles();
-        renderProfiles();
-        renderProfilesList();
+        if (newIdx < 0 || newIdx >= filtered.length) return;
+        const p1 = filtered[idx];
+        const p2 = filtered[newIdx];
+        const gIdx1 = state.profiles.findIndex(p => p.id === p1.id);
+        const gIdx2 = state.profiles.findIndex(p => p.id === p2.id);
+        if (gIdx1 >= 0 && gIdx2 >= 0) {
+          const ids = state.profiles.map(p => p.id);
+          [ids[gIdx1], ids[gIdx2]] = [ids[gIdx2], ids[gIdx1]];
+          await api.reorderProfiles(ids);
+          await loadProfiles();
+          renderProfiles();
+          renderProfilesList();
+        }
       }
     });
   });
@@ -4543,6 +4638,13 @@ async function saveNewProfile() {
   };
 
   try {
+    const exists = state.profiles.some(p => p.name.toLowerCase() === name.toLowerCase());
+    if (exists) {
+      if (!confirm(`A profile named "${name}" already exists. Overwrite it?`)) {
+        return;
+      }
+    }
+
     const result = await api.createProfile(profileData);
     if (result.success) {
       notify(`Profile "${result.profile.name}" ${result.action === 'created' ? 'created' : 'updated'}`, 'success');
