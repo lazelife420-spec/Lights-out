@@ -2921,10 +2921,19 @@ function renderReceiptsModal(receipts, stats) {
     document.querySelector('.tab-btn[data-tab="streaks"]')?.click();
   });
 
-  els.modalClose.addEventListener('click', () => els.optionsModal.classList.remove('active'));
-  els.btnCancelOpt.addEventListener('click', () => els.optionsModal.classList.remove('active'));
+  els.modalClose.addEventListener('click', () => {
+    els.optionsModal.classList.remove('active');
+    render();
+  });
+  els.btnCancelOpt.addEventListener('click', () => {
+    els.optionsModal.classList.remove('active');
+    render();
+  });
   els.optionsModal.addEventListener('click', event => {
-    if (event.target === els.optionsModal) els.optionsModal.classList.remove('active');
+    if (event.target === els.optionsModal) {
+      els.optionsModal.classList.remove('active');
+      render();
+    }
   });
 
   if (els.aboutModalClose) {
