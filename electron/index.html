@@ -717,8 +717,12 @@
                 <span class="stat-label">On-Time (7d)</span>
               </div>
             </div>
-            <div class="streak-week" id="streak-week-bar">
-              <!-- 7-day mini bar chart rendered by JS -->
+            <div class="streaks-section-header">
+              <h4>Sleep History (Last 30 Days)</h4>
+              <button class="btn btn-secondary" id="btn-export-streaks" style="padding: 4px 10px; font-size: 11px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px;">&#x1F4CB; Export Ledger</button>
+            </div>
+            <div class="sleep-history-grid" id="sleep-history-grid">
+              <!-- Rendered as a contribution-style habit grid by JS -->
             </div>
             <h4 class="achievements-heading">Achievements</h4>
             <div class="achievements-grid" id="achievements-grid">
@@ -1674,6 +1678,18 @@
           <button class="btn-danger btn-tiny" id="btn-clear-receipts">Clear All Receipts</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Streak Celebration Modal -->
+  <div class="modal" id="streak-celebration-modal">
+    <div class="modal-content streak-celebration-content" style="text-align:center; max-width: 320px;">
+      <div style="font-size:48px; margin-bottom: 12px; animation: badge-pulse 1.5s infinite;">🔥</div>
+      <h3 style="font-size:18px; color: var(--accent-amber); margin-bottom: 8px;">Ritual Complete!</h3>
+      <p style="font-size:13px; color: var(--text-secondary); margin-bottom: 16px;">You kept your promise tonight. Rest well.</p>
+      <div class="celebration-streak-number" id="celebration-streak-number" style="font-size: 64px; font-weight: 800; color: #fff; text-shadow: 0 0 20px rgba(245,166,35,0.5); line-height: 1;">0</div>
+      <div style="font-size:11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 24px;">Night Streak</div>
+      <button class="btn btn-primary" id="btn-celebration-dismiss" style="width: 100%;">Good Night</button>
     </div>
   </div>
 

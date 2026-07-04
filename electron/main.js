@@ -1460,6 +1460,9 @@ ipcMain.handle('get-weekly-report', async () => {
 ipcMain.handle('get-sleep-score', async () => {
   try { return streaks.getSleepScore(); } catch { return { score: null, label: 'Error', breakdown: {} }; }
 });
+ipcMain.handle('get-streaks-history', async () => {
+  try { return streaks.getHistory30(); } catch { return []; }
+});
 ipcMain.handle('add-custom-sequence', async (event, seq) => {
   const entry = lastLight.addCustomSequence(seq);
   if (entry) {

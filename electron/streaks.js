@@ -286,6 +286,25 @@ function exportData() {
   return clone(load());
 }
 
+function getHistory30() {
+  const data = load();
+  const now = new Date();
+  const days = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(now - i * 86400000);
+    const dateStr = d.toISOString().slice(0, 10);
+    const found = data.events.find(e => e.date === dateStr);
+    days.push({
+      date: dateStr,
+      hasEvent: !!found,
+      action: found ? found.action : null,
+      snoozed: found ? found.snoozed : false,
+      bedTime: found ? found.bedTime : null
+    });
+  }
+  return days;
+}
+
 function replaceAll(nextData) {
   const normalized = deepMerge(clone(DEFAULTS), nextData && typeof nextData === 'object' ? nextData : {});
   normalized.events = Array.isArray(normalized.events) ? normalized.events.slice(-365) : [];
@@ -311,6 +330,7 @@ module.exports = {
   getAchievementCatalog,
   getWeeklyReport,
   getSleepScore,
+  getHistory30,
   exportData,
   replaceAll,
   // Testing helpers.

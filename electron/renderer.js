@@ -133,6 +133,7 @@ const fallbackApi = (() => {
     getAchievementsCatalog: async () => [],
     getWeeklyReport: async () => null,
     getSleepScore: async () => ({ score: null, label: 'Preview', breakdown: {} }),
+    getStreaksHistory: async () => [],
     getCompanionStatus: async () => ({ running: false, port: 0, clients: 0, url: '' }),
     getRemoteControl: async () => ({ enabled: false, mode: 'off', token: '', port: 0, lanIp: '', url: '', pcName: 'Preview PC', clients: 0, connected: false, failed: false, statusLabel: 'Off' }),
     setRemoteControlEnabled: async () => ({ enabled: false, mode: 'off', token: '', url: '', statusLabel: 'Off' }),
@@ -404,7 +405,7 @@ const els = {
   streakTotal: document.getElementById('streak-total'),
   streakWeekAvg: document.getElementById('streak-weekavg'),
   streakOnTime: document.getElementById('streak-ontime'),
-  streakWeekBar: document.getElementById('streak-week-bar'),
+  sleepHistoryGrid: document.getElementById('sleep-history-grid'),
   streakCallout: document.getElementById('streak-callout'),
   streakCalloutCount: document.getElementById('streak-callout-count'),
   streakCalloutBest: document.getElementById('streak-callout-best'),
@@ -1652,6 +1653,9 @@ function applyTimerPayload(data) {
     hideWarningModal();
     removeWarmFilter();
     loadStreaks();
+    if (data.streaks && data.streaks.streak >= 1) {
+      showStreakCelebration(data.streaks.streak);
+    }
     api.showNotification('Lights Out', state.dryRun ? 'Dry run complete.' : `${actionLabel()} started.`);
     notify(data.message || 'Timer complete', 'success', 5000);
     setSessionOutcome(state.dryRun ? 'dryrun' : 'completed');
@@ -1710,7 +1714,8 @@ async function loadStreaks() {
     const catalog = await api.getAchievementsCatalog();
     const report = await api.getWeeklyReport();
     const sleepScore = await api.getSleepScore();
-    renderStreaks(summary, catalog, report, sleepScore);
+    const history = await api.getStreaksHistory?.() || [];
+    renderStreaks(summary, catalog, report, sleepScore, history);
   } catch { /* streaks are decorative, never block */ }
 }
 
@@ -1740,7 +1745,16 @@ async function refreshStreakCallout() {
   } catch { /* decorative, never block */ }
 }
 
-function renderStreaks(summary, catalog, report, sleepScore) {
+function showStreakCelebration(count) {
+  const modal = document.getElementById('streak-celebration-modal');
+  const num = document.getElementById('celebration-streak-number');
+  if (modal && num) {
+    num.textContent = count;
+    modal.classList.add('active');
+  }
+}
+
+function renderStreaks(summary, catalog, report, sleepScore, history) {
   if (!summary) return;
 
   // Sleep Score.
@@ -1778,29 +1792,29 @@ function renderStreaks(summary, catalog, report, sleepScore) {
   if (els.streakWeekAvg) els.streakWeekAvg.textContent = summary.weekAvg || '--:--';
   if (els.streakOnTime) els.streakOnTime.textContent = `${summary.weekOnTime || 0}%`;
 
-  // Week bar chart + consistency + snooze from report.
+  // Week consistency + snooze from report.
   if (report) {
-    // Update stats with report data.
     if (els.streakOnTime) els.streakOnTime.textContent = `${100 - (report.snoozeRate || 0)}% on-time`;
-    // Show consistency.
-    const existingStats = document.querySelectorAll('.streak-stat');
-    if (existingStats.length >= 4 && report.consistency !== undefined) {
-      // Replace the last stat with consistency if available.
-    }
   }
 
-  // Week bar chart.
-  if (els.streakWeekBar && summary.weekDays?.length) {
-    const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const today = new Date().toISOString().slice(0, 10);
-    els.streakWeekBar.innerHTML = summary.weekDays.map(d => {
-      const [h, m] = (d.bedTime || '23:00').split(':').map(Number);
-      const mins = h * 60 + m;
-      const maxMins = 24 * 60;
-      const pct = Math.min(100, Math.max(8, (mins / maxMins) * 100));
-      const isToday = d.date === today;
-      const dayIdx = new Date(d.date + 'T12:00:00').getDay();
-      return `<div class="week-bar${isToday ? ' today' : ''}" style="height:${pct}%" title="${escapeHtml(d.bedTime || '')}"><span class="week-bar-label">${dayLabels[dayIdx]}</span></div>`;
+  // Sleep History Grid (30 Days)
+  if (els.sleepHistoryGrid && history) {
+    els.sleepHistoryGrid.innerHTML = history.map(d => {
+      let stateClass = 'neutral';
+      let tooltip = `${d.date}: Missed (No timer)`;
+      let icon = '';
+      if (d.hasEvent) {
+        if (d.snoozed) {
+          stateClass = 'snoozed';
+          tooltip = `${d.date}: Bedtime met @ ${d.bedTime} (Snoozed) [${d.action}]`;
+          icon = '&#x26A0;';
+        } else {
+          stateClass = 'on-time';
+          tooltip = `${d.date}: Bedtime met @ ${d.bedTime} [${d.action}]`;
+          icon = '&#x2714;';
+        }
+      }
+      return `<div class="history-block ${stateClass}" data-tooltip="${escapeHtml(tooltip)}">${icon || d.date.slice(-2)}</div>`;
     }).join('');
   }
 
@@ -2921,6 +2935,38 @@ function renderReceiptsModal(receipts, stats) {
     document.querySelector('.tab-btn[data-tab="streaks"]')?.click();
   });
 
+  document.getElementById('btn-celebration-dismiss')?.addEventListener('click', () => {
+    document.getElementById('streak-celebration-modal')?.classList.remove('active');
+  });
+
+  document.getElementById('btn-export-streaks')?.addEventListener('click', async () => {
+    try {
+      const summary = await api.getStreaks();
+      const history = await api.getStreaksHistory();
+      
+      let ledger = `LIGHTS OUT BEDTIME LEDGER\n`;
+      ledger += `=========================\n`;
+      ledger += `Generated: ${new Date().toLocaleString()}\n`;
+      ledger += `Current Streak: ${summary.streak} nights\n`;
+      ledger += `Best Streak: ${summary.bestStreak} nights\n`;
+      ledger += `Total Rituals: ${summary.totalNights}\n`;
+      ledger += `Avg Bedtime (7d): ${summary.weekAvg}\n`;
+      ledger += `On-Time Rate (7d): ${summary.weekOnTime}%\n\n`;
+      
+      ledger += `DAILY HISTORY (30 DAYS):\n`;
+      ledger += `------------------------\n`;
+      history.forEach(d => {
+        const status = d.hasEvent ? (d.snoozed ? 'SNOOZED' : 'ON-TIME') : 'MISSED';
+        ledger += `${d.date}: ${status}${d.bedTime ? ` @ ${d.bedTime}` : ''} [${d.action || 'N/A'}]\n`;
+      });
+      
+      await navigator.clipboard.writeText(ledger);
+      notify('Streak ledger copied to clipboard!', 'success', 3000);
+    } catch (err) {
+      notify('Failed to export ledger.', 'error');
+    }
+  });
+
   els.modalClose.addEventListener('click', () => {
     els.optionsModal.classList.remove('active');
     render();
@@ -3159,6 +3205,8 @@ function renderReceiptsModal(receipts, stats) {
         document.getElementById('override-modal').classList.remove('active');
       } else if (document.getElementById('snooze-tax-modal')?.classList.contains('active')) {
         document.getElementById('snooze-tax-modal').classList.remove('active');
+      } else if (document.getElementById('streak-celebration-modal')?.classList.contains('active')) {
+        document.getElementById('streak-celebration-modal').classList.remove('active');
       } else if (state.running || state.paused) {
         cancelTimer();
       }

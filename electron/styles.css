@@ -4605,3 +4605,94 @@ body.mini-mode .ns-proof-section { display: none !important; }
   background: rgba(255, 77, 77, 0.1);
   border-color: var(--accent-red);
 }
+
+/* Sleep streaks history calendar grid and section header */
+.streaks-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 20px 0 8px;
+}
+.streaks-section-header h4 {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-secondary);
+}
+.sleep-history-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  margin-bottom: 24px;
+  padding: 12px;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-soft);
+}
+.history-block {
+  aspect-ratio: 1;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  position: relative;
+  cursor: default;
+  transition: transform 0.15s ease;
+}
+.history-block:hover {
+  transform: scale(1.05);
+}
+.history-block.on-time {
+  background: rgba(76, 175, 80, 0.12);
+  border: 1px solid rgba(76, 175, 80, 0.25);
+  color: #4caf50;
+}
+.history-block.snoozed {
+  background: rgba(245, 166, 35, 0.12);
+  border: 1px solid rgba(245, 166, 35, 0.25);
+  color: #f5a623;
+}
+.history-block.neutral {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+}
+.history-block::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(13, 14, 17, 0.95);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+.history-block:hover::after {
+  opacity: 1;
+}
+
+/* Streak Celebration Modal and Animations */
+.streak-celebration-content {
+  background: radial-gradient(circle at 50% 0%, rgba(91, 140, 255, 0.12) 0%, rgba(91, 140, 255, 0) 75%), var(--bg-card) !important;
+  border: 1px solid var(--accent-blue) !important;
+  box-shadow: 0 12px 36px rgba(91, 140, 255, 0.18) !important;
+}
+.celebration-streak-number {
+  background: linear-gradient(180deg, #fff 30%, #f5a623 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
