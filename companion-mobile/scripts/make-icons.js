@@ -34,7 +34,7 @@ function ensureSourceExists() {
   }
 }
 
-function compareOrWrite(filePath, expectedBuffer, modeSummary) {
+async function compareOrWrite(filePath, expectedBuffer, modeSummary) {
   const exists = fs.existsSync(filePath);
   if (isCheckMode) {
     if (!exists) {
@@ -42,11 +42,31 @@ function compareOrWrite(filePath, expectedBuffer, modeSummary) {
       console.error(`Missing: ${filePath}`);
       return;
     }
-    const actual = fs.readFileSync(filePath);
-    if (!actual.equals(expectedBuffer)) {
-      modeSummary.mismatched += 1;
-      console.error(`Mismatch: ${filePath}`);
-      return;
+    if (filePath.endsWith('.xml')) {
+      const actualText = fs.readFileSync(filePath, 'utf8').trim();
+      const expectedText = expectedBuffer.toString('utf8').trim();
+      if (actualText !== expectedText) {
+        modeSummary.mismatched += 1;
+        console.error(`Mismatch (XML): ${filePath}`);
+        return;
+      }
+    } else {
+      try {
+        const actual = fs.readFileSync(filePath);
+        const [rawActual, rawExpected] = await Promise.all([
+          sharp(actual).raw().toBuffer(),
+          sharp(expectedBuffer).raw().toBuffer()
+        ]);
+        if (!rawActual.equals(rawExpected)) {
+          modeSummary.mismatched += 1;
+          console.error(`Mismatch (Pixel Data): ${filePath}`);
+          return;
+        }
+      } catch (err) {
+        modeSummary.mismatched += 1;
+        console.error(`Error comparing ${filePath}: ${err.message}`);
+        return;
+      }
     }
     modeSummary.checked += 1;
     console.log(`Checked: ${filePath}`);
@@ -71,15 +91,15 @@ async function generate() {
   for (const [density, size] of Object.entries(legacySizes)) {
     const dir = path.join(androidRes, `mipmap-${density}`);
     const icon = await renderPng(svgBuffer, size);
-    compareOrWrite(path.join(dir, 'ic_launcher.png'), icon, summary);
-    compareOrWrite(path.join(dir, 'ic_launcher_round.png'), icon, summary);
+    await compareOrWrite(path.join(dir, 'ic_launcher.png'), icon, summary);
+    await compareOrWrite(path.join(dir, 'ic_launcher_round.png'), icon, summary);
   }
 
   // Adaptive foreground icons (same icon, sits on dark background).
   for (const [density, size] of Object.entries(adaptiveForegroundSizes)) {
     const dir = path.join(androidRes, `mipmap-${density}`);
     const fg = await renderPng(svgBuffer, size);
-    compareOrWrite(path.join(dir, 'ic_launcher_foreground.png'), fg, summary);
+    await compareOrWrite(path.join(dir, 'ic_launcher_foreground.png'), fg, summary);
   }
 
   // Adaptive background color to match dark premium brand.
@@ -89,7 +109,7 @@ async function generate() {
     <color name="ic_launcher_background">#060912</color>
 </resources>
 `);
-  compareOrWrite(bgXmlPath, bgXml, summary);
+  await compareOrWrite(bgXmlPath, bgXml, summary);
 
   if (isCheckMode) {
     const failed = summary.missing + summary.mismatched;

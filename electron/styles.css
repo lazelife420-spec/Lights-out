@@ -1233,6 +1233,16 @@ input:disabled {
   gap: 8px;
 }
 
+.footer-branding {
+  margin-left: 12px;
+  font-size: 9px;
+  color: var(--text-muted);
+  opacity: 0.55;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+  align-self: center;
+}
+
 /* Status pill: single animated status indicator replacing badge soup */
 .status-pill {
   display: inline-flex;

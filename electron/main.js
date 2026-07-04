@@ -426,6 +426,7 @@ function emitTimerUpdate(type, data = {}) {
     mainWindow.webContents.send('timer-update', payload);
   }
 
+  updateWidget();
   updateTrayText();
   // Only rebuild the tray context menu on real state transitions, not every
   // tick. Replacing the menu every second can drop a click on an open menu
@@ -887,24 +888,33 @@ function playFirstLight() {
   // Smart Light Sunrise: gradually brighten room lights during First Light.
   const slConfig = smartLights.getConfig();
   if (slConfig.enabled) {
-    let slElapsed = 0;
+    const sunriseTickSeconds = 5;
+    const totalSunriseSteps = Math.max(1, Math.ceil(FIRST_LIGHT_DURATION / sunriseTickSeconds));
+    let sunriseStep = 0;
     const slInterval = setInterval(() => {
-      slElapsed++;
-      const brightness = Math.min(100, Math.round((slElapsed / FIRST_LIGHT_DURATION) * 100));
-      smartLights.invokeSmartLightAction({ on: true, brightness, colorTemp: 400 - Math.round(brightness * 1.5) }).catch(() => {});
-      if (slElapsed >= FIRST_LIGHT_DURATION) clearInterval(slInterval);
-    }, 5000); // update every 5s to avoid API spam
+      sunriseStep++;
+      const progress = Math.min(1, sunriseStep / totalSunriseSteps);
+      const brightness = Math.round(progress * 254);
+      const colorTemp = Math.round(500 - (progress * 250));
+      smartLights.invokeSmartLightAction({
+        on: true,
+        brightness,
+        colorTemp,
+        transitionTime: sunriseTickSeconds * 10
+      }).catch(() => {});
+      if (sunriseStep >= totalSunriseSteps) clearInterval(slInterval);
+    }, sunriseTickSeconds * 1000);
   }
 
   // Morning Routine: send briefing data to renderer.
   setTimeout(async () => {
     try {
       const calSettings = settingsStore.getSection('calendar') || {};
-      const events = await calProviders.fetchEvents(calSettings, 1);
+      const events = await calProviders.fetchAllEvents(calSettings, new Date(), 1);
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('morning-briefing', {
           events: (events || []).slice(0, 5),
-          sleepDebt: sleepDebt.getSummary(),
+          sleepDebt: sleepDebt.getDebtSummary(),
           streaks: streaks.getSummary()
         });
       }
@@ -977,8 +987,12 @@ function sendAccountability(eventType, extra = {}) {
 // Matches title containing these keywords (case-insensitive).
 const AUTO_START_KEYWORDS = ['lights out', 'bedtime', 'wind down', 'shutdown', 'sleep timer', 'goodnight', 'lights off'];
 
+function getEventTitle(event) {
+  return String(event?.summary || event?.title || '').trim();
+}
+
 function isBedtimeEvent(event) {
-  const title = (event.title || '').toLowerCase();
+  const title = getEventTitle(event).toLowerCase();
   // Must contain a keyword to qualify.
   return AUTO_START_KEYWORDS.some(kw => title.includes(kw));
 }
@@ -989,20 +1003,21 @@ async function checkCalendarAutoStart() {
   if (timerState.running) return; // already running
 
   try {
-    const events = await calProviders.fetchEvents(calSettings, 1); // within 1 day
+    const events = await calProviders.fetchAllEvents(calSettings, new Date(), 1); // within 1 day
     if (!events || !events.length) return;
 
     const now = new Date();
     for (const event of events) {
       if (!isBedtimeEvent(event)) continue; // skip non-bedtime events
       const start = new Date(event.start);
+      const end = event.end ? new Date(event.end) : new Date(start.getTime() + 60 * 60 * 1000);
       const diffMin = (start - now) / 60000;
       // If event starts within the next 2 minutes, auto-start.
       if (diffMin >= -1 && diffMin <= 2) {
-        const duration = Math.max(300, Math.round((new Date(event.end) - now) / 1000));
+        const duration = Math.max(300, Math.round((end - now) / 1000));
         const action = event.action || calSettings.builtin?.action || 'shutdown';
         startTimer({ durationSeconds: duration, action });
-        showNativeNotification('Lights Out', `Auto-started from calendar: ${event.title || 'Bedtime'}`);
+        showNativeNotification('Lights Out', `Auto-started from calendar: ${getEventTitle(event) || 'Bedtime'}`);
         break;
       }
     }
@@ -1369,12 +1384,18 @@ ipcMain.handle('save-app-settings', async (event, settings = {}) => {
   if (settings.customization) settingsStore.updateSection('customization', settings.customization);
   if (settings.lastLight) settingsStore.updateSection('lastLight', settings.lastLight);
   if (settings.calendar) settingsStore.updateSection('calendar', settings.calendar);
+  if (settings.wifiGuard) settingsStore.updateSection('wifiGuard', settings.wifiGuard);
+  if (settings.contentBlocker) settingsStore.updateSection('contentBlocker', settings.contentBlocker);
+  if (settings.accountability) settingsStore.updateSection('accountability', settings.accountability);
   return {
     ...getLoginSettings(),
     app: settingsStore.getSection('app'),
     customization: settingsStore.getSection('customization'),
     lastLight: settingsStore.getSection('lastLight'),
-    calendar: settingsStore.getSection('calendar')
+    calendar: settingsStore.getSection('calendar'),
+    wifiGuard: settingsStore.getSection('wifiGuard'),
+    contentBlocker: settingsStore.getSection('contentBlocker'),
+    accountability: settingsStore.getSection('accountability')
   };
 });
 ipcMain.handle('discard-recoverable-timer', async () => {
@@ -1440,8 +1461,8 @@ ipcMain.handle('export-all-data', async () => {
       version: updater.currentVersion,
       exportedAt: new Date().toISOString(),
       settings: settingsStore.getAll(),
-      streaks: streaks.getSummary(),
-      profiles: profiles.getAllProfiles()
+      streaks: streaks.exportData(),
+      profiles: profiles.getAll()
     };
     return { success: true, data };
   } catch (err) {
@@ -1454,14 +1475,15 @@ ipcMain.handle('import-all-data', async (event, jsonData) => {
     if (!parsed || typeof parsed !== 'object') return { success: false, error: 'Invalid data format' };
     if (parsed.settings) {
       for (const [section, value] of Object.entries(parsed.settings)) {
-        if (value && typeof value === 'object') settingsStore.updateSection(section, value);
+        if (section === 'activeTimer') settingsStore.setActiveTimer(value || null);
+        else if (value !== undefined) settingsStore.updateSection(section, value);
       }
     }
     if (parsed.profiles && Array.isArray(parsed.profiles)) {
-      for (const p of parsed.profiles) {
-        if (p.name) profiles.create(p);
-      }
+      const importedProfiles = profiles.import(JSON.stringify(parsed.profiles));
+      if (!importedProfiles.success) return importedProfiles;
     }
+    if (parsed.streaks && typeof parsed.streaks === 'object') streaks.replaceAll(parsed.streaks);
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -1502,6 +1524,23 @@ ipcMain.handle('get-companion-status', async () => {
 ipcMain.handle('get-remote-control', async () => {
   return getRemoteControlState();
 });
+ipcMain.handle('set-remote-control-enabled', async (e, enabled) => {
+  const rc = settingsStore.getSection('remoteControl') || {};
+  const nextEnabled = Boolean(enabled);
+  const nextMode = nextEnabled
+    ? ((rc.mode && rc.mode !== 'off') ? rc.mode : 'wifi')
+    : 'off';
+  const patch = {
+    enabled: nextEnabled,
+    mode: nextMode
+  };
+  if (nextEnabled && !rc.token) patch.token = remoteControl.generateToken();
+  settingsStore.updateSection('remoteControl', patch);
+  startRemoteControl();
+  const state = getRemoteControlState();
+  broadcastRemoteControlState();
+  return state;
+});
 // Render the companion pairing URL as a scannable QR data URL so the phone can
 // pair by camera instead of typing a long URL + token. Returns '' on failure
 // (the URL + code are still shown as text as a fallback).
@@ -1521,7 +1560,7 @@ ipcMain.handle('generate-qr', async (e, text) => {
 });
 ipcMain.handle('set-remote-control-mode', async (e, mode) => {
   const rc = settingsStore.getSection('remoteControl') || {};
-  const patch = { mode };
+  const patch = { enabled: mode !== 'off', mode };
   // Generate a pairing token the first time remote control is turned on.
   if (mode !== 'off' && !rc.token) patch.token = remoteControl.generateToken();
   settingsStore.updateSection('remoteControl', patch);
@@ -1865,6 +1904,7 @@ ipcMain.on('minimize-window', () => {
 ipcMain.on('toggle-mini-mode', () => {
   miniMode = !miniMode;
   if (!mainWindow) return;
+  mainWindow.miniMode = miniMode;
 
   if (miniMode) {
     mainWindow.setSize(260, 320);
@@ -1881,6 +1921,7 @@ ipcMain.on('toggle-mini-mode', () => {
 function createWidgetWindow() {
   if (widgetWindow && !widgetWindow.isDestroyed()) {
     widgetWindow.show();
+    updateWidget();
     return;
   }
   widgetWindow = new BrowserWindow({
@@ -1901,6 +1942,9 @@ function createWidgetWindow() {
   widgetWindow.setVisibleOnAllWorkspaces(true);
   widgetWindow.setPosition(20, 20); // top-left corner
   widgetWindow.loadFile('widget.html');
+  widgetWindow.webContents.once('did-finish-load', () => {
+    updateWidget();
+  });
   widgetWindow.on('closed', () => { widgetWindow = null; widgetMode = false; });
   widgetMode = true;
 }
@@ -2211,9 +2255,12 @@ app.whenReady().then(async () => {
   });
 
   // Idle Detection: nudge when user walks away during wind-down.
+  const appSettings = settingsStore.getSection('app') || {};
   idleDetection.startMonitoring({
-    thresholdSeconds: 300,
+    thresholdSeconds: appSettings.idleDetectionEnabled === false ? 0 : (appSettings.idleThresholdSeconds || 300),
     onIdle: (idleSec) => {
+      const currentApp = settingsStore.getSection('app') || {};
+      if (currentApp.idleDetectionEnabled === false) return;
       if (timerState.running && !timerState.paused) {
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send('idle-detected', { idleSeconds: idleSec });
@@ -2229,7 +2276,7 @@ app.whenReady().then(async () => {
 
   // Bedtime Reminder: gentle nudge 15 min before bedtime.
   bedtimeReminder.startReminder({
-    minutesBefore: 15,
+    minutesBefore: appSettings.bedtimeReminderEnabled === false ? 0 : (appSettings.bedtimeReminderMinutes || 15),
     onReminder: (data) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('bedtime-reminder', data);

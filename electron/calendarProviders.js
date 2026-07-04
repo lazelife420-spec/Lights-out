@@ -236,6 +236,10 @@ async function fetchAllEvents(config, from, withinDays = 14) {
     .sort((a, b) => a.start - b.start);
 }
 
+function fetchEvents(config, withinDays = 14, from = new Date()) {
+  return fetchAllEvents(config, from, withinDays);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // HTTP helper
 // ─────────────────────────────────────────────────────────────────────────────
@@ -293,5 +297,6 @@ module.exports = {
   fetchOutlookEvents,
   fetchCalendlyEvents,
   fetchIcsEvents,
-  fetchAllEvents
+  fetchAllEvents,
+  fetchEvents
 };

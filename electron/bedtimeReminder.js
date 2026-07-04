@@ -8,11 +8,21 @@ let lastReminderDate = null;
 let reminderMinutesBefore = 15;
 let onReminderCallback = null;
 
+function normalizeReminderMinutes(value, fallback = 15) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  if (num <= 0) return 0;
+  return Math.max(1, Math.round(num));
+}
+
 // Start checking if it's almost bedtime.
 function startReminder(options = {}) {
   // Read persisted settings if no override.
   const appSettings = getAppSettings();
-  reminderMinutesBefore = options.minutesBefore || appSettings.bedtimeReminderMinutes || 15;
+  reminderMinutesBefore = normalizeReminderMinutes(
+    options.minutesBefore !== undefined ? options.minutesBefore : appSettings.bedtimeReminderMinutes,
+    15
+  );
   onReminderCallback = options.onReminder || null;
 
   if (reminderInterval) clearInterval(reminderInterval);
@@ -27,6 +37,7 @@ function stopReminder() {
 function checkBedtime() {
   const bedtime = getBedtimeFromSettings();
   if (!bedtime) return;
+  if (reminderMinutesBefore <= 0) return;
 
   const now = new Date();
   const [bh, bm] = bedtime.split(':').map(Number);
@@ -48,14 +59,6 @@ function checkBedtime() {
     // Fire callback for renderer.
     if (onReminderCallback) onReminderCallback({ minutesUntil, bedtime, message });
 
-    // Also send to renderer.
-    try {
-      const { BrowserWindow } = require('electron');
-      const win = BrowserWindow.getAllWindows()[0];
-      if (win && !win.isDestroyed()) {
-        win.webContents.send('bedtime-reminder', { minutesUntil, bedtime, message });
-      }
-    } catch {}
   }
 }
 
@@ -77,13 +80,15 @@ function getAppSettings() {
 }
 
 function showNativeNotification(title, body) {
+  const escapedTitle = String(title).replace(/'/g, "''");
+  const escapedBody = String(body).replace(/'/g, "''");
   const cmd = `
     [System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null
-    $Start-Sleep -Milliseconds 100
+    Start-Sleep -Milliseconds 100
     $notify = New-Object System.Windows.Forms.NotifyIcon
     $notify.Icon = [System.Drawing.SystemIcons]::Information
-    $notify.BalloonTipTitle = '${title}'
-    $notify.BalloonTipText = '${body}'
+    $notify.BalloonTipTitle = '${escapedTitle}'
+    $notify.BalloonTipText = '${escapedBody}'
     $notify.Visible = $true
     $notify.ShowBalloonTip(5000)
     Start-Sleep -Milliseconds 5500
@@ -93,7 +98,7 @@ function showNativeNotification(title, body) {
 }
 
 function setMinutesBefore(min) {
-  reminderMinutesBefore = Math.max(1, min);
+  reminderMinutesBefore = normalizeReminderMinutes(min, reminderMinutesBefore);
 }
 
 function getMinutesBefore() {
