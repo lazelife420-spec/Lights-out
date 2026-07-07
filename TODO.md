@@ -1,0 +1,8 @@
+- [x] Update companion-mobile/package.json scripts for icons:generate/icons:check compatibility
+- [x] Enhance companion-mobile/scripts/make-icons.js with --check mode and deterministic summary
+- [x] Run validation commands:
+  - [x] cd companion-mobile && npm run icons:generate
+  - [x] cd companion-mobile && npm run icons:check
+  - [x] cd companion-mobile/android && .\gradlew.bat :app:assembleDebug
+- [x] Stage, commit, push updates to blackboxai/pr7-scope-cleanup
+- [x] Confirm PR reflects follow-up hardening changes

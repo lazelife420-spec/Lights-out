@@ -13,4 +13,8 @@
     <string name="scan_title">Scan pairing QR</string>
     <string name="scan_hint">Point the camera at the QR code in the desktop app\'s Remote Control settings.</string>
     <string name="camera_needed">Camera permission is needed to scan the QR code.</string>
+    <string name="connection_failed">Couldn\'t reach that PC. Check the link, Wi-Fi, and that Remote Control is enabled.</string>
+    <string name="detected_pc_title">✨ PC Found on Wi-Fi</string>
+    <string name="detected_pc_hint">Connect to %1$s</string>
+    <string name="proof_foundry_footer">Forged by The Proof Foundry™</string>
 </resources>

@@ -132,6 +132,7 @@ const fallbackApi = (() => {
     getAchievementsCatalog: async () => [],
     getWeeklyReport: async () => null,
     getSleepScore: async () => ({ score: null, label: 'Preview', breakdown: {} }),
+    getStreaksHistory: async () => [],
     getCompanionStatus: async () => ({ running: false, port: 0, clients: 0, url: '' }),
     getRemoteControl: async () => ({ enabled: false, mode: 'off', token: '', port: 0, lanIp: '', url: '', pcName: 'Preview PC', clients: 0, connected: false, failed: false, statusLabel: 'Off' }),
     setRemoteControlMode: async () => ({ enabled: false, mode: 'off', token: '', url: '', statusLabel: 'Off' }),
@@ -403,7 +404,7 @@ const els = {
   streakTotal: document.getElementById('streak-total'),
   streakWeekAvg: document.getElementById('streak-weekavg'),
   streakOnTime: document.getElementById('streak-ontime'),
-  streakWeekBar: document.getElementById('streak-week-bar'),
+  sleepHistoryGrid: document.getElementById('sleep-history-grid'),
   streakCallout: document.getElementById('streak-callout'),
   streakCalloutCount: document.getElementById('streak-callout-count'),
   streakCalloutBest: document.getElementById('streak-callout-best'),
@@ -699,6 +700,8 @@ const state = {
   // Profiles state
   profiles: [],
   currentProfileId: null,
+  profileSearchQuery: '',
+  profileActiveFilter: 'all',
   // Calendar state
   calendarEvents: [],
   calendarSource: null,
@@ -1722,6 +1725,9 @@ function applyTimerPayload(data) {
     hideWarningModal();
     removeWarmFilter();
     loadStreaks();
+    if (data.streaks && data.streaks.streak >= 1) {
+      showStreakCelebration(data.streaks.streak);
+    }
     api.showNotification('Lights Out', state.dryRun ? 'Dry run complete.' : `${actionLabel()} started.`);
     notify(data.message || 'Timer complete', 'success', 5000);
     setSessionOutcome(state.dryRun ? 'dryrun' : 'completed');
@@ -1780,7 +1786,8 @@ async function loadStreaks() {
     const catalog = await api.getAchievementsCatalog();
     const report = await api.getWeeklyReport();
     const sleepScore = await api.getSleepScore();
-    renderStreaks(summary, catalog, report, sleepScore);
+    const history = await api.getStreaksHistory?.() || [];
+    renderStreaks(summary, catalog, report, sleepScore, history);
   } catch { /* streaks are decorative, never block */ }
 }
 
@@ -1810,7 +1817,16 @@ async function refreshStreakCallout() {
   } catch { /* decorative, never block */ }
 }
 
-function renderStreaks(summary, catalog, report, sleepScore) {
+function showStreakCelebration(count) {
+  const modal = document.getElementById('streak-celebration-modal');
+  const num = document.getElementById('celebration-streak-number');
+  if (modal && num) {
+    num.textContent = count;
+    modal.classList.add('active');
+  }
+}
+
+function renderStreaks(summary, catalog, report, sleepScore, history) {
   if (!summary) return;
 
   // Sleep Score.
@@ -1848,29 +1864,29 @@ function renderStreaks(summary, catalog, report, sleepScore) {
   if (els.streakWeekAvg) els.streakWeekAvg.textContent = summary.weekAvg || '--:--';
   if (els.streakOnTime) els.streakOnTime.textContent = `${summary.weekOnTime || 0}%`;
 
-  // Week bar chart + consistency + snooze from report.
+  // Week consistency + snooze from report.
   if (report) {
-    // Update stats with report data.
     if (els.streakOnTime) els.streakOnTime.textContent = `${100 - (report.snoozeRate || 0)}% on-time`;
-    // Show consistency.
-    const existingStats = document.querySelectorAll('.streak-stat');
-    if (existingStats.length >= 4 && report.consistency !== undefined) {
-      // Replace the last stat with consistency if available.
-    }
   }
 
-  // Week bar chart.
-  if (els.streakWeekBar && summary.weekDays?.length) {
-    const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const today = new Date().toISOString().slice(0, 10);
-    els.streakWeekBar.innerHTML = summary.weekDays.map(d => {
-      const [h, m] = (d.bedTime || '23:00').split(':').map(Number);
-      const mins = h * 60 + m;
-      const maxMins = 24 * 60;
-      const pct = Math.min(100, Math.max(8, (mins / maxMins) * 100));
-      const isToday = d.date === today;
-      const dayIdx = new Date(d.date + 'T12:00:00').getDay();
-      return `<div class="week-bar${isToday ? ' today' : ''}" style="height:${pct}%" title="${escapeHtml(d.bedTime || '')}"><span class="week-bar-label">${dayLabels[dayIdx]}</span></div>`;
+  // Sleep History Grid (30 Days)
+  if (els.sleepHistoryGrid && history) {
+    els.sleepHistoryGrid.innerHTML = history.map(d => {
+      let stateClass = 'neutral';
+      let tooltip = `${d.date}: Missed (No timer)`;
+      let icon = '';
+      if (d.hasEvent) {
+        if (d.snoozed) {
+          stateClass = 'snoozed';
+          tooltip = `${d.date}: Bedtime met @ ${d.bedTime} (Snoozed) [${d.action}]`;
+          icon = '&#x26A0;';
+        } else {
+          stateClass = 'on-time';
+          tooltip = `${d.date}: Bedtime met @ ${d.bedTime} [${d.action}]`;
+          icon = '&#x2714;';
+        }
+      }
+      return `<div class="history-block ${stateClass}" data-tooltip="${escapeHtml(tooltip)}">${icon || d.date.slice(-2)}</div>`;
     }).join('');
   }
 
@@ -2991,10 +3007,51 @@ function renderReceiptsModal(receipts, stats) {
     document.querySelector('.tab-btn[data-tab="streaks"]')?.click();
   });
 
-  els.modalClose.addEventListener('click', () => els.optionsModal.classList.remove('active'));
-  els.btnCancelOpt.addEventListener('click', () => els.optionsModal.classList.remove('active'));
+  document.getElementById('btn-celebration-dismiss')?.addEventListener('click', () => {
+    document.getElementById('streak-celebration-modal')?.classList.remove('active');
+  });
+
+  document.getElementById('btn-export-streaks')?.addEventListener('click', async () => {
+    try {
+      const summary = await api.getStreaks();
+      const history = await api.getStreaksHistory();
+      
+      let ledger = `LIGHTS OUT BEDTIME LEDGER\n`;
+      ledger += `=========================\n`;
+      ledger += `Generated: ${new Date().toLocaleString()}\n`;
+      ledger += `Current Streak: ${summary.streak} nights\n`;
+      ledger += `Best Streak: ${summary.bestStreak} nights\n`;
+      ledger += `Total Rituals: ${summary.totalNights}\n`;
+      ledger += `Avg Bedtime (7d): ${summary.weekAvg}\n`;
+      ledger += `On-Time Rate (7d): ${summary.weekOnTime}%\n\n`;
+      
+      ledger += `DAILY HISTORY (30 DAYS):\n`;
+      ledger += `------------------------\n`;
+      history.forEach(d => {
+        const status = d.hasEvent ? (d.snoozed ? 'SNOOZED' : 'ON-TIME') : 'MISSED';
+        ledger += `${d.date}: ${status}${d.bedTime ? ` @ ${d.bedTime}` : ''} [${d.action || 'N/A'}]\n`;
+      });
+      
+      await navigator.clipboard.writeText(ledger);
+      notify('Streak ledger copied to clipboard!', 'success', 3000);
+    } catch (err) {
+      notify('Failed to export ledger.', 'error');
+    }
+  });
+
+  els.modalClose.addEventListener('click', () => {
+    els.optionsModal.classList.remove('active');
+    render();
+  });
+  els.btnCancelOpt.addEventListener('click', () => {
+    els.optionsModal.classList.remove('active');
+    render();
+  });
   els.optionsModal.addEventListener('click', event => {
-    if (event.target === els.optionsModal) els.optionsModal.classList.remove('active');
+    if (event.target === els.optionsModal) {
+      els.optionsModal.classList.remove('active');
+      render();
+    }
   });
 
   if (els.aboutModalClose) {
@@ -3220,6 +3277,8 @@ function renderReceiptsModal(receipts, stats) {
         document.getElementById('override-modal').classList.remove('active');
       } else if (document.getElementById('snooze-tax-modal')?.classList.contains('active')) {
         document.getElementById('snooze-tax-modal').classList.remove('active');
+      } else if (document.getElementById('streak-celebration-modal')?.classList.contains('active')) {
+        document.getElementById('streak-celebration-modal').classList.remove('active');
       } else if (state.running || state.paused) {
         cancelTimer();
       }
@@ -3404,6 +3463,30 @@ function renderReceiptsModal(receipts, stats) {
       if (event.target === els.profilesModal) closeProfilesModal();
     });
   }
+
+  // Profile search listener
+  const searchInput = document.getElementById('profile-search');
+  searchInput?.addEventListener('input', () => {
+    state.profileSearchQuery = searchInput.value;
+    renderProfilesList();
+  });
+
+  // Profile filter button listeners
+  const filterContainer = document.getElementById('profile-filters');
+  filterContainer?.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      filterContainer.querySelectorAll('.filter-btn').forEach(b => {
+        b.classList.remove('active');
+        b.style.background = 'transparent';
+        b.style.color = 'var(--text-muted)';
+      });
+      btn.classList.add('active');
+      btn.style.background = 'rgba(255,255,255,0.08)';
+      btn.style.color = '#fff';
+      state.profileActiveFilter = btn.dataset.filter;
+      renderProfilesList();
+    });
+  });
 
   if (els.btnSaveProfile) {
     els.btnSaveProfile.addEventListener('click', saveNewProfile);
@@ -4288,6 +4371,31 @@ async function loadProfiles() {
   }
 }
 
+function getSortedAndFilteredProfiles() {
+  let list = [...state.profiles];
+  const query = (state.profileSearchQuery || '').toLowerCase().trim();
+  const filter = state.profileActiveFilter || 'all';
+
+  if (query) {
+    list = list.filter(p => p.name.toLowerCase().includes(query));
+  }
+
+  if (filter === 'duration') {
+    list = list.filter(p => p.mode === 'duration');
+  } else if (filter === 'clock') {
+    list = list.filter(p => p.mode === 'clock');
+  } else if (filter === 'pinned') {
+    list = list.filter(p => p.pinned);
+  }
+
+  // Sort pinned first, then normal relative order
+  return list.sort((a, b) => {
+    const aPin = a.pinned ? 1 : 0;
+    const bPin = b.pinned ? 1 : 0;
+    return bPin - aPin;
+  });
+}
+
 function renderProfiles() {
   if (!els.profilesGrid) return;
 
@@ -4296,12 +4404,16 @@ function renderProfiles() {
     return;
   }
 
-  els.profilesGrid.innerHTML = state.profiles.map((profile, index) => {
+  const sorted = [...state.profiles].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+  els.profilesGrid.innerHTML = sorted.map((profile, index) => {
     const isActive = state.currentProfileId === profile.id;
     const hint = getProfileHint(profile);
     return `
-      <div class="profile-card ${isActive ? 'active' : ''}" data-profile-id="${profile.id}" title="Ctrl+${index + 1} to quick-load">
-        <div class="profile-name">${escapeHtml(profile.name)}</div>
+      <div class="profile-card ${isActive ? 'active' : ''} ${profile.pinned ? 'pinned' : ''}" data-profile-id="${profile.id}" title="Ctrl+${index + 1} to quick-load">
+        <div class="profile-name">
+          ${profile.pinned ? '<span class="pin-badge" style="color:var(--accent-amber); margin-right:4px;">📌</span>' : ''}
+          ${escapeHtml(profile.name)}
+        </div>
         <div class="profile-hint">${escapeHtml(hint)}</div>
       </div>
     `;
@@ -4432,6 +4544,27 @@ async function applyProfile(profileId, opts = {}) {
 
 function openProfilesModal() {
   if (!els.profilesModal) return;
+  
+  // Reset search and filter query
+  state.profileSearchQuery = '';
+  state.profileActiveFilter = 'all';
+  const searchInput = document.getElementById('profile-search');
+  if (searchInput) searchInput.value = '';
+  const filterContainer = document.getElementById('profile-filters');
+  if (filterContainer) {
+    filterContainer.querySelectorAll('.filter-btn').forEach(b => {
+      b.classList.remove('active');
+      b.style.background = 'transparent';
+      b.style.color = 'var(--text-muted)';
+    });
+    const defaultBtn = filterContainer.querySelector('[data-filter="all"]');
+    if (defaultBtn) {
+      defaultBtn.classList.add('active');
+      defaultBtn.style.background = 'rgba(255,255,255,0.08)';
+      defaultBtn.style.color = '#fff';
+    }
+  }
+
   els.profilesModal.classList.add('active');
   updateProfileSavePreview();
   renderProfilesList();
@@ -4461,12 +4594,14 @@ function closeProfilesModal() {
 function renderProfilesList() {
   if (!els.profilesList) return;
 
-  if (state.profiles.length === 0) {
-    els.profilesList.innerHTML = '<div class="empty-profiles">No profiles yet. Create your first one above!</div>';
+  const filtered = getSortedAndFilteredProfiles();
+
+  if (filtered.length === 0) {
+    els.profilesList.innerHTML = '<div class="empty-profiles">No profiles matching search/filter criteria.</div>';
     return;
   }
 
-  els.profilesList.innerHTML = state.profiles.map((profile, idx) => {
+  els.profilesList.innerHTML = filtered.map((profile, idx) => {
     const hint = getProfileHint(profile);
     return `
       <div class="profile-item" data-profile-id="${profile.id}">
@@ -4475,8 +4610,11 @@ function renderProfilesList() {
           <div class="profile-item-hint">${escapeHtml(hint)}</div>
         </div>
         <div class="profile-item-actions">
+          <button class="profile-item-btn pin-btn" data-action="pin" title="${profile.pinned ? 'Unpin' : 'Pin'}">
+            ${profile.pinned ? '📌' : '🧷'}
+          </button>
           <button class="profile-item-btn move-btn" data-action="up" data-idx="${idx}" title="Move up" ${idx === 0 ? 'disabled' : ''}>&#9650;</button>
-          <button class="profile-item-btn move-btn" data-action="down" data-idx="${idx}" title="Move down" ${idx === state.profiles.length - 1 ? 'disabled' : ''}>&#9660;</button>
+          <button class="profile-item-btn move-btn" data-action="down" data-idx="${idx}" title="Move down" ${idx === filtered.length - 1 ? 'disabled' : ''}>&#9660;</button>
           <button class="profile-item-btn load-btn" data-action="load">Load</button>
           <button class="profile-item-btn delete-btn" data-action="delete">Delete</button>
         </div>
@@ -4512,16 +4650,30 @@ function renderProfilesList() {
         closeProfilesModal();
       } else if (action === 'delete') {
         await deleteProfile(profileId);
+      } else if (action === 'pin') {
+        const profile = state.profiles.find(p => p.id === profileId);
+        if (profile) {
+          await api.updateProfile(profileId, { pinned: !profile.pinned });
+          await loadProfiles();
+          renderProfiles();
+          renderProfilesList();
+        }
       } else if (action === 'up' || action === 'down') {
         const idx = parseInt(btn.dataset.idx);
         const newIdx = action === 'up' ? idx - 1 : idx + 1;
-        if (newIdx < 0 || newIdx >= state.profiles.length) return;
-        const ids = state.profiles.map(p => p.id);
-        [ids[idx], ids[newIdx]] = [ids[newIdx], ids[idx]];
-        await api.reorderProfiles(ids);
-        await loadProfiles();
-        renderProfiles();
-        renderProfilesList();
+        if (newIdx < 0 || newIdx >= filtered.length) return;
+        const p1 = filtered[idx];
+        const p2 = filtered[newIdx];
+        const gIdx1 = state.profiles.findIndex(p => p.id === p1.id);
+        const gIdx2 = state.profiles.findIndex(p => p.id === p2.id);
+        if (gIdx1 >= 0 && gIdx2 >= 0) {
+          const ids = state.profiles.map(p => p.id);
+          [ids[gIdx1], ids[gIdx2]] = [ids[gIdx2], ids[gIdx1]];
+          await api.reorderProfiles(ids);
+          await loadProfiles();
+          renderProfiles();
+          renderProfilesList();
+        }
       }
     });
   });
@@ -4551,6 +4703,13 @@ async function saveNewProfile() {
   };
 
   try {
+    const exists = state.profiles.some(p => p.name.toLowerCase() === name.toLowerCase());
+    if (exists) {
+      if (!confirm(`A profile named "${name}" already exists. Overwrite it?`)) {
+        return;
+      }
+    }
+
     const result = await api.createProfile(profileData);
     if (result.success) {
       notify(`Profile "${result.profile.name}" ${result.action === 'created' ? 'created' : 'updated'}`, 'success');

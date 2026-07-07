@@ -125,6 +125,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAchievementsCatalog: () => ipcRenderer.invoke('get-achievements-catalog'),
   getWeeklyReport: () => ipcRenderer.invoke('get-weekly-report'),
   getSleepScore: () => ipcRenderer.invoke('get-sleep-score'),
+  getStreaksHistory: () => ipcRenderer.invoke('get-streaks-history'),
 
   // Custom Last Light sequences
   addCustomSequence: (seq) => ipcRenderer.invoke('add-custom-sequence', seq),

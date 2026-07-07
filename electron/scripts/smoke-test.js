@@ -102,6 +102,23 @@ check('profiles: lastLight fields in normalized profile', () => {
   assert(norm && norm.lastLightEnabled === true && norm.lastLightSequence === 'ExitTheGrid' && norm.lastLightSound === 'Soft', 'lastLight fields not preserved');
 });
 
+check('streaks: export/import round-trip restores event history', () => {
+  const streaks = require(path.join(root, 'streaks.js'));
+  streaks._reset();
+  streaks.replaceAll({
+    events: [{ date: '2026-07-01', bedTime: '22:15', action: 'shutdown', snoozed: false }],
+    streak: 1,
+    bestStreak: 3,
+    achievements: ['first_light']
+  });
+  const exported = streaks.exportData();
+  streaks.replaceAll({ events: [], streak: 0, bestStreak: 0, achievements: [] });
+  streaks.replaceAll(exported);
+  const restored = streaks.exportData();
+  assert(restored.events.length === 1, 'streak events were not restored');
+  assert(restored.bestStreak === 3, 'best streak was not restored');
+});
+
 Module._load = origLoad;
 
 // 4b. lastLight sequence catalog + timing.
@@ -203,6 +220,73 @@ check('ipc: timer and login handlers remain exposed from main', () => {
   assertMatch(mainSrc, /ipcMain\.handle\('resume-timer', async \(\) => resumeTimer\(\)\);/, 'resume-timer IPC missing');
   assertMatch(mainSrc, /ipcMain\.handle\('snooze-timer', async \(event, seconds, reason\) => snoozeTimer\(seconds, reason\)\);/, 'snooze-timer IPC missing');
   assertMatch(mainSrc, /app\.setLoginItemSettings\(\{[\s\S]*openAtLogin: Boolean\(enabled\),[\s\S]*openAsHidden: false,[\s\S]*args: \['--minimized', '--no-auto-start'\]/s, 'run-at-login settings changed');
+});
+
+check('calendar: runtime uses the provider API that actually exists', () => {
+  assertMatch(mainSrc, /const events = await calProviders\.fetchAllEvents\(calSettings, new Date\(\), 1\);/, 'calendar runtime should use fetchAllEvents');
+  assert(!/calProviders\.fetchEvents\(calSettings, 1\)/.test(mainSrc), 'stale fetchEvents runtime call still present in main.js');
+});
+
+check('calendar: bedtime matching and notifications use normalized event titles', () => {
+  assertMatch(mainSrc, /function getEventTitle\(event\) \{[\s\S]*event\?\.summary \|\| event\?\.title/s, 'event title helper missing');
+  assertMatch(mainSrc, /function isBedtimeEvent\(event\) \{[\s\S]*getEventTitle\(event\)\.toLowerCase\(\)/s, 'bedtime matcher should read normalized event title');
+  assertMatch(mainSrc, /showNativeNotification\('Lights Out', `Auto-started from calendar: \$\{getEventTitle\(event\) \|\| 'Bedtime'\}`\);/, 'calendar notification should use normalized event title');
+});
+
+check('first-light: morning briefing uses live calendar and sleep-debt APIs', () => {
+  assertMatch(mainSrc, /const events = await calProviders\.fetchAllEvents\(calSettings, new Date\(\), 1\);/, 'First Light briefing should fetch live calendar events');
+  assertMatch(mainSrc, /sleepDebt: sleepDebt\.getDebtSummary\(\)/, 'First Light briefing should use getDebtSummary');
+  assert(!/sleepDebt\.getSummary\(\)/.test(mainSrc), 'stale sleepDebt.getSummary call still present');
+});
+
+check('first-light: smart-light sunrise uses exported helper with bounded timing', () => {
+  const smartLightsSrc = fs.readFileSync(path.join(root, 'smartLights.js'), 'utf8');
+  assertMatch(smartLightsSrc, /async function invokeSmartLightAction\(\{ on = true, brightness = 254, colorTemp = 366, transitionTime = 10 \} = \{\}\)/, 'smart-light action helper missing');
+  assertMatch(smartLightsSrc, /module\.exports = \{[\s\S]*invokeSmartLightAction,/s, 'smart-light action helper not exported');
+  assertMatch(mainSrc, /const sunriseTickSeconds = 5;/, 'First Light sunrise tick constant missing');
+  assertMatch(mainSrc, /const totalSunriseSteps = Math\.max\(1, Math\.ceil\(FIRST_LIGHT_DURATION \/ sunriseTickSeconds\)\);/, 'First Light sunrise step bound missing');
+  assertMatch(mainSrc, /smartLights\.invokeSmartLightAction\(\{[\s\S]*transitionTime: sunriseTickSeconds \* 10[\s\S]*\}\)\.catch\(\(\) => \{\}\);/s, 'First Light should use the exported smart-light action helper');
+});
+
+check('idle-detection: disabled state is honored at startup and at runtime', () => {
+  const idleSrc = fs.readFileSync(path.join(root, 'idleDetection.js'), 'utf8');
+  assertMatch(idleSrc, /function normalizeThreshold\(seconds, fallback = 300\) \{[\s\S]*if \(num <= 0\) return Number\.POSITIVE_INFINITY;/s, 'idle threshold normalization should allow disabled state');
+  assertMatch(idleSrc, /function getThreshold\(\) \{[\s\S]*Number\.isFinite\(idleThresholdSeconds\) \? idleThresholdSeconds : 0/s, 'idle threshold getter should surface disabled state as 0');
+  assertMatch(mainSrc, /thresholdSeconds: appSettings\.idleDetectionEnabled === false \? 0 : \(appSettings\.idleThresholdSeconds \|\| 300\)/, 'idle detection startup should honor saved enabled state');
+  assertMatch(mainSrc, /const currentApp = settingsStore\.getSection\('app'\) \|\| \{\};[\s\S]*if \(currentApp\.idleDetectionEnabled === false\) return;/s, 'idle callback should re-check enabled state');
+});
+
+check('bedtime-reminder: runtime honors disabled state and avoids duplicate renderer push', () => {
+  const reminderSrc = fs.readFileSync(path.join(root, 'bedtimeReminder.js'), 'utf8');
+  assertMatch(reminderSrc, /function normalizeReminderMinutes\(value, fallback = 15\) \{[\s\S]*if \(num <= 0\) return 0;/s, 'bedtime reminder normalization should allow disabled state');
+  assertMatch(reminderSrc, /if \(reminderMinutesBefore <= 0\) return;/, 'bedtime reminder should short-circuit when disabled');
+  assertMatch(reminderSrc, /Start-Sleep -Milliseconds 100/, 'bedtime reminder PowerShell warm-up should use valid Start-Sleep');
+  assert(!/BrowserWindow\.getAllWindows\(\)\[0\][\s\S]*bedtime-reminder/.test(reminderSrc), 'bedtime reminder module should not double-push directly to renderer');
+  assertMatch(mainSrc, /minutesBefore: appSettings\.bedtimeReminderEnabled === false \? 0 : \(appSettings\.bedtimeReminderMinutes \|\| 15\)/, 'bedtime reminder startup should honor saved enabled state');
+});
+
+check('settings: save-app-settings persists the auxiliary protection sections', () => {
+  assertMatch(mainSrc, /if \(settings\.wifiGuard\) settingsStore\.updateSection\('wifiGuard', settings\.wifiGuard\);/, 'wifiGuard save missing');
+  assertMatch(mainSrc, /if \(settings\.contentBlocker\) settingsStore\.updateSection\('contentBlocker', settings\.contentBlocker\);/, 'contentBlocker save missing');
+  assertMatch(mainSrc, /if \(settings\.accountability\) settingsStore\.updateSection\('accountability', settings\.accountability\);/, 'accountability save missing');
+});
+
+check('backup: export/import all-data uses the live profile API and restores streaks', () => {
+  assertMatch(mainSrc, /streaks: streaks\.exportData\(\),/, 'streak export missing');
+  assertMatch(mainSrc, /profiles: profiles\.getAll\(\)/, 'profile export should use public getAll API');
+  assertMatch(mainSrc, /const importedProfiles = profiles\.import\(JSON\.stringify\(parsed\.profiles\)\);/, 'profile import should replace from exported array');
+  assertMatch(mainSrc, /if \(parsed\.streaks && typeof parsed\.streaks === 'object'\) streaks\.replaceAll\(parsed\.streaks\);/, 'streak import missing');
+});
+
+check('mini-mode: toggling keeps the auto-fit guard in sync', () => {
+  assertMatch(mainSrc, /ipcMain\.on\('toggle-mini-mode', \(\) => \{[\s\S]*miniMode = !miniMode;[\s\S]*mainWindow\.miniMode = miniMode;/s, 'mainWindow.miniMode sync missing');
+  assertMatch(mainSrc, /ipcMain\.on\('fit-window-height', \(event, contentHeight\) => \{[\s\S]*mainWindow\.miniMode\) return;/s, 'fit-window-height mini-mode guard missing');
+});
+
+check('widget: updates on lifecycle changes, not just timer ticks', () => {
+  assertMatch(mainSrc, /function emitTimerUpdate\(type, data = \{\}\) \{[\s\S]*updateWidget\(\);[\s\S]*updateTrayText\(\);/s, 'widget not refreshed during state broadcasts');
+  assertMatch(mainSrc, /if \(widgetWindow && !widgetWindow\.isDestroyed\(\)\) \{[\s\S]*widgetWindow\.show\(\);[\s\S]*updateWidget\(\);/s, 'widget reopen refresh missing');
+  assertMatch(mainSrc, /widgetWindow\.webContents\.once\('did-finish-load', \(\) => \{[\s\S]*updateWidget\(\);[\s\S]*\}\);/s, 'widget initial refresh missing');
 });
 
 // 7. Core UI controls exist (start/pause/resume/snooze/cancel/mini + customize).
@@ -592,6 +676,13 @@ check('ritual-mode: UI overlay in HTML', () => {
   assert(htmlSrc.includes('id="ritual-overlay"'), 'ritual-overlay missing');
   assert(htmlSrc.includes('id="btn-ritual"'), 'btn-ritual missing');
   assert(htmlSrc.includes('id="btn-ritual-next"'), 'btn-ritual-next missing');
+});
+
+check('ritual-mode: lights step uses a real smart-lights scene helper', () => {
+  const smartLightsSrc = fs.readFileSync(path.join(root, 'smartLights.js'), 'utf8');
+  assertMatch(smartLightsSrc, /async function applyScene\(sceneId\) \{/, 'smart-lights scene helper missing');
+  assertMatch(smartLightsSrc, /module\.exports = \{[\s\S]*applyScene,/s, 'smart-lights scene helper not exported');
+  assertMatch(mainSrc, /smartLights\.applyScene\('night'\)\.catch\(\(\) => \{\}\);/, 'ritual lights step should use exported applyScene helper');
 });
 
 // 17. Stats Dashboard.

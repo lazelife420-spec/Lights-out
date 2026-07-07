@@ -723,8 +723,12 @@
                 <span class="stat-label">On-Time (7d)</span>
               </div>
             </div>
-            <div class="streak-week" id="streak-week-bar">
-              <!-- 7-day mini bar chart rendered by JS -->
+            <div class="streaks-section-header">
+              <h4>Sleep History (Last 30 Days)</h4>
+              <button class="btn btn-secondary" id="btn-export-streaks" style="padding: 4px 10px; font-size: 11px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px;">&#x1F4CB; Export Ledger</button>
+            </div>
+            <div class="sleep-history-grid" id="sleep-history-grid">
+              <!-- Rendered as a contribution-style habit grid by JS -->
             </div>
             <h4 class="achievements-heading">Achievements</h4>
             <div class="achievements-grid" id="achievements-grid">
@@ -786,6 +790,7 @@
           <span class="status-dot" id="status-dot"></span>
           <span class="status-text" id="status-text">Idle</span>
         </span>
+        <span class="footer-branding">Forged by The Proof Foundry™</span>
       </div>
       <div class="footer-right">
         <button class="footer-action" id="btn-notif" title="Open notifications" aria-label="Open notifications" style="position:relative">&#x1F514;
@@ -1595,7 +1600,16 @@
 
         <!-- Existing Profiles -->
         <div class="profiles-list-section">
-          <h3>Your Profiles</h3>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+            <h3>Your Profiles</h3>
+            <input type="text" id="profile-search" placeholder="Search profiles..." style="font-size:11px; padding: 4px 8px; border-radius: 4px; border:1px solid var(--border-soft); background:rgba(0,0,0,0.2); color:#fff; width: 140px;">
+          </div>
+          <div class="profile-filters" id="profile-filters" style="display:flex; gap:6px; margin-bottom: 12px;">
+            <button class="filter-btn active" data-filter="all" style="padding: 4px 8px; font-size:10px; border-radius: 4px; cursor:pointer; border:1px solid var(--border-soft); background:rgba(255,255,255,0.08); color:#fff;">All</button>
+            <button class="filter-btn" data-filter="duration" style="padding: 4px 8px; font-size:10px; border-radius: 4px; cursor:pointer; border:1px solid var(--border-soft); background:transparent; color:var(--text-muted);">Duration</button>
+            <button class="filter-btn" data-filter="clock" style="padding: 4px 8px; font-size:10px; border-radius: 4px; cursor:pointer; border:1px solid var(--border-soft); background:transparent; color:var(--text-muted);">Clock</button>
+            <button class="filter-btn" data-filter="pinned" style="padding: 4px 8px; font-size:10px; border-radius: 4px; cursor:pointer; border:1px solid var(--border-soft); background:transparent; color:var(--text-muted);">📌 Pinned</button>
+          </div>
           <div class="profiles-list" id="profiles-list">
             <!-- Profile items loaded dynamically -->
           </div>
@@ -1721,6 +1735,18 @@
           <button class="btn-danger btn-tiny" id="btn-clear-receipts">Clear All Receipts</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Streak Celebration Modal -->
+  <div class="modal" id="streak-celebration-modal">
+    <div class="modal-content streak-celebration-content" style="text-align:center; max-width: 320px;">
+      <div style="font-size:48px; margin-bottom: 12px; animation: badge-pulse 1.5s infinite;">🔥</div>
+      <h3 style="font-size:18px; color: var(--accent-amber); margin-bottom: 8px;">Ritual Complete!</h3>
+      <p style="font-size:13px; color: var(--text-secondary); margin-bottom: 16px;">You kept your promise tonight. Rest well.</p>
+      <div class="celebration-streak-number" id="celebration-streak-number" style="font-size: 64px; font-weight: 800; color: #fff; text-shadow: 0 0 20px rgba(245,166,35,0.5); line-height: 1;">0</div>
+      <div style="font-size:11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 24px;">Night Streak</div>
+      <button class="btn btn-primary" id="btn-celebration-dismiss" style="width: 100%;">Good Night</button>
     </div>
   </div>
 

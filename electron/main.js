@@ -425,6 +425,7 @@ function emitTimerUpdate(type, data = {}) {
     mainWindow.webContents.send('timer-update', payload);
   }
 
+  updateWidget();
   updateTrayText();
   // Only rebuild the tray context menu on real state transitions, not every
   // tick. Replacing the menu every second can drop a click on an open menu
@@ -886,24 +887,33 @@ function playFirstLight() {
   // Smart Light Sunrise: gradually brighten room lights during First Light.
   const slConfig = smartLights.getConfig();
   if (slConfig.enabled) {
-    let slElapsed = 0;
+    const sunriseTickSeconds = 5;
+    const totalSunriseSteps = Math.max(1, Math.ceil(FIRST_LIGHT_DURATION / sunriseTickSeconds));
+    let sunriseStep = 0;
     const slInterval = setInterval(() => {
-      slElapsed++;
-      const brightness = Math.min(100, Math.round((slElapsed / FIRST_LIGHT_DURATION) * 100));
-      smartLights.invokeSmartLightAction({ on: true, brightness, colorTemp: 400 - Math.round(brightness * 1.5) }).catch(() => {});
-      if (slElapsed >= FIRST_LIGHT_DURATION) clearInterval(slInterval);
-    }, 5000); // update every 5s to avoid API spam
+      sunriseStep++;
+      const progress = Math.min(1, sunriseStep / totalSunriseSteps);
+      const brightness = Math.round(progress * 254);
+      const colorTemp = Math.round(500 - (progress * 250));
+      smartLights.invokeSmartLightAction({
+        on: true,
+        brightness,
+        colorTemp,
+        transitionTime: sunriseTickSeconds * 10
+      }).catch(() => {});
+      if (sunriseStep >= totalSunriseSteps) clearInterval(slInterval);
+    }, sunriseTickSeconds * 1000);
   }
 
   // Morning Routine: send briefing data to renderer.
   setTimeout(async () => {
     try {
       const calSettings = settingsStore.getSection('calendar') || {};
-      const events = await calProviders.fetchEvents(calSettings, 1);
+      const events = await calProviders.fetchAllEvents(calSettings, new Date(), 1);
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('morning-briefing', {
           events: (events || []).slice(0, 5),
-          sleepDebt: sleepDebt.getSummary(),
+          sleepDebt: sleepDebt.getDebtSummary(),
           streaks: streaks.getSummary()
         });
       }
@@ -976,8 +986,12 @@ function sendAccountability(eventType, extra = {}) {
 // Matches title containing these keywords (case-insensitive).
 const AUTO_START_KEYWORDS = ['lights out', 'bedtime', 'wind down', 'shutdown', 'sleep timer', 'goodnight', 'lights off'];
 
+function getEventTitle(event) {
+  return String(event?.summary || event?.title || '').trim();
+}
+
 function isBedtimeEvent(event) {
-  const title = (event.title || '').toLowerCase();
+  const title = getEventTitle(event).toLowerCase();
   // Must contain a keyword to qualify.
   return AUTO_START_KEYWORDS.some(kw => title.includes(kw));
 }
@@ -988,20 +1002,21 @@ async function checkCalendarAutoStart() {
   if (timerState.running) return; // already running
 
   try {
-    const events = await calProviders.fetchEvents(calSettings, 1); // within 1 day
+    const events = await calProviders.fetchAllEvents(calSettings, new Date(), 1); // within 1 day
     if (!events || !events.length) return;
 
     const now = new Date();
     for (const event of events) {
       if (!isBedtimeEvent(event)) continue; // skip non-bedtime events
       const start = new Date(event.start);
+      const end = event.end ? new Date(event.end) : new Date(start.getTime() + 60 * 60 * 1000);
       const diffMin = (start - now) / 60000;
       // If event starts within the next 2 minutes, auto-start.
       if (diffMin >= -1 && diffMin <= 2) {
-        const duration = Math.max(300, Math.round((new Date(event.end) - now) / 1000));
+        const duration = Math.max(300, Math.round((end - now) / 1000));
         const action = event.action || calSettings.builtin?.action || 'shutdown';
         startTimer({ durationSeconds: duration, action });
-        showNativeNotification('Lights Out', `Auto-started from calendar: ${event.title || 'Bedtime'}`);
+        showNativeNotification('Lights Out', `Auto-started from calendar: ${getEventTitle(event) || 'Bedtime'}`);
         break;
       }
     }
@@ -1041,7 +1056,24 @@ function handleCompanionMessage(msg, client) {
   setTimeout(broadcastCompanionState, 300);
 }
 
+function updateSystemInfoCacheAsync() {
+  if (systemInfoCache && Date.now() - systemInfoCachedAt < SYSTEM_INFO_TTL_MS) {
+    return;
+  }
+  (async () => {
+    try {
+      const battery = await executePowerShell('(Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue).EstimatedChargeRemaining');
+      const powerPlan = await executePowerShell('(Get-CimInstance -Namespace "root\\cimv2\\power" -ClassName Win32_PowerPlan | Where-Object { $_.IsActive }).ElementName');
+      systemInfoCache = { battery: battery || 'N/A', powerPlan: powerPlan || 'Unknown' };
+      systemInfoCachedAt = Date.now();
+    } catch {
+      // ignore
+    }
+  })();
+}
+
 function broadcastCompanionState() {
+  updateSystemInfoCacheAsync();
   const appSettings = settingsStore.getSection('app') || {};
   const taxStats = overrideTax.getStats();
   companion.broadcast({
@@ -1055,6 +1087,10 @@ function broadcastCompanionState() {
     timerName: appSettings.timerName || 'Last Call',
     pcName: require('os').hostname(),
     dryRun: timerState.dryRun,
+    systemInfo: {
+      battery: systemInfoCache ? systemInfoCache.battery : 'N/A',
+      powerPlan: systemInfoCache ? systemInfoCache.powerPlan : 'Unknown'
+    },
     overrideTax: {
       sessionSnoozeCount: taxStats.sessionSnoozeCount,
       tomorrowDebt: taxStats.tomorrowDebt,
@@ -1150,9 +1186,32 @@ function broadcastRemoteControlState() {
   mainWindow.webContents.send('remote-control-status', getRemoteControlState());
 }
 
+async function configureFirewallRules(open) {
+  try {
+    if (open) {
+      await executePowerShell(
+        'New-NetFirewallRule -DisplayName "Lights Out Companion Port" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 58732 -Enabled True -Profile Private,Public -ErrorAction SilentlyContinue'
+      );
+      await executePowerShell(
+        'New-NetFirewallRule -DisplayName "Lights Out Companion Discovery" -Direction Inbound -Action Allow -Protocol UDP -LocalPort 58733 -Enabled True -Profile Private,Public -ErrorAction SilentlyContinue'
+      );
+    } else {
+      await executePowerShell(
+        'Remove-NetFirewallRule -DisplayName "Lights Out Companion Port" -ErrorAction SilentlyContinue'
+      );
+      await executePowerShell(
+        'Remove-NetFirewallRule -DisplayName "Lights Out Companion Discovery" -ErrorAction SilentlyContinue'
+      );
+    }
+  } catch (err) {
+    console.warn('Windows Firewall configuration skipped or failed:', err.message);
+  }
+}
+
 function stopRemoteControl() {
   try { companion.stop(); } catch {}
   try { family.stop(); } catch {}
+  configureFirewallRules(false);
 }
 
 function startRemoteControl() {
@@ -1166,11 +1225,13 @@ function startRemoteControl() {
   if (mode === 'wifi') {
     companion.start({ token: rc.token, host: '0.0.0.0' });
     family.start({ enabled: true, token: rc.token, peerName: require('os').hostname() }, familyCommandHandler);
+    configureFirewallRules(true);
   } else if (mode === 'local') {
     companion.start({ token: rc.token, host: '127.0.0.1' });
     // Family mode (LAN discovery) is disabled in "This PC only" mode.
+    configureFirewallRules(false);
   }
-  
+
   return true;
 }
 
@@ -1367,12 +1428,18 @@ ipcMain.handle('save-app-settings', async (event, settings = {}) => {
   if (settings.customization) settingsStore.updateSection('customization', settings.customization);
   if (settings.lastLight) settingsStore.updateSection('lastLight', settings.lastLight);
   if (settings.calendar) settingsStore.updateSection('calendar', settings.calendar);
+  if (settings.wifiGuard) settingsStore.updateSection('wifiGuard', settings.wifiGuard);
+  if (settings.contentBlocker) settingsStore.updateSection('contentBlocker', settings.contentBlocker);
+  if (settings.accountability) settingsStore.updateSection('accountability', settings.accountability);
   return {
     ...getLoginSettings(),
     app: settingsStore.getSection('app'),
     customization: settingsStore.getSection('customization'),
     lastLight: settingsStore.getSection('lastLight'),
-    calendar: settingsStore.getSection('calendar')
+    calendar: settingsStore.getSection('calendar'),
+    wifiGuard: settingsStore.getSection('wifiGuard'),
+    contentBlocker: settingsStore.getSection('contentBlocker'),
+    accountability: settingsStore.getSection('accountability')
   };
 });
 ipcMain.handle('discard-recoverable-timer', async () => {
@@ -1390,6 +1457,9 @@ ipcMain.handle('get-weekly-report', async () => {
 });
 ipcMain.handle('get-sleep-score', async () => {
   try { return streaks.getSleepScore(); } catch { return { score: null, label: 'Error', breakdown: {} }; }
+});
+ipcMain.handle('get-streaks-history', async () => {
+  try { return streaks.getHistory30(); } catch { return []; }
 });
 ipcMain.handle('add-custom-sequence', async (event, seq) => {
   const entry = lastLight.addCustomSequence(seq);
@@ -1442,8 +1512,8 @@ ipcMain.handle('export-all-data', async () => {
       version: updater.currentVersion,
       exportedAt: new Date().toISOString(),
       settings: settingsStore.getAll(),
-      streaks: streaks.getSummary(),
-      profiles: profiles.getAllProfiles()
+      streaks: streaks.exportData(),
+      profiles: profiles.getAll()
     };
     return { success: true, data };
   } catch (err) {
@@ -1456,14 +1526,15 @@ ipcMain.handle('import-all-data', async (event, jsonData) => {
     if (!parsed || typeof parsed !== 'object') return { success: false, error: 'Invalid data format' };
     if (parsed.settings) {
       for (const [section, value] of Object.entries(parsed.settings)) {
-        if (value && typeof value === 'object') settingsStore.updateSection(section, value);
+        if (section === 'activeTimer') settingsStore.setActiveTimer(value || null);
+        else if (value !== undefined) settingsStore.updateSection(section, value);
       }
     }
     if (parsed.profiles && Array.isArray(parsed.profiles)) {
-      for (const p of parsed.profiles) {
-        if (p.name) profiles.create(p);
-      }
+      const importedProfiles = profiles.import(JSON.stringify(parsed.profiles));
+      if (!importedProfiles.success) return importedProfiles;
     }
+    if (parsed.streaks && typeof parsed.streaks === 'object') streaks.replaceAll(parsed.streaks);
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -1867,6 +1938,7 @@ ipcMain.on('minimize-window', () => {
 ipcMain.on('toggle-mini-mode', () => {
   miniMode = !miniMode;
   if (!mainWindow) return;
+  mainWindow.miniMode = miniMode;
 
   if (miniMode) {
     mainWindow.setSize(260, 320);
@@ -1883,6 +1955,7 @@ ipcMain.on('toggle-mini-mode', () => {
 function createWidgetWindow() {
   if (widgetWindow && !widgetWindow.isDestroyed()) {
     widgetWindow.show();
+    updateWidget();
     return;
   }
   widgetWindow = new BrowserWindow({
@@ -1903,6 +1976,9 @@ function createWidgetWindow() {
   widgetWindow.setVisibleOnAllWorkspaces(true);
   widgetWindow.setPosition(20, 20); // top-left corner
   widgetWindow.loadFile('widget.html');
+  widgetWindow.webContents.once('did-finish-load', () => {
+    updateWidget();
+  });
   widgetWindow.on('closed', () => { widgetWindow = null; widgetMode = false; });
   widgetMode = true;
 }
@@ -2213,9 +2289,12 @@ app.whenReady().then(async () => {
   });
 
   // Idle Detection: nudge when user walks away during wind-down.
+  const appSettings = settingsStore.getSection('app') || {};
   idleDetection.startMonitoring({
-    thresholdSeconds: 300,
+    thresholdSeconds: appSettings.idleDetectionEnabled === false ? 0 : (appSettings.idleThresholdSeconds || 300),
     onIdle: (idleSec) => {
+      const currentApp = settingsStore.getSection('app') || {};
+      if (currentApp.idleDetectionEnabled === false) return;
       if (timerState.running && !timerState.paused) {
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send('idle-detected', { idleSeconds: idleSec });
@@ -2231,7 +2310,7 @@ app.whenReady().then(async () => {
 
   // Bedtime Reminder: gentle nudge 15 min before bedtime.
   bedtimeReminder.startReminder({
-    minutesBefore: 15,
+    minutesBefore: appSettings.bedtimeReminderEnabled === false ? 0 : (appSettings.bedtimeReminderMinutes || 15),
     onReminder: (data) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('bedtime-reminder', data);
