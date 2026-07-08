@@ -1,9 +1,9 @@
-# Lights Out
+# Lights Out PC
 
-**A Windows bedtime shutdown timer that gets out of your way until it matters.**
+**Bedtime Mode for Windows — a shutdown timer that gets out of your way until it matters.**
 A [Proof Foundry](https://prooffoundry.com) product.
 
-Set a time. Press START. Lights Out walks you through a calm wind-down, then a
+Set a time. Press START. Lights Out PC walks you through a calm wind-down, then a
 cinematic Last Light final countdown before your PC shuts off. Emergency cancel
 is always available. No surprise force-quits. No cloud account. No drama.
 
