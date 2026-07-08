@@ -46,10 +46,6 @@ const correctnessRules = {
   // function arguments (common in callback/handler signatures) and _-prefixed
   // bindings; still warn on genuinely dead local variables.
   'no-unused-vars': ['warn', { args: 'none', varsIgnorePattern: '^_', caughtErrors: 'none' }],
-  // Known real finding tracked as a follow-up (renderer.js has two
-  // renderCalendarEvents definitions; the later one wins). Warn so the lane
-  // stays green until the dead copy is removed in its own verified change.
-  'no-redeclare': 'warn',
 };
 
 module.exports = [
