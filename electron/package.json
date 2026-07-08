@@ -27,6 +27,7 @@
       "styles.css",
       "renderer-utils.js",
       "renderer-profiles.js",
+      "renderer-calendar.js",
       "renderer.js",
       "smartLights.js",
       "profiles.js",
