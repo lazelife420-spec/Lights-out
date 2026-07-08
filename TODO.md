@@ -6,3 +6,4 @@
   - [x] cd companion-mobile/android && .\gradlew.bat :app:assembleDebug
 - [x] Stage, commit, push updates to blackboxai/pr7-scope-cleanup
 - [x] Confirm PR reflects follow-up hardening changes
+- [x] Merge `blackboxai/pr7-scope-cleanup` into `main` (hardened remote-control security model preserved; features ported) and push

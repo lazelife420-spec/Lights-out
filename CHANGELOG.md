@@ -28,6 +28,16 @@ released version remains v10.3.0.
   real HTTP/WebSocket bridge and verifies off/local/wifi mode, token gating,
   token rotation, and rejection semantics (`test/companion-integration.test.js`).
 
+### Features (merged from `blackboxai/pr7-scope-cleanup`)
+- **Profiles search, filter & pin** — the Profiles panel now has a search box,
+  category filters, and the ability to pin favorite profiles to the top.
+- **30-day sleep-history grid** — a calendar-style grid visualizes the last 30
+  nights (on-time / snoozed / neutral) with hover tooltips; a streak-celebration
+  modal fires on milestone streaks.
+- **Companion auto-firewall + system status** — enabling `Same Wi-Fi` mode opens
+  Windows Firewall inbound rules for the companion port/discovery and removes
+  them on stop; the phone view shows the PC power plan and battery charge.
+
 ### Internal
 - `companion.js` tracks connected client count and emits `status` events;
   main process broadcasts `remote-control-status` to the renderer on every
