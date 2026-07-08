@@ -28,6 +28,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
+      - name: Lint
+        run: npm run lint
+
       - name: Syntax check
         # Check every shipped JS file so the gate can't drift out of sync with
         # the module list (scripts/ are dev tooling, excluded).

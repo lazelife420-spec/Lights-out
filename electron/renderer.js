@@ -125,8 +125,6 @@ const fallbackApi = (() => {
     onPlaySound: () => {},
     onPlayLastLight: () => {},
     onDimPhaseStarted: () => {},
-    onMediaPaused: () => {},
-    onUnsavedWorkWarning: () => {},
     onDimPhaseEnded: () => {},
     onOpenSettings: () => {},
     getStreaks: async () => ({ streak: 0, bestStreak: 0, totalNights: 0, achievements: [], weekAvg: '--:--', weekOnTime: 0, weekDays: [] }),
@@ -199,7 +197,6 @@ const fallbackApi = (() => {
     onBedtimeReminder: (cb) => {},
     onMorningBriefing: (cb) => {},
     setCalendarAutoStart: async () => ({ autoStartFromEvents: false }),
-    openExternal: async () => {},
     addCustomSequence: async () => null,
     removeCustomSequence: async () => ({ success: true }),
     getOpenBrowsers: async () => [],
@@ -392,8 +389,7 @@ const els = {
   warningCancel: document.getElementById('warning-cancel'),
   warningDismiss: document.getElementById('warning-dismiss'),
   warningOverride: document.getElementById('warning-override'),
-  // Status pill
-  statusPill: document.getElementById('status-pill'),
+  // Status pill status/dot/text (statusPill itself declared once above)
   statusDot: document.getElementById('status-dot'),
   statusText: document.getElementById('status-text'),
   // Streaks
@@ -558,10 +554,6 @@ const els = {
   updaterStatusText: document.getElementById('updater-status-text'),
   btnCheckUpdate: document.getElementById('btn-check-update'),
   updaterDownload: document.getElementById('updater-download'),
-  // Status pill
-  statusPill: document.getElementById('status-pill'),
-  statusDot: document.getElementById('status-dot'),
-  statusText: document.getElementById('status-text'),
   // Alarm
   chkAlarm: document.getElementById('chk-alarm'),
   alarmConfig: document.getElementById('alarm-config'),
@@ -598,7 +590,6 @@ const els = {
   btnCalGoogleFetch: document.getElementById('btn-cal-google-fetch'),
   btnCalOutlookFetch: document.getElementById('btn-cal-outlook-fetch'),
   btnCalCalendlyFetch: document.getElementById('btn-cal-calendly-fetch'),
-  calendarEvents: document.getElementById('calendar-events'),
   nextEventCard: document.getElementById('next-event-card'),
   nextEventName: document.getElementById('next-event-name'),
   nextEventTime: document.getElementById('next-event-time'),

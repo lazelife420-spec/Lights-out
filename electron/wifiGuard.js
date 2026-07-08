@@ -279,7 +279,7 @@ async function unblockInternet(config) {
 async function scanDevices() {
   try {
     const raw = await executePS(
-      `Get-NetNeighbor -State Reachable | Where-Object { $_.IPAddress -notmatch '^(127|0\.|169\.254|ff00)' } | Select-Object IPAddress, LinkLayerAddress, InterfaceAlias | ConvertTo-Json -Compress`
+      `Get-NetNeighbor -State Reachable | Where-Object { $_.IPAddress -notmatch '^(127|0.|169.254|ff00)' } | Select-Object IPAddress, LinkLayerAddress, InterfaceAlias | ConvertTo-Json -Compress`
     );
     if (!raw || raw === 'null') return [];
     const entries = JSON.parse(raw);

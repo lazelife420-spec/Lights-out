@@ -90,18 +90,23 @@ These are intentional product constraints. Do not casually remove them.
 
 ## Verification Checklist
 
-1. Syntax-check (CI globs every `electron/*.js`; locally the entry points are enough):
+1. Lint (ESLint flat config; errors fail, legacy warnings are tolerated):
+   `cd electron && npm run lint`
+2. Syntax-check (CI globs every `electron/*.js`; locally the entry points are enough):
    `node --check electron\main.js`
    `node --check electron\renderer.js`
    `node --check electron\preload.js`
-2. Unit tests:
+3. Unit tests:
    `cd electron && npm test`
-3. Smoke:
+4. Smoke:
    `cd electron && npm run smoke`
-4. Run:
+5. Run:
    `cd electron && npm start`
-5. Package when the change is meaningful:
+6. Package when the change is meaningful:
    `cd electron && npm run build`
+
+Note: there is no `test:e2e` lane yet — do not reference one until an Electron
+integration harness actually exists (Proof Foundry standard: no fake claims).
 
 Current smoke/test expectations include:
 - startup wording and login flags
