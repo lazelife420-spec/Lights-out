@@ -25,6 +25,7 @@
       "preload.js",
       "index.html",
       "styles.css",
+      "renderer-utils.js",
       "renderer.js",
       "smartLights.js",
       "profiles.js",

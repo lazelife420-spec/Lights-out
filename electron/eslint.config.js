@@ -67,8 +67,14 @@ module.exports = [
   // and calls them bare, plus reads globals defined by sibling <script> files
   // (AmbientVisuals). That pattern is intentional, so scope no-undef off and let
   // no-dupe-keys / no-redeclare still do the real work.
+  //
+  // Expected noise: no-unused-vars lints each file independently, so a function
+  // defined in renderer-utils.js and called only from renderer.js (or vice
+  // versa) shows as "defined but never used" in the defining file. That is a
+  // false positive of this split-file architecture, not dead code — check the
+  // sibling file for a call site before "cleaning up" one of these warnings.
   {
-    files: ['renderer.js', 'ambientVisuals.js'],
+    files: ['renderer.js', 'renderer-utils.js', 'ambientVisuals.js'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'script',
