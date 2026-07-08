@@ -320,6 +320,7 @@ function start(opts = {}) {
   if (server) return;
   expectedToken = String(opts.token || '');
   bindHost = opts.host || '127.0.0.1';
+  const port = opts.port || PWA_PORT;
   // Never expose a listener without a pairing token.
   if (!expectedToken) return;
   server = http.createServer(requestHandler);
@@ -338,9 +339,9 @@ function start(opts = {}) {
     }
   });
 
-  server.listen(PWA_PORT, bindHost, () => {
-    console.log(`Companion PWA running on ${bindHost}:${PWA_PORT}`);
-    updateStatus({ running: true, host: bindHost, failed: false, connected: clients.size > 0 });
+  server.listen(port, bindHost, () => {
+    console.log(`Companion PWA running on ${bindHost}:${port}`);
+    updateStatus({ running: true, host: bindHost, port, failed: false, connected: clients.size > 0 });
   });
 }
 
