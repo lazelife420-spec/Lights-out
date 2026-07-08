@@ -30,6 +30,7 @@
       "renderer-calendar.js",
       "renderer-receipts.js",
       "renderer-family-remote.js",
+      "renderer-ritual-focus.js",
       "renderer.js",
       "smartLights.js",
       "profiles.js",
