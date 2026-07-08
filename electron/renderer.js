@@ -1810,92 +1810,9 @@ function wireEvents() {
     }
   });
 
-function renderRemoteControl(rc) {
-  if (!rc || !els.chkRemoteControl) return;
-  els.chkRemoteControl.checked = !!rc.enabled;
-  if (els.remoteControlConfig) els.remoteControlConfig.style.display = rc.enabled ? '' : 'none';
-  if (els.remoteUrl) els.remoteUrl.textContent = rc.url || '';
-  if (els.remoteToken) els.remoteToken.textContent = rc.token || '';
-  updateRemoteQr(rc.url);
-}
-
-// Generate (or clear) the pairing QR for the current companion URL so the phone
-// can pair by camera. Hidden whenever there is no URL or QR support.
-async function updateRemoteQr(url) {
-  if (!els.remoteQrWrap || !els.remoteQr) return;
-  if (!url || !api.generateQr) { els.remoteQrWrap.style.display = 'none'; return; }
-  try {
-    const dataUrl = await api.generateQr(url);
-    if (dataUrl) {
-      els.remoteQr.src = dataUrl;
-      els.remoteQrWrap.style.display = '';
-    } else {
-      els.remoteQrWrap.style.display = 'none';
-    }
-  } catch {
-    els.remoteQrWrap.style.display = 'none';
-  }
-}
-
-async function loadRemoteControlState() {
-  if (!els.chkRemoteControl) return;
-  try { renderRemoteControl(await api.getRemoteControl?.()); } catch {}
-}
-
-function setupRemoteControlHandlers() {
-  els.chkRemoteControl?.addEventListener('change', async () => {
-    try {
-      const rc = await api.setRemoteControlEnabled?.(els.chkRemoteControl.checked);
-      renderRemoteControl(rc);
-      notify(els.chkRemoteControl.checked ? 'Remote control enabled' : 'Remote control disabled', 'info');
-    } catch { notify('Failed to update remote control', 'error'); }
-  });
-  els.btnRegenToken?.addEventListener('click', async () => {
-    try {
-      renderRemoteControl(await api.regenerateRemoteToken?.());
-      notify('New pairing code generated', 'success');
-    } catch { notify('Failed to regenerate code', 'error'); }
-  });
-  loadRemoteControlState();
-}
-
-function renderFamilyPeers(peers) {
-  if (!els.familyPeers) return;
-  if (!peers.length) {
-    els.familyPeers.innerHTML = '<p style="font-size:11px;color:var(--text-muted)">No other Lights Out instances found on your network.</p>';
-    return;
-  }
-  els.familyPeers.innerHTML = peers.map(p => `
-    <div class="family-peer" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bg-card)">
-      <span style="flex:1;font-size:12px">&#x1F5A5; ${escapeHtml(p.name || p.ip)} <small style="color:var(--text-muted)">${escapeHtml(p.ip)}</small></span>
-      <button class="btn-tiny" data-peer-ip="${escapeHtml(p.ip)}" data-peer-action="start" title="Start 30-min timer">&#x25B6;</button>
-      <button class="btn-tiny" data-peer-ip="${escapeHtml(p.ip)}" data-peer-action="pause" title="Pause">&#x23F8;</button>
-      <button class="btn-tiny" data-peer-ip="${escapeHtml(p.ip)}" data-peer-action="cancel" title="Cancel">&#x274C;</button>
-    </div>
-  `).join('');
-
-  els.familyPeers.querySelectorAll('button[data-peer-action]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const action = btn.dataset.peerAction;
-      familyRemote(btn.dataset.peerIp, action, action === 'start' ? 30 : undefined);
-    });
-  });
-}
-
-window.familyRemote = async function(ip, action, duration) {
-  try {
-    if (action === 'start') await api.familyRemoteStart?.(ip, (duration || 30) * 60, 'shutdown');
-    else if (action === 'pause') await api.familyRemotePause?.(ip);
-    else if (action === 'cancel') await api.familyRemoteCancel?.(ip);
-    notify(`Command sent to ${ip}`, 'info');
-  } catch { notify('Command failed', 'error'); }
-};
-
 // ─────────────────────────────────────────────────────────────────────────────
 // WiFi Guard: block internet for kids at bedtime
 // ─────────────────────────────────────────────────────────────────────────────
-
-const wifiSelectedDevices = { macs: [], ips: [] };
 
 if (els.chkWifiGuard) {
   els.chkWifiGuard.addEventListener('change', () => {
@@ -1943,39 +1860,6 @@ if (els.btnWifiUnblockTest) {
       els.wifiTestResult.textContent = result.success ? 'Unblocked!' : `Failed: ${result.error}`;
       els.wifiTestResult.style.color = result.success ? '#4caf50' : '#ff4d4d';
     } catch { els.wifiTestResult.textContent = 'Error'; }
-  });
-}
-
-function renderWifiDevices(devices) {
-  if (!els.wifiDeviceList) return;
-  if (!devices.length) {
-    els.wifiDeviceList.innerHTML = '<p style="font-size:11px;color:var(--text-muted)">No devices found. Make sure you\'re on the same network.</p>';
-    return;
-  }
-  els.wifiDeviceList.innerHTML = devices.map(d => {
-    const macSel = wifiSelectedDevices.macs.includes(d.mac);
-    const ipSel = wifiSelectedDevices.ips.includes(d.ip);
-    const selected = macSel || ipSel;
-    return `<div class="wifi-device${selected ? ' selected' : ''}" data-mac="${escapeHtml(d.mac)}" data-ip="${escapeHtml(d.ip)}" style="display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:4px;cursor:pointer;border:1px solid ${selected ? 'var(--accent-cyan)' : 'var(--bg-card)'};margin-bottom:3px;font-size:11px">
-      <span style="flex:1">&#x1F4F1; ${escapeHtml(d.mac)} <small style="color:var(--text-muted)">${escapeHtml(d.ip)}</small></span>
-      <span style="font-size:9px;color:var(--accent-cyan)">${selected ? 'BLOCKED' : 'click to block'}</span>
-    </div>`;
-  }).join('');
-
-  // Click handlers to toggle selection.
-  els.wifiDeviceList.querySelectorAll('.wifi-device').forEach(el => {
-    el.addEventListener('click', () => {
-      const mac = el.dataset.mac;
-      const ip = el.dataset.ip;
-      if (wifiSelectedDevices.macs.includes(mac)) {
-        wifiSelectedDevices.macs = wifiSelectedDevices.macs.filter(m => m !== mac);
-        wifiSelectedDevices.ips = wifiSelectedDevices.ips.filter(i => i !== ip);
-      } else {
-        wifiSelectedDevices.macs.push(mac);
-        wifiSelectedDevices.ips.push(ip);
-      }
-      renderWifiDevices(devices);
-    });
   });
 }
 
@@ -2099,15 +1983,6 @@ for (const [elId, key] of [['taxFreeSnoozes', 'freeSnoozes'], ['taxTightenMin', 
 }
 
 // Refresh tax stats periodically.
-async function refreshTaxStats() {
-  try {
-    const stats = await api.getOverrideTaxStats?.();
-    if (stats) {
-      if (els.taxSessionCount) els.taxSessionCount.textContent = stats.sessionSnoozeCount;
-      if (els.taxTomorrowDebt) els.taxTomorrowDebt.textContent = `${stats.tomorrowDebt} min`;
-    }
-  } catch {}
-}
 setInterval(refreshTaxStats, 5000);
 refreshTaxStats();
 
@@ -2129,23 +2004,6 @@ if (els.autopilotOverrideTime) {
     const val = els.autopilotOverrideTime.value || null;
     await api.saveAppSettings?.({ autopilotBedtime: val });
   });
-}
-
-async function refreshAutopilotStatus() {
-  try {
-    const status = await api.getAutopilotStatus?.();
-    if (!status) return;
-    if (els.chkAutopilot) els.chkAutopilot.checked = status.enabled;
-    if (els.autopilotConfig) els.autopilotConfig.style.display = status.enabled ? '' : 'none';
-    if (status.learned) {
-      if (els.autopilotLearned) els.autopilotLearned.textContent = status.learned.bedtime;
-      if (els.autopilotConfidence) {
-        els.autopilotConfidence.textContent = status.learned.confidence;
-        els.autopilotConfidence.style.color = status.learned.confidence === 'high' ? '#4caf50' : status.learned.confidence === 'medium' ? '#ff9800' : '#ff4d4d';
-      }
-      if (els.autopilotSample) els.autopilotSample.textContent = `${status.learned.sampleSize} nights`;
-    }
-  } catch {}
 }
 refreshAutopilotStatus();
 

@@ -29,6 +29,7 @@
       "renderer-profiles.js",
       "renderer-calendar.js",
       "renderer-receipts.js",
+      "renderer-family-remote.js",
       "renderer.js",
       "smartLights.js",
       "profiles.js",

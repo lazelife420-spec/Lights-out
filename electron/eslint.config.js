@@ -74,7 +74,7 @@ module.exports = [
   // false positive of this split-file architecture, not dead code — check the
   // sibling file for a call site before "cleaning up" one of these warnings.
   {
-    files: ['renderer.js', 'renderer-utils.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'ambientVisuals.js'],
+    files: ['renderer.js', 'renderer-utils.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'ambientVisuals.js'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'script',
