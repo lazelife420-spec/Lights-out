@@ -2,7 +2,6 @@
 // Ported from PowerShell LightsOut.SmartLights.psm1
 // Supports: Philips Hue Bridge, Generic HTTP webhook
 
-const { net } = require('electron');
 const https = require('https');
 const http = require('http');
 

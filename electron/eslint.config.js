@@ -42,8 +42,10 @@ const correctnessRules = {
   'no-empty': ['error', { allowEmptyCatch: true }], // best-effort try/catch
   'no-control-regex': 'off',                          // family.js strips \x00-\x1f
   'no-constant-condition': ['error', { checkLoops: false }],
-  // Legacy noise: report but don't fail the lane on these.
-  'no-unused-vars': 'warn',
+  // Legacy noise: report but don't fail the lane on these. Ignore unused
+  // function arguments (common in callback/handler signatures) and _-prefixed
+  // bindings; still warn on genuinely dead local variables.
+  'no-unused-vars': ['warn', { args: 'none', varsIgnorePattern: '^_', caughtErrors: 'none' }],
   // Known real finding tracked as a follow-up (renderer.js has two
   // renderCalendarEvents definitions; the later one wins). Warn so the lane
   // stays green until the dead copy is removed in its own verified change.
