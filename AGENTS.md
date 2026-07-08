@@ -36,7 +36,7 @@ As of 2026-06-24, the important behavior is:
 - the explicitly named force-shutdown batch file is still the only obvious "hard stop" shortcut
 - "Run at login" now means "start minimized and idle"
 - login startup should never silently imply force shutdown
-- the primary shipping app is the Electron line, last tagged release is `v10.3.0` (Ritual Mode + Intelligence); `main` additionally carries unreleased work merged from `blackboxai/pr7-scope-cleanup` (profile search/filter/pin, 30-day sleep-history grid, companion auto-firewall + battery/power display) — still pre-tag
+- the primary shipping app is the Electron line, last tagged release is `v10.3.0` (Ritual Mode + Intelligence); `main` now targets v10.4.0 (Phone Companion Easy Connect, profile search/filter/pin, 30-day sleep-history grid, companion auto-firewall + battery/power display) — version bumped in package.json but still pre-build/pre-tag/pre-publish
 - PowerShell remains present as a fallback runtime and backend integration layer, not the main feature lane
 - `SleepTimer.exe` was rebuilt after the login-startup behavior change
 - Electron build packaging succeeds with `npm run build`

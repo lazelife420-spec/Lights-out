@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased — Phone Companion Easy Connect
+## v10.4.0 — Phone Companion Easy Connect + Profiles Upgrade + Streaks (2026-07-08)
 
-Merged into `main` but not yet part of a tagged/published release. The latest
-released version remains v10.3.0.
+Version bumped in `package.json`/`package-lock.json` and the in-app footer/About
+text. Not yet built, tagged, or published — the latest tagged/published release
+remains v10.3.0 until this is built, tagged, and a GitHub release is cut.
 
 ### New
 - **Phone Companion Easy Connect** — redesigned pairing flow with three modes:

@@ -4,7 +4,10 @@
 
 ## Current Truth
 
-Lights Out™ is live at v10.1.0 — proof-first software forged for builders.
+Lights Out™'s latest tagged/published release is v10.3.0 — proof-first software
+forged for builders. `main` is version-bumped to v10.4.0 (Phone Companion Easy
+Connect, Profiles Upgrade, Streaks) but not yet built, tagged, or published —
+see [CHANGELOG.md](../CHANGELOG.md).
 
 Recent shipped fixes:
 
@@ -13,6 +16,11 @@ Recent shipped fixes:
 - v10.0.9 restored the Streaks tab panel and fixed the cancel-timer guided-breathing error toast.
 - v10.0.10 fixed a packaged-app startup crash (remoteControl.js was missing from the electron-builder file manifest) and corrected settings saves for WiFi Guard, Content Blocker, and Accountability.
 - v10.1.0 shipped the northstar visual UI: cinematic Last Light overlay, Lobby shell with icon sidebar, Morning Proof hero with real stat pills, and settings persistence for all new UI state.
+- v10.2.0 shipped Override Tax + Autopilot settings UI and a tray snooze cost label.
+- v10.3.0 shipped Ritual Mode, Stats Dashboard, Smart Suggestions, and the Notification Center.
+- v10.4.0 (pending build/tag) adds Phone Companion Easy Connect (QR pairing,
+  token-gated remote actions, live connection status), profile search/filter/pin,
+  and the 30-day sleep-history grid with streak-celebration modal.
 
 Current strongest product promise:
 
@@ -55,7 +63,7 @@ Lights Out should feel like a nightly cockpit, not a generic timer.
 Roadmap:
 
 - Saved profiles for routines like Movie Night, Hard Stop, Witchcraft, Beastmode.
-- Better profile sorting and pinned favorites.
+- ~~Better profile sorting and pinned favorites.~~ Shipped in v10.4.0 (search, category filters, pin-to-top).
 - Optional profile notes.
 - Last-used routine memory.
 - Better visual state for active profile.
@@ -76,7 +84,7 @@ Roadmap:
 
 - Keep Streaks tab visible and clickable.
 - Add Home callout for current streak.
-- Add timer-complete streak celebration.
+- ~~Add timer-complete streak celebration.~~ Shipped in v10.4.0 (streak-celebration modal fires on milestone streaks; 30-day sleep-history grid with hover tooltips).
 - Add morning briefing streak summary.
 - Add weekly/monthly views later.
 
@@ -139,58 +147,36 @@ Proof gates:
 
 ## Suggested Release Sequence
 
-### v10.1.0 - Runtime Trust Polish
+This section is a forward plan, not a version-number guarantee — actual shipped
+versions have not matched the originally planned v10.2.0/v10.3.0 slots (those
+shipped Override Tax/Autopilot and Ritual Mode instead). Treat item names as the
+source of truth, not the version numbers attached to them.
 
-Goal: make the app feel unbreakable.
+### Shipped
 
-Candidate work:
+- **v10.1.0 — Runtime Trust Polish**: northstar visual UI, Last Light overlay, Lobby shell, Morning Proof hero.
+- **v10.2.0 — Override Tax + Autopilot**: settings UI, tray snooze cost label.
+- **v10.3.0 — Ritual Mode + Intelligence**: guided ritual flow, Stats Dashboard, Smart Suggestions, Notification Center.
+- **v10.4.0 — Phone Companion + Profiles + Streaks** (pending build/tag): Phone Companion Easy Connect, profile search/filter/pin, 30-day sleep-history grid, streak-celebration modal, companion auto-firewall + system status.
 
-- Tray/menu regression proof.
-- Better visible updater status.
-- Clearer completed/cancelled session state.
-- Home streak callout.
-- Morning briefing uses streak data already sent by main process.
+### Next — Streaks & Profiles Follow-Through
 
-Ship only if:
-
-- Smoke passes.
-- Build passes.
-- Runtime screenshots prove each changed workflow.
-
-### v10.2.0 - Streaks That Feel Alive
-
-Goal: make habit progress visible without fake wellness claims.
+Goal: finish what v10.4.0 started without fake wellness claims.
 
 Candidate work:
 
-- Weekly streak view.
-- Monthly history.
-- Timer-complete streak celebration.
-- Missed-night neutral state.
+- Weekly/monthly streak views.
+- Missed-night neutral state (partially covered by the 30-day grid — confirm before re-scoping).
 - Export streak summary.
+- Home callout for current streak.
+- Morning briefing streak summary.
+- Optional profile notes, last-used routine memory, better active-profile visual state.
 
 Ship only if:
 
 - Data is real event data.
 - Empty state is honest.
 - Seeded-data screenshots pass.
-
-### v10.3.0 - Profiles Upgrade
-
-Goal: make routines fast to reuse.
-
-Candidate work:
-
-- Pinned profiles.
-- Profile search.
-- Profile categories.
-- Profile import/export polish.
-- Safer overwrite prompts.
-
-Ship only if:
-
-- Create/load/export/import all pass.
-- No profile data loss.
 
 ### v11.0.0 - Serious Night Mode
 
