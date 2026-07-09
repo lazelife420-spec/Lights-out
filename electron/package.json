@@ -33,6 +33,7 @@
       "renderer-ritual-focus.js",
       "renderer-settings.js",
       "renderer-lastlight-alarm.js",
+      "renderer-onboarding-updater.js",
       "renderer.js",
       "smartLights.js",
       "profiles.js",
