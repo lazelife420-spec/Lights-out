@@ -2379,11 +2379,11 @@ if (els.btnProofCopy) {
       if (!receipt) return;
       const text = [
         `Lights Out - Morning Proof`,
-        `Result: ${receipt.result}`,
+        `Result: ${humanizeReceiptResult(receipt.result)}`,
         `Action: ${receipt.action}${receipt.forceShutdown ? ' (Force)' : ''}${receipt.dryRun ? ' (Dry Run)' : ''}`,
         `Duration: ${Math.floor(receipt.durationSeconds / 60)}m`,
-        `Started: ${receipt.startedAt}`,
-        `Ended: ${receipt.endedAt || 'N/A'}`,
+        `Started: ${receipt.startedAt ? new Date(receipt.startedAt).toLocaleString() : 'N/A'}`,
+        `Ended: ${receipt.endedAt ? new Date(receipt.endedAt).toLocaleString() : 'N/A'}`,
         `Pauses: ${receipt.pauseCount}, Snoozes: ${receipt.snoozeCount}, Warnings: ${receipt.warningsShown}`,
         receipt.powerCommand ? `Command: ${receipt.powerCommand}` : '',
         receipt.notes ? `Notes: ${receipt.notes}` : ''
@@ -2439,7 +2439,7 @@ if (els.btnExportReceipts) {
         const end = r.endedAt ? new Date(r.endedAt).toLocaleString() : 'N/A';
         const durMin = r.durationSeconds ? Math.floor(r.durationSeconds / 60) : 0;
         ledger += `${start}\n`;
-        ledger += `  Result: ${r.result || 'unknown'}\n`;
+        ledger += `  Result: ${humanizeReceiptResult(r.result)}\n`;
         ledger += `  Action: ${r.action || 'N/A'}${r.forceShutdown ? ' (Force)' : ''}${r.dryRun ? ' (Dry Run)' : ''}\n`;
         ledger += `  Duration: ${durMin}m | Ended: ${end}\n`;
         ledger += `  Pauses: ${r.pauseCount || 0}, Snoozes: ${r.snoozeCount || 0}, Warnings: ${r.warningsShown || 0}\n`;

@@ -105,13 +105,13 @@ Lights Out should prove what happened.
 
 Roadmap:
 
-- Improve receipt viewer.
-- Add clearer proof copy.
+- ~~Improve receipt viewer.~~ Shipped 2026-07-09: rows were built from raw inline styles with no hover state and always-shown zero-value fields ("0p 0s" on every row). Rebuilt with real CSS classes per result type (icon + color-coded left border, mirroring the Morning Proof hero's icon vocabulary), a hover state, and meta chips that only show fields with real values (a 0-pause, 0-snooze run shows no clutter).
+- ~~Add clearer proof copy.~~ Shipped 2026-07-09: both "Copy Proof" (single latest receipt) and the new "Export Ledger" were dumping the raw internal result code (`dry_run_completed`) and raw ISO timestamps (`2026-07-08T21:30:00.000Z`) straight into the clipboard text. Added a shared `humanizeReceiptResult()` ("Dry Run Completed") and proper `toLocaleString()` timestamp formatting, used by both.
 - ~~Make copy-proof action more visible after completion.~~ Already shipped: "Copy Proof" is one of the labeled action buttons directly on the Morning Proof hero card, which is what greets the user right after a session completes -- as visible as it gets without being intrusive.
 - ~~Export session proof.~~ Shipped 2026-07-09: the Receipts modal previously had no bulk export (only per-session "Copy Proof" for the latest run). Added `runReceipts.getAllReceiptsForExport()` (full stored ledger, not the display-limited `listReceipts()`) plus an "Export Ledger" button that copies a readable text summary of every stored receipt to the clipboard, mirroring the Streaks tab's existing export pattern.
 - ~~Include release checksum verification instructions on landing page.~~ Shipped 2026-07-09: the landing page FAQ previously just pointed at `SHA256SUMS.txt` with no actual steps. Added the real `Get-FileHash` PowerShell command and how to compare it against the published checksum file.
 
-Still genuinely open: receipt viewer polish and proof-copy wording are subjective/design calls, not scoped here.
+This pillar's roadmap list is now fully shipped.
 
 Proof gates:
 

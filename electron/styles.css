@@ -3779,7 +3779,81 @@ body.mini-mode .ll-layout { padding: 16px; }
 }
 .receipts-actions {
   margin-top: 12px;
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.receipts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.receipt-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 0 6px 6px 0;
+  border-left: 3px solid var(--text-muted);
+  background: var(--bg-card);
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.receipt-row:hover {
+  background: var(--bg-hover);
+  transform: translateX(1px);
+}
+.receipt-row--completed { border-left-color: #4caf50; }
+.receipt-row--dry-run { border-left-color: #76c9ff; }
+.receipt-row--cancelled { border-left-color: #ff9800; }
+.receipt-row--running { border-left-color: #5b8cff; }
+.receipt-row--blocked { border-left-color: #ff4d4d; }
+.receipt-row-icon {
+  font-size: 14px;
+  line-height: 1;
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+.receipt-row-main {
+  flex: 1;
+  min-width: 0;
+}
+.receipt-row-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.receipt-row-date {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.receipt-row-result {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  flex-shrink: 0;
+}
+.receipt-row--completed .receipt-row-result { color: #4caf50; }
+.receipt-row--dry-run .receipt-row-result { color: #76c9ff; }
+.receipt-row--cancelled .receipt-row-result { color: #ff9800; }
+.receipt-row--running .receipt-row-result { color: #5b8cff; }
+.receipt-row--blocked .receipt-row-result { color: #ff4d4d; }
+.receipt-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.receipt-meta-chip {
+  font-size: 9px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  padding: 1px 6px;
 }
 
 /* ───────────── Imminent-action warning modal ───────────── */

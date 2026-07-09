@@ -686,6 +686,28 @@ check('receipts: export-receipts IPC handler and preload bridge wired', () => {
   assertMatch(rendererSrc, /els\.btnExportReceipts/, 'renderer does not wire up btnExportReceipts');
 });
 
+check('receipts: humanizeReceiptResult turns raw result codes into readable proof text', () => {
+  // Extract and eval the pure function directly (no DOM deps) so this
+  // actually exercises the mapping logic, not just source-text presence.
+  const fnMatch = rendererSrc.match(/function humanizeReceiptResult\([\s\S]*?\n}/);
+  assert(fnMatch, 'humanizeReceiptResult function not found in renderer-receipts.js');
+  const humanizeReceiptResult = new Function(`${fnMatch[0]}; return humanizeReceiptResult;`)();
+
+  assert(humanizeReceiptResult('power_executed') === 'Completed', 'power_executed should read "Completed"');
+  assert(humanizeReceiptResult('dry_run_completed') === 'Dry Run Completed', 'dry_run_completed should read "Dry Run Completed"');
+  assert(humanizeReceiptResult('cancelled') === 'Cancelled', 'cancelled should read "Cancelled"');
+  assert(humanizeReceiptResult(null) === 'Unknown', 'null/undefined result should read "Unknown", not crash');
+  // Unmapped codes still get title-cased with underscores turned to spaces,
+  // instead of leaking a raw snake_case enum into "proof" a user reads.
+  assert(humanizeReceiptResult('some_new_result') === 'Some New Result', 'unmapped codes should title-case, not leak snake_case');
+
+  // And confirm both clipboard-copy call sites actually use it instead of
+  // the raw result/timestamp fields (the bug this fixes).
+  assertMatch(rendererSrc, /Result: \$\{humanizeReceiptResult\(receipt\.result\)\}/, 'Copy Proof handler should humanize the result, not dump the raw code');
+  assertMatch(rendererSrc, /Started: \$\{receipt\.startedAt \? new Date\(receipt\.startedAt\)\.toLocaleString\(\)/, 'Copy Proof handler should format startedAt, not paste the raw ISO string');
+  assertMatch(rendererSrc, /Result: \$\{humanizeReceiptResult\(r\.result\)\}/, 'Export Ledger handler should humanize the result, not dump the raw code');
+});
+
 // 14. Override Tax integration.
 check('override-tax: module exists and exports expected API', () => {
   assert(mainSrc.includes("require('./overrideTax')"), 'overrideTax not required in main');
