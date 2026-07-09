@@ -282,6 +282,81 @@ function getSleepScore() {
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Trend View: weekly/monthly aggregates beyond the 30-day grid.
+// Buckets the full stored event history (up to 365 days) by ISO-ish week
+// (Monday-start) or calendar month, so long-term patterns are visible past
+// what the 30-day grid and 7-day weekly report can show.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function trendBucketKey(dateStr, granularity) {
+  if (granularity === 'month') return dateStr.slice(0, 7); // YYYY-MM
+
+  const d = new Date(dateStr + 'T12:00:00');
+  const day = d.getDay(); // 0=Sun..6=Sat
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() + diffToMonday);
+  return monday.toISOString().slice(0, 10); // bucket key = that week's Monday
+}
+
+function trendBucketLabel(key, granularity) {
+  if (granularity === 'month') {
+    const [y, m] = key.split('-').map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  }
+  const d = new Date(key + 'T12:00:00');
+  return `Wk of ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+}
+
+function getTrend(granularity = 'week', limit = 12) {
+  const normGranularity = granularity === 'month' ? 'month' : 'week';
+  const data = load();
+
+  const buckets = new Map();
+  for (const e of data.events) {
+    const key = trendBucketKey(e.date, normGranularity);
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(e);
+  }
+
+  const sortedKeys = [...buckets.keys()].sort();
+  const recentKeys = sortedKeys.slice(-Math.max(1, limit));
+
+  return recentKeys.map(key => {
+    const events = buckets.get(key);
+    let totalMin = 0;
+    let onTimeCount = 0;
+    let snoozeCount = 0;
+    for (const e of events) {
+      const [h, m] = (e.bedTime || '23:00').split(':').map(Number);
+      const mins = h * 60 + m;
+      totalMin += mins;
+      if (mins <= 23 * 60) onTimeCount++;
+      if (e.snoozed) snoozeCount++;
+    }
+    const avgMin = Math.round(totalMin / events.length);
+    const avgH = Math.floor(avgMin / 60) % 24;
+    const avgM = avgMin % 60;
+    const periodLength = normGranularity === 'month' ? daysInMonth(key) : 7;
+
+    return {
+      key,
+      label: trendBucketLabel(key, normGranularity),
+      nights: events.length,
+      periodLength,
+      avgBedTime: `${String(avgH).padStart(2, '0')}:${String(avgM).padStart(2, '0')}`,
+      onTimePercent: Math.round(onTimeCount / events.length * 100),
+      snoozeRate: Math.round(snoozeCount / events.length * 100)
+    };
+  });
+}
+
+function daysInMonth(yyyymm) {
+  const [y, m] = yyyymm.split('-').map(Number);
+  return new Date(y, m, 0).getDate();
+}
+
 function exportData() {
   return clone(load());
 }
@@ -331,6 +406,7 @@ module.exports = {
   getWeeklyReport,
   getSleepScore,
   getHistory30,
+  getTrend,
   exportData,
   replaceAll,
   // Testing helpers.

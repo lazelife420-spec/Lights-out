@@ -2494,6 +2494,11 @@ body.mini-mode .action-btn {
   opacity: 0.8;
 }
 
+.last-used-badge {
+  color: var(--accent-cyan);
+  opacity: 0.85;
+}
+
 .profile-item-actions {
   display: flex;
   gap: 4px;
@@ -4791,6 +4796,82 @@ body.mini-mode .ns-proof-section { display: none !important; }
 }
 .history-block:hover::after {
   opacity: 1;
+}
+
+/* Weekly/Monthly trend view -- aggregates beyond the 30-day grid */
+.trend-granularity-toggle {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+}
+.trend-toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.trend-toggle-btn:hover {
+  color: var(--text-primary);
+}
+.trend-toggle-btn.active {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.trend-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding: 12px;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-soft);
+}
+.trend-empty {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 8px 0;
+}
+.trend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+}
+.trend-row-label {
+  width: 78px;
+  flex-shrink: 0;
+  text-align: right;
+  color: var(--text-muted);
+}
+.trend-row-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.trend-row-fill {
+  height: 100%;
+  background: var(--accent-cyan);
+  border-radius: 3px;
+  transition: width 0.8s ease;
+}
+.trend-row-val {
+  width: 168px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 /* Streak Celebration Modal and Animations */

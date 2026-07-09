@@ -1487,6 +1487,9 @@ ipcMain.handle('get-sleep-score', async () => {
 ipcMain.handle('get-streaks-history', async () => {
   try { return streaks.getHistory30(); } catch { return []; }
 });
+ipcMain.handle('get-streaks-trend', async (event, granularity) => {
+  try { return streaks.getTrend(granularity); } catch { return []; }
+});
 ipcMain.handle('add-custom-sequence', async (event, seq) => {
   const entry = lastLight.addCustomSequence(seq);
   if (entry) {
@@ -1885,7 +1888,14 @@ ipcMain.handle('profiles-create', async (event, data) => profiles.create(data));
 ipcMain.handle('profiles-update', async (event, id, data) => profiles.update(id, data));
 ipcMain.handle('profiles-delete', async (event, id) => profiles.delete(id));
 ipcMain.handle('profiles-reorder', async (event, orderedIds) => profiles.reorder(orderedIds));
-ipcMain.handle('profiles-apply', async (event, id) => profiles.apply(id));
+ipcMain.handle('profiles-apply', async (event, id) => {
+  const result = profiles.apply(id);
+  if (result.success) {
+    const updated = profiles.markUsed(id);
+    if (updated) result.profile = updated;
+  }
+  return result;
+});
 ipcMain.handle('profiles-get-hint', async (event, profile) => profiles.getHint(profile));
 ipcMain.handle('profiles-export', async () => profiles.export());
 ipcMain.handle('profiles-import', async (event, jsonString) => profiles.import(jsonString));

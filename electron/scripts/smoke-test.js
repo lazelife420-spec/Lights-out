@@ -102,6 +102,30 @@ check('profiles: lastLight fields in normalized profile', () => {
   assert(norm && norm.lastLightEnabled === true && norm.lastLightSequence === 'ExitTheGrid' && norm.lastLightSound === 'Soft', 'lastLight fields not preserved');
 });
 
+check('profiles: markUsed stamps lastUsedAt and persists to disk', () => {
+  const profiles = require(path.join(root, 'profiles.js'));
+  const created = profiles.create({ name: 'Last-Used Smoke Test' });
+  assert(created.success, 'setup: profile creation failed');
+  assert(created.profile.lastUsedAt === null, 'freshly created profile should have no lastUsedAt yet');
+
+  const before = Date.now() - 1000;
+  const updated = profiles.markUsed(created.profile.id);
+  assert(updated && updated.lastUsedAt, 'markUsed did not return a stamped profile');
+  assert(new Date(updated.lastUsedAt).getTime() >= before, 'lastUsedAt not a recent timestamp');
+
+  // Reload from disk to confirm the stamp was actually persisted, not just cached.
+  profiles.reload();
+  const reloaded = profiles.getById(created.profile.id);
+  assert(reloaded && reloaded.lastUsedAt === updated.lastUsedAt, 'lastUsedAt not persisted to disk');
+
+  assert(profiles.markUsed('does-not-exist') === null, 'markUsed should return null for an unknown id');
+});
+
+check('main.js: profiles-apply handler stamps lastUsedAt via markUsed on success', () => {
+  const mainSrc = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+  assertMatch(mainSrc, /profiles-apply[\s\S]{0,200}profiles\.markUsed\(id\)/, 'profiles-apply IPC handler should call profiles.markUsed on success');
+});
+
 check('streaks: export/import round-trip restores event history', () => {
   const streaks = require(path.join(root, 'streaks.js'));
   streaks._reset();
@@ -117,6 +141,45 @@ check('streaks: export/import round-trip restores event history', () => {
   const restored = streaks.exportData();
   assert(restored.events.length === 1, 'streak events were not restored');
   assert(restored.bestStreak === 3, 'best streak was not restored');
+});
+
+check('streaks: getTrend aggregates events into weekly and monthly buckets', () => {
+  const streaks = require(path.join(root, 'streaks.js'));
+  streaks._reset();
+  // Two nights in the same ISO week (Mon 2026-06-01) and one in the next
+  // month (2026-07-01), so week/month bucketing produce different bucket
+  // counts against the same underlying data.
+  streaks.replaceAll({
+    events: [
+      { date: '2026-06-01', bedTime: '22:00', action: 'shutdown', snoozed: false },
+      { date: '2026-06-02', bedTime: '23:30', action: 'shutdown', snoozed: true },
+      { date: '2026-07-01', bedTime: '22:15', action: 'sleep', snoozed: false }
+    ],
+    streak: 1,
+    bestStreak: 1,
+    achievements: []
+  });
+
+  const weekly = streaks.getTrend('week');
+  assert(weekly.length === 2, `expected 2 week buckets, got ${weekly.length}`);
+  const juneWeek = weekly.find(w => w.nights === 2);
+  assert(juneWeek, 'the two June nights should land in the same week bucket');
+  assert(juneWeek.avgBedTime === '22:45', `expected avg bedtime 22:45, got ${juneWeek.avgBedTime}`);
+  assert(juneWeek.onTimePercent === 50, `expected 50% on-time (one of two nights before 23:00), got ${juneWeek.onTimePercent}`);
+  assert(juneWeek.snoozeRate === 50, `expected 50% snooze rate, got ${juneWeek.snoozeRate}`);
+  assert(juneWeek.periodLength === 7, 'week bucket periodLength should be 7');
+
+  const monthly = streaks.getTrend('month');
+  assert(monthly.length === 2, `expected 2 month buckets, got ${monthly.length}`);
+  const june = monthly.find(m => m.key === '2026-06');
+  assert(june && june.nights === 2, 'June bucket should have 2 nights');
+  assert(june.periodLength === 30, `June has 30 days, got periodLength ${june.periodLength}`);
+  assert(monthly[0].key < monthly[1].key, 'monthly buckets should be chronologically sorted');
+
+  assert(streaks.getTrend('week', 1).length === 1, 'limit should cap the number of returned buckets');
+
+  streaks.replaceAll({ events: [], streak: 0, bestStreak: 0, achievements: [] });
+  assert(streaks.getTrend('week').length === 0, 'no events should yield no buckets');
 });
 
 Module._load = origLoad;

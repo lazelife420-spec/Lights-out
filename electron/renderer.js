@@ -131,6 +131,7 @@ const fallbackApi = (() => {
     getWeeklyReport: async () => null,
     getSleepScore: async () => ({ score: null, label: 'Preview', breakdown: {} }),
     getStreaksHistory: async () => [],
+    getStreaksTrend: async () => [],
     getCompanionStatus: async () => ({ running: false, port: 0, clients: 0, url: '' }),
     getRemoteControl: async () => ({ enabled: false, mode: 'off', token: '', port: 0, lanIp: '', url: '', pcName: 'Preview PC', clients: 0, connected: false, failed: false, statusLabel: 'Off' }),
     setRemoteControlMode: async () => ({ enabled: false, mode: 'off', token: '', url: '', statusLabel: 'Off' }),
@@ -406,6 +407,8 @@ const els = {
   streakCalloutCount: document.getElementById('streak-callout-count'),
   streakCalloutBest: document.getElementById('streak-callout-best'),
   achievementsGrid: document.getElementById('achievements-grid'),
+  trendList: document.getElementById('trend-list'),
+  trendGranularityToggle: document.getElementById('trend-granularity-toggle'),
   // Sleep score
   scoreValue: document.getElementById('score-value'),
   scoreLabel: document.getElementById('score-label'),
@@ -692,6 +695,8 @@ const state = {
   currentProfileId: null,
   profileSearchQuery: '',
   profileActiveFilter: 'all',
+  // Streaks trend view (Weekly/Monthly toggle)
+  trendGranularity: 'week',
   // Calendar state
   calendarEvents: [],
   calendarSource: null,
@@ -1765,8 +1770,42 @@ async function loadStreaks() {
     const report = await api.getWeeklyReport();
     const sleepScore = await api.getSleepScore();
     const history = await api.getStreaksHistory?.() || [];
-    renderStreaks(summary, catalog, report, sleepScore, history);
+    const trend = await api.getStreaksTrend?.(state.trendGranularity) || [];
+    renderStreaks(summary, catalog, report, sleepScore, history, trend);
   } catch { /* streaks are decorative, never block */ }
+}
+
+// Re-fetches and re-renders just the trend rows, without a full loadStreaks()
+// round trip -- used by the Weekly/Monthly toggle.
+async function refreshTrend() {
+  try {
+    const trend = await api.getStreaksTrend?.(state.trendGranularity) || [];
+    renderTrend(trend);
+  } catch { /* decorative, never block */ }
+}
+
+function renderTrend(trend) {
+  if (!els.trendList) return;
+
+  if (!trend || !trend.length) {
+    els.trendList.innerHTML = '<div class="trend-empty">Not enough history yet.</div>';
+    return;
+  }
+
+  // Most recent period first; bar width relative to the period's own length
+  // (7 days for a week, actual days for a month) so a partial current period
+  // doesn't look like a slump next to full past periods.
+  const rows = [...trend].reverse();
+  els.trendList.innerHTML = rows.map(t => {
+    const pct = Math.round(clamp(t.nights / t.periodLength, 0, 1) * 100);
+    return `
+      <div class="trend-row">
+        <span class="trend-row-label">${escapeHtml(t.label)}</span>
+        <div class="trend-row-track"><div class="trend-row-fill" style="width:${pct}%"></div></div>
+        <span class="trend-row-val">${t.nights}/${t.periodLength}n · ${t.avgBedTime} · ${t.onTimePercent}% on-time</span>
+      </div>
+    `;
+  }).join('');
 }
 
 // Home streak callout: show the current streak above Saved Profiles, but only
@@ -1804,7 +1843,7 @@ function showStreakCelebration(count) {
   }
 }
 
-function renderStreaks(summary, catalog, report, sleepScore, history) {
+function renderStreaks(summary, catalog, report, sleepScore, history, trend) {
   if (!summary) return;
 
   // Sleep Score.
@@ -1867,6 +1906,8 @@ function renderStreaks(summary, catalog, report, sleepScore, history) {
       return `<div class="history-block ${stateClass}" data-tooltip="${escapeHtml(tooltip)}">${icon || d.date.slice(-2)}</div>`;
     }).join('');
   }
+
+  renderTrend(trend);
 
   // Achievements grid.
   if (els.achievementsGrid && catalog?.length) {
@@ -2500,6 +2541,18 @@ if (els.btnClearReceipts) {
 
   document.getElementById('btn-celebration-dismiss')?.addEventListener('click', () => {
     document.getElementById('streak-celebration-modal')?.classList.remove('active');
+  });
+
+  els.trendGranularityToggle?.querySelectorAll('.trend-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const granularity = btn.dataset.granularity;
+      if (!granularity || granularity === state.trendGranularity) return;
+      state.trendGranularity = granularity;
+      els.trendGranularityToggle.querySelectorAll('.trend-toggle-btn').forEach(b => {
+        b.classList.toggle('active', b === btn);
+      });
+      refreshTrend();
+    });
   });
 
   document.getElementById('btn-export-streaks')?.addEventListener('click', async () => {

@@ -66,6 +66,13 @@ test('normalize preserves an existing id/createdAt (update path) but always refr
   assert.equal(again.name, 'X renamed');
 });
 
+test('normalize defaults lastUsedAt to null and preserves it across re-normalization', () => {
+  const fresh = profiles.normalize({ name: 'X' });
+  assert.equal(fresh.lastUsedAt, null);
+  const used = profiles.normalize({ ...fresh, lastUsedAt: '2026-07-09T12:00:00.000Z' });
+  assert.equal(used.lastUsedAt, '2026-07-09T12:00:00.000Z');
+});
+
 test('getHint formats duration, clock, and calendar modes', () => {
   assert.equal(profiles.getHint({ action: 'shutdown', mode: 'duration', seconds: 1800 }), 'Shutdown in 30m');
   assert.equal(profiles.getHint({ action: 'sleep', mode: 'clock', clock: '23:30' }), 'Sleep at 23:30');

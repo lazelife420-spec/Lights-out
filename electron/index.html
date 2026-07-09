@@ -750,6 +750,16 @@
             <div class="sleep-history-grid" id="sleep-history-grid">
               <!-- Rendered as a contribution-style habit grid by JS -->
             </div>
+            <div class="streaks-section-header">
+              <h4>Trends</h4>
+              <div class="trend-granularity-toggle" id="trend-granularity-toggle">
+                <button class="trend-toggle-btn active" data-granularity="week" type="button">Weekly</button>
+                <button class="trend-toggle-btn" data-granularity="month" type="button">Monthly</button>
+              </div>
+            </div>
+            <div class="trend-list" id="trend-list">
+              <!-- Populated by JS: aggregate nights/avg-bedtime/on-time% per week or month -->
+            </div>
             <h4 class="achievements-heading">Achievements</h4>
             <div class="achievements-grid" id="achievements-grid">
               <!-- Populated by JS -->
