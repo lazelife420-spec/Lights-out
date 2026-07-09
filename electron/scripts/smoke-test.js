@@ -635,6 +635,18 @@ if (fs.existsSync(rrPath)) {
     assert(latest && latest.id, 'latest should exist');
   });
 
+  check('receipts: getAllReceiptsForExport returns the full ledger, not just the display-limited list', () => {
+    rr.clearReceipts();
+    const r1 = rr.createRunReceipt({ action: 'shutdown', totalSeconds: 1800 });
+    const r2 = rr.createRunReceipt({ action: 'sleep', totalSeconds: 900 });
+    const all = rr.getAllReceiptsForExport();
+    assert(Array.isArray(all) && all.length === 2, `expected 2 receipts, got ${all.length}`);
+    assert(all[0].id === r1.id && all[1].id === r2.id, 'export should be oldest-first, matching storage order');
+    // Mutating the returned array must not corrupt the live cache.
+    all.pop();
+    assert(rr.getAllReceiptsForExport().length === 2, 'export should return a copy, not the live array');
+  });
+
   check('receipts: pause/snooze/warning increments', () => {
     const r = rr.createRunReceipt({ action: 'sleep', totalSeconds: 600 });
     rr.receiptPaused(r.id);
@@ -666,6 +678,13 @@ if (fs.existsSync(rrPath)) {
     rr.clearReceipts();
   });
 }
+
+check('receipts: export-receipts IPC handler and preload bridge wired', () => {
+  assertMatch(mainSrc, /ipcMain\.handle\('export-receipts'.*\n.*runReceipts\.getAllReceiptsForExport\(\)/, 'export-receipts IPC handler missing or not wired to runReceipts.getAllReceiptsForExport');
+  assertMatch(preloadSrc, /exportReceipts:\s*\(\)\s*=>\s*ipcRenderer\.invoke\('export-receipts'\)/, 'preload exportReceipts bridge missing');
+  assert(htmlSrc.includes('id="btn-export-receipts"'), 'btn-export-receipts missing from HTML');
+  assertMatch(rendererSrc, /els\.btnExportReceipts/, 'renderer does not wire up btnExportReceipts');
+});
 
 // 14. Override Tax integration.
 check('override-tax: module exists and exports expected API', () => {

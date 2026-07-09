@@ -189,6 +189,7 @@ const fallbackApi = (() => {
     executeOverride: async () => ({ overridden: true }),
     getLatestReceipt: async () => null,
     listReceipts: async () => [],
+    exportReceipts: async () => [],
     clearReceipts: async () => ({ cleared: true }),
     getReceiptStats: async () => ({ total: 0, completed: 0, cancelled: 0, dryRun: 0, blocked: 0 }),
     getIdleSeconds: async () => 0,
@@ -562,6 +563,7 @@ const els = {
   receiptStats: document.getElementById('receipt-stats'),
   receiptsList: document.getElementById('receipts-list'),
   btnClearReceipts: document.getElementById('btn-clear-receipts'),
+  btnExportReceipts: document.getElementById('btn-export-receipts'),
   // Northstar sidebar destinations (LIB/SCH/STATS)
   panelLib: document.getElementById('ns-panel-lib'),
   panelSch: document.getElementById('ns-panel-sch'),
@@ -2411,6 +2413,44 @@ if (els.morningProofSection) {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && els.morningProofSection.style.display !== 'none') {
       dismissMorningProof();
+    }
+  });
+}
+
+// Export the full receipts ledger (not just the modal's visible/limited
+// list) as a readable text summary, copied to clipboard -- mirrors the
+// Streaks tab's "Export Ledger" pattern.
+if (els.btnExportReceipts) {
+  els.btnExportReceipts.addEventListener('click', async () => {
+    try {
+      const receipts = await api.exportReceipts?.() || [];
+      if (!receipts.length) {
+        notify('No receipts to export', 'info');
+        return;
+      }
+
+      let ledger = `LIGHTS OUT RUN RECEIPTS\n`;
+      ledger += `=========================\n`;
+      ledger += `Generated: ${new Date().toLocaleString()}\n`;
+      ledger += `Total Runs: ${receipts.length}\n\n`;
+
+      [...receipts].reverse().forEach(r => {
+        const start = r.startedAt ? new Date(r.startedAt).toLocaleString() : 'N/A';
+        const end = r.endedAt ? new Date(r.endedAt).toLocaleString() : 'N/A';
+        const durMin = r.durationSeconds ? Math.floor(r.durationSeconds / 60) : 0;
+        ledger += `${start}\n`;
+        ledger += `  Result: ${r.result || 'unknown'}\n`;
+        ledger += `  Action: ${r.action || 'N/A'}${r.forceShutdown ? ' (Force)' : ''}${r.dryRun ? ' (Dry Run)' : ''}\n`;
+        ledger += `  Duration: ${durMin}m | Ended: ${end}\n`;
+        ledger += `  Pauses: ${r.pauseCount || 0}, Snoozes: ${r.snoozeCount || 0}, Warnings: ${r.warningsShown || 0}\n`;
+        if (r.notes) ledger += `  Notes: ${r.notes}\n`;
+        ledger += `\n`;
+      });
+
+      await navigator.clipboard.writeText(ledger);
+      notify(`${receipts.length} receipts copied to clipboard`, 'success', 3000);
+    } catch (e) {
+      notify('Failed to export receipts', 'error');
     }
   });
 }

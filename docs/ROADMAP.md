@@ -61,7 +61,7 @@ Roadmap:
 - ~~Better profile sorting and pinned favorites.~~ Shipped in v10.4.0 (search, category filters, pin-to-top).
 - ~~Better visual state for active profile.~~ Shipped (`.profile-card.active` has dedicated styling, not just a bare class toggle).
 - ~~Optional profile notes.~~ Shipped: a 280-char note per profile, editable inline in the Profiles modal or set at save time, shown as a 📝 badge + hover tooltip on the Library card.
-- Last-used routine memory.
+- ~~Last-used routine memory.~~ Shipped: see the "Next" milestone below.
 
 Proof gates:
 
@@ -107,9 +107,11 @@ Roadmap:
 
 - Improve receipt viewer.
 - Add clearer proof copy.
-- Make copy-proof action more visible after completion.
-- Export session proof.
-- Include release checksum verification instructions on landing page.
+- ~~Make copy-proof action more visible after completion.~~ Already shipped: "Copy Proof" is one of the labeled action buttons directly on the Morning Proof hero card, which is what greets the user right after a session completes -- as visible as it gets without being intrusive.
+- ~~Export session proof.~~ Shipped 2026-07-09: the Receipts modal previously had no bulk export (only per-session "Copy Proof" for the latest run). Added `runReceipts.getAllReceiptsForExport()` (full stored ledger, not the display-limited `listReceipts()`) plus an "Export Ledger" button that copies a readable text summary of every stored receipt to the clipboard, mirroring the Streaks tab's existing export pattern.
+- ~~Include release checksum verification instructions on landing page.~~ Shipped 2026-07-09: the landing page FAQ previously just pointed at `SHA256SUMS.txt` with no actual steps. Added the real `Get-FileHash` PowerShell command and how to compare it against the published checksum file.
+
+Still genuinely open: receipt viewer polish and proof-copy wording are subjective/design calls, not scoped here.
 
 Proof gates:
 
@@ -170,12 +172,15 @@ morning-briefing summary are both shipped (see above), and the active-profile
 card already has dedicated CSS. Keep this list current going forward instead
 of letting it drift again.
 
-Candidate work still genuinely open:
+~~Last-used routine memory (remember + surface the last-loaded profile distinctly from "currently active").~~ Shipped 2026-07-09: `profiles.apply()` stays pure, but the `profiles-apply` IPC handler stamps + persists `lastUsedAt` via `profiles.markUsed()`. The Profiles grid shows a "· last used" badge on the most-recently-applied profile, distinct from the in-session "active" highlight, so it's visible even right after an app restart.
 
-- Last-used routine memory (remember + surface the last-loaded profile distinctly from "currently active").
-- A true weekly/monthly aggregate streak view beyond the 30-day grid.
+~~A true weekly/monthly aggregate streak view beyond the 30-day grid.~~ Shipped 2026-07-09: `streaks.getTrend(granularity)` buckets the full stored event history (up to 365 days) by ISO week or calendar month. The Streaks tab has a new "Trends" section (Weekly/Monthly toggle) between the 30-day grid and Achievements.
 
 ~~Optional profile notes.~~ Shipped: see the Personal Wind-Down pillar above.
+
+This milestone is now fully shipped -- nothing genuinely open remains here.
+Next up is either the Proof And Receipts pillar's open items (below) or
+v11.0.0.
 
 Ship only if:
 

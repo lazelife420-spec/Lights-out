@@ -1768,6 +1768,9 @@ ipcMain.handle('get-latest-receipt', async () => {
 ipcMain.handle('list-receipts', async (e, limit) => {
   return runReceipts.listReceipts(limit || 20);
 });
+ipcMain.handle('export-receipts', async () => {
+  return runReceipts.getAllReceiptsForExport();
+});
 ipcMain.handle('clear-receipts', async () => {
   return runReceipts.clearReceipts();
 });

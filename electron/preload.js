@@ -250,6 +250,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Run Receipts / Morning Proof
   getLatestReceipt: () => ipcRenderer.invoke('get-latest-receipt'),
   listReceipts: (limit) => ipcRenderer.invoke('list-receipts', limit),
+  exportReceipts: () => ipcRenderer.invoke('export-receipts'),
   clearReceipts: () => ipcRenderer.invoke('clear-receipts'),
   getReceiptStats: () => ipcRenderer.invoke('get-receipt-stats'),
 
