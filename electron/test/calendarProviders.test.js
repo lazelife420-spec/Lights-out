@@ -22,7 +22,7 @@ test('getProviders returns all five providers; getProvider looks up by id', () =
   assert.strictEqual(cp.getProvider('nope'), null);
 });
 
-test('getDefaultCalendarEvents emits Bedtime events with the right shape', () => {
+test('getDefaultCalendarEvents emits Bedtime events with the right shape (legacy single-schedule shape)', () => {
   const events = cp.getDefaultCalendarEvents(
     { bedtime: '22:30', days: ['mon','tue','wed','thu','fri','sat','sun'], action: 'shutdown' },
     MON_NOON, 7,
@@ -36,7 +36,7 @@ test('getDefaultCalendarEvents emits Bedtime events with the right shape', () =>
     assert.strictEqual(e.start.getMinutes(), 30);
     assert.strictEqual(e.end.getTime() - e.start.getTime(), 3600000); // +1h
     assert.ok(e.start > MON_NOON); // only future events
-    assert.match(e.uid, /^lo-default-\d{4}-\d{2}-\d{2}$/);
+    assert.match(e.uid, /^lo-default-legacy-\d{4}-\d{2}-\d{2}$/);
   }
 });
 
@@ -70,4 +70,66 @@ test('getDefaultCalendarEvents honors the withinDays cutoff', () => {
   const shortWindow = cp.getDefaultCalendarEvents({ days: ['mon'] }, MON_NOON, 3);
   // Only the anchor Monday's 22:30 falls within 3 days.
   assert.strictEqual(shortWindow.length, 1);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Multi-rule scheduling: several independent "at this time, on these days, do
+// this" rules, not just one global bedtime.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('getDefaultCalendarEvents emits events for every rule, each with its own label/time/action/duration', () => {
+  const events = cp.getDefaultCalendarEvents({
+    rules: [
+      { id: 'weeknight', label: 'Weeknight', time: '22:00', days: ['mon','tue','wed','thu','fri'], action: 'shutdown', durationMinutes: 30, enabled: true },
+      { id: 'weekend', label: 'Weekend', time: '23:30', days: ['fri','sat'], action: 'sleep', durationMinutes: 90, enabled: true }
+    ]
+  }, MON_NOON, 7);
+
+  const weeknight = events.filter(e => e.summary === 'Weeknight');
+  const weekend = events.filter(e => e.summary === 'Weekend');
+  assert.ok(weeknight.length > 0);
+  assert.ok(weekend.length > 0);
+  for (const e of weeknight) {
+    assert.strictEqual(e.action, 'shutdown');
+    assert.strictEqual(e.start.getHours(), 22);
+    assert.strictEqual(e.end.getTime() - e.start.getTime(), 30 * 60000);
+    assert.match(e.uid, /^lo-default-weeknight-\d{4}-\d{2}-\d{2}$/);
+  }
+  for (const e of weekend) {
+    assert.strictEqual(e.action, 'sleep');
+    assert.strictEqual(e.start.getHours(), 23);
+    assert.strictEqual(e.start.getMinutes(), 30);
+    assert.strictEqual(e.end.getTime() - e.start.getTime(), 90 * 60000);
+    assert.match(e.uid, /^lo-default-weekend-\d{4}-\d{2}-\d{2}$/);
+  }
+  // Friday is in both rules, so it must produce two distinct events (one per rule).
+  const friday = events.filter(e => e.start.getDay() === 5);
+  assert.strictEqual(friday.length, 2);
+});
+
+test('getDefaultCalendarEvents skips a disabled rule entirely', () => {
+  const events = cp.getDefaultCalendarEvents({
+    rules: [
+      { id: 'a', label: 'A', time: '22:00', days: ['mon'], action: 'shutdown', enabled: true },
+      { id: 'b', label: 'B', time: '23:00', days: ['mon'], action: 'sleep', enabled: false }
+    ]
+  }, MON_NOON, 7);
+  assert.ok(events.every(e => e.summary === 'A'));
+  assert.ok(events.length > 0);
+});
+
+test('getDefaultCalendarEvents returns nothing for an explicit empty rules array (user deleted every rule)', () => {
+  assert.deepStrictEqual(cp.getDefaultCalendarEvents({ rules: [] }, MON_NOON, 30), []);
+});
+
+test('getDefaultCalendarEvents events are sorted chronologically across rules', () => {
+  const events = cp.getDefaultCalendarEvents({
+    rules: [
+      { id: 'late', label: 'Late', time: '23:00', days: ['mon','tue'], action: 'shutdown', enabled: true },
+      { id: 'early', label: 'Early', time: '08:00', days: ['mon','tue'], action: 'shutdown', enabled: true }
+    ]
+  }, MON_NOON, 3);
+  const times = events.map(e => e.start.getTime());
+  const sorted = [...times].sort((a, b) => a - b);
+  assert.deepStrictEqual(times, sorted);
 });

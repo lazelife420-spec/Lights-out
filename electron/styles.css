@@ -2597,6 +2597,65 @@ body.mini-mode .action-btn {
   color: var(--accent-blue);
 }
 
+/* Schedule rules list (Schedule tab, built-in recurring rules) */
+.schedule-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.schedule-rule-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+.schedule-rule-item.disabled {
+  opacity: 0.5;
+}
+.schedule-rule-info {
+  flex: 1;
+  min-width: 0;
+}
+.schedule-rule-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.schedule-rule-detail {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.schedule-rule-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.schedule-rule-actions .profile-item-btn {
+  padding: 4px 8px;
+}
+.schedule-rules-empty {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 4px 0;
+}
+.schedule-rule-form {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  margin-top: 8px;
+}
+.schedule-rule-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 /* Next event card */
 .next-event-card {
   background: linear-gradient(135deg, rgba(91,140,255,0.08), rgba(118,201,255,0.06));

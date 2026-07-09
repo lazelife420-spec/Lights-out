@@ -82,6 +82,7 @@ Roadmap:
 - ~~Add timer-complete streak celebration.~~ Shipped in v10.4.0 (streak-celebration modal fires on milestone streaks; 30-day sleep-history grid with hover tooltips).
 - ~~Add morning briefing streak summary.~~ Shipped: First Light sends `{events, sleepDebt, streaks}` from main, renderer shows a one-line "Good morning! N-night streak · next: X" toast and syncs the Home callout.
 - Add a true weekly/monthly aggregate view (the 30-day grid + `getWeeklyReport()`'s on-time % cover part of this, but there's no dedicated trend view beyond 30 days).
+- ~~Multiple recurring schedule rules ("set timers for certain things at certain times").~~ Shipped: the Schedule tab's built-in calendar now holds a list of independent rules (own label, time, active days, action, duration), not one global bedtime. Each rule synthesizes its own recurring calendar events (`calendarProviders.getDefaultCalendarEvents`); auto-start skips the bedtime-keyword filter for these since they're explicit user config, not ambient imported-calendar noise. Settings persisted before this shipped migrate automatically (single implicit rule from the old bedtime/days/action fields).
 
 Avoid:
 

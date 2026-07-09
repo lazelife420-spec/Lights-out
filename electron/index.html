@@ -536,33 +536,53 @@
                 </select>
               </div>
 
-              <!-- Built-in default calendar config -->
+              <!-- Built-in schedule: multiple independent recurring rules -->
               <div class="cal-provider-config" id="cal-cfg-builtin">
-                <div class="option-group">
-                  <label>Default Bedtime</label>
-                  <input type="time" id="cal-builtin-bedtime" value="22:30">
+                <div class="schedule-rules-list" id="schedule-rules-list">
+                  <!-- rendered dynamically by renderScheduleRules() -->
                 </div>
-                <div class="option-group">
-                  <label>Active Days</label>
-                  <div class="day-toggle-grid">
-                    <button class="day-toggle active" data-day="sun">Sun</button>
-                    <button class="day-toggle active" data-day="mon">Mon</button>
-                    <button class="day-toggle active" data-day="tue">Tue</button>
-                    <button class="day-toggle active" data-day="wed">Wed</button>
-                    <button class="day-toggle active" data-day="thu">Thu</button>
-                    <button class="day-toggle active" data-day="fri">Fri</button>
-                    <button class="day-toggle active" data-day="sat">Sat</button>
+                <button class="btn-secondary btn-sm" id="btn-add-schedule-rule" type="button" style="margin-top:4px">+ Add Rule</button>
+
+                <div class="schedule-rule-form" id="schedule-rule-form" style="display:none">
+                  <div class="option-group">
+                    <label>Label</label>
+                    <input type="text" id="rule-label" placeholder="e.g. Weeknight" maxlength="32">
+                  </div>
+                  <div class="option-group">
+                    <label>Time</label>
+                    <input type="time" id="rule-time" value="22:30">
+                  </div>
+                  <div class="option-group">
+                    <label>Duration (minutes, before the action fires)</label>
+                    <input type="number" id="rule-duration" value="60" min="1" max="1440">
+                  </div>
+                  <div class="option-group">
+                    <label>Active Days</label>
+                    <div class="day-toggle-grid" id="rule-days">
+                      <button class="day-toggle active" data-day="sun" type="button">Sun</button>
+                      <button class="day-toggle active" data-day="mon" type="button">Mon</button>
+                      <button class="day-toggle active" data-day="tue" type="button">Tue</button>
+                      <button class="day-toggle active" data-day="wed" type="button">Wed</button>
+                      <button class="day-toggle active" data-day="thu" type="button">Thu</button>
+                      <button class="day-toggle active" data-day="fri" type="button">Fri</button>
+                      <button class="day-toggle active" data-day="sat" type="button">Sat</button>
+                    </div>
+                  </div>
+                  <div class="option-group">
+                    <label>Action</label>
+                    <select id="rule-action">
+                      <option value="shutdown">Shutdown</option>
+                      <option value="sleep">Sleep</option>
+                      <option value="hibernate">Hibernate</option>
+                    </select>
+                  </div>
+                  <div class="schedule-rule-form-actions">
+                    <button class="btn-secondary btn-sm" id="btn-cancel-rule" type="button">Cancel</button>
+                    <button class="btn-primary btn-sm" id="btn-save-rule" type="button">Save Rule</button>
                   </div>
                 </div>
-                <div class="option-group">
-                  <label>Action</label>
-                  <select id="cal-builtin-action">
-                    <option value="shutdown">Shutdown</option>
-                    <option value="sleep">Sleep</option>
-                    <option value="hibernate">Hibernate</option>
-                  </select>
-                </div>
-                <label class="checkbox-label" style="margin-top:4px">
+
+                <label class="checkbox-label" style="margin-top:12px">
                   <input type="checkbox" id="cal-auto-start">
                   Auto-start timer from calendar events
                 </label>

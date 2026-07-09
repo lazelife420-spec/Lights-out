@@ -121,9 +121,13 @@ const DEFAULTS = {
     autoStartFromEvents: false,
     builtin: {
       enabled: true,
-      bedtime: '22:30',
-      days: ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'],
-      action: 'shutdown'
+      // Multiple recurring rules, each an independent "at this time, on these
+      // days, do this" trigger (e.g. weeknights vs. weekends can differ).
+      // See calendarProviders.js normalizeScheduleRules for the legacy
+      // single-schedule shape this superseded.
+      rules: [
+        { id: 'default', label: 'Bedtime', time: '22:30', days: ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'], action: 'shutdown', durationMinutes: 60, enabled: true }
+      ]
     },
     ical: { url: '' },
     google: { apiKey: '', calendarId: '' },
