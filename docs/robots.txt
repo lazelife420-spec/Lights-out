@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://prooffoundry.com/lights-out/sitemap.xml

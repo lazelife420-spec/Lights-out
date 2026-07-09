@@ -267,9 +267,10 @@ function getProfileHint(profile) {
         } catch {}
       }
       return `${actionLabel} (calendar)`;
-    default:
+    default: {
       const minutes = Math.ceil(profile.seconds / 60);
       return `${actionLabel} in ${minutes}m`;
+    }
   }
 }
 

@@ -393,5 +393,10 @@ module.exports = {
   onStatus,
   PWA_PORT,
   // Exposed for unit testing the WebSocket handshake.
-  computeAccept
+  computeAccept,
+  // Exposed for unit testing the hand-rolled RFC 6455 frame codec. These are
+  // pure with respect to the (test-supplied) client object; consumeFrames /
+  // dispatchFrame only read/write client.buf, client.alive, and client.socket.
+  encodeFrame,
+  consumeFrames
 };

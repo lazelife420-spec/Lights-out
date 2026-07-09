@@ -90,6 +90,38 @@ WebView contents debugging is enabled, so with the phone on wireless ADB you can
 open desktop Chrome → `chrome://inspect` → **inspect** the WebView to see the
 companion page's console, network, and WebSocket frames.
 
+## Release signing
+
+A release keystore exists for this app (alias `lightsout-companion`), stored
+**outside any git checkout** at a stable per-machine path so it survives
+worktree pruning:
+
+```
+~/.android/lightsout-companion-release.jks   (Windows: C:\Users\<you>\.android\...)
+```
+
+To build a release APK on a machine that has this file, create
+`companion-android/keystore.properties` (gitignored, never commit it):
+
+```properties
+storeFile=C:/Users/<you>/.android/lightsout-companion-release.jks
+storePassword=<the store password>
+keyAlias=lightsout-companion
+keyPassword=<same as storePassword — PKCS12 keystores require it>
+```
+
+Without this file, `assembleRelease` falls back to debug signing (harmless
+for local testing, but **installing a debug-signed build over a
+release-signed install — or vice versa — fails with
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE`** and requires uninstalling first, which
+wipes the app's local storage (the saved companion URL/token). Always use the
+real release keystore for anything you intend to keep updating in place.
+
+> **Back up `lightsout-companion-release.jks` and its password.** There is no
+> recovery path if it's lost — a new keystore cannot resign updates for an
+> existing install, so every user would need to uninstall and reinstall from
+> scratch.
+
 ## Notes / limits
 
 - Phone and PC must be on the **same Wi-Fi** (no cloud relay; won't work on

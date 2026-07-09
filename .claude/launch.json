@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "electron-static-preview",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "58731", "--bind", "127.0.0.1", "--directory", "electron"],
+      "port": 58731
+    }
+  ]
+}

@@ -1,0 +1,128 @@
+// Renderer: Morning Proof hero + Run Receipts modal. Loaded as a classic
+// sibling <script>, after renderer-utils.js/renderer-profiles.js/
+// renderer-calendar.js and before renderer.js.
+//
+// SCOPE CHANGE, not a pure move: these three functions were previously
+// declared *nested inside* wireEvents() in renderer.js (function declarations
+// with zero indentation, easy to mistake for top-level — verified empirically
+// via `typeof renderReceiptsModal` at global scope, which was "undefined"
+// even after wireEvents() had already run once). That made them private,
+// reachable only through closures created during wireEvents()'s single
+// invocation (the event-listener callbacks that call them). Every call site
+// lived inside that same closure, so nothing was ever silently broken by the
+// nesting (unlike the calEvents bug fixed in the previous slice) — but hoisting
+// them to true top-level globals here is still a real scope change worth
+// calling out. Verified none of the three reference any wireEvents()-local
+// variable (only `els`/`api`/`notify`/`escapeHtml`/their own params), so the
+// hoist is behavior-preserving: the listener callbacks left behind in
+// wireEvents() now resolve these bare identifiers up the scope chain to the
+// globals defined here instead of to the (now-removed) local declarations.
+async function loadMorningProof() {
+  try {
+    const receipt = await api.getLatestReceipt?.();
+    if (receipt) renderMorningProof(receipt);
+  } catch (e) {
+    console.error('Failed to load morning proof:', e);
+  }
+}
+
+async function renderMorningProof(receipt) {
+  if (!receipt || !els.morningProofSection) return;
+  els.morningProofSection.style.display = '';
+
+  // Result → badge + headline.
+  const badgeMap = {
+    running:           { text: 'RUNNING',    color: '#5b8cff', icon: '\u{1F504}', title: 'IN PROGRESS' },
+    completing:        { text: 'COMPLETING', color: '#d4a50a', icon: '⏳',    title: 'COMPLETING…' },
+    power_executed:    { text: 'COMPLETED',  color: '#4caf50', icon: '☀️', title: 'MISSION COMPLETE' },
+    dry_run_completed: { text: 'DRY RUN',    color: '#76c9ff', icon: '\u{1F4CB}', title: 'DRY RUN COMPLETE' },
+    cancelled:         { text: 'CANCELLED',  color: '#ff9800', icon: '❌',    title: 'SESSION CANCELLED' },
+    blocked:           { text: 'BLOCKED',    color: '#ff4d4d', icon: '\u{1F6AB}', title: 'BLOCKED' },
+    error:             { text: 'ERROR',      color: '#ff4d4d', icon: '⚠️', title: 'ERROR' }
+  };
+  const badge = badgeMap[receipt.result] || { text: receipt.result?.toUpperCase(), color: 'var(--text-muted)', icon: '❓', title: receipt.result?.toUpperCase() || '—' };
+
+  if (els.proofBadge) {
+    els.proofBadge.textContent = badge.text;
+    els.proofBadge.style.color = badge.color;
+    els.proofBadge.style.borderColor = badge.color;
+  }
+  if (els.proofIcon) els.proofIcon.textContent = badge.icon;
+
+  const proofTitle = document.getElementById('ns-proof-title');
+  if (proofTitle) proofTitle.textContent = badge.title;
+
+  // Timestamp line.
+  const timestamp = document.getElementById('ns-proof-timestamp');
+  if (timestamp) {
+    const end = receipt.endedAt ? new Date(receipt.endedAt) : null;
+    const start = receipt.startedAt ? new Date(receipt.startedAt) : null;
+    const parts = [];
+    if (start) parts.push('Started ' + start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    if (end)   parts.push((receipt.result === 'cancelled' ? 'Cancelled' : 'Ended') + ' ' + end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    timestamp.textContent = parts.join(' · ');
+  }
+
+  // Stat pills — only show pills we have real values for.
+  function showPill(id, valId, value) {
+    const pill = document.getElementById(id);
+    const valEl = document.getElementById(valId);
+    if (!pill) return;
+    if (value !== null && value !== undefined && value !== '') {
+      if (valEl) valEl.textContent = value;
+      pill.style.display = '';
+    } else {
+      pill.style.display = 'none';
+    }
+  }
+
+  const durMin = receipt.durationSeconds ? Math.floor(receipt.durationSeconds / 60) : null;
+  showPill('ns-pill-duration', 'ns-pill-duration-val', durMin !== null ? `${durMin}m` : null);
+
+  const actionLabel = receipt.action ? (receipt.action.charAt(0).toUpperCase() + receipt.action.slice(1)) + (receipt.forceShutdown ? ' ⚡' : '') + (receipt.dryRun ? ' \u{1F4CB}' : '') : null;
+  showPill('ns-pill-action', 'ns-pill-action-val', actionLabel);
+
+  const snoozes = receipt.snoozeCount || 0;
+  showPill('ns-pill-snoozes', 'ns-pill-snoozes-val', snoozes > 0 ? snoozes : null);
+
+  // Total runs from stats API (real count, no faking).
+  try {
+    const stats = await api.getReceiptStats?.();
+    showPill('ns-pill-runs', 'ns-pill-runs-val', stats?.total ?? null);
+  } catch { showPill('ns-pill-runs', 'ns-pill-runs-val', null); }
+}
+
+function renderReceiptsModal(receipts, stats) {
+  // Stats.
+  if (els.receiptStats && stats) {
+    els.receiptStats.innerHTML = `
+      <div class="receipt-stat-grid">
+        <div class="receipt-stat"><span class="rs-val">${stats.total}</span><span class="rs-lbl">Total</span></div>
+        <div class="receipt-stat"><span class="rs-val" style="color:#4caf50">${stats.completed}</span><span class="rs-lbl">Completed</span></div>
+        <div class="receipt-stat"><span class="rs-val" style="color:#ff9800">${stats.cancelled}</span><span class="rs-lbl">Cancelled</span></div>
+        <div class="receipt-stat"><span class="rs-val" style="color:#76c9ff">${stats.dryRun}</span><span class="rs-lbl">Dry Runs</span></div>
+        <div class="receipt-stat"><span class="rs-val" style="color:#ff4d4d">${stats.blocked}</span><span class="rs-lbl">Blocked</span></div>
+      </div>
+    `;
+  }
+
+  // Receipts list.
+  if (!els.receiptsList) return;
+  if (!receipts.length) {
+    els.receiptsList.innerHTML = '<p style="font-size:11px;color:var(--text-muted)">No receipts yet. Start a timer to generate proof.</p>';
+    return;
+  }
+  els.receiptsList.innerHTML = receipts.map(r => {
+    const colorMap = { power_executed: '#4caf50', completed: '#4caf50', dry_run_completed: '#76c9ff', cancelled: '#ff9800', running: '#5b8cff', error: '#ff4d4d', blocked: '#ff4d4d' };
+    const c = colorMap[r.result] || 'var(--text-muted)';
+    const start = new Date(r.startedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const dur = Math.floor(r.durationSeconds / 60);
+    return `<div class="receipt-row" style="border-left:3px solid ${c};padding:6px 8px;margin-bottom:4px;border-radius:0 4px 4px 0;background:var(--bg-card)">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:11px;font-weight:600;color:var(--text-primary)">${start}</span>
+        <span style="font-size:10px;font-weight:700;color:${c};text-transform:uppercase">${escapeHtml(r.result?.replace(/_/g, ' ') || '')}</span>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${escapeHtml(r.action || '')}${r.dryRun ? ' (dry)' : ''}${r.forceShutdown ? ' /force' : ''} | ${dur}m | ${r.pauseCount || 0}p ${r.snoozeCount || 0}s</div>
+    </div>`;
+  }).join('');
+}

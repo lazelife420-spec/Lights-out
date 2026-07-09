@@ -27,6 +27,15 @@
       "preload.js",
       "index.html",
       "styles.css",
+      "renderer-utils.js",
+      "renderer-profiles.js",
+      "renderer-calendar.js",
+      "renderer-receipts.js",
+      "renderer-family-remote.js",
+      "renderer-ritual-focus.js",
+      "renderer-settings.js",
+      "renderer-lastlight-alarm.js",
+      "renderer-onboarding-updater.js",
       "renderer.js",
       "smartLights.js",
       "profiles.js",
@@ -100,7 +109,6 @@
     "electron": "^30.0.0",
     "electron-builder": "^24.0.0",
     "eslint": "^9.39.4",
-    "globals": "^17.7.0",
     "png-to-ico": "^3.0.1",
     "ws": "^8.21.0"
   }

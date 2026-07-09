@@ -36,8 +36,8 @@ async function tplinkBlock(routerIp, username, password, deviceMacs) {
   // TP-Link uses a session-based API.
   const base = `http://${routerIp}`;
   try {
-    // Login.
-    const loginRes = await httpPost(`${base}/cgi-bin/luci/admin/login`, {
+    // Login. (Response is not consumed today; the call establishes the session.)
+    await httpPost(`${base}/cgi-bin/luci/admin/login`, {
       username, password, operation: 'write'
     });
     // Set parental control rules for each MAC.
@@ -72,7 +72,8 @@ async function asusBlock(routerIp, username, password, deviceMacs) {
   const base = `http://${routerIp}`;
   try {
     // ASUS uses a token-based auth on their web UI.
-    const loginRes = await httpPost(`${base}/login.cgi`, {
+    // (Response is not consumed today; the call establishes the session.)
+    await httpPost(`${base}/login.cgi`, {
       login_authorization: Buffer.from(`${username}:${password}`).toString('base64')
     });
     for (const mac of deviceMacs) {
@@ -279,7 +280,7 @@ async function unblockInternet(config) {
 async function scanDevices() {
   try {
     const raw = await executePS(
-      `Get-NetNeighbor -State Reachable | Where-Object { $_.IPAddress -notmatch '^(127|0\.|169\.254|ff00)' } | Select-Object IPAddress, LinkLayerAddress, InterfaceAlias | ConvertTo-Json -Compress`
+      `Get-NetNeighbor -State Reachable | Where-Object { $_.IPAddress -notmatch '^(127|0.|169.254|ff00)' } | Select-Object IPAddress, LinkLayerAddress, InterfaceAlias | ConvertTo-Json -Compress`
     );
     if (!raw || raw === 'null') return [];
     const entries = JSON.parse(raw);
@@ -356,5 +357,9 @@ module.exports = {
   firewallCleanup,
   scanDevices,
   disableWiFiAdapter,
-  enableWiFiAdapter
+  enableWiFiAdapter,
+  // Exposed for unit testing the input sanitizers that guard PowerShell
+  // firewall-rule interpolation and SOAP/XML router request bodies.
+  validIps,
+  xmlEscape
 };

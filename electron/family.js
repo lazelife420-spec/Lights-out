@@ -22,6 +22,26 @@ const knownPeers = new Map(); // ip -> { ip, port, lastSeen }
 // Discovery: broadcast presence on LAN and listen for other instances.
 // ─────────────────────────────────────────────────────────────────────────────
 
+const MAX_LABEL_LEN = 64; // cap untrusted peer names from the LAN
+
+// Parse a discovery beacon received over UDP. Pure so it can be unit-tested
+// without opening a socket. `data` is the raw datagram, `senderIp` the source
+// address, `localIps` the set of our own addresses (to skip our own beacons).
+// Returns a normalized { ip, name } peer or null if the datagram should be
+// ignored. The name comes from an untrusted sender, so it is stripped of
+// control characters and length-capped before we keep it.
+function parseDiscoveryBeacon(data, senderIp, localIps = []) {
+  const str = Buffer.isBuffer(data) ? data.toString() : String(data || '');
+  if (!str.startsWith(FAMILY_MAGIC)) return null;
+  const parts = str.split('|');
+  if (parts.length < 2) return null;
+  if (!senderIp || localIps.includes(senderIp)) return null;
+
+  const rawLabel = parts[1] || '';
+  const label = rawLabel.replace(/[\x00-\x1f\x7f]/g, '').trim().slice(0, MAX_LABEL_LEN);
+  return { ip: senderIp, name: label || senderIp };
+}
+
 function startDiscovery(peerName) {
   if (discoverySocket) return;
   const name = peerName || require('os').hostname();
@@ -45,19 +65,10 @@ function startDiscovery(peerName) {
   });
 
   discoverySocket.on('message', (data, rinfo) => {
-    const str = data.toString();
-    if (!str.startsWith(FAMILY_MAGIC)) return;
-    const parts = str.split('|');
-    if (parts.length < 2) return;
-    const peerIp = rinfo.address;
-    const peerLabel = parts[1] || peerIp;
-
-    // Don't add ourselves (same IP).
-    const localIps = getLocalIPs();
-    if (localIps.includes(peerIp)) return;
-
-    knownPeers.set(peerIp, { ip: peerIp, name: peerLabel, lastSeen: Date.now() });
-    emitter.emit('peer-found', { ip: peerIp, name: peerLabel });
+    const peer = parseDiscoveryBeacon(data, rinfo.address, getLocalIPs());
+    if (!peer) return;
+    knownPeers.set(peer.ip, { ip: peer.ip, name: peer.name, lastSeen: Date.now() });
+    emitter.emit('peer-found', { ip: peer.ip, name: peer.name });
   });
 
   discoverySocket.on('error', () => { /* ignore */ });
@@ -287,12 +298,16 @@ module.exports = {
   stopCommandServer,
   getPeers,
   getLocalIPs,
-  filterAndRankLocalIPs,
   sendRemoteCommand,
   remoteStart,
   remotePause,
   remoteResume,
   remoteCancel,
   remoteSnooze,
-  onPeerFound: (callback) => emitter.on('peer-found', callback)
+  onPeerFound: (callback) => emitter.on('peer-found', callback),
+  // Exposed for unit testing the untrusted-beacon parser.
+  parseDiscoveryBeacon,
+  FAMILY_MAGIC,
+  MAX_LABEL_LEN,
+  filterAndRankLocalIPs
 };

@@ -1,26 +1,21 @@
-# Lights Out™ — A Proof Foundry Product
+# Lights Out PC™ — A Proof Foundry Product
 
 # Roadmap
 
 ## Current Truth
 
-Lights Out™'s latest tagged/published release is v10.3.0 — proof-first software
-forged for builders. `main` is version-bumped to v10.4.0 (Phone Companion Easy
-Connect, Profiles Upgrade, Streaks) but not yet built, tagged, or published —
-see [CHANGELOG.md](../CHANGELOG.md).
+Lights Out PC™ ("Bedtime Mode for Windows") is live at v10.4.0 — proof-first
+software forged for builders.
 
-Recent shipped fixes:
+Recent shipped milestones:
 
-- v10.0.8 fixed the in-app updater download target so it selects the real installer asset.
-- Remote control hardening landed on `main`: remote control is gated behind pairing token and safer host binding.
-- v10.0.9 restored the Streaks tab panel and fixed the cancel-timer guided-breathing error toast.
 - v10.0.10 fixed a packaged-app startup crash (remoteControl.js was missing from the electron-builder file manifest) and corrected settings saves for WiFi Guard, Content Blocker, and Accountability.
-- v10.1.0 shipped the northstar visual UI: cinematic Last Light overlay, Lobby shell with icon sidebar, Morning Proof hero with real stat pills, and settings persistence for all new UI state.
-- v10.2.0 shipped Override Tax + Autopilot settings UI and a tray snooze cost label.
-- v10.3.0 shipped Ritual Mode, Stats Dashboard, Smart Suggestions, and the Notification Center.
-- v10.4.0 (pending build/tag) adds Phone Companion Easy Connect (QR pairing,
-  token-gated remote actions, live connection status), profile search/filter/pin,
-  and the 30-day sleep-history grid with streak-celebration modal.
+- v10.1.0 shipped the northstar visual UI: cinematic Last Light "Exit the Grid" finale with UNPLUG confirm, Lobby "Tonight's Run" shell with icon sidebar, Morning Proof "Mission complete" hero with real stat pills, and settings persistence for all new UI state.
+- v10.2.0 added Override Tax (escalating snooze cost) and Autopilot Bedtime.
+- v10.3.0 added Ritual Mode and smarter wind-down intelligence, plus a hardened network layer (companion WebSocket frame codec, family LAN discovery parser, and wifiGuard input sanitizers all unit-tested).
+- v10.4.0 shipped Phone Companion Easy Connect (QR pairing, token-gated remote
+  actions, live connection status), profile search/filter/pin, and the 30-day
+  sleep-history grid with streak-celebration modal.
 
 Current strongest product promise:
 
@@ -62,7 +57,7 @@ Lights Out should feel like a nightly cockpit, not a generic timer.
 
 Roadmap:
 
-- Saved profiles for routines like Movie Night, Hard Stop, Witchcraft, Beastmode.
+- Tonight's-mode cards for routines like Weeknight, Movie, Bedtime, Hard Stop, and Custom.
 - ~~Better profile sorting and pinned favorites.~~ Shipped in v10.4.0 (search, category filters, pin-to-top).
 - Optional profile notes.
 - Last-used routine memory.
@@ -145,7 +140,7 @@ Proof gates:
 - Regenerate revokes old token.
 - Disable stops listener.
 
-## Suggested Release Sequence
+## Release Sequence
 
 This section is a forward plan, not a version-number guarantee — actual shipped
 versions have not matched the originally planned v10.2.0/v10.3.0 slots (those
@@ -154,10 +149,10 @@ source of truth, not the version numbers attached to them.
 
 ### Shipped
 
-- **v10.1.0 — Runtime Trust Polish**: northstar visual UI, Last Light overlay, Lobby shell, Morning Proof hero.
-- **v10.2.0 — Override Tax + Autopilot**: settings UI, tray snooze cost label.
-- **v10.3.0 — Ritual Mode + Intelligence**: guided ritual flow, Stats Dashboard, Smart Suggestions, Notification Center.
-- **v10.4.0 — Phone Companion + Profiles + Streaks** (pending build/tag): Phone Companion Easy Connect, profile search/filter/pin, 30-day sleep-history grid, streak-celebration modal, companion auto-firewall + system status.
+- **v10.1.0 — Runtime Trust Polish**: northstar visual UI, cinematic Last Light "Exit the Grid" finale with UNPLUG confirm, Lobby "Tonight's Run" shell, Morning Proof "Mission complete" hero.
+- **v10.2.0 — Override Tax + Autopilot**: escalating snooze cost, Autopilot Bedtime, settings UI, tray snooze cost label.
+- **v10.3.0 — Ritual Mode + Intelligence**: guided ritual flow, Stats Dashboard, Smart Suggestions, Notification Center, plus a hardened network layer (companion WebSocket frame codec, family LAN discovery parser, wifiGuard input sanitizers, all unit-tested).
+- **v10.4.0 — Phone Companion + Profiles + Streaks**: Phone Companion Easy Connect (QR pairing, token-gated remote actions, live connection status), profile search/filter/pin, 30-day sleep-history grid, streak-celebration modal, companion auto-firewall + system status.
 
 ### Next — Streaks & Profiles Follow-Through
 
@@ -165,11 +160,14 @@ Goal: finish what v10.4.0 started without fake wellness claims.
 
 Candidate work:
 
+- Tray/menu regression proof.
+- Better visible updater status.
+- Clearer completed/cancelled session state.
 - Weekly/monthly streak views.
 - Missed-night neutral state (partially covered by the 30-day grid — confirm before re-scoping).
 - Export streak summary.
 - Home callout for current streak.
-- Morning briefing streak summary.
+- Morning briefing streak summary (main process already sends the data).
 - Optional profile notes, last-used routine memory, better active-profile visual state.
 
 Ship only if:
@@ -178,7 +176,7 @@ Ship only if:
 - Empty state is honest.
 - Seeded-data screenshots pass.
 
-### v11.0.0 - Serious Night Mode
+### v11.0.0 - Serious Night Mode ⟶ next
 
 Goal: a full night shutdown cockpit for Windows power users.
 

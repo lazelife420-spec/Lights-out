@@ -32,7 +32,7 @@ async function getScreenTimeToday() {
   const results = {};
   const allProcesses = new Set();
 
-  for (const [catKey, cat] of Object.entries(CATEGORIES)) {
+  for (const cat of Object.values(CATEGORIES)) {
     for (const proc of cat.processes) {
       allProcesses.add(proc);
     }
