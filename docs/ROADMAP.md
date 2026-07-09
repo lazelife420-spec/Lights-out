@@ -40,6 +40,18 @@ Roadmap:
 - Keep tray behavior predictable.
 - Keep updater links and release assets verified.
 
+Audited 2026-07-09 with actual runtime proof (all forced dry-run -- never a
+real power action), not just reading the code: start/tick/pause/resume/
+snooze/cancel all produced correct state transitions with zero console
+errors; a dry-run timer left to complete naturally correctly skipped the
+real power action and recorded `lastOutcome: 'dryrun'`; and, most
+importantly, killing the whole process mid-timer and relaunching correctly
+showed the crash-recovery banner ("...timer was interrupted with ~Nm left"
+/ Resume / Dismiss) reading the persisted `activeTimer` snapshot. Tray
+hide-on-close and the Stats-panel updater status (`v10.4.0`, no errors)
+were also exercised. No bugs found -- this pillar's roadmap items are
+genuinely satisfied, not just assumed satisfied.
+
 Proof gates:
 
 - Start timer.
@@ -252,8 +264,15 @@ Proof-first software forged for builders.
 
 Good ideas, not immediate:
 
-- Achievements.
-- Weekly reports.
+- ~~Achievements.~~ Already fully shipped, this line was simply stale --
+  9 achievements (`streaks.getAchievementCatalog()`), unlocked/locked grid
+  with icons on the Streaks tab, wired end-to-end
+  (`get-achievements-catalog` IPC -> `getAchievementsCatalog` preload
+  bridge -> `renderStreaks()`).
+- Weekly reports. Partially covered now by the Trends section (shipped
+  2026-07-09, see the "Next" milestone) -- that's bar-chart aggregates, not
+  a narrative/exportable report, so leaving this parked as a distinct,
+  smaller-scope idea rather than removing it.
 - Family profiles.
 - Focus scoring.
 - Screen-time limits.
@@ -261,3 +280,10 @@ Good ideas, not immediate:
 - Content blocker schedules.
 
 Reason to park: these are feature-expansion lanes. Do not start them until the existing nightly workflow feels airtight.
+
+The "existing nightly workflow feels airtight" gate was affirmatively
+verified with runtime proof 2026-07-09 (see the Reliable Shutdown pillar
+above) -- it's no longer just an assumption. That doesn't auto-unlock this
+list: these are still described as "good ideas, not immediate," a genuine
+scope-expansion decision distinct from closing out already-declared roadmap
+items, and worth a deliberate call rather than defaulting into it.
