@@ -57,7 +57,7 @@ Lights Out should feel like a nightly cockpit, not a generic timer.
 
 Roadmap:
 
-- Tonight's-mode cards for routines like Weeknight, Movie, Bedtime, Hard Stop, and Custom.
+- ~~Tonight's-mode cards for routines like Weeknight, Movie, Bedtime, Hard Stop, and Custom.~~ Already shipped (undocumented until this pass): the Library tab's `.tonight-grid` has four one-tap preset cards (branded "WITCHCRAFT"/45min sleep, "MONEY"/30min cinema-night sleep, "HARD STOP"/15min force shutdown, "BEASTMODE"/2hr limit), plus the `ns-hero-card` "Tonight's Run" summary showing whichever mode is currently selected.
 - ~~Better profile sorting and pinned favorites.~~ Shipped in v10.4.0 (search, category filters, pin-to-top).
 - ~~Better visual state for active profile.~~ Shipped (`.profile-card.active` has dedicated styling, not just a bare class toggle).
 - ~~Optional profile notes.~~ Shipped: a 280-char note per profile, editable inline in the Profiles modal or set at save time, shown as a 📝 badge + hover tooltip on the Library card.
