@@ -1040,11 +1040,12 @@
           <div id="companion-connected-badge" class="companion-connected-badge" style="display:none"></div>
           <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Control this PC from your phone. Off by default and protected by a pairing code.</p>
           
-          <div class="mode-selector" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
-            <button type="button" class="btn-mode" data-mode="off" id="btn-mode-off">Off</button>
-            <button type="button" class="btn-mode" data-mode="local" id="btn-mode-local">This PC only</button>
-            <button type="button" class="btn-mode btn-mode-primary" data-mode="wifi" id="btn-mode-wifi">Connect Phone</button>
+          <div class="mode-selector" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+            <button type="button" class="btn-mode" data-mode="off" id="btn-mode-off" title="No listener running. Nothing is exposed on your network.">Off</button>
+            <button type="button" class="btn-mode" data-mode="local" id="btn-mode-local" title="Companion server runs, but only accepts connections from this PC -- not reachable from your phone or any other device. Useful for local testing, not for actual phone control.">This PC only</button>
+            <button type="button" class="btn-mode btn-mode-primary" data-mode="wifi" id="btn-mode-wifi" title="Companion server is reachable from other devices on your Wi-Fi network. Every command requires your pairing token.">Connect Phone</button>
           </div>
+          <p id="remote-mode-description" style="font-size:10px;color:var(--text-muted);margin:0 0 12px"></p>
 
           <div id="remote-control-config" style="display:none;margin-top:8px">
             <div id="remote-qr-wrap" style="display:none;text-align:center;margin:0 0 10px">

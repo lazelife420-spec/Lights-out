@@ -489,6 +489,17 @@ check('companion: mode buttons present in settings', () => {
   assert(htmlSrc.includes('Connect Phone'), 'Connect Phone button missing');
 });
 
+check('companion: mode buttons have explanatory tooltips, and a live description reflects the selected mode', () => {
+  // "This PC only" reads like it enables remote control from your phone --
+  // it actually means the opposite (loopback-only). Tooltips + a dynamic
+  // description line are the fix; regression-guard both.
+  assertMatch(htmlSrc, /id="btn-mode-local"[^>]*title="[^"]*not reachable from your phone/, 'This PC only button needs a tooltip clarifying it is loopback-only, not phone-reachable');
+  assertMatch(htmlSrc, /id="btn-mode-wifi"[^>]*title="[^"]*reachable from other devices/, 'Connect Phone button needs a tooltip clarifying LAN exposure');
+  assert(htmlSrc.includes('id="remote-mode-description"'), 'remote-mode-description element missing from HTML');
+  assertMatch(rendererSrc, /REMOTE_MODE_DESCRIPTIONS = \{[\s\S]*?off:[\s\S]*?local:[\s\S]*?wifi:/, 'REMOTE_MODE_DESCRIPTIONS map missing an off/local/wifi entry');
+  assertMatch(rendererSrc, /els\.remoteModeDescription\.textContent = REMOTE_MODE_DESCRIPTIONS\[mode\]/, 'renderRemoteControl must update the mode description text');
+});
+
 check('companion: settings panel loads remote control state on open', () => {
   assertMatch(rendererSrc, /function openSettingsPanel\(\) \{[\s\S]*?loadRemoteControlState\(\)/s, 'openSettingsPanel must load remote control state');
   assertMatch(rendererSrc, /async function loadRemoteControlState\(\) \{\s*if \(!els\.remoteControlConfig\) return;\s*try \{ renderRemoteControl\(await api\.getRemoteControl\?\.\(\)\); \} catch \{\}/, 'loadRemoteControlState should not bail on missing checkbox');

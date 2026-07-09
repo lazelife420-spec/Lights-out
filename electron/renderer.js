@@ -434,6 +434,7 @@ const els = {
   // Remote control
   chkRemoteControl: document.getElementById('chk-remote-control'),
   remoteControlConfig: document.getElementById('remote-control-config'),
+  remoteModeDescription: document.getElementById('remote-mode-description'),
   remoteUrl: document.getElementById('remote-url'),
   remoteToken: document.getElementById('remote-token'),
   remoteQr: document.getElementById('remote-qr'),

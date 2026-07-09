@@ -34,12 +34,26 @@
 // calendar auto-fetch bug in an earlier slice.
 const wifiSelectedDevices = { macs: [], ips: [] };
 
+// Plain-language explanation of what each mode actually exposes, shown
+// below the mode selector -- "This PC only" reads like it enables remote
+// control, but it means the opposite (loopback-only, unreachable from a
+// phone), which is exactly the kind of confusion clearer settings copy
+// needs to head off in a "safe by default" remote-control feature.
+const REMOTE_MODE_DESCRIPTIONS = {
+  off: 'No listener running. Nothing is exposed on your network.',
+  local: 'Loopback only -- the companion server runs but only accepts connections from this PC. Not reachable from your phone or any other device.',
+  wifi: 'Reachable from other devices on your Wi-Fi network. Every command requires your pairing token.'
+};
+
 function renderRemoteControl(rc) {
   if (!rc) return;
   const mode = rc.mode || 'off';
   document.querySelectorAll('.btn-mode').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.mode === mode);
   });
+  if (els.remoteModeDescription) {
+    els.remoteModeDescription.textContent = REMOTE_MODE_DESCRIPTIONS[mode] || '';
+  }
   if (els.companionStatusPill) {
     const statusClass = rc.failed ? 'status-failed' : rc.connected ? 'status-connected' : `status-${mode}`;
     els.companionStatusPill.className = `status-pill ${statusClass}`;
