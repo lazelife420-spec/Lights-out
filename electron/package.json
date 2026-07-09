@@ -86,8 +86,7 @@
           ]
         }
       ],
-      "icon": "assets/icon.ico",
-      "publisherName": "Lights Out"
+      "icon": "assets/icon.ico"
     },
     "portable": {
       "artifactName": "LightsOut.exe"
@@ -106,8 +105,8 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
-    "electron": "^30.0.0",
-    "electron-builder": "^24.0.0",
+    "electron": "^43.0.0",
+    "electron-builder": "^26.0.0",
     "eslint": "^9.39.4",
     "png-to-ico": "^3.0.1",
     "ws": "^8.21.0"

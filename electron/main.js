@@ -49,6 +49,24 @@ function writeStartupLog(message, extra) {
   }
 }
 
+// Without these, an uncaught exception or unhandled promise rejection anywhere
+// in the main process (a timer callback, a fire-and-forget network call, a
+// stray `await` outside an IPC handler's own try/catch) crashes the entire
+// app with no warning -- silently killing whatever shutdown countdown the
+// user had running. Node's default for an unhandled 'uncaughtException' is to
+// terminate the process; installing a handler suppresses that default and
+// keeps the app alive, trading "might run in a slightly inconsistent state"
+// for "definitely doesn't lose the user's active timer over an unrelated bug
+// in, say, the calendar-fetch code." Log-and-continue is deliberately chosen
+// over log-and-exit for that reason.
+process.on('uncaughtException', (err) => {
+  writeStartupLog('uncaughtException', { message: err && err.message, stack: err && err.stack });
+});
+process.on('unhandledRejection', (reason) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  writeStartupLog('unhandledRejection', { message: err.message, stack: err.stack });
+});
+
 function getPortableExtractionRoot() {
   const exePath = process.execPath;
   const exeDir = path.dirname(exePath);

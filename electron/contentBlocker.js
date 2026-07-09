@@ -57,14 +57,26 @@ function readHosts() {
   }
 }
 
+// Build the PowerShell command that writes `content` to the hosts file. Pure
+// (no process spawn) so the escaping can be unit tested. Content is passed as
+// base64 rather than interpolated into a quoted string: base64's alphabet
+// ([A-Za-z0-9+/=]) contains no quotes, backticks, or newlines, so this can
+// never be broken out of regardless of what the (already-sanitized) blocklist
+// or pre-existing hosts file content contains. This also sidesteps a real bug
+// the previous single-quote-escaping version had -- PowerShell does not
+// interpret `` `n `` as a newline inside a single-quoted string (only inside
+// double-quoted ones), so the old code silently wrote every hosts entry onto
+// one literal line, which Windows cannot parse as separate block rules.
+function buildWriteHostsCommand(content) {
+  const b64 = Buffer.from(content, 'utf8').toString('base64');
+  return `$bytes = [System.Convert]::FromBase64String('${b64}'); [System.IO.File]::WriteAllBytes('${HOSTS_PATH}', $bytes)`;
+}
+
 // Write the hosts file (requires admin, so we use PowerShell with elevation).
 async function writeHosts(content) {
   // Write via PowerShell which can handle admin file access.
-  const escaped = content.replace(/'/g, "''").replace(/\n/g, "`n");
   try {
-    await executePS(
-      `Set-Content -Path '${HOSTS_PATH}' -Value '${escaped}' -Encoding UTF8 -Force`
-    );
+    await executePS(buildWriteHostsCommand(content));
     // Flush DNS cache so changes take effect immediately.
     await executePS('ipconfig /flushdns');
     return true;
@@ -170,5 +182,7 @@ module.exports = {
   getActiveBlocklist,
   DEFAULT_BLOCKLIST,
   // Exposed for unit testing of the hosts-injection guard.
-  __sanitizeSites: sanitizeSites
+  __sanitizeSites: sanitizeSites,
+  // Exposed for unit testing the hosts-file write command builder.
+  __buildWriteHostsCommand: buildWriteHostsCommand
 };
