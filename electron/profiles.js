@@ -73,6 +73,11 @@ function normalizeProfile(raw) {
   const id = raw.id || generateId();
   const seconds = Math.max(60, Math.round(Number(raw.seconds) || 1800));
   const clock = raw.clock || '23:30';
+  // Optional free-text reminder of what/why this profile is for. Capped well
+  // under the hosts-file/PowerShell-injection-relevant lengths elsewhere in
+  // the app since this never reaches a shell command -- it is only ever
+  // rendered as text (escapeHtml'd) or a title="" tooltip in the renderer.
+  const notes = String(raw.notes || '').trim().substring(0, 280);
   // Auto-start is opt-in (default OFF) so selecting a profile never launches a
   // power action without the user pressing Start.
   const autoStart = raw.autoStart !== undefined ? Boolean(raw.autoStart) : false;
@@ -84,6 +89,7 @@ function normalizeProfile(raw) {
     mode,
     seconds,
     clock,
+    notes,
     scheduledAt: raw.scheduledAt || '',
     calendarSource: raw.calendarSource || '',
     calendarEventUid: raw.calendarEventUid || '',

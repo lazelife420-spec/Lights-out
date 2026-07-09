@@ -60,7 +60,7 @@ Roadmap:
 - Tonight's-mode cards for routines like Weeknight, Movie, Bedtime, Hard Stop, and Custom.
 - ~~Better profile sorting and pinned favorites.~~ Shipped in v10.4.0 (search, category filters, pin-to-top).
 - ~~Better visual state for active profile.~~ Shipped (`.profile-card.active` has dedicated styling, not just a bare class toggle).
-- Optional profile notes.
+- ~~Optional profile notes.~~ Shipped: a 280-char note per profile, editable inline in the Profiles modal or set at save time, shown as a 📝 badge + hover tooltip on the Library card.
 - Last-used routine memory.
 
 Proof gates:
@@ -172,9 +172,10 @@ of letting it drift again.
 
 Candidate work still genuinely open:
 
-- Optional profile notes.
 - Last-used routine memory (remember + surface the last-loaded profile distinctly from "currently active").
 - A true weekly/monthly aggregate streak view beyond the 30-day grid.
+
+~~Optional profile notes.~~ Shipped: see the Personal Wind-Down pillar above.
 
 Ship only if:
 

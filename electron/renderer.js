@@ -311,6 +311,7 @@ const els = {
   profilesModalClose: document.getElementById('profiles-modal-close'),
   btnCloseProfiles: document.getElementById('btn-close-profiles'),
   newProfileName: document.getElementById('new-profile-name'),
+  newProfileNotes: document.getElementById('new-profile-notes'),
   newProfileAutostart: document.getElementById('new-profile-autostart'),
   btnSaveProfile: document.getElementById('btn-save-profile'),
   scheduleHint: document.getElementById('schedule-hint'),

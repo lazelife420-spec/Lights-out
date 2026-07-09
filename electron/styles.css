@@ -1566,7 +1566,8 @@ body.phase-lastlight .cockpit {
 }
 
 .option-group select,
-.option-group input[type="number"] {
+.option-group input[type="number"],
+.option-group textarea {
   padding: 8px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
@@ -1575,8 +1576,15 @@ body.phase-lastlight .cockpit {
   outline: none;
 }
 
+.option-group textarea {
+  font-family: inherit;
+  font-size: 12px;
+  resize: vertical;
+}
+
 .option-group select:focus,
-.option-group input[type="number"]:focus {
+.option-group input[type="number"]:focus,
+.option-group textarea:focus {
   border-color: var(--accent-cyan);
 }
 
@@ -2456,6 +2464,34 @@ body.mini-mode .action-btn {
 .profile-item-hint {
   font-size: 11px;
   color: var(--text-muted);
+}
+
+.profile-item-notes-input {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 1px 4px;
+  width: 100%;
+  outline: none;
+  margin-top: 2px;
+}
+.profile-item-notes-input::placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+}
+.profile-item-notes-input:focus {
+  border-color: var(--accent-blue);
+  background: var(--bg-card);
+  font-style: normal;
+}
+
+.notes-badge {
+  font-size: 10px;
+  margin-left: 2px;
+  opacity: 0.8;
 }
 
 .profile-item-actions {
