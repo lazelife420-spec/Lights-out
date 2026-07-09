@@ -53,11 +53,15 @@ function renderProfiles() {
   els.profilesGrid.innerHTML = sorted.map((profile, index) => {
     const isActive = state.currentProfileId === profile.id;
     const hint = getProfileHint(profile);
+    // Notes ride along in the card's tooltip -- a quick hover reminder
+    // without taking up any of the card's compact layout.
+    const cardTitle = profile.notes ? `${profile.notes}` : `Ctrl+${index + 1} to quick-load`;
     return `
-      <div class="profile-card ${isActive ? 'active' : ''} ${profile.pinned ? 'pinned' : ''}" data-profile-id="${profile.id}" title="Ctrl+${index + 1} to quick-load">
+      <div class="profile-card ${isActive ? 'active' : ''} ${profile.pinned ? 'pinned' : ''}" data-profile-id="${profile.id}" title="${escapeHtml(cardTitle)}">
         <div class="profile-name">
           ${profile.pinned ? '<span class="pin-badge" style="color:var(--accent-amber); margin-right:4px;">📌</span>' : ''}
           ${escapeHtml(profile.name)}
+          ${profile.notes ? '<span class="notes-badge" aria-hidden="true">📝</span>' : ''}
         </div>
         <div class="profile-hint">${escapeHtml(hint)}</div>
       </div>
@@ -200,6 +204,7 @@ function renderProfilesList() {
         <div class="profile-item-info">
           <input type="text" class="profile-item-name-input" value="${escapeHtml(profile.name)}" data-profile-id="${profile.id}" maxlength="32" spellcheck="false">
           <div class="profile-item-hint">${escapeHtml(hint)}</div>
+          <input type="text" class="profile-item-notes-input" value="${escapeHtml(profile.notes || '')}" data-profile-id="${profile.id}" maxlength="280" spellcheck="false" placeholder="Add a note...">
         </div>
         <div class="profile-item-actions">
           <button class="profile-item-btn pin-btn" data-action="pin" title="${profile.pinned ? 'Unpin' : 'Pin'}">
@@ -224,6 +229,20 @@ function renderProfilesList() {
       await loadProfiles();
       renderProfiles();
       renderProfilesList();
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') input.blur();
+    });
+  });
+
+  // Notes handler (save on blur/enter, same pattern as rename).
+  els.profilesList.querySelectorAll('.profile-item-notes-input').forEach(input => {
+    input.addEventListener('change', async () => {
+      const profileId = input.dataset.profileId;
+      if (!profileId) return;
+      await api.updateProfile(profileId, { notes: input.value.trim() });
+      await loadProfiles();
+      renderProfiles();
     });
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') input.blur();
@@ -282,6 +301,7 @@ async function saveNewProfile() {
 
   const profileData = {
     name: name,
+    notes: els.newProfileNotes?.value?.trim() || '',
     action: state.action,
     mode: 'duration',
     seconds: inputSeconds(),
@@ -306,6 +326,7 @@ async function saveNewProfile() {
     if (result.success) {
       notify(`Profile "${result.profile.name}" ${result.action === 'created' ? 'created' : 'updated'}`, 'success');
       els.newProfileName.value = '';
+      if (els.newProfileNotes) els.newProfileNotes.value = '';
       await loadProfiles();
       renderProfilesList();
     } else {
