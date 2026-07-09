@@ -106,18 +106,8 @@ function setupCalendarHandlers() {
     saveCalendarConfig();
   });
 
-  // Day toggle buttons.
-  document.querySelectorAll('.day-toggle').forEach(btn => {
-    btn.addEventListener('click', () => {
-      btn.classList.toggle('active');
-      saveCalendarConfig();
-    });
-  });
-
-  // Built-in changes.
-  els.calBuiltinBedtime?.addEventListener('change', saveCalendarConfig);
-  els.calBuiltinAction?.addEventListener('change', saveCalendarConfig);
   els.calAutoStart?.addEventListener('change', saveCalendarConfig);
+  setupScheduleRuleHandlers();
 
   // Provider input changes.
   [els.calIcalUrl, els.calGoogleApikey, els.calGoogleCalid, els.calOutlookToken, els.calCalendlyToken].forEach(el => {
@@ -155,19 +145,14 @@ async function loadCalendarConfig() {
     const cal = await api.getCalendarSettings();
     if (!cal) return;
     if (els.selCalendarProvider) els.selCalendarProvider.value = cal.provider || 'builtin';
-    if (els.calBuiltinBedtime) els.calBuiltinBedtime.value = cal.builtin?.bedtime || '22:30';
-    if (els.calBuiltinAction) els.calBuiltinAction.value = cal.builtin?.action || 'shutdown';
     if (els.calAutoStart) els.calAutoStart.checked = cal.autoStartFromEvents || false;
     if (els.calIcalUrl) els.calIcalUrl.value = cal.ical?.url || '';
     if (els.calGoogleApikey) els.calGoogleApikey.value = cal.google?.apiKey || '';
     if (els.calGoogleCalid) els.calGoogleCalid.value = cal.google?.calendarId || '';
     if (els.calOutlookToken) els.calOutlookToken.value = cal.outlook?.accessToken || '';
     if (els.calCalendlyToken) els.calCalendlyToken.value = cal.calendly?.personalToken || '';
-    // Day toggles.
-    const days = cal.builtin?.days || ['sun','mon','tue','wed','thu','fri','sat'];
-    document.querySelectorAll('.day-toggle').forEach(btn => {
-      btn.classList.toggle('active', days.includes(btn.dataset.day));
-    });
+    scheduleRules = Array.isArray(cal.builtin?.rules) ? cal.builtin.rules : [];
+    renderScheduleRules();
     // Show the active provider config.
     els.selCalendarProvider?.dispatchEvent(new Event('change'));
   } catch (e) {
@@ -175,24 +160,150 @@ async function loadCalendarConfig() {
   }
 }
 
+// Saves everything EXCEPT builtin.rules, which is mutated + persisted directly
+// by persistScheduleRules() -- this function's config object omits that key so
+// the deep-merge in settings.js's updateSection() leaves the rule list alone
+// (see settings.js deepMerge: a key absent from the patch is never touched).
 async function saveCalendarConfig() {
-  const days = [...document.querySelectorAll('.day-toggle.active')].map(b => b.dataset.day);
   const config = {
     enabled: true,
     provider: els.selCalendarProvider?.value || 'builtin',
     autoStartFromEvents: els.calAutoStart?.checked || false,
-    builtin: {
-      enabled: true,
-      bedtime: els.calBuiltinBedtime?.value || '22:30',
-      days,
-      action: els.calBuiltinAction?.value || 'shutdown'
-    },
     ical: { url: els.calIcalUrl?.value || '' },
     google: { apiKey: els.calGoogleApikey?.value || '', calendarId: els.calGoogleCalid?.value || '' },
     outlook: { accessToken: els.calOutlookToken?.value || '' },
     calendly: { personalToken: els.calCalendlyToken?.value || '' }
   };
   await api.saveCalendarSettings(config);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Built-in schedule: multiple independent recurring rules (label, time, active
+// days, action). Each rule becomes a synthesized calendar event per matching
+// day via calendarProviders.getDefaultCalendarEvents on the main-process side.
+// ─────────────────────────────────────────────────────────────────────────────
+
+let scheduleRules = [];
+let editingRuleId = null; // null while the form is closed or adding; a rule id while editing
+
+const SCHEDULE_ACTION_LABELS = { shutdown: 'Shutdown', sleep: 'Sleep', hibernate: 'Hibernate' };
+const SCHEDULE_DAY_ORDER = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+const SCHEDULE_DAY_LABELS = { sun: 'Sun', mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat' };
+
+function formatRuleTime(time) {
+  const [h, m] = String(time || '00:00').split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const h12 = ((h + 11) % 12) + 1;
+  return `${h12}:${String(m).padStart(2, '0')} ${period}`;
+}
+
+function formatRuleDays(days) {
+  return SCHEDULE_DAY_ORDER.filter(d => (days || []).includes(d)).map(d => SCHEDULE_DAY_LABELS[d]).join('/');
+}
+
+function renderScheduleRules() {
+  const list = document.getElementById('schedule-rules-list');
+  if (!list) return;
+  if (!scheduleRules.length) {
+    list.innerHTML = '<div class="schedule-rules-empty">No scheduled rules yet. Add one to auto-trigger a timer at a specific time.</div>';
+    return;
+  }
+  list.innerHTML = scheduleRules.map(rule => `
+    <div class="schedule-rule-item ${rule.enabled === false ? 'disabled' : ''}" data-rule-id="${escapeHtml(rule.id)}">
+      <div class="schedule-rule-info">
+        <div class="schedule-rule-label">${escapeHtml(rule.label || 'Untitled')}</div>
+        <div class="schedule-rule-detail">${formatRuleTime(rule.time)} &middot; ${formatRuleDays(rule.days) || 'no days'} &middot; ${SCHEDULE_ACTION_LABELS[rule.action] || rule.action}</div>
+      </div>
+      <div class="schedule-rule-actions">
+        <input type="checkbox" class="rule-enabled-toggle" data-rule-id="${escapeHtml(rule.id)}" title="Enabled" ${rule.enabled === false ? '' : 'checked'}>
+        <button class="profile-item-btn rule-edit-btn" data-rule-id="${escapeHtml(rule.id)}" type="button">Edit</button>
+        <button class="profile-item-btn rule-delete-btn" data-rule-id="${escapeHtml(rule.id)}" type="button">Delete</button>
+      </div>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.rule-enabled-toggle').forEach(input => {
+    input.addEventListener('change', () => {
+      const rule = scheduleRules.find(r => r.id === input.dataset.ruleId);
+      if (rule) { rule.enabled = input.checked; persistScheduleRules(); }
+    });
+  });
+  list.querySelectorAll('.rule-edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => openRuleForm(btn.dataset.ruleId));
+  });
+  list.querySelectorAll('.rule-delete-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      scheduleRules = scheduleRules.filter(r => r.id !== btn.dataset.ruleId);
+      persistScheduleRules();
+    });
+  });
+}
+
+// Persists the in-memory rule list as a targeted patch (builtin.rules only),
+// re-renders the list, and refreshes the upcoming-events view so the Schedule
+// tab immediately reflects what will actually fire.
+function persistScheduleRules() {
+  renderScheduleRules();
+  api.saveCalendarSettings({ builtin: { rules: scheduleRules } });
+  fetchAndRenderEvents();
+}
+
+function openRuleForm(ruleId) {
+  const form = document.getElementById('schedule-rule-form');
+  if (!form) return;
+  editingRuleId = ruleId || null;
+  const rule = ruleId ? scheduleRules.find(r => r.id === ruleId) : null;
+  const labelEl = document.getElementById('rule-label');
+  const timeEl = document.getElementById('rule-time');
+  const durationEl = document.getElementById('rule-duration');
+  const actionEl = document.getElementById('rule-action');
+  if (labelEl) labelEl.value = rule?.label || '';
+  if (timeEl) timeEl.value = rule?.time || '22:30';
+  if (durationEl) durationEl.value = rule?.durationMinutes || 60;
+  if (actionEl) actionEl.value = rule?.action || 'shutdown';
+  const days = rule?.days || ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+  document.querySelectorAll('#rule-days .day-toggle').forEach(btn => {
+    btn.classList.toggle('active', days.includes(btn.dataset.day));
+  });
+  form.style.display = '';
+  labelEl?.focus();
+}
+
+function closeRuleForm() {
+  const form = document.getElementById('schedule-rule-form');
+  if (form) form.style.display = 'none';
+  editingRuleId = null;
+}
+
+function saveRuleFromForm() {
+  const label = document.getElementById('rule-label')?.value?.trim() || 'Untitled';
+  const time = document.getElementById('rule-time')?.value || '22:30';
+  const durationMinutes = Math.max(1, Math.min(1440, parseInt(document.getElementById('rule-duration')?.value, 10) || 60));
+  const action = document.getElementById('rule-action')?.value || 'shutdown';
+  const days = [...document.querySelectorAll('#rule-days .day-toggle.active')].map(b => b.dataset.day);
+  if (!days.length) { notify('Pick at least one active day', 'warning'); return; }
+
+  if (editingRuleId) {
+    const rule = scheduleRules.find(r => r.id === editingRuleId);
+    if (rule) Object.assign(rule, { label, time, durationMinutes, action, days });
+  } else {
+    scheduleRules.push({
+      id: `rule-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+      label, time, durationMinutes, action, days, enabled: true
+    });
+  }
+  closeRuleForm();
+  persistScheduleRules();
+  notify(`Schedule rule "${label}" saved`, 'success');
+}
+
+function setupScheduleRuleHandlers() {
+  document.getElementById('btn-add-schedule-rule')?.addEventListener('click', () => openRuleForm(null));
+  document.getElementById('btn-cancel-rule')?.addEventListener('click', closeRuleForm);
+  document.getElementById('btn-save-rule')?.addEventListener('click', saveRuleFromForm);
+  document.querySelectorAll('#rule-days .day-toggle').forEach(btn => {
+    btn.addEventListener('click', () => btn.classList.toggle('active'));
+  });
 }
 
 async function fetchAndRenderEvents() {

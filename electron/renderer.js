@@ -603,8 +603,6 @@ const els = {
   calCfgGoogle: document.getElementById('cal-cfg-google'),
   calCfgOutlook: document.getElementById('cal-cfg-outlook'),
   calCfgCalendly: document.getElementById('cal-cfg-calendly'),
-  calBuiltinBedtime: document.getElementById('cal-builtin-bedtime'),
-  calBuiltinAction: document.getElementById('cal-builtin-action'),
   calAutoStart: document.getElementById('cal-auto-start'),
   calIcalUrl: document.getElementById('cal-ical-url'),
   calGoogleApikey: document.getElementById('cal-google-apikey'),

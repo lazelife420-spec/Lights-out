@@ -1027,7 +1027,13 @@ async function checkCalendarAutoStart() {
 
     const now = new Date();
     for (const event of events) {
-      if (!isBedtimeEvent(event)) continue; // skip non-bedtime events
+      // Events from the built-in schedule (source: 'builtin') are rules the
+      // user explicitly configured in the Schedule tab -- e.g. a "Movie
+      // Night" rule whose label has no bedtime keyword in it -- so they skip
+      // the keyword filter. That filter exists only to keep auto-start from
+      // firing on random, unrelated entries pulled in from an *imported*
+      // external calendar (Google/Outlook/iCal), where intent is ambiguous.
+      if (event.source !== 'builtin' && !isBedtimeEvent(event)) continue;
       const start = new Date(event.start);
       const end = event.end ? new Date(event.end) : new Date(start.getTime() + 60 * 60 * 1000);
       const diffMin = (start - now) / 60000;

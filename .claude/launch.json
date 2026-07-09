@@ -4,8 +4,8 @@
     {
       "name": "electron-static-preview",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "48731", "--bind", "127.0.0.1", "--directory", "electron"],
-      "port": 48731
+      "runtimeArgs": ["-m", "http.server", "49281", "--bind", "127.0.0.1", "--directory", "electron"],
+      "port": 49281
     }
   ]
 }

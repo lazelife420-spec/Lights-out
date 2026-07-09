@@ -30,37 +30,66 @@ function getProvider(id) {
 // Built-in default calendar (recurring bedtime schedule)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Normalize a builtin-calendar config into an array of schedule rules.
+// Supports the legacy single-schedule shape ({ bedtime, days, action }) that
+// every settings.json persisted before multi-rule scheduling shipped, so
+// upgrading users don't silently lose their configured bedtime -- if `rules`
+// isn't present at all, the legacy fields (or their original hardcoded
+// defaults) become a single implicit rule. An explicit `rules: []` (a user
+// who deleted every rule on purpose) is left empty, not backfilled.
+function normalizeScheduleRules(schedule) {
+  if (Array.isArray(schedule?.rules)) return schedule.rules;
+  return [{
+    id: 'legacy',
+    label: 'Bedtime',
+    time: schedule?.bedtime || '22:30',
+    days: schedule?.days || ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'],
+    action: schedule?.action || 'shutdown',
+    durationMinutes: 60,
+    enabled: true
+  }];
+}
+
+const SCHEDULE_DAY_MAP = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+
 function getDefaultCalendarEvents(schedule, from, withinDays) {
-  // schedule: { bedtime: '22:30', days: ['mon','tue','wed','thu','fri','sat','sun'], action: 'shutdown' }
-  const days = schedule?.days || ['mon','tue','wed','thu','fri','sat','sun'];
-  const bedtime = schedule?.bedtime || '22:30';
-  const action = schedule?.action || 'shutdown';
-  const [h, m] = bedtime.split(':').map(Number);
-  const dayMap = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
-  const targetDays = days.map(d => dayMap[d.toLowerCase()]).filter(n => n !== undefined);
+  const rules = normalizeScheduleRules(schedule).filter(r => r && r.enabled !== false);
 
   const events = [];
-  const start = new Date(from);
-  start.setHours(0, 0, 0, 0);
-  const cutoff = new Date(start.getTime() + withinDays * 86400000);
+  const windowStart = new Date(from);
+  windowStart.setHours(0, 0, 0, 0);
+  const cutoff = new Date(windowStart.getTime() + withinDays * 86400000);
 
-  for (let d = new Date(start); d <= cutoff; d.setDate(d.getDate() + 1)) {
-    if (targetDays.includes(d.getDay())) {
+  for (const rule of rules) {
+    const targetDays = (Array.isArray(rule.days) ? rule.days : [])
+      .map(d => SCHEDULE_DAY_MAP[String(d).toLowerCase()])
+      .filter(n => n !== undefined);
+    if (!targetDays.length) continue;
+
+    const [h, m] = String(rule.time || '22:30').split(':').map(Number);
+    const durationMs = Math.max(1, Number(rule.durationMinutes) || 60) * 60000;
+    const label = rule.label || 'Bedtime';
+    const action = rule.action || 'shutdown';
+    const ruleId = rule.id || 'rule';
+
+    for (let d = new Date(windowStart); d <= cutoff; d.setDate(d.getDate() + 1)) {
+      if (!targetDays.includes(d.getDay())) continue;
       const evtStart = new Date(d);
       evtStart.setHours(h, m, 0, 0);
-      if (evtStart > from) {
-        events.push({
-          uid: `lo-default-${d.toISOString().slice(0, 10)}`,
-          summary: 'Bedtime',
-          start: evtStart,
-          end: new Date(evtStart.getTime() + 3600000),
-          location: '',
-          source: 'builtin',
-          action
-        });
-      }
+      if (evtStart <= from) continue;
+      events.push({
+        uid: `lo-default-${ruleId}-${d.toISOString().slice(0, 10)}`,
+        summary: label,
+        start: evtStart,
+        end: new Date(evtStart.getTime() + durationMs),
+        location: '',
+        source: 'builtin',
+        action
+      });
     }
   }
+
+  events.sort((a, b) => a.start - b.start);
   return events;
 }
 
