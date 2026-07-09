@@ -725,6 +725,43 @@ check('override-tax: preload exposes assessSnoozeCost', () => {
   assertMatch(preloadSrc, /assessSnoozeCost:/, 'preload assessSnoozeCost bridge missing');
   assertMatch(preloadSrc, /getOverrideTaxStats:/, 'preload getOverrideTaxStats bridge missing');
 });
+
+check('fullscreen-clock: IPC handler, window sync, preload, HTML, and renderer wiring', () => {
+  assertMatch(mainSrc, /ipcMain\.handle\('set-fullscreen-clock', \(event, flag\) => \{[\s\S]*?mainWindow\.miniMode\) return \{ fullScreen: false \};[\s\S]*?mainWindow\.setFullScreen\(!!flag\);/, 'set-fullscreen-clock IPC handler missing or not disabled in mini mode');
+  assertMatch(mainSrc, /mainWindow\.on\('enter-full-screen', \(\) => \{[\s\S]*?send\('fullscreen-changed', true\)/, 'enter-full-screen -> fullscreen-changed(true) missing');
+  assertMatch(mainSrc, /mainWindow\.on\('leave-full-screen', \(\) => \{[\s\S]*?send\('fullscreen-changed', false\)/, 'leave-full-screen -> fullscreen-changed(false) missing, OS-level exits would desync the renderer');
+  assertMatch(preloadSrc, /setFullScreenClock:\s*\(flag\)\s*=>\s*ipcRenderer\.invoke\('set-fullscreen-clock', flag\)/, 'preload setFullScreenClock bridge missing');
+  assertMatch(preloadSrc, /onFullScreenChanged:\s*\(cb\)\s*=>\s*ipcRenderer\.on\('fullscreen-changed'/, 'preload onFullScreenChanged bridge missing');
+  assert(htmlSrc.includes('id="btn-fullscreen-clock"'), 'btn-fullscreen-clock missing from HTML');
+  assert(htmlSrc.includes('id="btn-fullscreen-clock-exit"'), 'btn-fullscreen-clock-exit missing from HTML');
+  assertMatch(rendererSrc, /fullscreenClock: false,/, 'state.fullscreenClock missing');
+  assertMatch(rendererSrc, /if \(state\.fullscreenClock\) \{\s*exitFullscreenClock\(\);/, 'Escape should exit fullscreen clock mode before any other action');
+  assertMatch(rendererSrc, /els\.body\.classList\.toggle\('fullscreen-clock-mode', state\.fullscreenClock\)/, 'applyFullscreenClockState should drive the body class from main-process state, not a local guess');
+
+  // Regression coverage for three bugs a manual runtime pass caught (the
+  // whole point of this feature's "Ship only if: Manual runtime proof
+  // exists" gate) that static wiring checks alone would have missed:
+
+  // 1. .fullscreen-clock-btn defaults to display:none in CSS, so toggling
+  //    the inline style to '' falls back to that CSS default (still
+  //    hidden) instead of showing the button -- must set an explicit value.
+  assertMatch(rendererSrc, /btnFullscreenClock\.style\.display = \(idleClockVisible && !state\.fullscreenClock\) \? 'flex' : 'none'/, "fullscreen button must toggle to an explicit 'flex', not '' (falls back to the CSS class's display:none), and must hide itself once already fullscreen");
+
+  // 2. The exit button must NOT be a descendant of the transformed
+  //    .timer-section: a transformed ancestor turns a descendant's
+  //    position:fixed into "fixed relative to that ancestor," so the
+  //    2.8x scale would blow up its size and reposition it off in a corner
+  //    of the scaled ring instead of the actual screen corner.
+  const exitBtnIdx = htmlSrc.indexOf('id="btn-fullscreen-clock-exit"');
+  const timerSectionIdx = htmlSrc.indexOf('<section class="timer-section">');
+  assert(exitBtnIdx >= 0 && timerSectionIdx >= 0 && exitBtnIdx < timerSectionIdx, 'btn-fullscreen-clock-exit must be defined before/outside .timer-section, not nested inside the transformed ring section');
+
+  // 3. Entering fullscreen must force the Library tab active first -- the
+  //    fullscreen CSS only hides content within #ns-panel-lib, so a stale
+  //    nsActiveTab left on Schedule/Stats from a prior session would leak
+  //    that panel's content into the fullscreen view instead of the clock.
+  assertMatch(rendererSrc, /function enterFullscreenClock\(\) \{\s*[\s\S]*?handleSidebarNavigation\('lib', \{ persist: false \}\);/, 'enterFullscreenClock must force the lib panel active before entering fullscreen');
+});
 check('override-tax: snooze-tax-modal in HTML', () => {
   assert(htmlSrc.includes('id="snooze-tax-modal"'), 'snooze-tax-modal missing from HTML');
   assert(htmlSrc.includes('id="btn-snooze-tax-confirm"'), 'snooze-tax-confirm button missing');

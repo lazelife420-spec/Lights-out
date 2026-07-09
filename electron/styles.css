@@ -4948,6 +4948,86 @@ body.mini-mode .ns-proof-section { display: none !important; }
   white-space: nowrap;
 }
 
+/* Full-screen clock mode: reuses the existing window (setFullScreen via
+   main), hides everything except the ring/clock, and scales it up to read
+   from across a room. Entered/exited via #btn-fullscreen-clock /
+   #btn-fullscreen-clock-exit / Esc (wired in renderer.js). */
+.fullscreen-clock-btn {
+  position: absolute;
+  right: 8px;
+  bottom: 4px;
+  width: 26px;
+  height: 26px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.fullscreen-clock-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+}
+.fullscreen-clock-exit {
+  display: none;
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-soft);
+  border-radius: 50%;
+  color: var(--text-muted);
+  font-size: 15px;
+  cursor: pointer;
+  z-index: 2000;
+  opacity: 0.35;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.fullscreen-clock-exit:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+}
+
+body.fullscreen-clock-mode .ns-sidebar,
+body.fullscreen-clock-mode .chrome-header,
+body.fullscreen-clock-mode .app-footer,
+body.fullscreen-clock-mode #ns-panel-lib > *:not(.timer-section),
+body.fullscreen-clock-mode #action-bar-running,
+body.fullscreen-clock-mode #setup-controls {
+  display: none !important;
+}
+body.fullscreen-clock-mode .cockpit {
+  max-width: 100%;
+}
+body.fullscreen-clock-mode .dashboard {
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+body.fullscreen-clock-mode #ns-panel-lib {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+body.fullscreen-clock-mode .timer-section {
+  transform: scale(2.8);
+}
+body.fullscreen-clock-mode .fullscreen-clock-exit {
+  display: flex;
+}
+
 /* Streak Celebration Modal and Animations */
 .streak-celebration-content {
   background: radial-gradient(circle at 50% 0%, rgba(91, 140, 255, 0.12) 0%, rgba(91, 140, 255, 0) 75%), var(--bg-card) !important;

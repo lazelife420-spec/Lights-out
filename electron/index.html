@@ -95,6 +95,13 @@
   <div class="cockpit">
     <canvas class="ambient-canvas" id="ambient-canvas"></canvas>
 
+    <!-- Lives directly under .cockpit (not .timer-section) so its
+         position:fixed isn't captured by the fullscreen-clock-mode
+         transform:scale() on .timer-section -- a transformed ancestor turns
+         position:fixed into "fixed relative to that ancestor" instead of
+         the viewport, which would scale and mislocate the button. -->
+    <button class="fullscreen-clock-exit" id="btn-fullscreen-clock-exit" title="Exit full screen (Esc)" aria-label="Exit full screen">&#x2715;</button>
+
     <!-- Northstar left sidebar (icon rail) -->
     <aside class="ns-sidebar" aria-label="Navigation">
       <div class="ns-sidebar-logo">
@@ -307,8 +314,9 @@
             <div class="time-label" id="timer-label">until shutdown</div>
             <div class="time-sub" id="timer-sub"></div>
           </div>
+          <button class="fullscreen-clock-btn" id="btn-fullscreen-clock" title="Full screen clock" aria-label="Full screen clock" style="display:none">&#x26F6;</button>
         </div>
-        
+
         <!-- Quick Action Bar (shown when timer is running) -->
         <div class="action-bar" id="action-bar-running" style="display:none">
           <button class="action-btn secondary" id="btn-pause">

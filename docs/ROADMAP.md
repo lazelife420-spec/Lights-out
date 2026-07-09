@@ -192,13 +192,42 @@ Ship only if:
 
 Goal: a full night shutdown cockpit for Windows power users.
 
-Candidate work:
+Candidate work, surveyed 2026-07-09 against actual code/tests before touching
+anything (most of this list turned out to already be satisfied, same lesson
+as the "Next" milestone above -- keep re-checking before assuming a roadmap
+line is still open):
 
-- Full-screen clock mode polish.
-- Ambient visuals.
-- Smart light integration only if runtime-proven.
-- Calendar-based wind-down only if parser tests are strong.
-- Remote companion mature enough for real LAN use.
+- ~~Full-screen clock mode polish.~~ Shipped 2026-07-09: this genuinely did not
+  exist (not "polish" of anything -- net-new). Reuses the existing main window
+  (`mainWindow.setFullScreen()`, no second `BrowserWindow`, no multi-monitor
+  picker): the CSS hides everything except the ring/analog clock and scales
+  it up; exit via Esc or a corner button. Two real bugs only surfaced by
+  actually running it (not by the wiring checks alone): the enter button's
+  CSS class defaulted to `display:none`, so toggling the inline style to `''`
+  silently fell back to hidden instead of showing it; and the exit button
+  lived inside the transformed `.timer-section`, which turns a descendant's
+  `position:fixed` into "fixed relative to that transformed ancestor" --
+  the button was rendering scaled-up and mislocated instead of a normal
+  36px icon in the screen corner. Both fixed; see `git log` for detail.
+- Ambient visuals: already shipped pre-existing -- `ambientVisuals.js` is
+  wired to a live Settings dropdown (`customization.ambientVisual`). No gap
+  found.
+- Calendar-based wind-down, "only if parser tests are strong": already
+  satisfied -- 26 tests across `calendar-ics.test.js` + `calendarProviders.test.js`.
+- Remote companion, "mature enough for real LAN use": already satisfied --
+  reviewed and hardened in the Electron-hardening pass (Electron/electron-builder
+  bump, LAN-facing surface audit: companion WebSocket server, family UDP
+  discovery, wifiGuard) and separately in an earlier companion-remote
+  security review. No further gaps found either time. The LAN phone PWA's
+  plaintext-over-LAN / `0.0.0.0` bind / no-TLS posture is accepted-by-design
+  for a same-network pairing flow, not an oversight.
+- Smart light integration, "only if runtime-proven": **not shippable by an
+  agent with no physical smart light to test against.** Code exists
+  (`smartLights.js`: Hue + generic HTTP webhook) but has zero automated test
+  coverage, and "runtime-proven" specifically means proof against real
+  hardware -- claiming that without one would be exactly the kind of fake
+  claim this app's own ethos forbids. Left alone; flagging honestly instead
+  of faking it or quietly skipping it.
 
 Ship only if:
 

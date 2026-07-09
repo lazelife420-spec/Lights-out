@@ -53,6 +53,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleMiniMode: () => ipcRenderer.send('toggle-mini-mode'),
   setWindowOpacity: (value) => ipcRenderer.send('set-window-opacity', value),
   fitWindowHeight: (height) => ipcRenderer.send('fit-window-height', height),
+  setFullScreenClock: (flag) => ipcRenderer.invoke('set-fullscreen-clock', flag),
+  onFullScreenChanged: (cb) => ipcRenderer.on('fullscreen-changed', (e, isFullScreen) => cb(isFullScreen)),
   
   // Notifications & sounds
   showNotification: (title, body) => ipcRenderer.send('show-notification', title, body),

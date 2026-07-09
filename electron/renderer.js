@@ -126,6 +126,8 @@ const fallbackApi = (() => {
     onDimPhaseStarted: () => {},
     onDimPhaseEnded: () => {},
     onOpenSettings: () => {},
+    setFullScreenClock: async () => ({ fullScreen: false }),
+    onFullScreenChanged: () => {},
     getStreaks: async () => ({ streak: 0, bestStreak: 0, totalNights: 0, achievements: [], weekAvg: '--:--', weekOnTime: 0, weekDays: [] }),
     getAchievementsCatalog: async () => [],
     getWeeklyReport: async () => null,
@@ -320,6 +322,8 @@ const els = {
   // Clock face elements
   czClockFace: document.getElementById('cz-clockface'),
   analogClock: document.getElementById('analog-clock'),
+  btnFullscreenClock: document.getElementById('btn-fullscreen-clock'),
+  btnFullscreenClockExit: document.getElementById('btn-fullscreen-clock-exit'),
   analogTicks: document.getElementById('analog-ticks'),
   analogNumerals: document.getElementById('analog-numerals'),
   analogArabic: document.getElementById('analog-arabic'),
@@ -676,6 +680,8 @@ const state = {
   phase: 'idle',
   // Clock Mode: show current time when idle
   clockMode: true,
+  // Full screen clock mode (reuses the main window, no separate BrowserWindow)
+  fullscreenClock: false,
   // Clock face style when idle: 'digital' | 'analog' | 'hybrid'. Hybrid is the default.
   clockFace: 'hybrid',
   // Analog/hybrid clock customization.
@@ -1250,6 +1256,10 @@ function render() {
   els.body.classList.toggle('is-paused', state.paused);
   els.body.classList.toggle('mini-mode', state.miniMode);
   els.timerDisplay?.classList.toggle('clock-idle', idleClockVisible);
+  // Full screen only makes sense over the idle clock face -- once a timer's
+  // running the ring switches to a countdown, and setup-controls/action-bar
+  // (hidden in fullscreen-clock-mode) are what pause/snooze/cancel live in.
+  if (els.btnFullscreenClock) els.btnFullscreenClock.style.display = (idleClockVisible && !state.fullscreenClock) ? 'flex' : 'none';
 
   // Clock Mode: show current time when idle instead of countdown input.
   if (idleClockVisible) {
@@ -1944,6 +1954,27 @@ function toggleMiniMode() {
   notify(state.miniMode ? 'Mini mode' : 'Full view', 'info');
 }
 
+// Full screen clock mode: reuses the existing window (main.js setFullScreen),
+// no separate BrowserWindow. state.fullscreenClock is only ever set from
+// applyFullscreenClockState() -- the main process's isFullScreen() is the
+// single source of truth, reached either by these calls or by an OS-level
+// exit (Alt+Tab, taskbar) that never goes through our IPC.
+function enterFullscreenClock() {
+  // The fullscreen CSS only hides content within #ns-panel-lib; force that
+  // panel active first so a stale nsActiveTab (e.g. left on Schedule/Stats
+  // from a prior session) can't leak its content into the fullscreen view.
+  handleSidebarNavigation('lib', { persist: false });
+  api.setFullScreenClock?.(true);
+}
+function exitFullscreenClock() {
+  api.setFullScreenClock?.(false);
+}
+function applyFullscreenClockState(isFullScreen) {
+  state.fullscreenClock = !!isFullScreen;
+  els.body.classList.toggle('fullscreen-clock-mode', state.fullscreenClock);
+  render();
+}
+
 function selectClockTarget(timeValue) {
   const seconds = secondsUntilClockValue(timeValue);
   state.unit = 'min';
@@ -1993,6 +2024,9 @@ function wireEvents() {
   els.btnMinimize.addEventListener('click', () => api.minimizeWindow());
   els.btnClose.addEventListener('click', () => api.closeWindow());
   els.btnMini?.addEventListener('click', toggleMiniMode);
+  els.btnFullscreenClock?.addEventListener('click', enterFullscreenClock);
+  els.btnFullscreenClockExit?.addEventListener('click', exitFullscreenClock);
+  api.onFullScreenChanged?.(applyFullscreenClockState);
   els.btnWidget?.addEventListener('click', () => {
     api.toggleWidget?.();
     notify('Desktop widget toggled', 'info');
@@ -2843,7 +2877,9 @@ if (els.btnClearReceipts) {
 
     if (event.key === 'Escape') {
       // Close the topmost active modal/drawer.
-      if (els.optionsModal.classList.contains('active')) {
+      if (state.fullscreenClock) {
+        exitFullscreenClock();
+      } else if (els.optionsModal.classList.contains('active')) {
         els.optionsModal.classList.remove('active');
       } else if (els.profilesModal?.classList.contains('active')) {
         els.profilesModal.classList.remove('active');

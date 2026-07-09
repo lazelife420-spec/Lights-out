@@ -307,6 +307,16 @@ function createWindow() {
     refreshTrayMenu();
   });
 
+  // Keep the renderer's fullscreen-clock UI state in sync however fullscreen
+  // was exited -- our own Esc/exit-button handler, or an OS-level shortcut
+  // (e.g. the taskbar, Alt+Tab away and back) that never went through IPC.
+  mainWindow.on('enter-full-screen', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('fullscreen-changed', true);
+  });
+  mainWindow.on('leave-full-screen', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('fullscreen-changed', false);
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
     if (app.isQuitting) clearTimerInterval();
@@ -2093,6 +2103,16 @@ ipcMain.on('fit-window-height', (event, contentHeight) => {
   const maxH = Math.max(600, work.height - 48);
   const target = Math.max(600, Math.min(desired, maxH));
   if (Math.abs(curH - target) > 2) mainWindow.setContentSize(w, target);
+});
+
+// Full-screen clock mode: reuses the existing main window (no new
+// BrowserWindow, no multi-monitor picker) -- the renderer hides all other
+// chrome and enlarges the analog clock via CSS. Disabled in mini mode,
+// where the window is deliberately small and always-on-top instead.
+ipcMain.handle('set-fullscreen-clock', (event, flag) => {
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.miniMode) return { fullScreen: false };
+  mainWindow.setFullScreen(!!flag);
+  return { fullScreen: mainWindow.isFullScreen() };
 });
 
 function setupJumpList() {
