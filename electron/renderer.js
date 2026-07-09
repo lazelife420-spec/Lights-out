@@ -88,7 +88,6 @@ const fallbackApi = (() => {
       emit('snoozed', { addedSeconds: addSeconds });
       return { success: true };
     },
-    executeAction: async () => ({ success: true, dryRun: true }),
     getSystemInfo: async () => ({ battery: 'N/A', powerPlan: 'Preview' }),
     getAppSettings: async () => {
       let stored = {};
@@ -131,11 +130,13 @@ const fallbackApi = (() => {
     getAchievementsCatalog: async () => [],
     getWeeklyReport: async () => null,
     getSleepScore: async () => ({ score: null, label: 'Preview', breakdown: {} }),
+    getStreaksHistory: async () => [],
     getCompanionStatus: async () => ({ running: false, port: 0, clients: 0, url: '' }),
-    getRemoteControl: async () => ({ enabled: false, token: '', port: 0, lanIp: '', url: '' }),
-    setRemoteControlEnabled: async () => ({ enabled: false, token: '', url: '' }),
-    regenerateRemoteToken: async () => ({ enabled: false, token: '', url: '' }),
+    getRemoteControl: async () => ({ enabled: false, mode: 'off', token: '', port: 0, lanIp: '', url: '', pcName: 'Preview PC', clients: 0, connected: false, failed: false, statusLabel: 'Off' }),
+    setRemoteControlMode: async () => ({ enabled: false, mode: 'off', token: '', url: '', statusLabel: 'Off' }),
+    regenerateRemoteToken: async () => ({ enabled: false, mode: 'off', token: '', url: '', statusLabel: 'Off' }),
     generateQr: async () => '',
+    onRemoteControlStatus: () => {},
     getFamilyPeers: async () => [],
     familyRemoteStart: async () => ({ success: true }),
     familyRemotePause: async () => ({ success: true }),
@@ -210,6 +211,7 @@ const fallbackApi = (() => {
     checkForUpdate: async () => ({ available: false }),
     getUpdateStatus: async () => ({ available: false }),
     onUpdateAvailable: () => {},
+    getAppVersion: async () => null,
     exportAllData: async () => ({ success: false, error: 'Preview mode' }),
     importAllData: async () => ({ success: false, error: 'Preview mode' }),
     getCalendarProviders: async () => [],
@@ -398,7 +400,7 @@ const els = {
   streakTotal: document.getElementById('streak-total'),
   streakWeekAvg: document.getElementById('streak-weekavg'),
   streakOnTime: document.getElementById('streak-ontime'),
-  streakWeekBar: document.getElementById('streak-week-bar'),
+  sleepHistoryGrid: document.getElementById('sleep-history-grid'),
   streakCallout: document.getElementById('streak-callout'),
   streakCalloutCount: document.getElementById('streak-callout-count'),
   streakCalloutBest: document.getElementById('streak-callout-best'),
@@ -419,6 +421,7 @@ const els = {
   btnCancelCustomSeq: document.getElementById('btn-cancel-custom-seq'),
   // Widget
   btnWidget: document.getElementById('btn-widget'),
+  btnCompanion: document.getElementById('btn-companion'),
   // Remote control
   chkRemoteControl: document.getElementById('chk-remote-control'),
   remoteControlConfig: document.getElementById('remote-control-config'),
@@ -427,6 +430,11 @@ const els = {
   remoteQr: document.getElementById('remote-qr'),
   remoteQrWrap: document.getElementById('remote-qr-wrap'),
   btnRegenToken: document.getElementById('btn-regen-token'),
+  btnTurnOffCompanion: document.getElementById('btn-turn-off-companion'),
+  btnCopyUrl: document.getElementById('btn-copy-url'),
+  companionStatusPill: document.getElementById('companion-status-pill'),
+  companionConnectedBadge: document.getElementById('companion-connected-badge'),
+  remoteShortCode: document.getElementById('remote-short-code'),
 
   // Family mode
   btnFamilyScan: document.getElementById('btn-family-scan'),
@@ -540,15 +548,32 @@ const els = {
   proofIcon: document.getElementById('proof-icon'),
   proofBadge: document.getElementById('proof-badge'),
   proofBody: document.getElementById('proof-body'),
+  btnWarningLedger: document.getElementById('btn-warning-ledger'),
   btnProofDetails: document.getElementById('btn-proof-details'),
   btnProofCopy: document.getElementById('btn-proof-copy'),
+  btnProofClose: document.getElementById('btn-proof-close'),
+  btnProofDismiss: document.getElementById('btn-proof-dismiss'),
   receiptsModal: document.getElementById('receipts-modal'),
   receiptsModalClose: document.getElementById('receipts-modal-close'),
   receiptStats: document.getElementById('receipt-stats'),
   receiptsList: document.getElementById('receipts-list'),
   btnClearReceipts: document.getElementById('btn-clear-receipts'),
+  // Northstar sidebar destinations (LIB/SCH/STATS)
+  panelLib: document.getElementById('ns-panel-lib'),
+  panelSch: document.getElementById('ns-panel-sch'),
+  panelStats: document.getElementById('ns-panel-stats'),
+  statsCompanionMode: document.getElementById('stats-companion-mode'),
+  statsCompanionStatus: document.getElementById('stats-companion-status'),
+  statsCompanionNetwork: document.getElementById('stats-companion-network'),
+  statsCompanionClients: document.getElementById('stats-companion-clients'),
+  statsSessionSummary: document.getElementById('stats-session-summary'),
+  btnStatsViewLedger: document.getElementById('btn-stats-view-ledger'),
   aboutModal: document.getElementById('about-modal'),
   aboutModalClose: document.getElementById('about-modal-close'),
+  // Version display (footer + About modal). HTML carries a static fallback string;
+  // applyAppVersion() overrides it at runtime from electron/package.json.
+  version: document.getElementById('version'),
+  aboutVersion: document.getElementById('about-version'),
   // Updater status (in About modal)
   updaterStatus: document.getElementById('updater-status'),
   updaterStatusText: document.getElementById('updater-status-text'),
@@ -666,6 +691,8 @@ const state = {
   // Profiles state
   profiles: [],
   currentProfileId: null,
+  profileSearchQuery: '',
+  profileActiveFilter: 'all',
   // Calendar state
   calendarEvents: [],
   calendarSource: null,
@@ -1057,6 +1084,135 @@ if (btnNotif && notifDrawer) {
 if (notifDrawerClose && notifDrawer) {
   notifDrawerClose.addEventListener('click', () => { notifDrawer.style.display = 'none'; });
 }
+
+function setSidebarSelection(tab) {
+  document.querySelectorAll('.ns-nav-item').forEach(btn => {
+    const isActive = btn.dataset.nsTab === tab;
+    btn.classList.toggle('active', isActive);
+    if (isActive) btn.setAttribute('aria-current', 'page');
+    else btn.removeAttribute('aria-current');
+  });
+}
+
+function activateTopTab(tab) {
+  const button = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+  if (!button) return false;
+  button.click();
+  return true;
+}
+
+async function openReceiptsLedger() {
+  try {
+    const [receipts, stats] = await Promise.all([
+      api.listReceipts?.(50),
+      api.getReceiptStats?.()
+    ]);
+    renderReceiptsModal(receipts || [], stats);
+    if (els.receiptsModal) els.receiptsModal.classList.add('active');
+    return true;
+  } catch (e) {
+    console.error('Failed to load receipts:', e);
+    notify('Ledger is unavailable right now', 'warning');
+    return false;
+  }
+}
+
+function openSettingsPanel() {
+  syncCustomizeUI();
+  updateLastLightUIFromState();
+  loadRemoteControlState();
+  els.optionsModal?.classList.add('active');
+}
+
+function openHelpPanel() {
+  els.aboutModal?.classList.add('active');
+  refreshUpdaterStatus();
+  notify('Open Settings for controls and About for version/update details.', 'info', 4200);
+}
+
+// Exactly one of LIB / SCH / STATS is visible at a time. Each child element's
+// own conditional display logic (isIdle, has-streak, has-proof, etc.) keeps
+// working independently underneath — this only toggles the panel-level wrapper.
+function applyMainPanelVisibility(panel) {
+  if (els.panelLib) els.panelLib.style.display = panel === 'lib' ? '' : 'none';
+  if (els.panelSch) els.panelSch.style.display = panel === 'sch' ? '' : 'none';
+  if (els.panelStats) els.panelStats.style.display = panel === 'stats' ? '' : 'none';
+  if (panel === 'sch') activateTopTab('schedule');
+}
+
+// Pulls only data that already exists elsewhere in the app (companion status,
+// receipt history) — no new tracking, no fabricated numbers.
+async function renderStatusPanel() {
+  try {
+    const rc = await api.getRemoteControl?.();
+    const modeLabels = { off: 'Off', local: 'This PC only', wifi: 'Same Wi-Fi' };
+    const mode = rc?.mode || 'off';
+    if (els.statsCompanionMode) els.statsCompanionMode.textContent = modeLabels[mode] || 'Off';
+    if (els.statsCompanionStatus) els.statsCompanionStatus.textContent = rc?.statusLabel || 'Off';
+    if (els.statsCompanionNetwork) {
+      els.statsCompanionNetwork.textContent = mode === 'wifi' ? `${rc.lanIp}:${rc.port}`
+        : mode === 'local' ? `127.0.0.1:${rc.port}`
+        : '—';
+    }
+    if (els.statsCompanionClients) els.statsCompanionClients.textContent = String(rc?.clients || 0);
+  } catch {
+    if (els.statsCompanionStatus) els.statsCompanionStatus.textContent = 'Unavailable';
+  }
+
+  if (!els.statsSessionSummary) return;
+  try {
+    const receipts = await api.listReceipts?.(5);
+    if (!receipts || !receipts.length) {
+      els.statsSessionSummary.innerHTML = '<p class="empty-state">No session history yet.</p>';
+      return;
+    }
+    els.statsSessionSummary.innerHTML = receipts.map(r => {
+      const when = r.startedAt ? new Date(r.startedAt).toLocaleDateString() : '—';
+      return `<div class="status-row"><span>${escapeHtml(when)}</span><span>${escapeHtml(r.result || '')} &middot; ${escapeHtml(r.action || '')}</span></div>`;
+    }).join('');
+  } catch {
+    els.statsSessionSummary.innerHTML = '<p class="empty-state">No session history yet.</p>';
+  }
+}
+
+async function handleSidebarNavigation(tab, { persist = true } = {}) {
+  let handled = false;
+
+  if (tab === 'lib') {
+    applyMainPanelVisibility('lib');
+    handled = true;
+  }
+  if (tab === 'sch') {
+    applyMainPanelVisibility('sch');
+    handled = true;
+  }
+  if (tab === 'set') {
+    openSettingsPanel();
+    handled = true;
+  }
+  if (tab === 'help') {
+    openHelpPanel();
+    handled = true;
+  }
+  if (tab === 'stats') {
+    applyMainPanelVisibility('stats');
+    renderStatusPanel();
+    handled = true;
+  }
+
+  if (!handled) {
+    notify('Coming soon', 'info');
+    return false;
+  }
+
+  setSidebarSelection(tab);
+  if (persist) {
+    try { api.saveAppSettings({ app: { nsActiveTab: tab } }); } catch (_) {}
+  }
+  return true;
+}
+
+els.btnStatsViewLedger?.addEventListener('click', () => openReceiptsLedger());
 
 function formatIdleClockTime(now, compact = false) {
   const use12Hour = state.clockFormat === '12h';
@@ -1548,6 +1704,9 @@ function applyTimerPayload(data) {
     hideWarningModal();
     removeWarmFilter();
     loadStreaks();
+    if (data.streaks && data.streaks.streak >= 1) {
+      showStreakCelebration(data.streaks.streak);
+    }
     api.showNotification('Lights Out', state.dryRun ? 'Dry run complete.' : `${actionLabel()} started.`);
     notify(data.message || 'Timer complete', 'success', 5000);
     setSessionOutcome(state.dryRun ? 'dryrun' : 'completed');
@@ -1606,7 +1765,8 @@ async function loadStreaks() {
     const catalog = await api.getAchievementsCatalog();
     const report = await api.getWeeklyReport();
     const sleepScore = await api.getSleepScore();
-    renderStreaks(summary, catalog, report, sleepScore);
+    const history = await api.getStreaksHistory?.() || [];
+    renderStreaks(summary, catalog, report, sleepScore, history);
   } catch { /* streaks are decorative, never block */ }
 }
 
@@ -1636,7 +1796,16 @@ async function refreshStreakCallout() {
   } catch { /* decorative, never block */ }
 }
 
-function renderStreaks(summary, catalog, report, sleepScore) {
+function showStreakCelebration(count) {
+  const modal = document.getElementById('streak-celebration-modal');
+  const num = document.getElementById('celebration-streak-number');
+  if (modal && num) {
+    num.textContent = count;
+    modal.classList.add('active');
+  }
+}
+
+function renderStreaks(summary, catalog, report, sleepScore, history) {
   if (!summary) return;
 
   // Sleep Score.
@@ -1674,29 +1843,29 @@ function renderStreaks(summary, catalog, report, sleepScore) {
   if (els.streakWeekAvg) els.streakWeekAvg.textContent = summary.weekAvg || '--:--';
   if (els.streakOnTime) els.streakOnTime.textContent = `${summary.weekOnTime || 0}%`;
 
-  // Week bar chart + consistency + snooze from report.
+  // Week consistency + snooze from report.
   if (report) {
-    // Update stats with report data.
     if (els.streakOnTime) els.streakOnTime.textContent = `${100 - (report.snoozeRate || 0)}% on-time`;
-    // Show consistency.
-    const existingStats = document.querySelectorAll('.streak-stat');
-    if (existingStats.length >= 4 && report.consistency !== undefined) {
-      // Replace the last stat with consistency if available.
-    }
   }
 
-  // Week bar chart.
-  if (els.streakWeekBar && summary.weekDays?.length) {
-    const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const today = new Date().toISOString().slice(0, 10);
-    els.streakWeekBar.innerHTML = summary.weekDays.map(d => {
-      const [h, m] = (d.bedTime || '23:00').split(':').map(Number);
-      const mins = h * 60 + m;
-      const maxMins = 24 * 60;
-      const pct = Math.min(100, Math.max(8, (mins / maxMins) * 100));
-      const isToday = d.date === today;
-      const dayIdx = new Date(d.date + 'T12:00:00').getDay();
-      return `<div class="week-bar${isToday ? ' today' : ''}" style="height:${pct}%" title="${escapeHtml(d.bedTime || '')}"><span class="week-bar-label">${dayLabels[dayIdx]}</span></div>`;
+  // Sleep History Grid (30 Days)
+  if (els.sleepHistoryGrid && history) {
+    els.sleepHistoryGrid.innerHTML = history.map(d => {
+      let stateClass = 'neutral';
+      let tooltip = `${d.date}: Missed (No timer)`;
+      let icon = '';
+      if (d.hasEvent) {
+        if (d.snoozed) {
+          stateClass = 'snoozed';
+          tooltip = `${d.date}: Bedtime met @ ${d.bedTime} (Snoozed) [${d.action}]`;
+          icon = '&#x26A0;';
+        } else {
+          stateClass = 'on-time';
+          tooltip = `${d.date}: Bedtime met @ ${d.bedTime} [${d.action}]`;
+          icon = '&#x2714;';
+        }
+      }
+      return `<div class="history-block ${stateClass}" data-tooltip="${escapeHtml(tooltip)}">${icon || d.date.slice(-2)}</div>`;
     }).join('');
   }
 
@@ -1774,7 +1943,6 @@ function applyTonightCard(card) {
   }
   notify(`Selected: ${card.querySelector('.card-title')?.textContent || 'Timer'}`, 'info');
 }
-
 function wireEvents() {
   els.btnStart.addEventListener('click', () => startTimer());
   els.btnStop.addEventListener('click', cancelTimer);
@@ -1785,6 +1953,7 @@ function wireEvents() {
   els.btnMini?.addEventListener('click', toggleMiniMode);
   els.btnWidget?.addEventListener('click', () => {
     api.toggleWidget?.();
+    notify('Desktop widget toggled', 'info');
   });
   els.btnCompanion?.addEventListener('click', async () => {
     try {
@@ -1793,9 +1962,13 @@ function wireEvents() {
         await api.openExternal?.(rc.url);
         notify(`Companion at ${rc.url}`, 'info');
       } else {
-        notify('Enable Remote Control in settings first', 'info');
+        openSettingsPanel();
+        setSidebarSelection('set');
+        notify('Enable Remote Control in settings before opening the Companion PWA', 'info');
       }
-    } catch {}
+    } catch {
+      notify('Companion setup is unavailable right now', 'warning');
+    }
   });
 
   // Family mode scan and remote controls.
@@ -2143,18 +2316,11 @@ if (els.btnOverrideCancel) {
 
 // View receipts modal.
 if (els.btnProofDetails) {
-  els.btnProofDetails.addEventListener('click', async () => {
-    try {
-      const [receipts, stats] = await Promise.all([
-        api.listReceipts?.(50),
-        api.getReceiptStats?.()
-      ]);
-      renderReceiptsModal(receipts || [], stats);
-      if (els.receiptsModal) els.receiptsModal.classList.add('active');
-    } catch (e) {
-      console.error('Failed to load receipts:', e);
-    }
-  });
+  els.btnProofDetails.addEventListener('click', () => openReceiptsLedger());
+}
+
+if (els.btnWarningLedger) {
+  els.btnWarningLedger.addEventListener('click', () => openReceiptsLedger());
 }
 
 if (els.receiptsModalClose) {
@@ -2193,9 +2359,21 @@ document.getElementById('btn-proof-again')?.addEventListener('click', () => {
 });
 
 // Northstar proof hero: Dismiss — hides the card.
-document.getElementById('btn-proof-dismiss')?.addEventListener('click', () => {
+function dismissMorningProof() {
   if (els.morningProofSection) els.morningProofSection.style.display = 'none';
-});
+}
+
+document.getElementById('btn-proof-dismiss')?.addEventListener('click', dismissMorningProof);
+document.getElementById('btn-proof-close')?.addEventListener('click', dismissMorningProof);
+
+// Escape closes the Mission Complete overlay when it is visible.
+if (els.morningProofSection) {
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && els.morningProofSection.style.display !== 'none') {
+      dismissMorningProof();
+    }
+  });
+}
 
 // Clear receipts.
 if (els.btnClearReceipts) {
@@ -2268,15 +2446,14 @@ if (els.btnClearReceipts) {
       }
 
       if (item.id === 'open-options') {
-        syncCustomizeUI();
-        updateLastLightUIFromState();
-        els.optionsModal.classList.add('active');
+        openSettingsPanel();
+        setSidebarSelection('set');
         return;
       }
 
       if (item.id === 'open-about') {
-        els.aboutModal.classList.add('active');
-        refreshUpdaterStatus();
+        openHelpPanel();
+        setSidebarSelection('help');
         return;
       }
 
@@ -2306,20 +2483,67 @@ if (els.btnClearReceipts) {
       document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById(`tab-${btn.dataset.tab}`)?.classList.add('active');
+      if (btn.dataset.tab === 'library') setSidebarSelection('lib');
+      if (btn.dataset.tab === 'schedule') setSidebarSelection('sch');
+      if (btn.dataset.tab === 'streaks') setSidebarSelection('stats');
       if (btn.dataset.tab === 'streaks') loadStreaks();
       if (btn.dataset.tab === 'focus') loadSleepDebt();
     });
   });
+
+  // Northstar hero card PLAY button starts the timer.
+  document.getElementById('ns-play-btn')?.addEventListener('click', () => startTimer());
 
   // Home streak callout jumps to the Streaks tab for the full breakdown.
   els.streakCallout?.addEventListener('click', () => {
     document.querySelector('.tab-btn[data-tab="streaks"]')?.click();
   });
 
-  els.modalClose.addEventListener('click', () => els.optionsModal.classList.remove('active'));
-  els.btnCancelOpt.addEventListener('click', () => els.optionsModal.classList.remove('active'));
+  document.getElementById('btn-celebration-dismiss')?.addEventListener('click', () => {
+    document.getElementById('streak-celebration-modal')?.classList.remove('active');
+  });
+
+  document.getElementById('btn-export-streaks')?.addEventListener('click', async () => {
+    try {
+      const summary = await api.getStreaks();
+      const history = await api.getStreaksHistory();
+      
+      let ledger = `LIGHTS OUT BEDTIME LEDGER\n`;
+      ledger += `=========================\n`;
+      ledger += `Generated: ${new Date().toLocaleString()}\n`;
+      ledger += `Current Streak: ${summary.streak} nights\n`;
+      ledger += `Best Streak: ${summary.bestStreak} nights\n`;
+      ledger += `Total Rituals: ${summary.totalNights}\n`;
+      ledger += `Avg Bedtime (7d): ${summary.weekAvg}\n`;
+      ledger += `On-Time Rate (7d): ${summary.weekOnTime}%\n\n`;
+      
+      ledger += `DAILY HISTORY (30 DAYS):\n`;
+      ledger += `------------------------\n`;
+      history.forEach(d => {
+        const status = d.hasEvent ? (d.snoozed ? 'SNOOZED' : 'ON-TIME') : 'MISSED';
+        ledger += `${d.date}: ${status}${d.bedTime ? ` @ ${d.bedTime}` : ''} [${d.action || 'N/A'}]\n`;
+      });
+      
+      await navigator.clipboard.writeText(ledger);
+      notify('Streak ledger copied to clipboard!', 'success', 3000);
+    } catch (err) {
+      notify('Failed to export ledger.', 'error');
+    }
+  });
+
+  els.modalClose.addEventListener('click', () => {
+    els.optionsModal.classList.remove('active');
+    render();
+  });
+  els.btnCancelOpt.addEventListener('click', () => {
+    els.optionsModal.classList.remove('active');
+    render();
+  });
   els.optionsModal.addEventListener('click', event => {
-    if (event.target === els.optionsModal) els.optionsModal.classList.remove('active');
+    if (event.target === els.optionsModal) {
+      els.optionsModal.classList.remove('active');
+      render();
+    }
   });
 
   if (els.aboutModalClose) {
@@ -2526,8 +2750,27 @@ if (els.btnClearReceipts) {
     }
 
     if (event.key === 'Escape') {
+      // Close the topmost active modal/drawer.
       if (els.optionsModal.classList.contains('active')) {
         els.optionsModal.classList.remove('active');
+      } else if (els.profilesModal?.classList.contains('active')) {
+        els.profilesModal.classList.remove('active');
+      } else if (els.receiptsModal?.classList.contains('active')) {
+        els.receiptsModal.classList.remove('active');
+      } else if (els.aboutModal?.classList.contains('active')) {
+        els.aboutModal.classList.remove('active');
+      } else if (document.getElementById('notif-drawer')?.style.display !== 'none') {
+        document.getElementById('notif-drawer').style.display = 'none';
+      } else if (document.getElementById('ritual-overlay')?.classList.contains('active')) {
+        document.getElementById('ritual-overlay').classList.remove('active');
+      } else if (document.getElementById('warning-modal')?.classList.contains('active')) {
+        document.getElementById('warning-modal').classList.remove('active');
+      } else if (document.getElementById('override-modal')?.classList.contains('active')) {
+        document.getElementById('override-modal').classList.remove('active');
+      } else if (document.getElementById('snooze-tax-modal')?.classList.contains('active')) {
+        document.getElementById('snooze-tax-modal').classList.remove('active');
+      } else if (document.getElementById('streak-celebration-modal')?.classList.contains('active')) {
+        document.getElementById('streak-celebration-modal').classList.remove('active');
       } else if (state.running || state.paused) {
         cancelTimer();
       }
@@ -2712,6 +2955,30 @@ if (els.btnClearReceipts) {
       if (event.target === els.profilesModal) closeProfilesModal();
     });
   }
+
+  // Profile search listener
+  const searchInput = document.getElementById('profile-search');
+  searchInput?.addEventListener('input', () => {
+    state.profileSearchQuery = searchInput.value;
+    renderProfilesList();
+  });
+
+  // Profile filter button listeners
+  const filterContainer = document.getElementById('profile-filters');
+  filterContainer?.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      filterContainer.querySelectorAll('.filter-btn').forEach(b => {
+        b.classList.remove('active');
+        b.style.background = 'transparent';
+        b.style.color = 'var(--text-muted)';
+      });
+      btn.classList.add('active');
+      btn.style.background = 'rgba(255,255,255,0.08)';
+      btn.style.color = '#fff';
+      state.profileActiveFilter = btn.dataset.filter;
+      renderProfilesList();
+    });
+  });
 
   if (els.btnSaveProfile) {
     els.btnSaveProfile.addEventListener('click', saveNewProfile);
@@ -2903,17 +3170,10 @@ async function loadInitialData() {
   }
 }
 
-// Northstar PLAY button delegates to existing START button (visual alias only).
-document.getElementById('ns-play-btn')?.addEventListener('click', () => {
-  document.getElementById('btn-start')?.click();
-});
-
 // Northstar sidebar tab: toggle active class + persist.
 document.querySelectorAll('.ns-nav-item').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.ns-nav-item').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    try { api.saveAppSettings({ app: { nsActiveTab: btn.dataset.nsTab } }); } catch (_) {}
+    handleSidebarNavigation(btn.dataset.nsTab);
   });
 });
 
@@ -3014,6 +3274,7 @@ setupCalendarHandlers();
 setupRemoteControlHandlers();
 setAction(state.action);
 loadInitialData().finally(render);
+applyAppVersion();
 refreshStreakCallout();
 
 checkOnboarding();

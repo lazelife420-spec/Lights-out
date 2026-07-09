@@ -70,6 +70,18 @@ async function refreshUpdaterStatus() {
   }
 }
 
+// Overrides the static "v10.3.0" text baked into index.html with the real
+// electron/package.json version. Leaves the static fallback in place (rather
+// than writing "undefined") when the bridge is unavailable, e.g. offline/static preview.
+async function applyAppVersion() {
+  try {
+    const version = await api.getAppVersion?.();
+    if (!version) return;
+    if (els.version) els.version.textContent = `v${version}`;
+    if (els.aboutVersion) els.aboutVersion.textContent = `Version ${version}`;
+  } catch { /* keep static fallback text */ }
+}
+
 let onboardStep = 1;
 let onboardData = { bedtime: null, focus: null, sequence: null, sound: true };
 

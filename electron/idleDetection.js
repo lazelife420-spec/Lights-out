@@ -10,9 +10,16 @@ let onIdleCallback = null;
 let onReturnCallback = null;
 let wasIdle = false;
 
+function normalizeThreshold(seconds, fallback = 300) {
+  const num = Number(seconds);
+  if (!Number.isFinite(num)) return fallback;
+  if (num <= 0) return Number.POSITIVE_INFINITY;
+  return Math.max(60, num);
+}
+
 // Start monitoring idle time.
 function startMonitoring(options = {}) {
-  idleThresholdSeconds = options.thresholdSeconds || 300;
+  idleThresholdSeconds = normalizeThreshold(options.thresholdSeconds, 300);
   onIdleCallback = options.onIdle || null;
   onReturnCallback = options.onReturn || null;
   wasIdle = false;
@@ -65,11 +72,11 @@ async function getIdleSeconds() {
 }
 
 function setThreshold(seconds) {
-  idleThresholdSeconds = Math.max(60, seconds);
+  idleThresholdSeconds = normalizeThreshold(seconds, idleThresholdSeconds);
 }
 
 function getThreshold() {
-  return idleThresholdSeconds;
+  return Number.isFinite(idleThresholdSeconds) ? idleThresholdSeconds : 0;
 }
 
 function isIdle() {

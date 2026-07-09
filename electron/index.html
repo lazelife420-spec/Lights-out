@@ -101,25 +101,25 @@
         <img src="assets/brand/lights-out-icon.svg" alt="Lights Out" draggable="false">
       </div>
       <nav class="ns-sidebar-nav">
-        <button class="ns-nav-item active" data-ns-tab="lib" title="Library">
+        <button class="ns-nav-item active" data-ns-tab="lib" title="Library" aria-label="Open library">
           <span class="ns-nav-icon" aria-hidden="true">&#x1F4DA;</span>
           <span class="ns-nav-label">LIB</span>
         </button>
-        <button class="ns-nav-item" data-ns-tab="sch" title="Schedule">
+        <button class="ns-nav-item" data-ns-tab="sch" title="Open schedule" aria-label="Open schedule">
           <span class="ns-nav-icon" aria-hidden="true">&#x1F4C5;</span>
           <span class="ns-nav-label">SCH</span>
         </button>
-        <button class="ns-nav-item" data-ns-tab="set" title="Settings">
+        <button class="ns-nav-item" data-ns-tab="set" title="Open settings" aria-label="Open settings">
           <span class="ns-nav-icon" aria-hidden="true">&#x2699;</span>
           <span class="ns-nav-label">SET</span>
         </button>
       </nav>
       <div class="ns-sidebar-footer">
-        <button class="ns-nav-item" data-ns-tab="help" title="Help">
+        <button class="ns-nav-item" data-ns-tab="help" title="Open help and about" aria-label="Open help and about">
           <span class="ns-nav-icon" aria-hidden="true">&#x3F;</span>
           <span class="ns-nav-label">?</span>
         </button>
-        <button class="ns-nav-item" data-ns-tab="stats" title="Stats">
+        <button class="ns-nav-item" data-ns-tab="stats" title="Open stats" aria-label="Open stats">
           <span class="ns-nav-icon" aria-hidden="true">&#x1F4CA;</span>
           <span class="ns-nav-label">STATS</span>
         </button>
@@ -201,13 +201,13 @@
         </div>
       </nav>
       <div class="window-buttons">
-        <button class="win-btn mini" id="btn-mini" title="Mini Mode">
+        <button class="win-btn mini" id="btn-mini" title="Mini Mode" aria-label="Toggle mini mode">
           <span>&#x25A3;</span>
         </button>
-        <button class="win-btn minimize" id="btn-minimize" title="Minimize">
+        <button class="win-btn minimize" id="btn-minimize" title="Minimize" aria-label="Minimize window">
           <span>&#x2014;</span>
         </button>
-        <button class="win-btn close" id="btn-close" title="Close to Tray">
+        <button class="win-btn close" id="btn-close" title="Close to Tray" aria-label="Close to tray">
           <span>&#x2715;</span>
         </button>
       </div>
@@ -215,6 +215,9 @@
 
     <!-- Main Dashboard -->
     <main class="dashboard">
+
+      <!-- LIB: Tonight / main lobby panel (default screen) -->
+      <div class="ns-main-panel" id="ns-panel-lib">
 
       <!-- Northstar: Tonight's Run hero card (shown in lobby/idle state) -->
       <section class="ns-hero-card" id="ns-hero-card" style="display:none" aria-label="Tonight's Run">
@@ -229,7 +232,7 @@
               <span class="ns-hero-meta-sep">&middot;</span>
               <span class="ns-hero-meta-item">Proof: <span class="ns-meta-accent">Tomorrow morning</span></span>
             </div>
-            <button class="ns-play-btn" id="ns-play-btn">
+            <button class="ns-play-btn" id="ns-play-btn" aria-label="Start tonight's timer">
               <span aria-hidden="true">&#x25B6;</span>
               PLAY
             </button>
@@ -364,7 +367,7 @@
           <span class="profiles-title">Saved Profiles</span>
           <div class="profiles-header-actions">
             <button class="btn-save-profile-quick" id="btn-save-current-profile" title="Save the current timer as a reusable profile">&#x2795; Save as Profile</button>
-            <button class="btn-icon" id="btn-manage-profiles" title="Manage Profiles">&#x2699;</button>
+            <button class="btn-icon" id="btn-manage-profiles" title="Manage Profiles" aria-label="Manage profiles">&#x2699;</button>
           </div>
         </div>
         <div class="profiles-grid" id="profiles-grid">
@@ -415,7 +418,7 @@
           </div>
           <div class="card-body">
             <p id="warning-text">Apps may prevent shutdown</p>
-            <button class="link-btn">View Ledger</button>
+            <button class="link-btn" id="btn-warning-ledger">View Ledger</button>
           </div>
         </div>
       </section>
@@ -468,14 +471,18 @@
             </button>
             <button class="ns-proof-btn ns-proof-btn-secondary" id="btn-proof-details">View Ledger</button>
             <button class="ns-proof-btn ns-proof-btn-ghost" id="btn-proof-copy">Copy Proof</button>
-            <button class="ns-proof-btn ns-proof-btn-ghost" id="btn-proof-dismiss" aria-label="Dismiss">&#x2715;</button>
+            <button class="ns-proof-btn ns-proof-btn-ghost" id="btn-proof-close">Close</button>
+            <button class="ns-proof-btn ns-proof-btn-ghost" id="btn-proof-dismiss" aria-label="Dismiss overlay">&#x2715;</button>
           </div>
 
         </div>
       </section>
 
-      <!-- Tabs Section -->
-      <section class="tabs-section">
+      </div>
+      <!-- /LIB panel -->
+
+      <!-- SCH: Schedule panel (duration/clock mode, calendar controls) -->
+      <section class="tabs-section ns-main-panel" id="ns-panel-sch" style="display:none">
         <div class="tabs-header">
           <button class="tab-btn active" data-tab="library">Library</button>
           <button class="tab-btn" data-tab="schedule">Schedule</button>
@@ -716,8 +723,12 @@
                 <span class="stat-label">On-Time (7d)</span>
               </div>
             </div>
-            <div class="streak-week" id="streak-week-bar">
-              <!-- 7-day mini bar chart rendered by JS -->
+            <div class="streaks-section-header">
+              <h4>Sleep History (Last 30 Days)</h4>
+              <button class="btn btn-secondary" id="btn-export-streaks" style="padding: 4px 10px; font-size: 11px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px;">&#x1F4CB; Export Ledger</button>
+            </div>
+            <div class="sleep-history-grid" id="sleep-history-grid">
+              <!-- Rendered as a contribution-style habit grid by JS -->
             </div>
             <h4 class="achievements-heading">Achievements</h4>
             <div class="achievements-grid" id="achievements-grid">
@@ -728,6 +739,48 @@
         </div>
       </section>
 
+      <!-- STATS: Status / proof / diagnostics panel -->
+      <div class="ns-main-panel" id="ns-panel-stats" style="display:none">
+        <section class="status-section">
+          <div class="status-card">
+            <div class="card-header">
+              <span class="icon">&#x1F4F1;</span>
+              <span>Companion Status</span>
+            </div>
+            <div class="card-body">
+              <div class="status-row">
+                <span>Mode</span>
+                <span id="stats-companion-mode">Off</span>
+              </div>
+              <div class="status-row">
+                <span>Status</span>
+                <span id="stats-companion-status">Off</span>
+              </div>
+              <div class="status-row">
+                <span>Network</span>
+                <span id="stats-companion-network">&mdash;</span>
+              </div>
+              <div class="status-row">
+                <span>Connected devices</span>
+                <span id="stats-companion-clients">0</span>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="status-section">
+          <div class="status-card">
+            <div class="card-header">
+              <span class="icon">&#x1F4CB;</span>
+              <span>Session History</span>
+            </div>
+            <div class="card-body" id="stats-session-summary">
+              <p class="empty-state">No session history yet.</p>
+            </div>
+          </div>
+        </section>
+        <button class="btn-secondary" id="btn-stats-view-ledger">View Full Ledger</button>
+      </div>
+
     </main>
 
     <!-- Footer -->
@@ -737,15 +790,16 @@
           <span class="status-dot" id="status-dot"></span>
           <span class="status-text" id="status-text">Idle</span>
         </span>
+        <span class="footer-branding">Forged by The Proof Foundry™</span>
       </div>
       <div class="footer-right">
-        <button class="footer-action" id="btn-notif" title="Notifications" style="position:relative">&#x1F514;
+        <button class="footer-action" id="btn-notif" title="Open notifications" aria-label="Open notifications" style="position:relative">&#x1F514;
           <span class="badge notif-badge" id="notif-badge" style="display:none;position:absolute;top:-2px;right:-4px;font-size:8px;background:#ff4d4d;color:#fff;border-radius:50%;min-width:14px;height:14px;display:none;align-items:center;justify-content:center;padding:0 3px"></span>
         </button>
-        <button class="footer-action" id="btn-widget" title="Desktop widget">&#x1F4CA;</button>
-        <button class="footer-action" id="btn-companion" title="Companion PWA">&#x1F4F1;</button>
+        <button class="footer-action" id="btn-widget" title="Toggle desktop widget" aria-label="Toggle desktop widget">&#x1F4CA;</button>
+        <button class="footer-action" id="btn-companion" title="Open companion setup" aria-label="Open companion setup">&#x1F4F1;</button>
         <span class="badge update-badge" id="badge-update" style="display:none" title="Update available">UPDATE</span>
-        <span id="version">v10.3.0</span>
+        <span id="version">v10.4.0</span>
       </div>
     </footer>
 
@@ -756,7 +810,7 @@
     <div class="modal-content">
       <div class="modal-header">
         <h2>Advanced Options</h2>
-        <button class="modal-close" id="modal-close">&times;</button>
+        <button class="modal-close" id="modal-close" aria-label="Close advanced options">&times;</button>
       </div>
       <div class="modal-body">
         <div class="option-group">
@@ -941,26 +995,53 @@
 
         <!-- Remote Control Section -->
         <div class="option-section remote-control-section">
-          <h3>&#x1F4F1; Remote Control</h3>
-          <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Control this PC from your phone or other PCs on your network. Off by default and protected by a pairing code.</p>
-          <div class="option-group">
-            <label class="checkbox-label">
-              <input type="checkbox" id="chk-remote-control">
-              <span>Enable phone &amp; family remote control</span>
-            </label>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <h3>&#x1F4F1; Phone Companion</h3>
+            <span id="companion-status-pill" class="status-pill status-off">Off</span>
           </div>
+          <div id="companion-connected-badge" class="companion-connected-badge" style="display:none"></div>
+          <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Control this PC from your phone. Off by default and protected by a pairing code.</p>
+          
+          <div class="mode-selector" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
+            <button type="button" class="btn-mode" data-mode="off" id="btn-mode-off">Off</button>
+            <button type="button" class="btn-mode" data-mode="local" id="btn-mode-local">This PC only</button>
+            <button type="button" class="btn-mode btn-mode-primary" data-mode="wifi" id="btn-mode-wifi">Connect Phone</button>
+          </div>
+
           <div id="remote-control-config" style="display:none;margin-top:8px">
-            <p style="font-size:10px;color:#d4a50a;background:rgba(212,165,10,0.10);border:1px solid rgba(212,165,10,0.25);border-radius:6px;padding:6px 8px;margin:0 0 8px">&#x26A0;&#xFE0F; Local Wi-Fi only &mdash; the connection is not encrypted. Use this on home or other networks you trust, not public Wi-Fi.</p>
             <div id="remote-qr-wrap" style="display:none;text-align:center;margin:0 0 10px">
               <img id="remote-qr" alt="Pairing QR code" width="180" height="180" style="background:#fff;border-radius:10px;padding:8px">
               <p style="font-size:11px;color:var(--text-secondary);margin:6px 0 0">&#x1F4F1; Scan with your phone camera to pair instantly</p>
             </div>
-            <p style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Or open this address on your phone (same Wi-Fi):</p>
-            <code id="remote-url" style="display:block;font-size:11px;word-break:break-all;background:var(--bg-card);padding:6px;border-radius:6px"></code>
-            <p style="font-size:11px;color:var(--text-muted);margin:8px 0 4px">Pairing code:</p>
-            <code id="remote-token" style="display:block;font-size:12px;background:var(--bg-card);padding:6px;border-radius:6px"></code>
-            <button type="button" id="btn-regen-token" class="btn-secondary" style="margin-top:8px">Regenerate Code</button>
-            <p style="font-size:10px;color:var(--text-muted);margin-top:8px">Anyone with this address and code can start, pause, snooze, or cancel timers (never a forced shutdown). Regenerate to revoke old links.</p>
+            
+            <div class="companion-details" style="background:var(--bg-card);padding:10px;border-radius:8px;border:1px solid var(--border-color)">
+              <div style="margin-bottom:10px">
+                <p style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Manual URL fallback:</p>
+                <div style="display:flex;gap:4px">
+                  <code id="remote-url" style="flex:1;font-size:11px;word-break:break-all;background:rgba(0,0,0,0.2);padding:6px;border-radius:4px;border:1px solid rgba(255,255,255,0.05)"></code>
+                  <button type="button" id="btn-copy-url" class="btn-icon-small" title="Copy URL">&#x1F4CB;</button>
+                </div>
+              </div>
+              
+              <div style="display:flex;justify-content:space-between;align-items:flex-end">
+                <div style="flex:1">
+                  <p style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Short pairing code:</p>
+                  <code id="remote-short-code" style="font-size:18px;letter-spacing:2px;font-weight:bold;color:var(--accent-color)"></code>
+                </div>
+                <button type="button" id="btn-regen-token" class="btn-secondary" style="font-size:10px;padding:4px 8px">Regenerate</button>
+              </div>
+            </div>
+
+            <div style="margin-top:12px;padding:8px;background:rgba(212,165,10,0.05);border-radius:6px;border:1px solid rgba(212,165,10,0.1)">
+              <p style="font-size:10px;color:#d4a50a;margin-bottom:4px">&#x2753; Having trouble?</p>
+              <ul style="font-size:10px;color:var(--text-muted);margin:0;padding-left:14px">
+                <li>Phone and PC must be on the same Wi-Fi network.</li>
+                <li>VPN or firewall can block local connections.</li>
+                <li>Use manual URL if QR scanning fails.</li>
+              </ul>
+            </div>
+            
+            <button type="button" id="btn-turn-off-companion" class="btn-danger-outline" style="width:100%;margin-top:12px;font-size:11px">Turn off companion</button>
           </div>
         </div>
 
@@ -1497,7 +1578,7 @@
     <div class="modal-content modal-large">
       <div class="modal-header">
         <h2>Saved Profiles</h2>
-        <button class="modal-close" id="profiles-modal-close">&times;</button>
+        <button class="modal-close" id="profiles-modal-close" aria-label="Close profiles">&times;</button>
       </div>
       <div class="modal-body">
         <!-- Create New Profile -->
@@ -1519,7 +1600,16 @@
 
         <!-- Existing Profiles -->
         <div class="profiles-list-section">
-          <h3>Your Profiles</h3>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+            <h3>Your Profiles</h3>
+            <input type="text" id="profile-search" placeholder="Search profiles..." style="font-size:11px; padding: 4px 8px; border-radius: 4px; border:1px solid var(--border-soft); background:rgba(0,0,0,0.2); color:#fff; width: 140px;">
+          </div>
+          <div class="profile-filters" id="profile-filters" style="display:flex; gap:6px; margin-bottom: 12px;">
+            <button class="filter-btn active" data-filter="all" style="padding: 4px 8px; font-size:10px; border-radius: 4px; cursor:pointer; border:1px solid var(--border-soft); background:rgba(255,255,255,0.08); color:#fff;">All</button>
+            <button class="filter-btn" data-filter="duration" style="padding: 4px 8px; font-size:10px; border-radius: 4px; cursor:pointer; border:1px solid var(--border-soft); background:transparent; color:var(--text-muted);">Duration</button>
+            <button class="filter-btn" data-filter="clock" style="padding: 4px 8px; font-size:10px; border-radius: 4px; cursor:pointer; border:1px solid var(--border-soft); background:transparent; color:var(--text-muted);">Clock</button>
+            <button class="filter-btn" data-filter="pinned" style="padding: 4px 8px; font-size:10px; border-radius: 4px; cursor:pointer; border:1px solid var(--border-soft); background:transparent; color:var(--text-muted);">📌 Pinned</button>
+          </div>
           <div class="profiles-list" id="profiles-list">
             <!-- Profile items loaded dynamically -->
           </div>
@@ -1601,7 +1691,7 @@
     <div class="modal-content" style="max-width:340px;max-height:420px;overflow:hidden;display:flex;flex-direction:column">
       <div class="modal-header" style="flex-shrink:0">
         <h2 style="font-size:14px">&#x1F514; Notifications</h2>
-        <button class="modal-close" id="notif-drawer-close">&times;</button>
+        <button class="modal-close" id="notif-drawer-close" aria-label="Close notifications">&times;</button>
       </div>
       <div id="notif-list" style="flex:1;overflow-y:auto;padding:0">
         <p style="text-align:center;color:var(--text-muted);font-size:11px;padding:20px 0">No notifications yet.</p>
@@ -1636,7 +1726,7 @@
     <div class="modal-content receipts-modal-content">
       <div class="modal-header">
         <h2>Run Receipts</h2>
-        <button class="modal-close" id="receipts-modal-close">&times;</button>
+        <button class="modal-close" id="receipts-modal-close" aria-label="Close ledger">&times;</button>
       </div>
       <div class="modal-body">
         <div class="receipt-stats" id="receipt-stats"></div>
@@ -1648,17 +1738,29 @@
     </div>
   </div>
 
+  <!-- Streak Celebration Modal -->
+  <div class="modal" id="streak-celebration-modal">
+    <div class="modal-content streak-celebration-content" style="text-align:center; max-width: 320px;">
+      <div style="font-size:48px; margin-bottom: 12px; animation: badge-pulse 1.5s infinite;">🔥</div>
+      <h3 style="font-size:18px; color: var(--accent-amber); margin-bottom: 8px;">Ritual Complete!</h3>
+      <p style="font-size:13px; color: var(--text-secondary); margin-bottom: 16px;">You kept your promise tonight. Rest well.</p>
+      <div class="celebration-streak-number" id="celebration-streak-number" style="font-size: 64px; font-weight: 800; color: #fff; text-shadow: 0 0 20px rgba(245,166,35,0.5); line-height: 1;">0</div>
+      <div style="font-size:11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 24px;">Night Streak</div>
+      <button class="btn btn-primary" id="btn-celebration-dismiss" style="width: 100%;">Good Night</button>
+    </div>
+  </div>
+
   <!-- About Modal -->
   <div class="modal" id="about-modal">
     <div class="modal-content about-modal-content">
       <div class="modal-header">
         <h2>About</h2>
-        <button class="modal-close" id="about-modal-close">&times;</button>
+        <button class="modal-close" id="about-modal-close" aria-label="Close about dialog">&times;</button>
       </div>
       <div class="modal-body about-body">
         <img class="about-wordmark" src="assets/brand/lights-out-wordmark-transparent.svg" alt="Lights Out" draggable="false">
         <p class="about-tagline">Bedtime shutdown timer for Windows.</p>
-        <p class="about-version">Version 10.3.0</p>
+        <p class="about-version" id="about-version">Version 10.4.0</p>
         <div class="about-updater" id="about-updater">
           <div class="updater-status" id="updater-status" data-state="idle">
             <span class="updater-dot"></span>

@@ -30,7 +30,9 @@ The important behavior is:
 - force shutdown is never the default launcher behavior; it must be chosen explicitly
 - "Run at login" means "start minimized and idle" — login startup never silently
   implies a force shutdown or an active countdown
-- the last tagged release is `v10.3.0` (Ritual Mode + Intelligence); `main` tracks the tagged commit
+- the current tagged/published release is `v10.4.0` (Phone Companion Easy Connect,
+  profile search/filter/pin, 30-day sleep-history grid, companion auto-firewall +
+  battery/power display), shipped on top of v10.3.0's Ritual Mode + Intelligence
 - Electron build packaging succeeds with `npm run build`
 - Electron smoke coverage guards startup wording/flags, tray menu wiring, timer
   control IPC, mini mode wiring, keyboard shortcuts, and browser-preview safe defaults
@@ -115,6 +117,7 @@ Current smoke/test expectations include:
 - mini mode and keyboard shortcut guards
 - preview/fallback safe defaults
 - network-boundary validation (remote commands, WS frames, discovery beacons, sanitizers)
+- companion Easy Connect: off/local/wifi mode contract, QR gating, token-protected remote actions, and real-time connection status
 
 ### Static browser preview of the Electron UI
 

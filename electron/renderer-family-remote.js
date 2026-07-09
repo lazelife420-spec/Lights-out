@@ -35,12 +35,24 @@
 const wifiSelectedDevices = { macs: [], ips: [] };
 
 function renderRemoteControl(rc) {
-  if (!rc || !els.chkRemoteControl) return;
-  els.chkRemoteControl.checked = !!rc.enabled;
-  if (els.remoteControlConfig) els.remoteControlConfig.style.display = rc.enabled ? '' : 'none';
+  if (!rc) return;
+  const mode = rc.mode || 'off';
+  document.querySelectorAll('.btn-mode').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === mode);
+  });
+  if (els.companionStatusPill) {
+    const statusClass = rc.failed ? 'status-failed' : rc.connected ? 'status-connected' : `status-${mode}`;
+    els.companionStatusPill.className = `status-pill ${statusClass}`;
+    els.companionStatusPill.textContent = rc.statusLabel || (mode === 'off' ? 'Off' : (mode === 'local' ? 'This PC only' : 'Same Wi-Fi'));
+  }
+  if (els.remoteControlConfig) els.remoteControlConfig.style.display = mode === 'off' ? 'none' : '';
   if (els.remoteUrl) els.remoteUrl.textContent = rc.url || '';
-  if (els.remoteToken) els.remoteToken.textContent = rc.token || '';
-  updateRemoteQr(rc.url);
+  if (els.remoteShortCode) els.remoteShortCode.textContent = rc.shortCode || '';
+  if (els.companionConnectedBadge) {
+    els.companionConnectedBadge.style.display = rc.connected ? '' : 'none';
+    els.companionConnectedBadge.textContent = rc.connected ? `${rc.clients} phone${rc.clients === 1 ? '' : 's'} connected` : '';
+  }
+  updateRemoteQr(mode === 'wifi' ? rc.url : '');
 }
 
 // Generate (or clear) the pairing QR for the current companion URL so the phone
@@ -62,17 +74,31 @@ async function updateRemoteQr(url) {
 }
 
 async function loadRemoteControlState() {
-  if (!els.chkRemoteControl) return;
+  if (!els.remoteControlConfig) return;
   try { renderRemoteControl(await api.getRemoteControl?.()); } catch {}
 }
 
 function setupRemoteControlHandlers() {
-  els.chkRemoteControl?.addEventListener('change', async () => {
+  document.querySelectorAll('.btn-mode').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const mode = btn.dataset.mode;
+      try {
+        const rc = await api.setRemoteControlMode?.(mode);
+        renderRemoteControl(rc);
+        notify(`Companion mode: ${mode}`, 'info');
+      } catch { notify('Failed to update companion mode', 'error'); }
+    });
+  });
+  els.btnTurnOffCompanion?.addEventListener('click', async () => {
     try {
-      const rc = await api.setRemoteControlEnabled?.(els.chkRemoteControl.checked);
+      const rc = await api.setRemoteControlMode?.('off');
       renderRemoteControl(rc);
-      notify(els.chkRemoteControl.checked ? 'Remote control enabled' : 'Remote control disabled', 'info');
-    } catch { notify('Failed to update remote control', 'error'); }
+      notify('Companion turned off', 'info');
+    } catch { notify('Failed to turn off companion', 'error'); }
+  });
+  els.btnCopyUrl?.addEventListener('click', () => {
+    const url = els.remoteUrl?.textContent;
+    if (url) { navigator.clipboard.writeText(url); notify('URL copied to clipboard', 'success'); }
   });
   els.btnRegenToken?.addEventListener('click', async () => {
     try {
@@ -80,6 +106,7 @@ function setupRemoteControlHandlers() {
       notify('New pairing code generated', 'success');
     } catch { notify('Failed to regenerate code', 'error'); }
   });
+  api.onRemoteControlStatus?.(renderRemoteControl);
   loadRemoteControlState();
 }
 

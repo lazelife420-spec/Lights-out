@@ -193,6 +193,7 @@ const DEFAULTS = {
   // When enabled, a pairing token is required on every remote command.
   remoteControl: {
     enabled: false,
+    mode: 'off',
     token: ''
   },
   // Persisted running-timer snapshot for crash/quit recovery. null when idle.

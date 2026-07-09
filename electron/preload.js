@@ -8,8 +8,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   pauseTimer: () => ipcRenderer.invoke('pause-timer'),
   resumeTimer: () => ipcRenderer.invoke('resume-timer'),
   snoozeTimer: (seconds, reason) => ipcRenderer.invoke('snooze-timer', seconds, reason),
-  executeAction: (action, options) => ipcRenderer.invoke('execute-action', action, options),
-  
+
   // Override Tax
   assessSnoozeCost: () => ipcRenderer.invoke('assess-snooze-cost'),
   getOverrideTaxStats: () => ipcRenderer.invoke('get-override-tax-stats'),
@@ -126,6 +125,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAchievementsCatalog: () => ipcRenderer.invoke('get-achievements-catalog'),
   getWeeklyReport: () => ipcRenderer.invoke('get-weekly-report'),
   getSleepScore: () => ipcRenderer.invoke('get-sleep-score'),
+  getStreaksHistory: () => ipcRenderer.invoke('get-streaks-history'),
 
   // Custom Last Light sequences
   addCustomSequence: (seq) => ipcRenderer.invoke('add-custom-sequence', seq),
@@ -164,6 +164,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateAvailable: (callback) => {
     ipcRenderer.on('update-available', (event, data) => callback(data));
   },
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
   // Data export/import
   exportAllData: () => ipcRenderer.invoke('export-all-data'),
@@ -180,9 +181,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Remote control gating (companion + family). Off by default.
   getRemoteControl: () => ipcRenderer.invoke('get-remote-control'),
-  setRemoteControlEnabled: (enabled) => ipcRenderer.invoke('set-remote-control-enabled', enabled),
+  setRemoteControlMode: (mode) => ipcRenderer.invoke('set-remote-control-mode', mode),
   regenerateRemoteToken: () => ipcRenderer.invoke('regenerate-remote-token'),
   generateQr: (text) => ipcRenderer.invoke('generate-qr', text),
+  onRemoteControlStatus: (callback) => {
+    ipcRenderer.on('remote-control-status', (event, data) => callback(data));
+  },
 
   // Family mode
   getFamilyPeers: () => ipcRenderer.invoke('get-family-peers'),

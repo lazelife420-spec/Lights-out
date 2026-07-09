@@ -104,9 +104,7 @@ function applyAppSettings(app) {
   }
   // Restore northstar sidebar tab.
   if (app.nsActiveTab) {
-    document.querySelectorAll('.ns-nav-item').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.nsTab === app.nsActiveTab);
-    });
+    handleSidebarNavigation(app.nsActiveTab, { persist: false });
   }
   // Restore northstar selected mode card.
   if (app.nsSelectedMode) {

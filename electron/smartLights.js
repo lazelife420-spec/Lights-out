@@ -381,6 +381,75 @@ function updateSmartLightTick(remainingSeconds) {
   }
 }
 
+async function invokeSmartLightAction({ on = true, brightness = 254, colorTemp = 366, transitionTime = 10 } = {}) {
+  if (!config.enabled) return;
+
+  const targetBri = Math.max(0, Math.min(254, Math.round(Number(brightness) || 0)));
+  const targetCt = Math.max(153, Math.min(500, Math.round(Number(colorTemp) || 366)));
+  const hueState = {
+    on: Boolean(on) && targetBri > 0,
+    bri: targetBri,
+    transitiontime: Math.max(0, Math.round(Number(transitionTime) || 0))
+  };
+  if (targetCt) hueState.ct = targetCt;
+
+  switch (config.provider) {
+    case 'hue': {
+      if (!config.hueBridgeIp || !config.hueUsername) return;
+      if (config.hueGroupId) {
+        await setHueGroupState(config.hueBridgeIp, config.hueUsername, config.hueGroupId, hueState);
+        return;
+      }
+
+      let ids = config.hueLightIds.length > 0 ? [...config.hueLightIds] : [];
+      if (ids.length === 0) {
+        const lights = await getHueLights(config.hueBridgeIp, config.hueUsername);
+        ids = lights.map(light => light.id);
+      }
+
+      await Promise.all(ids.map(id => setHueLightState(config.hueBridgeIp, config.hueUsername, id, hueState)));
+      return;
+    }
+    case 'http':
+      await invokeHttpLightAction(targetBri, targetCt, Boolean(on) && targetBri > 0);
+      return;
+    case 'homeassistant':
+      await invokeHAAction(targetBri, targetCt, Boolean(on) && targetBri > 0);
+      return;
+    case 'ifttt':
+      await invokeIFTTTAction(targetBri, Boolean(on) && targetBri > 0);
+      return;
+    case 'mqtt':
+      await invokeMQTTAction(targetBri, Boolean(on) && targetBri > 0);
+      return;
+    default:
+      return;
+  }
+}
+
+async function applyScene(sceneId) {
+  switch (String(sceneId || '').toLowerCase()) {
+    case 'night':
+      return invokeSmartLightAction({
+        on: true,
+        brightness: 48,
+        colorTemp: 460,
+        transitionTime: 20
+      });
+    case 'dim':
+      return invokeSmartLightAction({
+        on: true,
+        brightness: 96,
+        colorTemp: 410,
+        transitionTime: 15
+      });
+    case 'off':
+      return invokeSmartLightOff();
+    default:
+      return invokeSmartLightAction({});
+  }
+}
+
 async function invokeSmartLightOff() {
   if (!config.enabled) return;
 
@@ -525,6 +594,8 @@ module.exports = {
   // Timer integration
   startSmartLightDim,
   updateSmartLightTick,
+  invokeSmartLightAction,
+  applyScene,
   invokeSmartLightOff,
   resetSmartLightState,
   shouldStartDim,

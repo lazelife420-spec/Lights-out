@@ -1,5 +1,51 @@
 # Changelog
 
+## v10.4.0 — Phone Companion Easy Connect + Profiles Upgrade + Streaks (2026-07-08)
+
+Version bumped in `package.json`/`package-lock.json` and the in-app footer/About
+text. Not yet built, tagged, or published — the latest tagged/published release
+remains v10.3.0 until this is built, tagged, and a GitHub release is cut.
+
+### New
+- **Phone Companion Easy Connect** — redesigned pairing flow with three modes:
+  `Off` (disabled), `This PC only` (binds `127.0.0.1`, local machine only), and
+  `Same Wi-Fi` (binds for LAN access). Desktop status pill shows live state:
+  `Off`, `This PC only`, `Waiting for phone`, `Phone connected`, or
+  `Connection failed`.
+- **QR + manual pairing** — in `Same Wi-Fi` mode the desktop shows a scannable
+  QR code, a manual URL fallback, and a short 6-character pairing code, with
+  one-click copy for the manual URL. `This PC only` mode never exposes a QR.
+- **Token-protected remote actions** — every phone command requires the
+  pairing token; invalid or missing tokens are rejected with a proper
+  WebSocket 401/403 response before the handshake completes. A hard safety
+  check in the message handler also rejects any command while mode is `Off`,
+  independent of the token check.
+- **Real-time connection status** — the desktop status pill and the phone's
+  own connection state (`Connecting…`, `Connected to [PC]`, `Disconnected`,
+  `Pairing expired`, `Wrong network or PC offline`) update live, and the
+  desktop shows how many phones are connected. All phone-side timer actions
+  require confirmation and are disabled while disconnected.
+- **Companion integration smoke test** — `npm run smoke:companion` starts the
+  real HTTP/WebSocket bridge and verifies off/local/wifi mode, token gating,
+  token rotation, and rejection semantics (`test/companion-integration.test.js`).
+
+### Features (merged from `blackboxai/pr7-scope-cleanup`)
+- **Profiles search, filter & pin** — the Profiles panel now has a search box,
+  category filters, and the ability to pin favorite profiles to the top.
+- **30-day sleep-history grid** — a calendar-style grid visualizes the last 30
+  nights (on-time / snoozed / neutral) with hover tooltips; a streak-celebration
+  modal fires on milestone streaks.
+- **Companion auto-firewall + system status** — enabling `Same Wi-Fi` mode opens
+  Windows Firewall inbound rules for the companion port/discovery and removes
+  them on stop; the phone view shows the PC power plan and battery charge.
+
+### Internal
+- `companion.js` tracks connected client count and emits `status` events;
+  main process broadcasts `remote-control-status` to the renderer on every
+  state change.
+- Updated `main.js`, `renderer.js`, `companion.js`, `companion.html`, and
+  `styles.css`.
+
 ## v10.3.0 — Ritual Mode + Intelligence (2026-06-28)
 
 ### New
@@ -106,3 +152,23 @@ cleanup could show a red error toast.
 ## v10.0.8 — Updater download target (2026-06-14)
 
 Fixed in-app updater download target so it selects the real installer asset.
+
+## v10.4.0 — Easy Connect Companion (2026-07-01)
+
+### New
+- **Easy Connect for phone companion** — redesigned pairing flow:
+  - **Three connection modes**: `Off` (disabled), `This PC only` (local binding), and `Same Wi-Fi` (LAN binding)
+  - **QR Code pairing**: Scan from the desktop app to pair instantly in `Same Wi-Fi` mode
+  - **Short pairing codes**: 6-character codes for manual fallback
+  - **Desktop status pill**: Real-time status indication (`Off`, `This PC only`, `Same Wi-Fi`)
+  - **Mobile-first companion UX**: Improved layout, connection state feedback (`Connecting`, `Connected`, `Disconnected`, `Pairing expired`), and action confirmations
+  - **One-click copy**: Copy the manual pairing URL to clipboard
+- **Security hardening**:
+  - Token-protected WebSocket handshake with 401/403 rejection
+  - Explicit host binding control per mode
+  - Hard safety check in message handlers to reject commands when mode is `Off`
+
+### Internal
+- New integration test: `test/companion-integration.test.js`
+- Smoke suite: 116/116 (+6 over v10.3.0)
+- Updated `main.js`, `renderer.js`, `companion.js`, `companion.html`, and `styles.css`

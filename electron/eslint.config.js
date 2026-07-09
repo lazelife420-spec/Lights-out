@@ -45,11 +45,11 @@ const correctnessRules = {
   // Legacy noise: report but don't fail the lane on these. Ignore unused
   // function arguments (common in callback/handler signatures) and _-prefixed
   // bindings; still warn on genuinely dead local variables.
-  'no-unused-vars': ['warn', { args: 'none', varsIgnorePattern: '^_', caughtErrors: 'none' }],
+  'no-unused-vars': ['warn', { args: 'none', varsIgnorePattern: '^_', ignoreRestSiblings: true, caughtErrors: 'none' }],
 };
 
 module.exports = [
-  { ignores: ['node_modules/**', 'dist/**', 'assets/**'] },
+  { ignores: ['node_modules/**', 'dist/**', 'assets/**', 'test-results/**', 'build.log'] },
 
   // Node main process, feature modules, preload, tests, build scripts.
   {
@@ -74,7 +74,7 @@ module.exports = [
   // false positive of this split-file architecture, not dead code — check the
   // sibling file for a call site before "cleaning up" one of these warnings.
   {
-    files: ['renderer.js', 'renderer-utils.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'ambientVisuals.js'],
+    files: ['renderer.js', 'renderer-utils.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'ambientVisuals.js', 'lastLight.js'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'script',

@@ -89,6 +89,7 @@ function normalizeProfile(raw) {
     calendarEventUid: raw.calendarEventUid || '',
     calendarEventTitle: raw.calendarEventTitle || '',
     autoStart,
+    pinned: Boolean(raw.pinned),
     // Extended options
     dryRun: Boolean(raw.dryRun),
     forceShutdown: Boolean(raw.forceShutdown),

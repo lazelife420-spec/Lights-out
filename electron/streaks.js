@@ -17,17 +17,22 @@ const DEFAULTS = {
   achievements: []  // ['first_light', '7_night_streak', ...]
 };
 
+function clone(value) {
+  if (typeof structuredClone === 'function') return structuredClone(value);
+  return JSON.parse(JSON.stringify(value));
+}
+
 function load() {
   if (cache) return cache;
   try {
     if (!configPath) configPath = path.join(app.getPath('userData'), STREAKS_FILE);
     if (fs.existsSync(configPath)) {
-      cache = deepMerge(structuredClone(DEFAULTS), JSON.parse(fs.readFileSync(configPath, 'utf8')));
+      cache = deepMerge(clone(DEFAULTS), JSON.parse(fs.readFileSync(configPath, 'utf8')));
     } else {
-      cache = structuredClone(DEFAULTS);
+      cache = clone(DEFAULTS);
     }
   } catch {
-    cache = structuredClone(DEFAULTS);
+    cache = clone(DEFAULTS);
   }
   return cache;
 }
@@ -277,6 +282,42 @@ function getSleepScore() {
   };
 }
 
+function exportData() {
+  return clone(load());
+}
+
+function getHistory30() {
+  const data = load();
+  const now = new Date();
+  const days = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(now - i * 86400000);
+    const dateStr = d.toISOString().slice(0, 10);
+    const found = data.events.find(e => e.date === dateStr);
+    days.push({
+      date: dateStr,
+      hasEvent: !!found,
+      action: found ? found.action : null,
+      snoozed: found ? found.snoozed : false,
+      bedTime: found ? found.bedTime : null
+    });
+  }
+  return days;
+}
+
+function replaceAll(nextData) {
+  const normalized = deepMerge(clone(DEFAULTS), nextData && typeof nextData === 'object' ? nextData : {});
+  normalized.events = Array.isArray(normalized.events) ? normalized.events.slice(-365) : [];
+  normalized.achievements = Array.isArray(normalized.achievements) ? normalized.achievements : [];
+  normalized.streak = Number.isFinite(Number(normalized.streak)) ? Math.max(0, Number(normalized.streak)) : 0;
+  normalized.bestStreak = Number.isFinite(Number(normalized.bestStreak))
+    ? Math.max(normalized.streak, Number(normalized.bestStreak))
+    : normalized.streak;
+  cache = normalized;
+  save();
+  return getSummary();
+}
+
 function formatTime() {
   const now = new Date();
   return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -289,6 +330,9 @@ module.exports = {
   getAchievementCatalog,
   getWeeklyReport,
   getSleepScore,
+  getHistory30,
+  exportData,
+  replaceAll,
   // Testing helpers.
   _load: load,
   _reset: () => { cache = null; }
