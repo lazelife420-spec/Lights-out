@@ -39,6 +39,13 @@ The important behavior is:
 - unit tests cover the network trust boundaries: remote-command validation, the
   companion WebSocket handshake + frame codec, the family LAN discovery parser,
   and the wifiGuard input sanitizers
+- Electron is pinned to `^43.0.0` and electron-builder to `^26.0.0` (bumped from
+  30/24 to close 7 high-severity npm-audit CVEs against the old Electron line;
+  `npm audit` is clean); `sharp`'s prebuilt N-API binary needs no rebuild across
+  that jump
+- `main.js` installs `process.on('uncaughtException'/'unhandledRejection', ...)`
+  handlers that log to `userData/startup.log` and keep the app alive rather than
+  letting an unrelated bug silently kill the user's active timer
 
 ## Source Of Truth
 
