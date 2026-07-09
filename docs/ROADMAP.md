@@ -59,9 +59,9 @@ Roadmap:
 
 - Tonight's-mode cards for routines like Weeknight, Movie, Bedtime, Hard Stop, and Custom.
 - ~~Better profile sorting and pinned favorites.~~ Shipped in v10.4.0 (search, category filters, pin-to-top).
+- ~~Better visual state for active profile.~~ Shipped (`.profile-card.active` has dedicated styling, not just a bare class toggle).
 - Optional profile notes.
 - Last-used routine memory.
-- Better visual state for active profile.
 
 Proof gates:
 
@@ -78,10 +78,10 @@ The streak UI should make the habit visible without pretending to be medical sle
 Roadmap:
 
 - Keep Streaks tab visible and clickable.
-- Add Home callout for current streak.
+- ~~Add Home callout for current streak.~~ Shipped: `updateStreakCallout()` shows a 🔥-night-streak pill above Saved Profiles, hidden entirely at streak 0 (honest empty state), click-through to the Streaks tab.
 - ~~Add timer-complete streak celebration.~~ Shipped in v10.4.0 (streak-celebration modal fires on milestone streaks; 30-day sleep-history grid with hover tooltips).
-- Add morning briefing streak summary.
-- Add weekly/monthly views later.
+- ~~Add morning briefing streak summary.~~ Shipped: First Light sends `{events, sleepDebt, streaks}` from main, renderer shows a one-line "Good morning! N-night streak · next: X" toast and syncs the Home callout.
+- Add a true weekly/monthly aggregate view (the 30-day grid + `getWeeklyReport()`'s on-time % cover part of this, but there's no dedicated trend view beyond 30 days).
 
 Avoid:
 
@@ -158,17 +158,22 @@ source of truth, not the version numbers attached to them.
 
 Goal: finish what v10.4.0 started without fake wellness claims.
 
-Candidate work:
+Most of this list turned out to already be shipped (verified 2026-07-09 by
+reading + browser-preview-testing each item rather than trusting the stale
+checklist below): tray regression tests exist in `scripts/smoke-test.js`,
+updater status has a real `renderUpdaterStatus()` panel, session outcomes
+already have distinct completed/dryrun/cancelled labels, the 30-day grid
+already renders a `neutral` state for missed nights, the export-streaks
+button and `streaks.exportData()` already exist, the Home streak callout and
+morning-briefing summary are both shipped (see above), and the active-profile
+card already has dedicated CSS. Keep this list current going forward instead
+of letting it drift again.
 
-- Tray/menu regression proof.
-- Better visible updater status.
-- Clearer completed/cancelled session state.
-- Weekly/monthly streak views.
-- Missed-night neutral state (partially covered by the 30-day grid — confirm before re-scoping).
-- Export streak summary.
-- Home callout for current streak.
-- Morning briefing streak summary (main process already sends the data).
-- Optional profile notes, last-used routine memory, better active-profile visual state.
+Candidate work still genuinely open:
+
+- Optional profile notes.
+- Last-used routine memory (remember + surface the last-loaded profile distinctly from "currently active").
+- A true weekly/monthly aggregate streak view beyond the 30-day grid.
 
 Ship only if:
 
