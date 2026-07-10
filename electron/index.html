@@ -1221,6 +1221,45 @@
               <button type="button" id="btn-content-unblock-test" class="btn-secondary">Test Unblock</button>
               <span id="content-test-result" style="font-size:11px;color:var(--text-muted)"></span>
             </div>
+
+            <div class="option-group">
+              <label>Blocking Schedule <small style="font-weight:400;color:var(--text-muted)">(independent of the shutdown timer -- e.g. block overnight whether or not a timer is running)</small></label>
+              <div class="schedule-rules-list" id="cb-schedules-list">
+                <!-- rendered dynamically by renderContentBlockerSchedules() -->
+              </div>
+              <button class="btn-secondary btn-sm" id="btn-add-cb-schedule" type="button" style="margin-top:4px">+ Add Schedule</button>
+
+              <div class="schedule-rule-form" id="cb-schedule-form" style="display:none">
+                <div class="option-group">
+                  <label>Label</label>
+                  <input type="text" id="cb-rule-label" placeholder="e.g. Overnight" maxlength="32">
+                </div>
+                <div class="option-group">
+                  <label>Start Time</label>
+                  <input type="time" id="cb-rule-start" value="22:00">
+                </div>
+                <div class="option-group">
+                  <label>End Time</label>
+                  <input type="time" id="cb-rule-end" value="07:00">
+                </div>
+                <div class="option-group">
+                  <label>Active Days</label>
+                  <div class="day-toggle-grid" id="cb-rule-days">
+                    <button class="day-toggle active" data-day="sun" type="button">Sun</button>
+                    <button class="day-toggle active" data-day="mon" type="button">Mon</button>
+                    <button class="day-toggle active" data-day="tue" type="button">Tue</button>
+                    <button class="day-toggle active" data-day="wed" type="button">Wed</button>
+                    <button class="day-toggle active" data-day="thu" type="button">Thu</button>
+                    <button class="day-toggle active" data-day="fri" type="button">Fri</button>
+                    <button class="day-toggle active" data-day="sat" type="button">Sat</button>
+                  </div>
+                </div>
+                <div class="schedule-rule-form-actions">
+                  <button class="btn-secondary btn-sm" id="btn-cancel-cb-rule" type="button">Cancel</button>
+                  <button class="btn-primary btn-sm" id="btn-save-cb-rule" type="button">Save Schedule</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

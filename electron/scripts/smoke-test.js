@@ -500,6 +500,56 @@ check('companion: mode buttons have explanatory tooltips, and a live description
   assertMatch(rendererSrc, /els\.remoteModeDescription\.textContent = REMOTE_MODE_DESCRIPTIONS\[mode\]/, 'renderRemoteControl must update the mode description text');
 });
 
+check('content-blocker: recurring schedules -- settings default, IPC wiring, HTML, and renderer wiring', () => {
+  const settingsSrc = fs.readFileSync(path.join(root, 'settings.js'), 'utf8');
+  assertMatch(settingsSrc, /contentBlocker:\s*\{[\s\S]*?schedules:\s*\[\]/, 'contentBlocker settings defaults missing schedules: []');
+
+  // save-content-blocker-settings / get-content-blocker-settings are
+  // pre-existing IPC channels (this feature is their first real caller) --
+  // guard there's still exactly one handler each, since ipcMain.handle()
+  // throws at startup on a second registration for the same channel.
+  const saveMatches = mainSrc.match(/ipcMain\.handle\('save-content-blocker-settings'/g) || [];
+  const getMatches = mainSrc.match(/ipcMain\.handle\('get-content-blocker-settings'/g) || [];
+  assert(saveMatches.length === 1, `expected exactly 1 save-content-blocker-settings handler, found ${saveMatches.length} (a second ipcMain.handle() registration for the same channel throws at startup)`);
+  assert(getMatches.length === 1, `expected exactly 1 get-content-blocker-settings handler, found ${getMatches.length}`);
+  assertMatch(mainSrc, /ipcMain\.handle\('save-content-blocker-settings'[\s\S]*?checkContentBlockerSchedules\(\);/, 'save-content-blocker-settings should re-evaluate schedules immediately, not wait up to 60s');
+  assertMatch(mainSrc, /setInterval\(checkContentBlockerSchedules, 60000\);/, 'checkContentBlockerSchedules should run on a periodic timer');
+  assertMatch(mainSrc, /restoreAfterTimer[\s\S]*?contentBlocker\.isAnyScheduleActive\(cbConfig\.schedules/, 'restoreAfterTimer must not unblock while a recurring schedule is still active');
+
+  assert(htmlSrc.includes('id="cb-schedules-list"'), 'cb-schedules-list missing from HTML');
+  assert(htmlSrc.includes('id="cb-schedule-form"'), 'cb-schedule-form missing from HTML');
+  assert(htmlSrc.includes('id="cb-rule-start"') && htmlSrc.includes('id="cb-rule-end"'), 'cb-rule-start/end time inputs missing from HTML');
+
+  assertMatch(rendererSrc, /function renderContentBlockerSchedules\(\)/, 'renderContentBlockerSchedules missing');
+  assertMatch(rendererSrc, /function persistCbSchedules\(\)/, 'persistCbSchedules missing');
+  assertMatch(rendererSrc, /api\.saveContentBlockerSettings\?\.\(\{ schedules: cbSchedules \}\)/, 'persistCbSchedules must save only the schedules key, not clobber the rest of the section');
+  assertMatch(rendererSrc, /cbSchedules = Array\.isArray\(cb\.schedules\) \? cb\.schedules : \[\]/, 'applyContentBlockerSettings must load schedules from settings on open');
+});
+
+check('settings: WiFi Guard / Content Blocker / Accountability settings actually rehydrate on launch', () => {
+  // Real pre-existing bug, found via manual runtime testing while building
+  // the content-blocker-schedules feature: loadInitialData() checked
+  // `appSettings.wifiGuard` / `appSettings.contentBlocker` /
+  // `appSettings.accountability`, but get-app-settings never returns those
+  // keys (only app/customization/lastLight/calendar/recoverableTimer) --
+  // so those three sections' saved state, including the enable checkboxes,
+  // never reloaded on app launch. Re-saving the Options modal from that
+  // stale (always-unchecked) state would have silently disabled them.
+  // Fixed by fetching each via its own dedicated getter, same pattern as
+  // smartLights/getSmartLightConfig already used correctly.
+  assertMatch(rendererSrc, /const \[systemInfo, appSettings, lightConfig, wifiConfig, cbConfig, accConfig\] = await Promise\.all\(\[/, 'loadInitialData must fetch wifiGuard/contentBlocker/accountability via their own calls, not assume they are nested in appSettings');
+  assertMatch(rendererSrc, /api\.getWifiGuardSettings\?\.\(\)/, 'loadInitialData missing api.getWifiGuardSettings() call');
+  assertMatch(rendererSrc, /api\.getContentBlockerSettings\?\.\(\)/, 'loadInitialData missing api.getContentBlockerSettings() call');
+  assertMatch(rendererSrc, /api\.getAccountabilitySettings\?\.\(\)/, 'loadInitialData missing api.getAccountabilitySettings() call');
+  assertMatch(rendererSrc, /if \(wifiConfig\) applyWifiGuardSettings\(wifiConfig\);/, 'applyWifiGuardSettings must be driven by the dedicated getter result, not appSettings.wifiGuard (always undefined)');
+  assertMatch(rendererSrc, /if \(cbConfig\) applyContentBlockerSettings\(cbConfig\);/, 'applyContentBlockerSettings must be driven by the dedicated getter result, not appSettings.contentBlocker (always undefined)');
+  assertMatch(rendererSrc, /if \(accConfig\) applyAccountabilitySettings\(accConfig\);/, 'applyAccountabilitySettings must be driven by the dedicated getter result, not appSettings.accountability (always undefined)');
+  // Guard against the bug's exact shape ever coming back.
+  assert(!/if \(appSettings\.wifiGuard\)/.test(rendererSrc), 'regression: appSettings.wifiGuard check reintroduced (always undefined, get-app-settings never returns it)');
+  assert(!/if \(appSettings\.contentBlocker\)/.test(rendererSrc), 'regression: appSettings.contentBlocker check reintroduced');
+  assert(!/if \(appSettings\.accountability\)/.test(rendererSrc), 'regression: appSettings.accountability check reintroduced');
+});
+
 check('companion: settings panel loads remote control state on open', () => {
   assertMatch(rendererSrc, /function openSettingsPanel\(\) \{[\s\S]*?loadRemoteControlState\(\)/s, 'openSettingsPanel must load remote control state');
   assertMatch(rendererSrc, /async function loadRemoteControlState\(\) \{\s*if \(!els\.remoteControlConfig\) return;\s*try \{ renderRemoteControl\(await api\.getRemoteControl\?\.\(\)\); \} catch \{\}/, 'loadRemoteControlState should not bail on missing checkbox');

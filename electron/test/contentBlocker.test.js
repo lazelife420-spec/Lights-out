@@ -67,3 +67,59 @@ test('buildWriteHostsCommand never embeds a raw single-quote from content (base6
   assert.doesNotMatch(match[1], /['`\n]/, 'base64 payload must contain no quotes, backticks, or newlines');
   assert.equal(Buffer.from(match[1], 'base64').toString('utf8'), content);
 });
+
+// isScheduleActive/isAnyScheduleActive: recurring blocking windows,
+// independent of the shutdown timer. Fixed `now` values throughout so the
+// overnight-crossing edge cases (the whole reason this needs its own
+// function instead of a naive time-range check) are deterministic.
+const WED_2PM = new Date('2026-07-08T14:00:00'); // Wednesday, same-day window territory
+const WED_11PM = new Date('2026-07-08T23:00:00'); // Wednesday night, before midnight
+const THU_2AM = new Date('2026-07-09T02:00:00'); // Thursday early morning, after midnight
+const THU_2PM = new Date('2026-07-09T14:00:00'); // Thursday afternoon, well outside any overnight window
+
+test('isScheduleActive: same-day window is active only inside [start, end)', () => {
+  const rule = { startTime: '13:00', endTime: '17:00', days: ['wed'], enabled: true };
+  assert.equal(cb.isScheduleActive(rule, WED_2PM), true);
+  assert.equal(cb.isScheduleActive(rule, THU_2PM), false, 'wrong day should not match');
+  assert.equal(cb.isScheduleActive({ ...rule, startTime: '15:00' }, WED_2PM), false, 'before window start');
+});
+
+test('isScheduleActive: overnight window spans midnight correctly on both sides', () => {
+  const rule = { startTime: '22:00', endTime: '07:00', days: ['wed'], enabled: true };
+  assert.equal(cb.isScheduleActive(rule, WED_11PM), true, 'before-midnight portion on the scheduled day');
+  assert.equal(cb.isScheduleActive(rule, THU_2AM), true, 'after-midnight portion the morning after the scheduled day');
+  assert.equal(cb.isScheduleActive(rule, THU_2PM), false, 'well outside the overnight window');
+  assert.equal(cb.isScheduleActive(rule, WED_2PM), false, 'daytime on the scheduled day itself is not inside 22:00-07:00');
+});
+
+test('isScheduleActive: overnight window does not leak into the wrong day-after', () => {
+  // Schedule only runs Mon nights -- Thursday morning must NOT inherit
+  // Wednesday's (unscheduled) overnight window.
+  const rule = { startTime: '22:00', endTime: '07:00', days: ['mon'], enabled: true };
+  assert.equal(cb.isScheduleActive(rule, THU_2AM), false);
+});
+
+test('isScheduleActive: disabled, zero-length, and malformed inputs are all inactive', () => {
+  assert.equal(cb.isScheduleActive({ startTime: '22:00', endTime: '07:00', days: ['wed'], enabled: false }, WED_11PM), false);
+  assert.equal(cb.isScheduleActive({ startTime: '10:00', endTime: '10:00', days: ['wed'], enabled: true }, WED_2PM), false, 'zero-length window');
+  assert.equal(cb.isScheduleActive(null, WED_2PM), false);
+  assert.equal(cb.isScheduleActive(undefined, WED_2PM), false);
+});
+
+test('isScheduleActive: missing/empty days defaults to every day', () => {
+  const rule = { startTime: '13:00', endTime: '17:00', enabled: true };
+  assert.equal(cb.isScheduleActive(rule, WED_2PM), true);
+  assert.equal(cb.isScheduleActive({ ...rule, days: [] }, WED_2PM), true);
+});
+
+test('isAnyScheduleActive: true if any schedule in the list is active, false for empty/non-array', () => {
+  const schedules = [
+    { startTime: '22:00', endTime: '07:00', days: ['mon'], enabled: true },  // not today
+    { startTime: '13:00', endTime: '17:00', days: ['wed'], enabled: true }   // active now
+  ];
+  assert.equal(cb.isAnyScheduleActive(schedules, WED_2PM), true);
+  assert.equal(cb.isAnyScheduleActive(schedules, THU_2PM), false);
+  assert.equal(cb.isAnyScheduleActive([], WED_2PM), false);
+  assert.equal(cb.isAnyScheduleActive(null, WED_2PM), false);
+  assert.equal(cb.isAnyScheduleActive(undefined, WED_2PM), false);
+});

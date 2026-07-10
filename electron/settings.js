@@ -182,7 +182,11 @@ const DEFAULTS = {
     blockOnDim: true,
     unblockOnComplete: true,
     blocklist: [],
-    useDefault: true
+    useDefault: true,
+    // Recurring blocking windows independent of the shutdown timer, e.g.
+    // "block social media 22:00-07:00 every night". Each entry:
+    // { id, label, startTime, endTime, days: ['sun',...], enabled }.
+    schedules: []
   },
   accountability: {
     enabled: false,

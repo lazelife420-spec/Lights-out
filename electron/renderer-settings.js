@@ -207,6 +207,118 @@ function applyContentBlockerSettings(cb) {
   if (els.contentCustomBlocklist) els.contentCustomBlocklist.value = (cb.blocklist || []).join('\n');
   if (els.chkContentBlockDim) els.chkContentBlockDim.checked = cb.blockOnDim !== false;
   if (els.chkContentUnblockComplete) els.chkContentUnblockComplete.checked = cb.unblockOnComplete !== false;
+  cbSchedules = Array.isArray(cb.schedules) ? cb.schedules : [];
+  renderContentBlockerSchedules();
+}
+
+// Content Blocker recurring schedules -- independent of the shutdown timer's
+// own dim-phase blocking (e.g. "block social media 22:00-07:00 every
+// night" whether or not a timer happens to be running). Mirrors the
+// Schedule tab's rule editor (renderer-calendar.js) exactly, including
+// reusing its formatRuleTime/formatRuleDays/SCHEDULE_DAY_ORDER globals --
+// same shape (label, days), just a start/end time window instead of a
+// single time+duration since blocking needs a window, not a fire-once
+// trigger.
+let cbSchedules = [];
+let editingCbScheduleId = null;
+
+function renderContentBlockerSchedules() {
+  const list = els.cbSchedulesList;
+  if (!list) return;
+  if (!cbSchedules.length) {
+    list.innerHTML = '<div class="schedule-rules-empty">No blocking schedules yet. Add one to block sites on a recurring window, independent of the timer.</div>';
+    return;
+  }
+  list.innerHTML = cbSchedules.map(rule => `
+    <div class="schedule-rule-item ${rule.enabled === false ? 'disabled' : ''}" data-rule-id="${escapeHtml(rule.id)}">
+      <div class="schedule-rule-info">
+        <div class="schedule-rule-label">${escapeHtml(rule.label || 'Untitled')}</div>
+        <div class="schedule-rule-detail">${formatRuleTime(rule.startTime)} &ndash; ${formatRuleTime(rule.endTime)} &middot; ${formatRuleDays(rule.days) || 'no days'}</div>
+      </div>
+      <div class="schedule-rule-actions">
+        <input type="checkbox" class="cb-rule-enabled-toggle" data-rule-id="${escapeHtml(rule.id)}" title="Enabled" ${rule.enabled === false ? '' : 'checked'}>
+        <button class="profile-item-btn cb-rule-edit-btn" data-rule-id="${escapeHtml(rule.id)}" type="button">Edit</button>
+        <button class="profile-item-btn cb-rule-delete-btn" data-rule-id="${escapeHtml(rule.id)}" type="button">Delete</button>
+      </div>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.cb-rule-enabled-toggle').forEach(input => {
+    input.addEventListener('change', () => {
+      const rule = cbSchedules.find(r => r.id === input.dataset.ruleId);
+      if (rule) { rule.enabled = input.checked; persistCbSchedules(); }
+    });
+  });
+  list.querySelectorAll('.cb-rule-edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => openCbScheduleForm(btn.dataset.ruleId));
+  });
+  list.querySelectorAll('.cb-rule-delete-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      cbSchedules = cbSchedules.filter(r => r.id !== btn.dataset.ruleId);
+      persistCbSchedules();
+    });
+  });
+}
+
+// Persists immediately (not deferred to the Options modal's bulk Save
+// button) since a blocking schedule has a real-world effect independent of
+// whether the user ever opens that modal again -- same reasoning as the
+// Schedule tab's persistScheduleRules().
+function persistCbSchedules() {
+  renderContentBlockerSchedules();
+  api.saveContentBlockerSettings?.({ schedules: cbSchedules });
+}
+
+function openCbScheduleForm(ruleId) {
+  const form = els.cbScheduleForm;
+  if (!form) return;
+  editingCbScheduleId = ruleId || null;
+  const rule = ruleId ? cbSchedules.find(r => r.id === ruleId) : null;
+  if (els.cbRuleLabel) els.cbRuleLabel.value = rule?.label || '';
+  if (els.cbRuleStart) els.cbRuleStart.value = rule?.startTime || '22:00';
+  if (els.cbRuleEnd) els.cbRuleEnd.value = rule?.endTime || '07:00';
+  const days = rule?.days || [...SCHEDULE_DAY_ORDER];
+  els.cbRuleDays?.querySelectorAll('.day-toggle').forEach(btn => {
+    btn.classList.toggle('active', days.includes(btn.dataset.day));
+  });
+  form.style.display = '';
+  els.cbRuleLabel?.focus();
+}
+
+function closeCbScheduleForm() {
+  if (els.cbScheduleForm) els.cbScheduleForm.style.display = 'none';
+  editingCbScheduleId = null;
+}
+
+function saveCbScheduleFromForm() {
+  const label = els.cbRuleLabel?.value?.trim() || 'Untitled';
+  const startTime = els.cbRuleStart?.value || '22:00';
+  const endTime = els.cbRuleEnd?.value || '07:00';
+  const days = [...(els.cbRuleDays?.querySelectorAll('.day-toggle.active') || [])].map(b => b.dataset.day);
+  if (!days.length) { notify('Pick at least one active day', 'warning'); return; }
+  if (startTime === endTime) { notify('Start and end time can\'t be the same', 'warning'); return; }
+
+  if (editingCbScheduleId) {
+    const rule = cbSchedules.find(r => r.id === editingCbScheduleId);
+    if (rule) Object.assign(rule, { label, startTime, endTime, days });
+  } else {
+    cbSchedules.push({
+      id: `cbrule-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+      label, startTime, endTime, days, enabled: true
+    });
+  }
+  closeCbScheduleForm();
+  persistCbSchedules();
+  notify(`Blocking schedule "${label}" saved`, 'success');
+}
+
+function setupCbScheduleHandlers() {
+  els.btnAddCbSchedule?.addEventListener('click', () => openCbScheduleForm(null));
+  els.btnCancelCbRule?.addEventListener('click', closeCbScheduleForm);
+  els.btnSaveCbRule?.addEventListener('click', saveCbScheduleFromForm);
+  els.cbRuleDays?.querySelectorAll('.day-toggle').forEach(btn => {
+    btn.addEventListener('click', () => btn.classList.toggle('active'));
+  });
 }
 
 function applyAccountabilitySettings(acc) {

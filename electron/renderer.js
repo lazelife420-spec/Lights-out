@@ -164,7 +164,7 @@ const fallbackApi = (() => {
     contentBlockStatus: async () => ({ blocked: false, sites: [] }),
     saveContentBlockerSettings: async () => {},
     getContentBlockerSettings: async () => ({
-      enabled: false, blockOnDim: true, unblockOnComplete: true, blocklist: [], useDefault: true
+      enabled: false, blockOnDim: true, unblockOnComplete: true, blocklist: [], useDefault: true, schedules: []
     }),
     onContentBlocked: (cb) => {},
     saveAccountabilitySettings: async () => {},
@@ -479,6 +479,15 @@ const els = {
   btnContentBlockTest: document.getElementById('btn-content-block-test'),
   btnContentUnblockTest: document.getElementById('btn-content-unblock-test'),
   contentTestResult: document.getElementById('content-test-result'),
+  cbSchedulesList: document.getElementById('cb-schedules-list'),
+  btnAddCbSchedule: document.getElementById('btn-add-cb-schedule'),
+  cbScheduleForm: document.getElementById('cb-schedule-form'),
+  cbRuleLabel: document.getElementById('cb-rule-label'),
+  cbRuleStart: document.getElementById('cb-rule-start'),
+  cbRuleEnd: document.getElementById('cb-rule-end'),
+  cbRuleDays: document.getElementById('cb-rule-days'),
+  btnCancelCbRule: document.getElementById('btn-cancel-cb-rule'),
+  btnSaveCbRule: document.getElementById('btn-save-cb-rule'),
 
   // Accountability
   chkAccountability: document.getElementById('chk-accountability'),
@@ -3226,10 +3235,13 @@ function updateLightsUI() {
 
 async function loadInitialData() {
   try {
-    const [systemInfo, appSettings, lightConfig] = await Promise.all([
+    const [systemInfo, appSettings, lightConfig, wifiConfig, cbConfig, accConfig] = await Promise.all([
       api.getSystemInfo(),
       api.getAppSettings(),
-      api.getSmartLightConfig()
+      api.getSmartLightConfig(),
+      api.getWifiGuardSettings?.(),
+      api.getContentBlockerSettings?.(),
+      api.getAccountabilitySettings?.()
     ]);
 
     // --- Critical: rehydrate persisted settings FIRST. A failure in any
@@ -3280,18 +3292,19 @@ async function loadInitialData() {
       updateLightsUIFromState();
     }
 
-    // Load WiFi Guard config
-    if (appSettings.wifiGuard) {
-      applyWifiGuardSettings(appSettings.wifiGuard);
-    }
-    // Load Content Blocker config
-    if (appSettings.contentBlocker) {
-      applyContentBlockerSettings(appSettings.contentBlocker);
-    }
-    // Load Accountability config
-    if (appSettings.accountability) {
-      applyAccountabilitySettings(appSettings.accountability);
-    }
+    // Load WiFi Guard / Content Blocker / Accountability config. These live
+    // in their own settings sections (not nested under appSettings, which
+    // only carries app/customization/lastLight/calendar) -- fetched above
+    // via their own dedicated getters, same pattern as smartLights/lightConfig.
+    // PRE-EXISTING BUG fixed here: this used to check `appSettings.wifiGuard`
+    // etc., which was always undefined, so these three sections' saved state
+    // (including the enable checkboxes) never rehydrated into the UI on
+    // launch -- reopening Settings always showed them unchecked/default even
+    // when actually enabled, and re-saving the Options modal from that state
+    // would have silently disabled them.
+    if (wifiConfig) applyWifiGuardSettings(wifiConfig);
+    if (cbConfig) applyContentBlockerSettings(cbConfig);
+    if (accConfig) applyAccountabilitySettings(accConfig);
   } catch (e) {
     console.error('loadInitialData failed:', e);
     els.batteryLevel.textContent = 'N/A';
@@ -3401,6 +3414,7 @@ setupWarningHandlers();
 setupAlarmHandlers();
 setupCalendarHandlers();
 setupRemoteControlHandlers();
+setupCbScheduleHandlers();
 setAction(state.action);
 loadInitialData().finally(render);
 applyAppVersion();

@@ -277,7 +277,32 @@ Good ideas, not immediate:
 - Focus scoring.
 - Screen-time limits.
 - Recurring alarms.
-- Content blocker schedules.
+- ~~Content blocker schedules.~~ Shipped 2026-07-09: recurring blocking
+  windows independent of the shutdown timer (e.g. "block social media
+  22:00-07:00 every night" whether or not a Lights Out timer is running).
+  `contentBlocker.isScheduleActive()`/`isAnyScheduleActive()` handle the
+  overnight-crossing-midnight case correctly (unit tested against fixed
+  timestamps); a 60s main-process check only calls block/unblock on an
+  actual on/off transition, and `restoreAfterTimer()`'s existing
+  unblock-on-complete now checks for an active schedule first so it can't
+  undo a schedule's block. UI mirrors the Schedule tab's rule editor.
+  Picked over the other parked items because it reuses two already-hardened
+  primitives (the tested hosts-file write path, the multi-rule recurring
+  pattern) rather than needing new system-modification surface or
+  underspecified product scope.
+
+  While building this, manual runtime testing (not just the wiring checks)
+  surfaced a real pre-existing bug unrelated to this feature's own logic:
+  `loadInitialData()` checked `appSettings.wifiGuard` /
+  `appSettings.contentBlocker` / `appSettings.accountability`, but
+  `get-app-settings` never actually returns those three sections -- so
+  their saved state, including the enable checkboxes, never rehydrated on
+  app launch. Re-saving the Options modal from that always-unchecked state
+  would have silently disabled WiFi Guard/Content Blocker/Accountability
+  even if the user had them on. Fixed by fetching each via its own
+  dedicated getter (the same pattern `smartLights` already used correctly),
+  and confirmed via a real relaunch that the checkboxes, blocklist, and now
+  the schedules all correctly survive a process restart.
 
 Reason to park: these are feature-expansion lanes. Do not start them until the existing nightly workflow feels airtight.
 
