@@ -1250,7 +1250,9 @@ function getRemoteControlState() {
     clients: status.clients || 0,
     connected,
     failed,
-    statusLabel: getCompanionStatusLabel(mode, connected, failed, status.clients)
+    statusLabel: getCompanionStatusLabel(mode, connected, failed, status.clients),
+    failedAttempts: status.failedAttempts || 0,
+    lastFailedIp: status.lastFailedIp || ''
   };
 }
 

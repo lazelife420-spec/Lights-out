@@ -28,8 +28,23 @@ let status = {
   host: '127.0.0.1',
   clients: 0,
   connected: false,
-  failed: false
+  failed: false,
+  failedAttempts: 0,
+  lastFailedIp: ''
 };
+
+// Failed-pairing-attempt counter, purely informational -- not a lockout. Resets
+// whenever the server (re)starts, e.g. after the user regenerates the pairing
+// code, so a burst of failures from the user's own device reconnecting with a
+// now-stale cached token doesn't linger as a false "someone's trying to get
+// in" signal after they've already moved on. Deliberately no rate limiting or
+// IP banning here: the 192-bit token already makes guessing infeasible, and a
+// hard lockout would risk locking out the user's own device on a fat-fingered
+// pairing code. This exists purely so the desktop UI can surface the fact
+// that *something* has been failing, for the user to react to (e.g. by
+// regenerating) if it's unexpected.
+let failedAttempts = 0;
+let lastFailedIp = '';
 
 // Computes the RFC 6455 Sec-WebSocket-Accept value for a client key. The magic
 // GUID must be exactly this string — a wrong GUID produces an accept that every
@@ -76,6 +91,12 @@ function writeHttpResponse(socket, status, headers = {}, body = '') {
   try { socket.end(); } catch {}
 }
 
+function recordFailedAttempt(socket) {
+  failedAttempts++;
+  lastFailedIp = (socket.remoteAddress || '').replace(/^::ffff:/, '');
+  updateStatus({ failedAttempts, lastFailedIp });
+}
+
 function upgradeHandler(req, socket, head) {
   if (req.headers.upgrade?.toLowerCase() !== 'websocket') { socket.destroy(); return; }
 
@@ -92,10 +113,12 @@ function upgradeHandler(req, socket, head) {
     return;
   }
   if (!token) {
+    recordFailedAttempt(socket);
     writeHttpResponse(socket, '401 Unauthorized', { 'WWW-Authenticate': 'Bearer' }, 'Unauthorized');
     return;
   }
   if (!remoteControl.tokensMatch(token, expectedToken)) {
+    recordFailedAttempt(socket);
     writeHttpResponse(socket, '403 Forbidden', {}, 'Forbidden');
     return;
   }
@@ -321,6 +344,10 @@ function start(opts = {}) {
   expectedToken = String(opts.token || '');
   bindHost = opts.host || '127.0.0.1';
   const port = opts.port || PWA_PORT;
+  // Fresh start (including a regenerated token) clears the failed-attempt
+  // count -- see recordFailedAttempt's comment for why this isn't a lockout.
+  failedAttempts = 0;
+  lastFailedIp = '';
   // Never expose a listener without a pairing token.
   if (!expectedToken) return;
   server = http.createServer(requestHandler);
@@ -341,7 +368,7 @@ function start(opts = {}) {
 
   server.listen(port, bindHost, () => {
     console.log(`Companion PWA running on ${bindHost}:${port}`);
-    updateStatus({ running: true, host: bindHost, port, failed: false, connected: clients.size > 0 });
+    updateStatus({ running: true, host: bindHost, port, failed: false, connected: clients.size > 0, failedAttempts, lastFailedIp });
   });
 }
 
@@ -398,5 +425,8 @@ module.exports = {
   // pure with respect to the (test-supplied) client object; consumeFrames /
   // dispatchFrame only read/write client.buf, client.alive, and client.socket.
   encodeFrame,
-  consumeFrames
+  consumeFrames,
+  // Exposed for unit testing the failed-pairing-attempt counter (needs only
+  // a socket-shaped object with .remoteAddress, no real server/port).
+  recordFailedAttempt
 };

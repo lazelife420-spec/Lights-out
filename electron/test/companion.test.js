@@ -38,3 +38,30 @@ test('computeAccept changes with the key', () => {
     companion.computeAccept('x3JJHMbDL1EzLkh9GBhXDw==')
   );
 });
+
+// Failed-pairing-attempt visibility: purely informational (see the comment
+// above recordFailedAttempt in companion.js for why this is not a lockout).
+// Tests use relative deltas rather than absolute counts since the counter
+// only resets on start() (which needs a real bound port), so module state
+// may carry over between test files/runs.
+
+test('recordFailedAttempt increments the counter and records the source IP', () => {
+  const before = companion.getStatus().failedAttempts;
+  companion.recordFailedAttempt({ remoteAddress: '192.168.1.50' });
+  const after = companion.getStatus();
+  assert.equal(after.failedAttempts, before + 1);
+  assert.equal(after.lastFailedIp, '192.168.1.50');
+});
+
+test('recordFailedAttempt strips the IPv4-mapped IPv6 prefix from the source address', () => {
+  companion.recordFailedAttempt({ remoteAddress: '::ffff:10.0.0.5' });
+  assert.equal(companion.getStatus().lastFailedIp, '10.0.0.5');
+});
+
+test('recordFailedAttempt tolerates a missing remoteAddress', () => {
+  const before = companion.getStatus().failedAttempts;
+  companion.recordFailedAttempt({});
+  const after = companion.getStatus();
+  assert.equal(after.failedAttempts, before + 1);
+  assert.equal(after.lastFailedIp, '');
+});

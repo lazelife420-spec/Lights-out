@@ -130,3 +130,18 @@ real release keystore for anything you intend to keep updating in place.
   companion is LAN-only. If you later put the companion behind HTTPS, tighten that.
 - `applicationId` is `com.lightsout.companion`; bump `versionCode`/`versionName` in
   `app/build.gradle` for updates.
+- **The "auto-detect" card may never appear, and that's likely not a bug.**
+  It relies on the desktop broadcasting a UDP beacon on port 58733
+  (`family.js`'s `LIGHTSOUT_FAMILY_V1` beacon) that the app listens for in
+  `MainActivity.startUdpDiscovery()`. Confirmed 2026-07-10 on a real network:
+  even a raw OS-level broadcast probe, sent from the same PC with the same
+  Windows Firewall/network profile as the real app, never reached the phone
+  — while a normal unicast WebSocket connection to that same PC's specific IP
+  worked fine. This points to the router/AP silently dropping broadcast
+  traffic between Wi-Fi clients ("client/AP isolation," a common default on
+  mesh systems and many consumer routers), not a code defect on either end.
+  There is no app-level fix for this: it's why "Scan QR code" is the primary,
+  most-prominent button on the setup screen and auto-detect is a bonus, not
+  the main path. Don't spend time re-debugging `startUdpDiscovery()` or
+  `family.js`'s beacon unless you have concrete evidence the specific network
+  in question actually permits Wi-Fi client-to-client broadcast.

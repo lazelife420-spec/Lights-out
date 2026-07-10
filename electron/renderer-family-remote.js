@@ -66,6 +66,17 @@ function renderRemoteControl(rc) {
     els.companionConnectedBadge.style.display = rc.connected ? '' : 'none';
     els.companionConnectedBadge.textContent = rc.connected ? `${rc.clients} phone${rc.clients === 1 ? '' : 's'} connected` : '';
   }
+  // Purely informational -- not a lockout, not an alarm. Shows only when
+  // there's something to react to; disappears on its own once the user
+  // regenerates the code (see companion.js's recordFailedAttempt).
+  if (els.remoteFailedAttempts) {
+    const count = rc.failedAttempts || 0;
+    els.remoteFailedAttempts.style.display = count > 0 ? '' : 'none';
+    if (count > 0 && els.remoteFailedAttemptsText) {
+      const ipSuffix = rc.lastFailedIp ? ` (last from ${rc.lastFailedIp})` : '';
+      els.remoteFailedAttemptsText.textContent = `${count} failed pairing attempt${count === 1 ? '' : 's'}${ipSuffix}`;
+    }
+  }
   updateRemoteQr(mode === 'wifi' ? rc.url : '');
 }
 

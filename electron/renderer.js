@@ -446,6 +446,8 @@ const els = {
   btnCopyUrl: document.getElementById('btn-copy-url'),
   companionStatusPill: document.getElementById('companion-status-pill'),
   companionConnectedBadge: document.getElementById('companion-connected-badge'),
+  remoteFailedAttempts: document.getElementById('remote-failed-attempts'),
+  remoteFailedAttemptsText: document.getElementById('remote-failed-attempts-text'),
   remoteShortCode: document.getElementById('remote-short-code'),
 
   // Family mode

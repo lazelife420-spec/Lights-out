@@ -727,6 +727,20 @@ check('companion: same-wifi status shows Waiting for phone before client connect
   assertMatch(mainSrc, /return 'Waiting for phone';/, 'Waiting for phone fallback missing');
 });
 
+check('companion: failed pairing attempts are surfaced to the desktop UI, calmly', () => {
+  // Informational only -- see recordFailedAttempt's comment in companion.js
+  // for why this is deliberately not a lockout/rate-limit. Guards that the
+  // wiring from companion.js's counter through main.js to the renderer stays
+  // intact, and that the copy stays factual rather than alarmist (no "ALERT",
+  // no red/danger styling class beyond the existing muted text color).
+  assertMatch(mainSrc, /failedAttempts: status\.failedAttempts \|\| 0/, 'getRemoteControlState must forward failedAttempts from companion.getStatus()');
+  assertMatch(mainSrc, /lastFailedIp: status\.lastFailedIp \|\| ''/, 'getRemoteControlState must forward lastFailedIp from companion.getStatus()');
+  assert(htmlSrc.includes('id="remote-failed-attempts"'), 'remote-failed-attempts element missing from HTML');
+  assert(htmlSrc.includes('id="remote-failed-attempts-text"'), 'remote-failed-attempts-text element missing from HTML');
+  assert(!/ALERT|SECURITY WARNING|danger/i.test(htmlSrc.match(/<p id="remote-failed-attempts"[\s\S]*?<\/p>/)?.[0] || ''), 'failed-attempts copy should stay calm/factual, not alarmist');
+  assertMatch(rendererSrc, /els\.remoteFailedAttempts\.style\.display = count > 0 \? '' : 'none'/, 'renderer must show/hide the failed-attempts line based on a real count');
+});
+
 check('trusted-lan: explicit warning modal exists and states the real exposure/limits', () => {
   assert(htmlSrc.includes('id="lan-warning-modal"'), 'lan-warning-modal missing from HTML');
   assert(htmlSrc.includes('id="btn-lan-warning-confirm"'), 'lan-warning confirm button missing');
