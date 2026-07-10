@@ -2907,6 +2907,8 @@ if (els.btnClearReceipts) {
         document.getElementById('override-modal').classList.remove('active');
       } else if (document.getElementById('snooze-tax-modal')?.classList.contains('active')) {
         document.getElementById('snooze-tax-modal').classList.remove('active');
+      } else if (document.getElementById('lan-warning-modal')?.classList.contains('active')) {
+        document.getElementById('btn-lan-warning-cancel')?.click();
       } else if (document.getElementById('streak-celebration-modal')?.classList.contains('active')) {
         document.getElementById('streak-celebration-modal').classList.remove('active');
       } else if (state.running || state.paused) {

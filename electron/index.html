@@ -1768,6 +1768,27 @@
     </div>
   </div>
 
+  <!-- Trusted LAN Mode: explicit warning shown before "Connect Phone" exposes the
+       companion server to the whole Wi-Fi network. -->
+  <div class="modal" id="lan-warning-modal">
+    <div class="modal-content" style="max-width:360px">
+      <div style="text-align:center;margin-bottom:12px">
+        <span style="font-size:28px">&#x1F4F6;</span>
+        <h2 style="font-size:15px;margin:6px 0 4px">This opens your PC to your Wi-Fi network</h2>
+      </div>
+      <ul style="font-size:11px;color:var(--text-secondary);margin:0 0 12px;padding-left:18px;line-height:1.6">
+        <li>Any device on this Wi-Fi network that has the pairing code can start, pause, snooze, or cancel the timer.</li>
+        <li>It can <strong>never</strong> force a shutdown, log you out, or hibernate the PC &mdash; that stays local-only.</li>
+        <li>Regenerating the pairing code instantly revokes access for every connected device.</li>
+        <li>Turn this off any time from Settings.</li>
+      </ul>
+      <div style="display:flex;gap:8px">
+        <button class="btn-primary" id="btn-lan-warning-confirm" style="flex:1;font-size:11px">I understand, connect phone</button>
+        <button class="btn-secondary" id="btn-lan-warning-cancel" style="flex:1;font-size:11px">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Notification Center Drawer -->
   <div class="modal" id="notif-drawer" style="display:none">
     <div class="modal-content" style="max-width:340px;max-height:420px;overflow:hidden;display:flex;flex-direction:column">

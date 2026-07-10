@@ -675,6 +675,23 @@ check('companion: same-wifi status shows Waiting for phone before client connect
   assertMatch(mainSrc, /return 'Waiting for phone';/, 'Waiting for phone fallback missing');
 });
 
+check('trusted-lan: explicit warning modal exists and states the real exposure/limits', () => {
+  assert(htmlSrc.includes('id="lan-warning-modal"'), 'lan-warning-modal missing from HTML');
+  assert(htmlSrc.includes('id="btn-lan-warning-confirm"'), 'lan-warning confirm button missing');
+  assert(htmlSrc.includes('id="btn-lan-warning-cancel"'), 'lan-warning cancel button missing');
+  assertMatch(htmlSrc, /Any device on this Wi-Fi network[\s\S]*pairing code can start, pause, snooze, or cancel/, 'warning copy must state exactly what is exposed');
+  assertMatch(htmlSrc, /never<\/strong> force a shutdown, log you out, or hibernate/, 'warning copy must state what stays off-limits');
+});
+
+check('trusted-lan: enabling wifi mode is gated behind the warning modal, other modes are not', () => {
+  assertMatch(rendererSrc, /function showLanWarningModal\(\)/, 'showLanWarningModal helper missing');
+  assertMatch(rendererSrc, /if \(mode === 'wifi' && !btn\.classList\.contains\('active'\)\) \{\s*const confirmed = await showLanWarningModal\(\);\s*if \(!confirmed\) return;/, 'wifi mode click must await confirmation before proceeding, and bail out if cancelled');
+});
+
+check('trusted-lan: Escape cancels the warning modal without silently enabling wifi mode', () => {
+  assertMatch(rendererSrc, /document\.getElementById\('lan-warning-modal'\)\?\.classList\.contains\('active'\)[\s\S]{0,40}document\.getElementById\('btn-lan-warning-cancel'\)\?\.click\(\)/, 'Escape must click the cancel button (resolving the confirmation promise as false), not just hide the modal');
+});
+
 // 8. Run Receipts module logic.
 const rrPath = path.join(root, 'runReceipts.js');
 if (fs.existsSync(rrPath)) {

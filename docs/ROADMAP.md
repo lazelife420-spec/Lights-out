@@ -7,7 +7,7 @@
 Lights Out PC™ ("Bedtime Mode for Windows") is live at **v10.4.0** — the
 latest tagged/published release. Proof-first software forged for builders.
 
-**Unreleased, pending merge:** [PR #19](https://github.com/lazelife420-spec/Lights-out/pull/19)
+**Merged to `main`, not yet tagged/released:** [PR #19](https://github.com/lazelife420-spec/Lights-out/pull/19)
 (`claude/roadmap-followthrough`) closed out every open item from the
 Streaks/Profiles and Proof & Receipts pillars, verified the Reliable
 Shutdown pillar with live runtime proof (not just code review), shipped
@@ -105,22 +105,33 @@ can be viewed, proof can be copied, receipt does not overclaim.
 
 Remote control should be useful only when safe.
 
-**Status:** the default-safety posture and settings copy are both done.
-One open item:
+**Status:** fully satisfied. No open items.
 
-- **Trusted LAN mode with explicit warning and proof.** Not scoped yet —
-  needs a product decision on what "trusted" actually means (per-device
-  allowlist? longer-lived tokens? something else?), what the warning UX
-  looks like, and what proof gate would satisfy "safe." Don't start this
-  without that design conversation; it's a security-posture change, not a
-  copy/UI tweak.
+**Trusted LAN mode, decided and shipped 2026-07-09:** "trusted" means an
+explicit, informed choice at the moment of exposure, not a new
+device-identity system. Enabling "Connect Phone" (the `wifi` mode that
+binds `0.0.0.0` and opens the firewall — see `startRemoteControl` in
+`main.js`) now gates behind a warning modal
+(`#lan-warning-modal`/`showLanWarningModal` in
+`renderer-family-remote.js`) that states plainly what's exposed (any
+device on the Wi-Fi network with the pairing code can start/pause/snooze/
+cancel) and what stays off-limits (never a forced shutdown/logout/
+hibernate, regenerating the code revokes access instantly). Per-device
+allowlisting and longer-lived tokens were considered and explicitly
+declined for v1 of this: the app is a single-user LAN control surface
+already gated by network membership + a shared pairing token, and adding
+per-device identity would be new security-model surface without a clear
+user story yet. Revisit only if a concrete need shows up (e.g. multiple
+household members each wanting independent revocation).
 
 **Ongoing commitment:** remote control stays off by default, pairing token
 stays required, companion stays bound to `127.0.0.1` by default.
 
 Proof gates: default no listener, enable generates token, bad token
 rejected, good token works, regenerate revokes old token, disable stops
-listener.
+listener, enabling `wifi` mode is blocked until the warning is explicitly
+confirmed (verified live in-browser: Cancel leaves the mode off and never
+calls `setRemoteControlMode`; Confirm calls it with `'wifi'`).
 
 ## Release Sequence
 
@@ -146,19 +157,20 @@ originally planned for that slot.
 
 Goal: a full night shutdown cockpit for Windows power users.
 
-**Shipped, pending merge (PR #19):** full-screen clock mode — reuses the
-main window, hides all chrome, scales the analog clock to read from across
-a room.
+**Shipped:** full-screen clock mode — reuses the main window, hides all
+chrome, scales the analog clock to read from across a room. Trusted LAN
+mode — see Pillar 5 above.
 
-**Still open, blocked:**
+**Descoped from v11.0.0, 2026-07-09:**
 
-- **Smart light integration, "only if runtime-proven."** Code exists
-  (`smartLights.js`: Hue + generic HTTP webhook) but has zero test
-  coverage, and "runtime-proven" means proof against real hardware. Needs
-  either a physical smart light to test against, or an explicit decision to
-  descope this from v11.0.0.
-- **Trusted LAN mode** — see Pillar 5 above; may land here or later
-  depending on when it gets designed.
+- **Smart light integration.** Code exists (`smartLights.js`: Hue +
+  generic HTTP webhook) but has zero test coverage, and "runtime-proven"
+  means proof against real hardware — which no agent working on this repo
+  has access to. Rather than ship an unproven integration under a
+  proof-first brand, it's parked until either a physical smart light is
+  available to test against, or there's an explicit product call to ship
+  it as an unverified/experimental feature (which would need its own
+  honest labeling). Not deleted — just not claimed as done.
 
 Ship only if: manual runtime proof exists, no fake integrations, no unsafe
 remote defaults.
