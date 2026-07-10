@@ -63,6 +63,11 @@ class MainActivity : AppCompatActivity() {
     // Failsafe map tracking failed connection attempts per host IP with timestamp to prevent reconnect loops
     private val failedConnections = mutableMapOf<String, Long>()
 
+    // Bounds subnet-scan-based reconnect attempts (see handleLoadFailure) to
+    // one per cooldown window, so a wrong/revoked token -- which will keep
+    // failing no matter which host answers -- can't turn into a busy loop.
+    private var lastScanAttemptAt = 0L
+
     private val prefs by lazy { getSharedPreferences("lightsout", MODE_PRIVATE) }
 
     // Scanner returns the pairing URL; persist it and connect.
@@ -234,6 +239,15 @@ class MainActivity : AppCompatActivity() {
     private fun showWeb(url: String) {
         lastRequestedUrl = url
         mainFrameLoadFailed = false
+        // Captured here, at the moment a URL is actually provided (QR scan,
+        // manual paste, or an auto-reconnect), rather than read back out of
+        // the WebView later -- companion.html strips `?t=` from the address
+        // bar via history.replaceState almost immediately after load, so by
+        // the time onPageFinished's callback reports a URL, the token is
+        // already gone from it. See CompanionUrlNormalizer.extractToken.
+        CompanionUrlNormalizer.extractToken(url)?.let { token ->
+            prefs.edit().putString(KEY_TOKEN, token).apply()
+        }
         setup.visibility = View.GONE
         webView.visibility = View.VISIBLE
         autoDetectCard.visibility = View.GONE
@@ -259,6 +273,35 @@ class MainActivity : AppCompatActivity() {
         }
 
         webView.stopLoading()
+
+        // Most likely cause of a failed load on a previously-working pairing:
+        // the desktop's LAN IP changed (observed in practice on a machine
+        // with two Wi-Fi adapters on the same subnet). Try a unicast subnet
+        // scan for the same token before giving up to the manual setup
+        // screen -- but only once per cooldown window, so a genuinely wrong/
+        // revoked token (which will keep failing no matter what host answers)
+        // can't turn into a busy-loop of scans.
+        val token = prefs.getString(KEY_TOKEN, null)
+        val now = System.currentTimeMillis()
+        if (token != null && now - lastScanAttemptAt > SCAN_COOLDOWN_MS) {
+            lastScanAttemptAt = now
+            Toast.makeText(this, R.string.reconnecting, Toast.LENGTH_SHORT).show()
+            SubnetScanner.findCompanion(applicationContext) { foundHost ->
+                runOnUiThread {
+                    if (foundHost != null && foundHost != ip) {
+                        Log.i("LightsOutApp", "Subnet scan found companion at $foundHost after $ip failed to load")
+                        showWeb(CompanionUrlNormalizer.buildUrl(foundHost, token))
+                    } else {
+                        fallBackToSetup(url)
+                    }
+                }
+            }
+        } else {
+            fallBackToSetup(url)
+        }
+    }
+
+    private fun fallBackToSetup(url: String?) {
         showSetup(url ?: prefs.getString(KEY_URL, null))
         Toast.makeText(this, R.string.connection_failed, Toast.LENGTH_LONG).show()
     }
@@ -335,21 +378,20 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Auto-reconnect on IP change
+        // Auto-reconnect on IP change. Uses the token captured directly at
+        // pairing time (see showWeb/KEY_TOKEN), not one re-parsed out of the
+        // saved URL -- companion.html strips `?t=` from the address bar via
+        // history.replaceState almost immediately after load, so by the time
+        // a URL gets persisted to KEY_URL, the query string is already gone
+        // and this reconnect could never actually fire.
+        val token = prefs.getString(KEY_TOKEN, null)
         val saved = prefs.getString(KEY_URL, null)
-        if (webView.visibility != View.VISIBLE && saved != null) {
-            val uri = try { java.net.URI(saved) } catch (_: Exception) { null }
-            val query = uri?.rawQuery
-            if (query != null && query.contains("t=")) {
-                val tokenParam = query.split("&").firstOrNull { it.startsWith("t=") }
-                if (tokenParam != null) {
-                    val newUrl = "http://$ip:${CompanionUrlNormalizer.DEFAULT_PORT}/?$tokenParam"
-                    if (uri.host != ip) {
-                        Log.i("LightsOutApp", "Auto-discovered PC IP changed from ${uri.host} to $ip. Attempting auto-reconnect.")
-                        showWeb(newUrl)
-                        return
-                    }
-                }
+        if (webView.visibility != View.VISIBLE && token != null && saved != null) {
+            val savedHost = try { java.net.URI(saved).host } catch (_: Exception) { null }
+            if (savedHost != null && savedHost != ip) {
+                Log.i("LightsOutApp", "Auto-discovered PC IP changed from $savedHost to $ip. Attempting auto-reconnect.")
+                showWeb(CompanionUrlNormalizer.buildUrl(ip, token))
+                return
             }
         }
 
@@ -375,5 +417,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val KEY_URL = "companion_url"
+        private const val KEY_TOKEN = "companion_token"
+        private const val SCAN_COOLDOWN_MS = 20_000L
     }
 }

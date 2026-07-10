@@ -48,4 +48,32 @@ internal object CompanionUrlNormalizer {
             null
         }
     }
+
+    // Extracts the pairing token from a normalized companion URL's `t` query
+    // param. Used to capture the token at the moment the user actually
+    // provides a URL (QR scan / manual paste / auto-discovery), independent
+    // of what the address bar later becomes -- the companion page itself
+    // calls history.replaceState() to strip `?t=` from the visible URL
+    // almost immediately after load, so anything that reads the token back
+    // out of a *later-observed* WebView URL (e.g. onPageFinished's callback
+    // parameter) will find it already gone.
+    fun extractToken(url: String?): String? {
+        if (url.isNullOrBlank()) return null
+        return try {
+            URI(url).rawQuery
+                ?.split("&")
+                ?.firstOrNull { it.startsWith("t=") }
+                ?.substringAfter("t=")
+                ?.takeIf { it.isNotBlank() }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    // Rebuilds a companion URL for a newly-discovered host, reusing a
+    // previously-captured token (see extractToken). Always targets the
+    // default port -- a rediscovered PC is identified by IP alone, not by a
+    // full prior URL, so there's no "original port" to preserve.
+    fun buildUrl(host: String, token: String): String =
+        "http://$host:$DEFAULT_PORT/?t=$token"
 }
