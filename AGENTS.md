@@ -19,9 +19,23 @@ The core product idea is:
 
 ## Product Surface
 
-There is one app surface: `electron\`.
-It is the primary (and only) shipping UI, with a real build and packaging flow.
+There is one *desktop* app surface: `electron\`.
+It is the primary shipping UI, with a real build and packaging flow.
 The old WinForms UI has been deprecated and removed in favor of this cockpit dashboard.
+
+There is also an optional native Android companion, `companion-android\` — a
+thin WebView wrapper (Kotlin) around `electron\companion.html` with its own QR
+pairing scanner (CameraX + on-device ML Kit), documented in
+`companion-android\README.md`. It is not part of the desktop build/release
+train and has no CI coverage; treat changes to it as a separate, manual
+workflow. Its release keystore
+(`~/.android/lightsout-companion-release.jks`, gitignored
+`companion-android\keystore.properties` alongside it) is the one and only
+signing identity for this app going forward — it has no recovery path if
+lost, so if you (the agent) ever generate or touch it, flag that loudly to
+the user rather than treating it as disposable. (`companion-mobile\`, an
+earlier, unfinished Capacitor-based duplicate of this same idea, was removed
+2026-07-09 — if you see references to it in old history, that's why.)
 
 ## Current State
 

@@ -92,10 +92,44 @@ async function loadRemoteControlState() {
   try { renderRemoteControl(await api.getRemoteControl?.()); } catch {}
 }
 
+// Trusted LAN mode: "wifi" is the mode that actually exposes the companion
+// server beyond this PC (binds 0.0.0.0, opens the firewall — see main.js
+// startRemoteControl). Enabling it must be an explicit, informed choice, not
+// a single accidental click, so it is gated behind a warning modal that
+// states exactly what is exposed and what stays off-limits (never a forced
+// shutdown/logout/hibernate). Resolves false if the user cancels or the
+// modal is missing from the DOM.
+function showLanWarningModal() {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('lan-warning-modal');
+    if (!modal) { resolve(false); return; }
+
+    modal.classList.add('active');
+
+    const confirmBtn = document.getElementById('btn-lan-warning-confirm');
+    const cancelBtn = document.getElementById('btn-lan-warning-cancel');
+
+    function cleanup() {
+      modal.classList.remove('active');
+      confirmBtn?.removeEventListener('click', onConfirm);
+      cancelBtn?.removeEventListener('click', onCancel);
+    }
+    function onConfirm() { cleanup(); resolve(true); }
+    function onCancel() { cleanup(); resolve(false); }
+
+    confirmBtn?.addEventListener('click', onConfirm);
+    cancelBtn?.addEventListener('click', onCancel);
+  });
+}
+
 function setupRemoteControlHandlers() {
   document.querySelectorAll('.btn-mode').forEach(btn => {
     btn.addEventListener('click', async () => {
       const mode = btn.dataset.mode;
+      if (mode === 'wifi' && !btn.classList.contains('active')) {
+        const confirmed = await showLanWarningModal();
+        if (!confirmed) return;
+      }
       try {
         const rc = await api.setRemoteControlMode?.(mode);
         renderRemoteControl(rc);

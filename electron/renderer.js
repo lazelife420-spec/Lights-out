@@ -407,6 +407,8 @@ const els = {
   streakTotal: document.getElementById('streak-total'),
   streakWeekAvg: document.getElementById('streak-weekavg'),
   streakOnTime: document.getElementById('streak-ontime'),
+  weeklyReportText: document.getElementById('weekly-report-text'),
+  btnCopyWeeklyReport: document.getElementById('btn-copy-weekly-report'),
   sleepHistoryGrid: document.getElementById('sleep-history-grid'),
   streakCallout: document.getElementById('streak-callout'),
   streakCalloutCount: document.getElementById('streak-callout-count'),
@@ -1908,6 +1910,10 @@ function renderStreaks(summary, catalog, report, sleepScore, history, trend) {
     if (els.streakOnTime) els.streakOnTime.textContent = `${100 - (report.snoozeRate || 0)}% on-time`;
   }
 
+  if (els.weeklyReportText) {
+    els.weeklyReportText.textContent = report?.narrative || 'No nights logged this week yet. Start a timer tonight to begin this week\'s report.';
+  }
+
   // Sleep History Grid (30 Days)
   if (els.sleepHistoryGrid && history) {
     els.sleepHistoryGrid.innerHTML = history.map(d => {
@@ -2667,6 +2673,16 @@ if (els.btnClearReceipts) {
     }
   });
 
+  els.btnCopyWeeklyReport?.addEventListener('click', async () => {
+    try {
+      const text = els.weeklyReportText?.textContent || '';
+      await navigator.clipboard.writeText(text);
+      notify('Weekly report copied to clipboard!', 'success', 3000);
+    } catch (err) {
+      notify('Failed to copy weekly report.', 'error');
+    }
+  });
+
   els.modalClose.addEventListener('click', () => {
     els.optionsModal.classList.remove('active');
     render();
@@ -2907,6 +2923,8 @@ if (els.btnClearReceipts) {
         document.getElementById('override-modal').classList.remove('active');
       } else if (document.getElementById('snooze-tax-modal')?.classList.contains('active')) {
         document.getElementById('snooze-tax-modal').classList.remove('active');
+      } else if (document.getElementById('lan-warning-modal')?.classList.contains('active')) {
+        document.getElementById('btn-lan-warning-cancel')?.click();
       } else if (document.getElementById('streak-celebration-modal')?.classList.contains('active')) {
         document.getElementById('streak-celebration-modal').classList.remove('active');
       } else if (state.running || state.paused) {

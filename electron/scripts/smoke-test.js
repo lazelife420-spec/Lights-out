@@ -182,6 +182,39 @@ check('streaks: getTrend aggregates events into weekly and monthly buckets', () 
   assert(streaks.getTrend('week').length === 0, 'no events should yield no buckets');
 });
 
+check('streaks: buildWeeklyNarrative summarizes only real computed fields (no invented claims)', () => {
+  const streaks = require(path.join(root, 'streaks.js'));
+  streaks._reset();
+
+  // No nights logged this week -- must say so honestly, not fabricate a claim.
+  const empty = streaks.buildWeeklyNarrative({ nightsThisWeek: 0 });
+  assert(/No nights logged this week/.test(empty), 'empty report should admit no nights logged');
+
+  const today = new Date();
+  const iso = (daysAgo) => new Date(today - daysAgo * 86400000).toISOString().slice(0, 10);
+  streaks.replaceAll({
+    events: [
+      { date: iso(2), bedTime: '22:00', action: 'shutdown', snoozed: false },
+      { date: iso(1), bedTime: '22:30', action: 'shutdown', snoozed: true },
+      { date: iso(0), bedTime: '22:15', action: 'sleep', snoozed: false }
+    ],
+    streak: 3,
+    bestStreak: 5,
+    achievements: ['first_light']
+  });
+
+  const report = streaks.getWeeklyReport();
+  assert(report.nightsThisWeek === 3, `expected 3 nights this week, got ${report.nightsThisWeek}`);
+  assert(typeof report.narrative === 'string' && report.narrative.length > 0, 'getWeeklyReport should include a narrative field');
+  assert(report.narrative.includes('3 of the last 7 nights logged'), `narrative should state the real night count, got: ${report.narrative}`);
+  assert(report.narrative.includes('Current streak: 3 nights (best ever: 5)'), 'narrative should state the real streak numbers');
+  assert(report.narrative.includes('Snoozed on 33% of logged nights'), `narrative should state the real snooze rate, got: ${report.narrative}`);
+  assert(report.narrative.includes('2 shutdown, 1 sleep'), 'narrative should break down real action counts');
+  assert(report.narrative.includes('1 achievement unlocked'), 'narrative should state the real achievement count');
+
+  streaks.replaceAll({ events: [], streak: 0, bestStreak: 0, achievements: [] });
+});
+
 Module._load = origLoad;
 
 // 4b. lastLight sequence catalog + timing.
@@ -600,10 +633,29 @@ check('companion: host query cannot override location.host for the pairing token
   assertMatch(companionHtml, /if \(fromUrl && isValidHost\(fromUrl\)\)/, 'URL host param must be validated, not trusted as-is');
 });
 
-check('companion: pair-reset has exactly one non-conflicting handler', () => {
+check('companion: no dangling getElementById reference crashes the page on load', () => {
+  // Regression test for two real bugs found via live device testing (phone
+  // physically paired to a running desktop instance): a 2026-07-03 merge
+  // (3042de6) dropped the #pair-reset button from the markup but left
+  // `const pairReset = document.getElementById('pair-reset')` and an
+  // unguarded `pairReset.addEventListener(...)` behind, and a separate,
+  // older redesign dropped the entire #disconnected/#disconnected-msg
+  // status block while five call sites across every connection-state-change
+  // path (setConnectionState, showPairing, ws.onclose, ws.onerror) kept
+  // referencing it unguarded. Both are always-null references, so both threw
+  // an uncaught TypeError on page load / on first WebSocket state change --
+  // which silently aborted the rest of that top-level script. Concretely:
+  // the pair-reset crash meant connect() never even ran, so the phone
+  // companion was stuck on the static "Connecting..." placeholder forever,
+  // for every user, regardless of a correct token/network -- the entire
+  // remote-control-from-phone feature was non-functional. The status pill
+  // already carries the identical message via setConnectionState(state,
+  // msg), so the fix was deleting the redundant dead block rather than
+  // resurrecting removed UI (same call made for pair-reset: reconnection is
+  // already automatic via scheduleReconnect()).
   const companionHtml = fs.readFileSync(path.join(root, 'companion.html'), 'utf8');
-  const matches = companionHtml.match(/pairReset\.addEventListener\('click'/g) || [];
-  assert(matches.length === 1, `pair-reset should have exactly one click handler, found ${matches.length}`);
+  assert(!/pairReset|pair-reset/.test(companionHtml), 'a dead pairReset/pair-reset reference has reappeared with no corresponding element -- this crashes the page on load');
+  assert(!/\bconst disconnected\b|disconnected-msg|disconnected\.style/.test(companionHtml), 'a dead #disconnected/#disconnected-msg reference has reappeared with no corresponding element -- this crashes every connection-state change');
 });
 
 check('morning proof: Mission Complete overlay has accessible close affordances', () => {
@@ -673,6 +725,31 @@ check('companion: same-wifi status shows Waiting for phone before client connect
   assertMatch(mainSrc, /if \(connected\) return 'Phone connected';/, 'connected label missing');
   assertMatch(mainSrc, /if \(clients > 0\) return 'Phone connected';/, 'clients label missing');
   assertMatch(mainSrc, /return 'Waiting for phone';/, 'Waiting for phone fallback missing');
+});
+
+check('trusted-lan: explicit warning modal exists and states the real exposure/limits', () => {
+  assert(htmlSrc.includes('id="lan-warning-modal"'), 'lan-warning-modal missing from HTML');
+  assert(htmlSrc.includes('id="btn-lan-warning-confirm"'), 'lan-warning confirm button missing');
+  assert(htmlSrc.includes('id="btn-lan-warning-cancel"'), 'lan-warning cancel button missing');
+  assertMatch(htmlSrc, /Any device on this Wi-Fi network[\s\S]*pairing code can start, pause, snooze, or cancel/, 'warning copy must state exactly what is exposed');
+  assertMatch(htmlSrc, /never<\/strong> force a shutdown, log you out, or hibernate/, 'warning copy must state what stays off-limits');
+});
+
+check('trusted-lan: enabling wifi mode is gated behind the warning modal, other modes are not', () => {
+  assertMatch(rendererSrc, /function showLanWarningModal\(\)/, 'showLanWarningModal helper missing');
+  assertMatch(rendererSrc, /if \(mode === 'wifi' && !btn\.classList\.contains\('active'\)\) \{\s*const confirmed = await showLanWarningModal\(\);\s*if \(!confirmed\) return;/, 'wifi mode click must await confirmation before proceeding, and bail out if cancelled');
+});
+
+check('trusted-lan: Escape cancels the warning modal without silently enabling wifi mode', () => {
+  assertMatch(rendererSrc, /document\.getElementById\('lan-warning-modal'\)\?\.classList\.contains\('active'\)[\s\S]{0,40}document\.getElementById\('btn-lan-warning-cancel'\)\?\.click\(\)/, 'Escape must click the cancel button (resolving the confirmation promise as false), not just hide the modal');
+});
+
+check('weekly-report: "This Week" UI is wired to the real backend field, not a placeholder', () => {
+  assert(htmlSrc.includes('id="weekly-report-text"'), 'weekly-report-text element missing from HTML');
+  assert(htmlSrc.includes('id="btn-copy-weekly-report"'), 'copy-weekly-report button missing from HTML');
+  assertMatch(rendererSrc, /els\.weeklyReportText\.textContent = report\?\.narrative/, 'renderer must populate the narrative from the real report field');
+  assertMatch(rendererSrc, /els\.btnCopyWeeklyReport\?\.addEventListener\('click'/, 'copy-weekly-report button is not wired to a click handler');
+  assertMatch(mainSrc, /ipcMain\.handle\('get-weekly-report'/, 'get-weekly-report IPC handler missing');
 });
 
 // 8. Run Receipts module logic.

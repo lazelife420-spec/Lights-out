@@ -205,7 +205,7 @@ function getWeeklyReport() {
   const actionCounts = {};
   recent.forEach(e => { actionCounts[e.action] = (actionCounts[e.action] || 0) + 1; });
 
-  return {
+  const report = {
     weekStart: weekAgo,
     weekEnd: now.toISOString().slice(0, 10),
     nightsThisWeek: recent.length,
@@ -218,6 +218,33 @@ function getWeeklyReport() {
     trend,
     achievements: data.achievements || []
   };
+  report.narrative = buildWeeklyNarrative(report);
+  return report;
+}
+
+// Turns a getWeeklyReport() result into a plain-text narrative -- every
+// sentence is a direct readout of a field already computed above, no scoring
+// or diagnosis layered on top (see Streaks pillar guardrail: no medical
+// language, no fake scores not backed by actual events). Pure function so
+// it's testable without touching the events store.
+function buildWeeklyNarrative(report) {
+  if (!report || !report.nightsThisWeek) {
+    return 'No nights logged this week yet. Start a timer tonight to begin this week\'s report.';
+  }
+  const lines = [];
+  lines.push(`${report.nightsThisWeek} of the last 7 nights logged (${report.totalNights} total since you started).`);
+  lines.push(`Current streak: ${report.streak} night${report.streak === 1 ? '' : 's'} (best ever: ${report.bestStreak}).`);
+  if (report.trend.length > 1) {
+    lines.push(`Bedtime varied by about ${report.consistency} minutes night to night this week.`);
+  }
+  lines.push(`Snoozed on ${report.snoozeRate}% of logged nights this week.`);
+  const actionParts = Object.entries(report.actionCounts)
+    .map(([action, count]) => `${count} ${action}`);
+  if (actionParts.length) lines.push(`Actions taken: ${actionParts.join(', ')}.`);
+  if (report.achievements.length) {
+    lines.push(`${report.achievements.length} achievement${report.achievements.length === 1 ? '' : 's'} unlocked so far.`);
+  }
+  return lines.join('\n');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -404,6 +431,7 @@ module.exports = {
   getWeekStats,
   getAchievementCatalog,
   getWeeklyReport,
+  buildWeeklyNarrative,
   getSleepScore,
   getHistory30,
   getTrend,
