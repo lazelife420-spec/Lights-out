@@ -1,10 +1,50 @@
 # Changelog
 
-## v10.4.0 — Phone Companion Easy Connect + Profiles Upgrade + Streaks (2026-07-08)
+## v11.0.0 — Serious Night Mode (2026-07-09)
 
-Version bumped in `package.json`/`package-lock.json` and the in-app footer/About
-text. Not yet built, tagged, or published — the latest tagged/published release
-remains v10.3.0 until this is built, tagged, and a GitHub release is cut.
+### Fixed
+- **Critical: the phone companion was completely non-functional.** Found via
+  live device testing (a real phone physically paired against a real
+  desktop instance) — every connection attempt silently failed and stayed
+  stuck on "Connecting…" forever, regardless of a correct pairing code or
+  network. Root cause: two unrelated past markup redesigns each left behind
+  a dead DOM reference in `companion.html` (`#pair-reset`, then separately
+  `#disconnected`/`#disconnected-msg`) that threw an uncaught exception and
+  silently aborted the page's script before it ever attempted a connection.
+  Fixed by removing the dead code; the status pill and automatic reconnect
+  already covered everything those removed elements provided. Verified
+  end-to-end afterward on a real device: real pairing, real WebSocket, live
+  connected state. No reinstall needed on already-installed phones — the
+  companion app loads this page fresh from the desktop on every connection.
+
+### New
+- **Trusted LAN mode.** Enabling "Connect Phone" (the mode that exposes the
+  companion server to your Wi-Fi network) now requires explicitly
+  confirming a warning that states exactly what's exposed (any device on
+  the network with the pairing code can start/pause/snooze/cancel) and what
+  stays off-limits (never a forced shutdown, logout, or hibernate).
+- **Weekly Reports.** A "This Week" section on the Streaks tab summarizes
+  the last 7 nights in plain language (nights logged, streak, bedtime
+  consistency, snooze rate, actions taken) with a one-click "Copy Report"
+  to clipboard. Built entirely from data already tracked — no new claims,
+  no fabricated scoring.
+- Full-screen clock mode (reuses the main window, hides all chrome, scales
+  the analog clock to read from across a room) — carried over from the
+  unreleased tail of v10.4.0's follow-through work.
+
+### Removed
+- `companion-mobile`, an unfinished, unused duplicate of the real Android
+  companion app (`companion-android`) — no signing setup, no QR pairing, no
+  CI or documentation references.
+
+### Descoped
+- **Smart light integration** is explicitly not part of this release.
+  Code exists (`smartLights.js`) but has never been runtime-proven against
+  real hardware, and this project ships proof-first — it stays parked
+  until either real hardware is available to test against, or there's an
+  explicit decision to ship it labeled experimental.
+
+## v10.4.0 — Phone Companion Easy Connect + Profiles Upgrade + Streaks (2026-07-08)
 
 ### New
 - **Phone Companion Easy Connect** — redesigned pairing flow with three modes:

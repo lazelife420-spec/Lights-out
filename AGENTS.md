@@ -44,9 +44,11 @@ The important behavior is:
 - force shutdown is never the default launcher behavior; it must be chosen explicitly
 - "Run at login" means "start minimized and idle" — login startup never silently
   implies a force shutdown or an active countdown
-- the current tagged/published release is `v10.4.0` (Phone Companion Easy Connect,
-  profile search/filter/pin, 30-day sleep-history grid, companion auto-firewall +
-  battery/power display), shipped on top of v10.3.0's Ritual Mode + Intelligence
+- the current tagged/published release is `v11.0.0` — Serious Night Mode:
+  fixed a critical bug where the phone companion never actually connected
+  (dead DOM references crashing the page), Trusted LAN mode's explicit
+  warning gate, Weekly Reports, full-screen clock mode — shipped on top of
+  v10.4.0's Phone Companion Easy Connect + Profiles Upgrade + Streaks
 - Electron build packaging succeeds with `npm run build`
 - Electron smoke coverage guards startup wording/flags, tray menu wiring, timer
   control IPC, mini mode wiring, keyboard shortcuts, and browser-preview safe defaults

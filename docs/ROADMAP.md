@@ -4,18 +4,15 @@
 
 ## Current Truth
 
-Lights Out PC™ ("Bedtime Mode for Windows") is live at **v10.4.0** — the
+Lights Out PC™ ("Bedtime Mode for Windows") is live at **v11.0.0** — the
 latest tagged/published release. Proof-first software forged for builders.
 
-**Merged to `main`, not yet tagged/released:** [PR #19](https://github.com/lazelife420-spec/Lights-out/pull/19)
-(`claude/roadmap-followthrough`) closed out every open item from the
-Streaks/Profiles and Proof & Receipts pillars, verified the Reliable
-Shutdown pillar with live runtime proof (not just code review), shipped
-full-screen clock mode, clarified Remote Control's settings copy, and
-opened the Backlog Parking Lot with recurring content-blocker schedules.
-Full detail lives in the PR description and commit history; a summarized
-version graduates into `CHANGELOG.md` when this is actually built, tagged,
-and released.
+v11.0.0 fixed a critical, previously-undiscovered bug where the phone
+companion never actually connected for anyone (dead DOM references
+crashing `companion.html` on load — see [PR #20](https://github.com/lazelife420-spec/Lights-out/pull/20)
+for the full root-cause writeup), shipped Trusted LAN mode's explicit
+warning gate, Weekly Reports, and full-screen clock mode, and removed the
+dead `companion-mobile` duplicate. Full detail lives in `CHANGELOG.md`.
 
 Current strongest product promise:
 
@@ -169,28 +166,17 @@ originally planned for that slot.
 - **v10.4.0 — Phone Companion + Profiles + Streaks:** Phone Companion Easy
   Connect, profile search/filter/pin, 30-day sleep-history grid,
   streak-celebration modal.
-
-### v11.0.0 — Serious Night Mode (in progress)
-
-Goal: a full night shutdown cockpit for Windows power users.
-
-**Shipped:** full-screen clock mode — reuses the main window, hides all
-chrome, scales the analog clock to read from across a room. Trusted LAN
-mode — see Pillar 5 above.
-
-**Descoped from v11.0.0, 2026-07-09:**
-
-- **Smart light integration.** Code exists (`smartLights.js`: Hue +
-  generic HTTP webhook) but has zero test coverage, and "runtime-proven"
-  means proof against real hardware — which no agent working on this repo
-  has access to. Rather than ship an unproven integration under a
-  proof-first brand, it's parked until either a physical smart light is
-  available to test against, or there's an explicit product call to ship
-  it as an unverified/experimental feature (which would need its own
-  honest labeling). Not deleted — just not claimed as done.
-
-Ship only if: manual runtime proof exists, no fake integrations, no unsafe
-remote defaults.
+- **v11.0.0 — Serious Night Mode:** full-screen clock mode, Trusted LAN
+  mode's explicit warning gate (see Pillar 5), Weekly Reports, and a fix
+  for a critical bug where the phone companion never actually connected
+  for anyone (dead DOM references crashing `companion.html` on load —
+  found via live device testing, not code review). Smart light integration
+  was explicitly descoped from this release: code exists (`smartLights.js`:
+  Hue + generic HTTP webhook) but has zero test coverage, and
+  "runtime-proven" means proof against real hardware, which no agent
+  working on this repo has access to. Not deleted — just not claimed done.
+  Parked until either real hardware is available, or there's an explicit
+  product call to ship it labeled experimental.
 
 ### v12.0.0 — Candidates (not yet prioritized)
 
