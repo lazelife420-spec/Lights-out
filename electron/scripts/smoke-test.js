@@ -633,10 +633,29 @@ check('companion: host query cannot override location.host for the pairing token
   assertMatch(companionHtml, /if \(fromUrl && isValidHost\(fromUrl\)\)/, 'URL host param must be validated, not trusted as-is');
 });
 
-check('companion: pair-reset has exactly one non-conflicting handler', () => {
+check('companion: no dangling getElementById reference crashes the page on load', () => {
+  // Regression test for two real bugs found via live device testing (phone
+  // physically paired to a running desktop instance): a 2026-07-03 merge
+  // (3042de6) dropped the #pair-reset button from the markup but left
+  // `const pairReset = document.getElementById('pair-reset')` and an
+  // unguarded `pairReset.addEventListener(...)` behind, and a separate,
+  // older redesign dropped the entire #disconnected/#disconnected-msg
+  // status block while five call sites across every connection-state-change
+  // path (setConnectionState, showPairing, ws.onclose, ws.onerror) kept
+  // referencing it unguarded. Both are always-null references, so both threw
+  // an uncaught TypeError on page load / on first WebSocket state change --
+  // which silently aborted the rest of that top-level script. Concretely:
+  // the pair-reset crash meant connect() never even ran, so the phone
+  // companion was stuck on the static "Connecting..." placeholder forever,
+  // for every user, regardless of a correct token/network -- the entire
+  // remote-control-from-phone feature was non-functional. The status pill
+  // already carries the identical message via setConnectionState(state,
+  // msg), so the fix was deleting the redundant dead block rather than
+  // resurrecting removed UI (same call made for pair-reset: reconnection is
+  // already automatic via scheduleReconnect()).
   const companionHtml = fs.readFileSync(path.join(root, 'companion.html'), 'utf8');
-  const matches = companionHtml.match(/pairReset\.addEventListener\('click'/g) || [];
-  assert(matches.length === 1, `pair-reset should have exactly one click handler, found ${matches.length}`);
+  assert(!/pairReset|pair-reset/.test(companionHtml), 'a dead pairReset/pair-reset reference has reappeared with no corresponding element -- this crashes the page on load');
+  assert(!/\bconst disconnected\b|disconnected-msg|disconnected\.style/.test(companionHtml), 'a dead #disconnected/#disconnected-msg reference has reappeared with no corresponding element -- this crashes every connection-state change');
 });
 
 check('morning proof: Mission Complete overlay has accessible close affordances', () => {

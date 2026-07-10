@@ -113,7 +113,6 @@
     .custom-input .unit { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; }
     .btn-custom { flex: 0 0 96px; }
 
-    .disconnected { color: var(--muted); font-size: 12px; margin-top: 22px; }
     .streak { margin-top: 18px; padding: 14px; border-radius: 14px; background: var(--card); border: 1px solid var(--card-border); display: flex; align-items: center; justify-content: center; gap: 12px; }
     .streak-flame { font-size: 22px; }
     .streak-meta { text-align: left; }
@@ -128,7 +127,6 @@
     .pair-input:focus { border-color: var(--accent); }
     .pair-submit { width: 100%; }
     .pair-error { color: #ff6b6b; font-size: 12px; margin-top: 10px; }
-    .pair-reset { background: none; border: none; color: var(--accent); font-size: 12px; font-weight: 700; cursor: pointer; margin-top: 10px; padding: 4px; text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -260,7 +258,6 @@
     const statusText = document.getElementById('status-text');
     const idleControls = document.getElementById('idle-controls');
     const activeControls = document.getElementById('active-controls');
-    const disconnected = document.getElementById('disconnected');
     const streakSection = document.getElementById('streak-section');
     const streakCount = document.getElementById('streak-count');
     const ringProgress = document.getElementById('ring-progress');
@@ -271,7 +268,6 @@
     const pairInput = document.getElementById('pair-input');
     const pairSubmit = document.getElementById('pair-submit');
     const pairError = document.getElementById('pair-error');
-    const pairReset = document.getElementById('pair-reset');
 
     const RING_C = 2 * Math.PI * 54;
     const PHASE_COLORS = { focus: '#5b8cff', dim: '#d4a50a', lastlight: '#ff4d4d', idle: '#5b8cff' };
@@ -343,7 +339,6 @@
       const pcEl = document.getElementById('pc-name');
       if (pcEl) pcEl.style.display = (state === 'connected' && pcName) ? '' : 'none';
       if (state === 'connected') {
-        disconnected.style.display = 'none';
         pairCard.style.display = 'none';
         enableControls(true);
       } else {
@@ -356,7 +351,6 @@
       statusPill.style.display = 'none';
       idleControls.style.display = 'none';
       activeControls.style.display = 'none';
-      disconnected.style.display = 'none';
       document.getElementById('pc-name').style.display = 'none';
       pairError.style.display = 'none';
       try { hostInput.value = pairHost || ''; } catch {}
@@ -419,30 +413,24 @@
           localStorage.removeItem(TOKEN_KEY);
           pairToken = '';
           setConnectionState('expired', 'Pairing expired');
-          document.getElementById('disconnected-msg').textContent = 'Pairing expired or invalid';
           showPairing();
         } else if (e.code === 1006) {
           setConnectionState('offline', 'Wrong network or PC offline');
-          document.getElementById('disconnected-msg').textContent = 'Wrong network or PC offline';
         } else {
           setConnectionState('disconnected', 'Disconnected');
-          document.getElementById('disconnected-msg').textContent = 'Disconnected from PC';
         }
-        disconnected.style.display = '';
         scheduleReconnect();
       };
 
       ws.onerror = () => {
         setConnectionState('offline', 'Wrong network or PC offline');
-        document.getElementById('disconnected-msg').textContent = 'Wrong network or PC offline';
-        disconnected.style.display = '';
         scheduleReconnect();
       };
     }
 
     function enableControls(enabled) {
       document.querySelectorAll('.btn').forEach(btn => {
-        if (btn.id !== 'pair-submit' && btn.id !== 'pair-reset') {
+        if (btn.id !== 'pair-submit') {
           btn.disabled = !enabled;
         }
       });
@@ -609,12 +597,6 @@
         send({ action: 'cancel' });
         showToast('Timer cancelled');
       }
-    });
-
-    // Reconnect action
-    pairReset.addEventListener('click', () => {
-      if (pairToken) connect();
-      else showPairing();
     });
 
     if (pairToken) connect();
