@@ -244,6 +244,7 @@
     <div id="companion-system" style="display:none;padding:12px 16px;margin-top:8px;border-radius:12px;background:var(--card,rgba(255,255,255,0.04));border:1px solid var(--card-border)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <span style="font-size:11px;color:var(--muted,#999);font-weight:600">PC STATUS</span>
+        <span id="comp-battery" style="font-size:10px;color:var(--accent);font-weight:600">Battery: --</span>
         <span id="comp-power-plan" style="font-size:10px;color:var(--accent);font-weight:600">Plan: --</span>
     </div>
     <div id="toast" class="feedback-toast"></div>
@@ -539,7 +540,7 @@
           const plan = document.getElementById('comp-power-plan');
           if (bat) {
             const batVal = data.systemInfo.battery;
-            bat.textContent = batVal === 'N/A' ? 'N/A (Plugged In)' : `${batVal}%`;
+            bat.textContent = `Battery: ${batVal === 'N/A' ? 'N/A (Plugged In)' : `${batVal}%`}`;
           }
           if (plan) {
             plan.textContent = `Plan: ${data.systemInfo.powerPlan || 'Unknown'}`;

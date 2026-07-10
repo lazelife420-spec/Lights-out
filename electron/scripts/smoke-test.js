@@ -658,6 +658,24 @@ check('companion: no dangling getElementById reference crashes the page on load'
   assert(!/\bconst disconnected\b|disconnected-msg|disconnected\.style/.test(companionHtml), 'a dead #disconnected/#disconnected-msg reference has reappeared with no corresponding element -- this crashes every connection-state change');
 });
 
+check('companion: no const-bound getElementById references an id missing from the markup', () => {
+  // General guard for the whole bug class the two checks above document by
+  // name: `const x = document.getElementById('foo')` where 'foo' doesn't
+  // exist in the markup is always either dead code (delete it) or a crash
+  // waiting to happen the next time x.something runs unguarded -- there's no
+  // third option. A third real instance of this (an already-guarded
+  // `const bat = document.getElementById('comp-battery')` with no matching
+  // element, silently disabling the phone's battery display -- non-crashing
+  // only because it happened to be guarded) was found by exactly this audit
+  // and fixed by adding the missing #comp-battery element rather than
+  // deleting the code, since the feature was wanted, just never wired up.
+  const companionHtml = fs.readFileSync(path.join(root, 'companion.html'), 'utf8');
+  const declared = [...companionHtml.matchAll(/const\s+(\w+)\s*=\s*document\.getElementById\('([^']+)'\)/g)];
+  const ids = new Set([...companionHtml.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]));
+  const dead = declared.filter(([, , id]) => !ids.has(id)).map(([, varName, id]) => `${varName} -> #${id}`);
+  assert(dead.length === 0, `dead getElementById reference(s) found: ${dead.join(', ')}`);
+});
+
 check('morning proof: Mission Complete overlay has accessible close affordances', () => {
   assert(htmlSrc.includes('id="btn-proof-close"'), 'visible Close button missing');
   assert(htmlSrc.includes('id="btn-proof-dismiss"'), 'dismiss X button missing');
