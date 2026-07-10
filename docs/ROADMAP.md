@@ -124,6 +124,23 @@ per-device identity would be new security-model surface without a clear
 user story yet. Revisit only if a concrete need shows up (e.g. multiple
 household members each wanting independent revocation).
 
+**Critical bug found + fixed 2026-07-09 via live device testing:** physically
+paired an Android phone (the real `companion-android` release build, not a
+simulation) against a running desktop instance over LAN, and the phone
+never got past "Connecting…" — for any token, on any network. Root cause:
+`electron/companion.html` had two unguarded dead DOM references
+(`#pair-reset`, then `#disconnected`/`#disconnected-msg`) left behind by
+separate past markup redesigns; each threw an uncaught TypeError that
+silently aborted the page's top-level script, meaning `connect()` never
+even ran. This made the entire phone companion feature non-functional for
+every user, regardless of correct setup, for as long as those dead
+references have been on `main`. Fixed by deleting the dead code (the
+status pill and automatic `scheduleReconnect()` already cover what the
+removed UI provided). Re-verified end-to-end after the fix: real phone,
+real desktop, real WebSocket, "Connected to `<hostname>`" with live state.
+No APK rebuild needed for already-installed phones — `companion-android`
+loads `companion.html` live from the desktop on every connection.
+
 **Ongoing commitment:** remote control stays off by default, pairing token
 stays required, companion stays bound to `127.0.0.1` by default.
 
