@@ -7,7 +7,7 @@ Set a time. Press START. Lights Out PC walks you through a calm wind-down, then 
 cinematic Last Light final countdown before your PC shuts off. Emergency cancel
 is always available. No surprise force-quits. No cloud account. No drama.
 
-[![Download v10.4.0](https://img.shields.io/badge/Download-v10.4.0-blue?style=for-the-badge)](https://github.com/lazelife420-spec/Lights-out/releases/tag/v10.4.0)
+[![Download v11.0.0](https://img.shields.io/badge/Download-v11.0.0-blue?style=for-the-badge)](https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.0.0)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?style=for-the-badge)](https://github.com/lazelife420-spec/Lights-out/releases/latest)
 
@@ -15,9 +15,9 @@ is always available. No surprise force-quits. No cloud account. No drama.
 
 ## Download
 
-**[→ Lights Out v10.4.0 — installer, portable EXE, SHA256 checksums](https://github.com/lazelife420-spec/Lights-out/releases/tag/v10.4.0)**
+**[→ Lights Out v11.0.0 — installer, portable EXE, SHA256 checksums](https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.0.0)**
 
-- `Lights.Out.Setup.10.4.0.exe` — NSIS installer, standard Windows install
+- `Lights.Out.Setup.11.0.0.exe` — NSIS installer, standard Windows install
 - `LightsOut.exe` — portable, runs from any folder, no install needed
 - `SHA256SUMS.txt` — checksums for both artifacts
 
@@ -52,8 +52,8 @@ Every release ships an installer, a portable build, and SHA256 checksums, built
 and published by CI. No hand-edited binaries. No mystery downloads.
 
 - Latest release: https://github.com/lazelife420-spec/Lights-out/releases/latest
-- v10.4.0 release: https://github.com/lazelife420-spec/Lights-out/releases/tag/v10.4.0
-- Smoke suite: 156 passing
+- v11.0.0 release: https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.0.0
+- Smoke suite: 171 passing
 
 ## Surface
 
