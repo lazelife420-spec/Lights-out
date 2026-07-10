@@ -201,7 +201,16 @@ top, consistent with the Streaks pillar's no-fake-scores guardrail.
 | Family profiles | Vague as written ("Family profiles.") — could mean syncing saved profiles across paired Family Mode peers, or something else entirely. Needs product intent before scoping. |
 | Focus scoring | Would need a new persistence layer (Focus Sessions currently has no historical event log, unlike Streaks). Also carries messaging risk against the "no guaranteed productivity" brand promise — needs the same care Sleep Score got to avoid gamification/fake-score framing. |
 | Screen-time limits | `screenTime.js` today is read-only/advisory (a "reality check" message), not enforcement. Actual *limits* imply a new blocking mechanism — real system-modification risk, same category as content-blocker schedules but with a different (unbuilt) trigger. |
-| Recurring alarms | Possible overlap with the Schedule tab's existing multi-rule recurring system — needs a check for what's actually missing before scoping, same lesson as the 2026-07-09 pass caught elsewhere. |
+
+**Checked and dropped, 2026-07-10: "Recurring alarms."** Confirmed fully
+redundant with the Schedule tab's existing multi-rule builtin calendar
+(`calendarProviders.js`'s `normalizeScheduleRules`/`getDefaultCalendarEvents`,
+UI in `index.html`'s `#schedule-rule-form`): named rules, a time, a
+per-weekday toggle grid, an action (shutdown/sleep/hibernate), and a
+duration are all already there and already shipped. There was never a
+distinct feature here to build — just a naming mismatch between the
+backlog entry and what had already shipped under "Schedule." Not
+re-scoping; removing it.
 
 ## Brand Promise
 
