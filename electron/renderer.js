@@ -407,6 +407,8 @@ const els = {
   streakTotal: document.getElementById('streak-total'),
   streakWeekAvg: document.getElementById('streak-weekavg'),
   streakOnTime: document.getElementById('streak-ontime'),
+  weeklyReportText: document.getElementById('weekly-report-text'),
+  btnCopyWeeklyReport: document.getElementById('btn-copy-weekly-report'),
   sleepHistoryGrid: document.getElementById('sleep-history-grid'),
   streakCallout: document.getElementById('streak-callout'),
   streakCalloutCount: document.getElementById('streak-callout-count'),
@@ -1908,6 +1910,10 @@ function renderStreaks(summary, catalog, report, sleepScore, history, trend) {
     if (els.streakOnTime) els.streakOnTime.textContent = `${100 - (report.snoozeRate || 0)}% on-time`;
   }
 
+  if (els.weeklyReportText) {
+    els.weeklyReportText.textContent = report?.narrative || 'No nights logged this week yet. Start a timer tonight to begin this week\'s report.';
+  }
+
   // Sleep History Grid (30 Days)
   if (els.sleepHistoryGrid && history) {
     els.sleepHistoryGrid.innerHTML = history.map(d => {
@@ -2664,6 +2670,16 @@ if (els.btnClearReceipts) {
       notify('Streak ledger copied to clipboard!', 'success', 3000);
     } catch (err) {
       notify('Failed to export ledger.', 'error');
+    }
+  });
+
+  els.btnCopyWeeklyReport?.addEventListener('click', async () => {
+    try {
+      const text = els.weeklyReportText?.textContent || '';
+      await navigator.clipboard.writeText(text);
+      notify('Weekly report copied to clipboard!', 'success', 3000);
+    } catch (err) {
+      notify('Failed to copy weekly report.', 'error');
     }
   });
 

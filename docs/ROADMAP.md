@@ -185,9 +185,16 @@ existing nightly workflow's reliability only just got affirmatively
 verified (see Pillar 1) rather than assumed — these are genuine
 scope-expansion decisions, not a continuation of already-declared work.
 
+**Shipped 2026-07-09: Weekly reports.** A plain-text narrative summary (`streaks.js`'s
+`buildWeeklyNarrative`, fed by the existing `getWeeklyReport()` data — no new
+persistence layer) shown under a "This Week" section on the Streaks tab, with
+a one-click "Copy Report" to clipboard. Every sentence is a direct readout of
+an already-computed field (nights logged, streak, consistency, snooze rate,
+action breakdown, achievement count) — no scoring or diagnosis layered on
+top, consistent with the Streaks pillar's no-fake-scores guardrail.
+
 | Candidate | Why it's not started |
 |---|---|
-| Weekly reports | Distinct from the Trends section (shipped 2026-07-09) — that's bar-chart aggregates, this would be a narrative/exportable report. Smaller scope, needs a concrete spec. |
 | Family profiles | Vague as written ("Family profiles.") — could mean syncing saved profiles across paired Family Mode peers, or something else entirely. Needs product intent before scoping. |
 | Focus scoring | Would need a new persistence layer (Focus Sessions currently has no historical event log, unlike Streaks). Also carries messaging risk against the "no guaranteed productivity" brand promise — needs the same care Sleep Score got to avoid gamification/fake-score framing. |
 | Screen-time limits | `screenTime.js` today is read-only/advisory (a "reality check" message), not enforcement. Actual *limits* imply a new blocking mechanism — real system-modification risk, same category as content-blocker schedules but with a different (unbuilt) trigger. |

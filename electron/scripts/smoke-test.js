@@ -182,6 +182,39 @@ check('streaks: getTrend aggregates events into weekly and monthly buckets', () 
   assert(streaks.getTrend('week').length === 0, 'no events should yield no buckets');
 });
 
+check('streaks: buildWeeklyNarrative summarizes only real computed fields (no invented claims)', () => {
+  const streaks = require(path.join(root, 'streaks.js'));
+  streaks._reset();
+
+  // No nights logged this week -- must say so honestly, not fabricate a claim.
+  const empty = streaks.buildWeeklyNarrative({ nightsThisWeek: 0 });
+  assert(/No nights logged this week/.test(empty), 'empty report should admit no nights logged');
+
+  const today = new Date();
+  const iso = (daysAgo) => new Date(today - daysAgo * 86400000).toISOString().slice(0, 10);
+  streaks.replaceAll({
+    events: [
+      { date: iso(2), bedTime: '22:00', action: 'shutdown', snoozed: false },
+      { date: iso(1), bedTime: '22:30', action: 'shutdown', snoozed: true },
+      { date: iso(0), bedTime: '22:15', action: 'sleep', snoozed: false }
+    ],
+    streak: 3,
+    bestStreak: 5,
+    achievements: ['first_light']
+  });
+
+  const report = streaks.getWeeklyReport();
+  assert(report.nightsThisWeek === 3, `expected 3 nights this week, got ${report.nightsThisWeek}`);
+  assert(typeof report.narrative === 'string' && report.narrative.length > 0, 'getWeeklyReport should include a narrative field');
+  assert(report.narrative.includes('3 of the last 7 nights logged'), `narrative should state the real night count, got: ${report.narrative}`);
+  assert(report.narrative.includes('Current streak: 3 nights (best ever: 5)'), 'narrative should state the real streak numbers');
+  assert(report.narrative.includes('Snoozed on 33% of logged nights'), `narrative should state the real snooze rate, got: ${report.narrative}`);
+  assert(report.narrative.includes('2 shutdown, 1 sleep'), 'narrative should break down real action counts');
+  assert(report.narrative.includes('1 achievement unlocked'), 'narrative should state the real achievement count');
+
+  streaks.replaceAll({ events: [], streak: 0, bestStreak: 0, achievements: [] });
+});
+
 Module._load = origLoad;
 
 // 4b. lastLight sequence catalog + timing.
@@ -690,6 +723,14 @@ check('trusted-lan: enabling wifi mode is gated behind the warning modal, other 
 
 check('trusted-lan: Escape cancels the warning modal without silently enabling wifi mode', () => {
   assertMatch(rendererSrc, /document\.getElementById\('lan-warning-modal'\)\?\.classList\.contains\('active'\)[\s\S]{0,40}document\.getElementById\('btn-lan-warning-cancel'\)\?\.click\(\)/, 'Escape must click the cancel button (resolving the confirmation promise as false), not just hide the modal');
+});
+
+check('weekly-report: "This Week" UI is wired to the real backend field, not a placeholder', () => {
+  assert(htmlSrc.includes('id="weekly-report-text"'), 'weekly-report-text element missing from HTML');
+  assert(htmlSrc.includes('id="btn-copy-weekly-report"'), 'copy-weekly-report button missing from HTML');
+  assertMatch(rendererSrc, /els\.weeklyReportText\.textContent = report\?\.narrative/, 'renderer must populate the narrative from the real report field');
+  assertMatch(rendererSrc, /els\.btnCopyWeeklyReport\?\.addEventListener\('click'/, 'copy-weekly-report button is not wired to a click handler');
+  assertMatch(mainSrc, /ipcMain\.handle\('get-weekly-report'/, 'get-weekly-report IPC handler missing');
 });
 
 // 8. Run Receipts module logic.
