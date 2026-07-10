@@ -159,6 +159,49 @@ function getActiveBlocklist() {
   return sites;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Recurring blocking schedules -- independent of the shutdown timer's own
+// dim-phase blocking. Pure (no I/O), so overnight-window edge cases can be
+// unit tested against a fixed `now` instead of waiting for the real clock.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+function timeToMinutes(hhmm) {
+  const [h, m] = String(hhmm || '00:00').split(':').map(Number);
+  return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
+}
+
+// Whether a single schedule is active at `now`. Handles windows that cross
+// midnight (e.g. 22:00-07:00), which is the common case for a bedtime
+// blocking schedule and the reason this can't just compare against today's
+// day-of-week alone.
+function isScheduleActive(schedule, now = new Date()) {
+  if (!schedule || schedule.enabled === false) return false;
+  const days = Array.isArray(schedule.days) && schedule.days.length ? schedule.days : DAY_KEYS;
+  const startMin = timeToMinutes(schedule.startTime);
+  const endMin = timeToMinutes(schedule.endTime);
+  if (startMin === endMin) return false; // zero-length window, never active
+
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const todayKey = DAY_KEYS[now.getDay()];
+
+  if (startMin < endMin) {
+    // Same-day window, e.g. 13:00-17:00.
+    return days.includes(todayKey) && nowMin >= startMin && nowMin < endMin;
+  }
+  // Overnight window, e.g. 22:00-07:00: active either from startMin to
+  // midnight on a scheduled day, or from midnight to endMin the morning
+  // after a scheduled day.
+  const yesterdayKey = DAY_KEYS[(now.getDay() + 6) % 7];
+  return (days.includes(todayKey) && nowMin >= startMin) ||
+         (days.includes(yesterdayKey) && nowMin < endMin);
+}
+
+function isAnyScheduleActive(schedules, now = new Date()) {
+  return Array.isArray(schedules) && schedules.some(s => isScheduleActive(s, now));
+}
+
 function executePS(command) {
   return new Promise((resolve, reject) => {
     const ps = spawn('powershell.exe', [
@@ -181,6 +224,8 @@ module.exports = {
   isBlocked,
   getActiveBlocklist,
   DEFAULT_BLOCKLIST,
+  isScheduleActive,
+  isAnyScheduleActive,
   // Exposed for unit testing of the hosts-injection guard.
   __sanitizeSites: sanitizeSites,
   // Exposed for unit testing the hosts-file write command builder.

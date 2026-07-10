@@ -17,6 +17,24 @@
 // hoist is behavior-preserving: the listener callbacks left behind in
 // wireEvents() now resolve these bare identifiers up the scope chain to the
 // globals defined here instead of to the (now-removed) local declarations.
+// Human-readable label for a receipt's result code (e.g. "dry_run_completed"
+// -> "Dry Run Completed"). Shared between the receipts list and the Copy
+// Proof clipboard text so "proof" never reads as a raw internal enum value.
+function humanizeReceiptResult(result) {
+  const labels = {
+    power_executed: 'Completed',
+    completed: 'Completed',
+    dry_run_completed: 'Dry Run Completed',
+    cancelled: 'Cancelled',
+    running: 'Running',
+    error: 'Error',
+    blocked: 'Blocked'
+  };
+  if (labels[result]) return labels[result];
+  if (!result) return 'Unknown';
+  return result.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 async function loadMorningProof() {
   try {
     const receipt = await api.getLatestReceipt?.();
@@ -112,17 +130,42 @@ function renderReceiptsModal(receipts, stats) {
     els.receiptsList.innerHTML = '<p style="font-size:11px;color:var(--text-muted)">No receipts yet. Start a timer to generate proof.</p>';
     return;
   }
+  // Same result vocabulary as the Morning Proof hero badge (renderMorningProof),
+  // just mapped to a modifier class + icon instead of a badge/title.
+  const resultMeta = {
+    power_executed:    { cls: 'completed', icon: '✅' },
+    completed:          { cls: 'completed', icon: '✅' },
+    dry_run_completed: { cls: 'dry-run',   icon: '\u{1F4CB}' },
+    cancelled:         { cls: 'cancelled', icon: '❌' },
+    running:           { cls: 'running',   icon: '\u{1F504}' },
+    error:             { cls: 'blocked',   icon: '⚠️' },
+    blocked:           { cls: 'blocked',   icon: '\u{1F6AB}' }
+  };
   els.receiptsList.innerHTML = receipts.map(r => {
-    const colorMap = { power_executed: '#4caf50', completed: '#4caf50', dry_run_completed: '#76c9ff', cancelled: '#ff9800', running: '#5b8cff', error: '#ff4d4d', blocked: '#ff4d4d' };
-    const c = colorMap[r.result] || 'var(--text-muted)';
+    const meta = resultMeta[r.result] || { cls: '', icon: '❓' };
     const start = new Date(r.startedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     const dur = Math.floor(r.durationSeconds / 60);
-    return `<div class="receipt-row" style="border-left:3px solid ${c};padding:6px 8px;margin-bottom:4px;border-radius:0 4px 4px 0;background:var(--bg-card)">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:11px;font-weight:600;color:var(--text-primary)">${start}</span>
-        <span style="font-size:10px;font-weight:700;color:${c};text-transform:uppercase">${escapeHtml(r.result?.replace(/_/g, ' ') || '')}</span>
+
+    // Only show meta chips that carry real information -- a "0 pauses,
+    // 0 snoozes" chip on every row is noise, not proof.
+    const chips = [
+      `${escapeHtml((r.action || '').charAt(0).toUpperCase() + (r.action || '').slice(1))}`,
+      `${dur}m`,
+      r.dryRun ? 'Dry Run' : null,
+      r.forceShutdown ? 'Forced' : null,
+      r.pauseCount ? `${r.pauseCount} pause${r.pauseCount === 1 ? '' : 's'}` : null,
+      r.snoozeCount ? `${r.snoozeCount} snooze${r.snoozeCount === 1 ? '' : 's'}` : null
+    ].filter(Boolean);
+
+    return `<div class="receipt-row receipt-row--${meta.cls}">
+      <span class="receipt-row-icon" aria-hidden="true">${meta.icon}</span>
+      <div class="receipt-row-main">
+        <div class="receipt-row-top">
+          <span class="receipt-row-date">${escapeHtml(start)}</span>
+          <span class="receipt-row-result">${escapeHtml(humanizeReceiptResult(r.result))}</span>
+        </div>
+        <div class="receipt-row-meta">${chips.map(c => `<span class="receipt-meta-chip">${c}</span>`).join('')}</div>
       </div>
-      <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${escapeHtml(r.action || '')}${r.dryRun ? ' (dry)' : ''}${r.forceShutdown ? ' /force' : ''} | ${dur}m | ${r.pauseCount || 0}p ${r.snoozeCount || 0}s</div>
     </div>`;
   }).join('');
 }

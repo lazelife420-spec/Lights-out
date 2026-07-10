@@ -50,8 +50,13 @@ function renderProfiles() {
   }
 
   const sorted = [...state.profiles].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+  const lastUsedId = getLastUsedProfileId();
   els.profilesGrid.innerHTML = sorted.map((profile, index) => {
     const isActive = state.currentProfileId === profile.id;
+    // Last-used is a separate, persistent signal from "active" (which only
+    // reflects this session) -- skip it on the active card to avoid two
+    // badges saying almost the same thing at once.
+    const isLastUsed = !isActive && profile.id === lastUsedId;
     const hint = getProfileHint(profile);
     // Notes ride along in the card's tooltip -- a quick hover reminder
     // without taking up any of the card's compact layout.
@@ -63,7 +68,7 @@ function renderProfiles() {
           ${escapeHtml(profile.name)}
           ${profile.notes ? '<span class="notes-badge" aria-hidden="true">📝</span>' : ''}
         </div>
-        <div class="profile-hint">${escapeHtml(hint)}</div>
+        <div class="profile-hint">${escapeHtml(hint)}${isLastUsed ? ' <span class="last-used-badge">· last used</span>' : ''}</div>
       </div>
     `;
   }).join('');
@@ -75,6 +80,17 @@ function renderProfiles() {
       applyProfile(profileId);
     });
   });
+}
+
+// The single most-recently-applied profile, across restarts (lastUsedAt is
+// persisted). Distinct from state.currentProfileId, which only reflects
+// what's loaded in *this* session and is null after a fresh app launch.
+function getLastUsedProfileId() {
+  let latest = null;
+  for (const p of state.profiles) {
+    if (p.lastUsedAt && (!latest || p.lastUsedAt > latest.lastUsedAt)) latest = p;
+  }
+  return latest ? latest.id : null;
 }
 
 function getProfileHint(profile) {
@@ -98,6 +114,13 @@ async function applyProfile(profileId, opts = {}) {
     }
 
     state.currentProfileId = profileId;
+
+    // Pick up the fresh lastUsedAt stamp so the "last used" badge updates
+    // immediately, without a full loadProfiles() round trip.
+    if (result.profile) {
+      const idx = state.profiles.findIndex(p => p.id === profileId);
+      if (idx >= 0) state.profiles[idx] = result.profile;
+    }
 
     // Dismiss clock mode so the user sees the loaded timer value, not the clock face.
     if (state.clockMode) {
@@ -199,11 +222,12 @@ function renderProfilesList() {
 
   els.profilesList.innerHTML = filtered.map((profile, idx) => {
     const hint = getProfileHint(profile);
+    const lastUsedHint = profile.lastUsedAt ? ` · Last used ${formatTimeAgo(new Date(profile.lastUsedAt))}` : '';
     return `
       <div class="profile-item" data-profile-id="${profile.id}">
         <div class="profile-item-info">
           <input type="text" class="profile-item-name-input" value="${escapeHtml(profile.name)}" data-profile-id="${profile.id}" maxlength="32" spellcheck="false">
-          <div class="profile-item-hint">${escapeHtml(hint)}</div>
+          <div class="profile-item-hint">${escapeHtml(hint)}${escapeHtml(lastUsedHint)}</div>
           <input type="text" class="profile-item-notes-input" value="${escapeHtml(profile.notes || '')}" data-profile-id="${profile.id}" maxlength="280" spellcheck="false" placeholder="Add a note...">
         </div>
         <div class="profile-item-actions">

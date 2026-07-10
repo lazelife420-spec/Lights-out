@@ -53,6 +53,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleMiniMode: () => ipcRenderer.send('toggle-mini-mode'),
   setWindowOpacity: (value) => ipcRenderer.send('set-window-opacity', value),
   fitWindowHeight: (height) => ipcRenderer.send('fit-window-height', height),
+  setFullScreenClock: (flag) => ipcRenderer.invoke('set-fullscreen-clock', flag),
+  onFullScreenChanged: (cb) => ipcRenderer.on('fullscreen-changed', (e, isFullScreen) => cb(isFullScreen)),
   
   // Notifications & sounds
   showNotification: (title, body) => ipcRenderer.send('show-notification', title, body),
@@ -126,6 +128,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getWeeklyReport: () => ipcRenderer.invoke('get-weekly-report'),
   getSleepScore: () => ipcRenderer.invoke('get-sleep-score'),
   getStreaksHistory: () => ipcRenderer.invoke('get-streaks-history'),
+  getStreaksTrend: (granularity) => ipcRenderer.invoke('get-streaks-trend', granularity),
 
   // Custom Last Light sequences
   addCustomSequence: (seq) => ipcRenderer.invoke('add-custom-sequence', seq),
@@ -249,6 +252,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Run Receipts / Morning Proof
   getLatestReceipt: () => ipcRenderer.invoke('get-latest-receipt'),
   listReceipts: (limit) => ipcRenderer.invoke('list-receipts', limit),
+  exportReceipts: () => ipcRenderer.invoke('export-receipts'),
   clearReceipts: () => ipcRenderer.invoke('clear-receipts'),
   getReceiptStats: () => ipcRenderer.invoke('get-receipt-stats'),
 

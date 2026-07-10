@@ -136,6 +136,13 @@ function listReceipts(limit = 20) {
   return data.receipts.slice(-limit).reverse();
 }
 
+// All receipts, oldest first -- unlike listReceipts() (most-recent-first,
+// capped at a display limit), this is the full stored ledger for export.
+function getAllReceiptsForExport() {
+  const data = load();
+  return [...data.receipts];
+}
+
 // Clear all receipts.
 function clearReceipts() {
   cache = { receipts: [] };
@@ -173,6 +180,7 @@ module.exports = {
   receiptWarning,
   getLatestReceipt,
   listReceipts,
+  getAllReceiptsForExport,
   clearReceipts,
   getReceiptStats,
   _load: load,

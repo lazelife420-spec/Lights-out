@@ -2494,6 +2494,11 @@ body.mini-mode .action-btn {
   opacity: 0.8;
 }
 
+.last-used-badge {
+  color: var(--accent-cyan);
+  opacity: 0.85;
+}
+
 .profile-item-actions {
   display: flex;
   gap: 4px;
@@ -3774,7 +3779,81 @@ body.mini-mode .ll-layout { padding: 16px; }
 }
 .receipts-actions {
   margin-top: 12px;
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.receipts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.receipt-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 0 6px 6px 0;
+  border-left: 3px solid var(--text-muted);
+  background: var(--bg-card);
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.receipt-row:hover {
+  background: var(--bg-hover);
+  transform: translateX(1px);
+}
+.receipt-row--completed { border-left-color: #4caf50; }
+.receipt-row--dry-run { border-left-color: #76c9ff; }
+.receipt-row--cancelled { border-left-color: #ff9800; }
+.receipt-row--running { border-left-color: #5b8cff; }
+.receipt-row--blocked { border-left-color: #ff4d4d; }
+.receipt-row-icon {
+  font-size: 14px;
+  line-height: 1;
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+.receipt-row-main {
+  flex: 1;
+  min-width: 0;
+}
+.receipt-row-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.receipt-row-date {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.receipt-row-result {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  flex-shrink: 0;
+}
+.receipt-row--completed .receipt-row-result { color: #4caf50; }
+.receipt-row--dry-run .receipt-row-result { color: #76c9ff; }
+.receipt-row--cancelled .receipt-row-result { color: #ff9800; }
+.receipt-row--running .receipt-row-result { color: #5b8cff; }
+.receipt-row--blocked .receipt-row-result { color: #ff4d4d; }
+.receipt-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.receipt-meta-chip {
+  font-size: 9px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  padding: 1px 6px;
 }
 
 /* ───────────── Imminent-action warning modal ───────────── */
@@ -4791,6 +4870,162 @@ body.mini-mode .ns-proof-section { display: none !important; }
 }
 .history-block:hover::after {
   opacity: 1;
+}
+
+/* Weekly/Monthly trend view -- aggregates beyond the 30-day grid */
+.trend-granularity-toggle {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+}
+.trend-toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.trend-toggle-btn:hover {
+  color: var(--text-primary);
+}
+.trend-toggle-btn.active {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.trend-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding: 12px;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-soft);
+}
+.trend-empty {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 8px 0;
+}
+.trend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+}
+.trend-row-label {
+  width: 78px;
+  flex-shrink: 0;
+  text-align: right;
+  color: var(--text-muted);
+}
+.trend-row-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.trend-row-fill {
+  height: 100%;
+  background: var(--accent-cyan);
+  border-radius: 3px;
+  transition: width 0.8s ease;
+}
+.trend-row-val {
+  width: 168px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Full-screen clock mode: reuses the existing window (setFullScreen via
+   main), hides everything except the ring/clock, and scales it up to read
+   from across a room. Entered/exited via #btn-fullscreen-clock /
+   #btn-fullscreen-clock-exit / Esc (wired in renderer.js). */
+.fullscreen-clock-btn {
+  position: absolute;
+  right: 8px;
+  bottom: 4px;
+  width: 26px;
+  height: 26px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.fullscreen-clock-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+}
+.fullscreen-clock-exit {
+  display: none;
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-soft);
+  border-radius: 50%;
+  color: var(--text-muted);
+  font-size: 15px;
+  cursor: pointer;
+  z-index: 2000;
+  opacity: 0.35;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.fullscreen-clock-exit:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+}
+
+body.fullscreen-clock-mode .ns-sidebar,
+body.fullscreen-clock-mode .chrome-header,
+body.fullscreen-clock-mode .app-footer,
+body.fullscreen-clock-mode #ns-panel-lib > *:not(.timer-section),
+body.fullscreen-clock-mode #action-bar-running,
+body.fullscreen-clock-mode #setup-controls {
+  display: none !important;
+}
+body.fullscreen-clock-mode .cockpit {
+  max-width: 100%;
+}
+body.fullscreen-clock-mode .dashboard {
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+body.fullscreen-clock-mode #ns-panel-lib {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+body.fullscreen-clock-mode .timer-section {
+  transform: scale(2.8);
+}
+body.fullscreen-clock-mode .fullscreen-clock-exit {
+  display: flex;
 }
 
 /* Streak Celebration Modal and Animations */

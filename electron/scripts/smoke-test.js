@@ -102,6 +102,30 @@ check('profiles: lastLight fields in normalized profile', () => {
   assert(norm && norm.lastLightEnabled === true && norm.lastLightSequence === 'ExitTheGrid' && norm.lastLightSound === 'Soft', 'lastLight fields not preserved');
 });
 
+check('profiles: markUsed stamps lastUsedAt and persists to disk', () => {
+  const profiles = require(path.join(root, 'profiles.js'));
+  const created = profiles.create({ name: 'Last-Used Smoke Test' });
+  assert(created.success, 'setup: profile creation failed');
+  assert(created.profile.lastUsedAt === null, 'freshly created profile should have no lastUsedAt yet');
+
+  const before = Date.now() - 1000;
+  const updated = profiles.markUsed(created.profile.id);
+  assert(updated && updated.lastUsedAt, 'markUsed did not return a stamped profile');
+  assert(new Date(updated.lastUsedAt).getTime() >= before, 'lastUsedAt not a recent timestamp');
+
+  // Reload from disk to confirm the stamp was actually persisted, not just cached.
+  profiles.reload();
+  const reloaded = profiles.getById(created.profile.id);
+  assert(reloaded && reloaded.lastUsedAt === updated.lastUsedAt, 'lastUsedAt not persisted to disk');
+
+  assert(profiles.markUsed('does-not-exist') === null, 'markUsed should return null for an unknown id');
+});
+
+check('main.js: profiles-apply handler stamps lastUsedAt via markUsed on success', () => {
+  const mainSrc = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+  assertMatch(mainSrc, /profiles-apply[\s\S]{0,200}profiles\.markUsed\(id\)/, 'profiles-apply IPC handler should call profiles.markUsed on success');
+});
+
 check('streaks: export/import round-trip restores event history', () => {
   const streaks = require(path.join(root, 'streaks.js'));
   streaks._reset();
@@ -117,6 +141,45 @@ check('streaks: export/import round-trip restores event history', () => {
   const restored = streaks.exportData();
   assert(restored.events.length === 1, 'streak events were not restored');
   assert(restored.bestStreak === 3, 'best streak was not restored');
+});
+
+check('streaks: getTrend aggregates events into weekly and monthly buckets', () => {
+  const streaks = require(path.join(root, 'streaks.js'));
+  streaks._reset();
+  // Two nights in the same ISO week (Mon 2026-06-01) and one in the next
+  // month (2026-07-01), so week/month bucketing produce different bucket
+  // counts against the same underlying data.
+  streaks.replaceAll({
+    events: [
+      { date: '2026-06-01', bedTime: '22:00', action: 'shutdown', snoozed: false },
+      { date: '2026-06-02', bedTime: '23:30', action: 'shutdown', snoozed: true },
+      { date: '2026-07-01', bedTime: '22:15', action: 'sleep', snoozed: false }
+    ],
+    streak: 1,
+    bestStreak: 1,
+    achievements: []
+  });
+
+  const weekly = streaks.getTrend('week');
+  assert(weekly.length === 2, `expected 2 week buckets, got ${weekly.length}`);
+  const juneWeek = weekly.find(w => w.nights === 2);
+  assert(juneWeek, 'the two June nights should land in the same week bucket');
+  assert(juneWeek.avgBedTime === '22:45', `expected avg bedtime 22:45, got ${juneWeek.avgBedTime}`);
+  assert(juneWeek.onTimePercent === 50, `expected 50% on-time (one of two nights before 23:00), got ${juneWeek.onTimePercent}`);
+  assert(juneWeek.snoozeRate === 50, `expected 50% snooze rate, got ${juneWeek.snoozeRate}`);
+  assert(juneWeek.periodLength === 7, 'week bucket periodLength should be 7');
+
+  const monthly = streaks.getTrend('month');
+  assert(monthly.length === 2, `expected 2 month buckets, got ${monthly.length}`);
+  const june = monthly.find(m => m.key === '2026-06');
+  assert(june && june.nights === 2, 'June bucket should have 2 nights');
+  assert(june.periodLength === 30, `June has 30 days, got periodLength ${june.periodLength}`);
+  assert(monthly[0].key < monthly[1].key, 'monthly buckets should be chronologically sorted');
+
+  assert(streaks.getTrend('week', 1).length === 1, 'limit should cap the number of returned buckets');
+
+  streaks.replaceAll({ events: [], streak: 0, bestStreak: 0, achievements: [] });
+  assert(streaks.getTrend('week').length === 0, 'no events should yield no buckets');
 });
 
 Module._load = origLoad;
@@ -426,6 +489,67 @@ check('companion: mode buttons present in settings', () => {
   assert(htmlSrc.includes('Connect Phone'), 'Connect Phone button missing');
 });
 
+check('companion: mode buttons have explanatory tooltips, and a live description reflects the selected mode', () => {
+  // "This PC only" reads like it enables remote control from your phone --
+  // it actually means the opposite (loopback-only). Tooltips + a dynamic
+  // description line are the fix; regression-guard both.
+  assertMatch(htmlSrc, /id="btn-mode-local"[^>]*title="[^"]*not reachable from your phone/, 'This PC only button needs a tooltip clarifying it is loopback-only, not phone-reachable');
+  assertMatch(htmlSrc, /id="btn-mode-wifi"[^>]*title="[^"]*reachable from other devices/, 'Connect Phone button needs a tooltip clarifying LAN exposure');
+  assert(htmlSrc.includes('id="remote-mode-description"'), 'remote-mode-description element missing from HTML');
+  assertMatch(rendererSrc, /REMOTE_MODE_DESCRIPTIONS = \{[\s\S]*?off:[\s\S]*?local:[\s\S]*?wifi:/, 'REMOTE_MODE_DESCRIPTIONS map missing an off/local/wifi entry');
+  assertMatch(rendererSrc, /els\.remoteModeDescription\.textContent = REMOTE_MODE_DESCRIPTIONS\[mode\]/, 'renderRemoteControl must update the mode description text');
+});
+
+check('content-blocker: recurring schedules -- settings default, IPC wiring, HTML, and renderer wiring', () => {
+  const settingsSrc = fs.readFileSync(path.join(root, 'settings.js'), 'utf8');
+  assertMatch(settingsSrc, /contentBlocker:\s*\{[\s\S]*?schedules:\s*\[\]/, 'contentBlocker settings defaults missing schedules: []');
+
+  // save-content-blocker-settings / get-content-blocker-settings are
+  // pre-existing IPC channels (this feature is their first real caller) --
+  // guard there's still exactly one handler each, since ipcMain.handle()
+  // throws at startup on a second registration for the same channel.
+  const saveMatches = mainSrc.match(/ipcMain\.handle\('save-content-blocker-settings'/g) || [];
+  const getMatches = mainSrc.match(/ipcMain\.handle\('get-content-blocker-settings'/g) || [];
+  assert(saveMatches.length === 1, `expected exactly 1 save-content-blocker-settings handler, found ${saveMatches.length} (a second ipcMain.handle() registration for the same channel throws at startup)`);
+  assert(getMatches.length === 1, `expected exactly 1 get-content-blocker-settings handler, found ${getMatches.length}`);
+  assertMatch(mainSrc, /ipcMain\.handle\('save-content-blocker-settings'[\s\S]*?checkContentBlockerSchedules\(\);/, 'save-content-blocker-settings should re-evaluate schedules immediately, not wait up to 60s');
+  assertMatch(mainSrc, /setInterval\(checkContentBlockerSchedules, 60000\);/, 'checkContentBlockerSchedules should run on a periodic timer');
+  assertMatch(mainSrc, /restoreAfterTimer[\s\S]*?contentBlocker\.isAnyScheduleActive\(cbConfig\.schedules/, 'restoreAfterTimer must not unblock while a recurring schedule is still active');
+
+  assert(htmlSrc.includes('id="cb-schedules-list"'), 'cb-schedules-list missing from HTML');
+  assert(htmlSrc.includes('id="cb-schedule-form"'), 'cb-schedule-form missing from HTML');
+  assert(htmlSrc.includes('id="cb-rule-start"') && htmlSrc.includes('id="cb-rule-end"'), 'cb-rule-start/end time inputs missing from HTML');
+
+  assertMatch(rendererSrc, /function renderContentBlockerSchedules\(\)/, 'renderContentBlockerSchedules missing');
+  assertMatch(rendererSrc, /function persistCbSchedules\(\)/, 'persistCbSchedules missing');
+  assertMatch(rendererSrc, /api\.saveContentBlockerSettings\?\.\(\{ schedules: cbSchedules \}\)/, 'persistCbSchedules must save only the schedules key, not clobber the rest of the section');
+  assertMatch(rendererSrc, /cbSchedules = Array\.isArray\(cb\.schedules\) \? cb\.schedules : \[\]/, 'applyContentBlockerSettings must load schedules from settings on open');
+});
+
+check('settings: WiFi Guard / Content Blocker / Accountability settings actually rehydrate on launch', () => {
+  // Real pre-existing bug, found via manual runtime testing while building
+  // the content-blocker-schedules feature: loadInitialData() checked
+  // `appSettings.wifiGuard` / `appSettings.contentBlocker` /
+  // `appSettings.accountability`, but get-app-settings never returns those
+  // keys (only app/customization/lastLight/calendar/recoverableTimer) --
+  // so those three sections' saved state, including the enable checkboxes,
+  // never reloaded on app launch. Re-saving the Options modal from that
+  // stale (always-unchecked) state would have silently disabled them.
+  // Fixed by fetching each via its own dedicated getter, same pattern as
+  // smartLights/getSmartLightConfig already used correctly.
+  assertMatch(rendererSrc, /const \[systemInfo, appSettings, lightConfig, wifiConfig, cbConfig, accConfig\] = await Promise\.all\(\[/, 'loadInitialData must fetch wifiGuard/contentBlocker/accountability via their own calls, not assume they are nested in appSettings');
+  assertMatch(rendererSrc, /api\.getWifiGuardSettings\?\.\(\)/, 'loadInitialData missing api.getWifiGuardSettings() call');
+  assertMatch(rendererSrc, /api\.getContentBlockerSettings\?\.\(\)/, 'loadInitialData missing api.getContentBlockerSettings() call');
+  assertMatch(rendererSrc, /api\.getAccountabilitySettings\?\.\(\)/, 'loadInitialData missing api.getAccountabilitySettings() call');
+  assertMatch(rendererSrc, /if \(wifiConfig\) applyWifiGuardSettings\(wifiConfig\);/, 'applyWifiGuardSettings must be driven by the dedicated getter result, not appSettings.wifiGuard (always undefined)');
+  assertMatch(rendererSrc, /if \(cbConfig\) applyContentBlockerSettings\(cbConfig\);/, 'applyContentBlockerSettings must be driven by the dedicated getter result, not appSettings.contentBlocker (always undefined)');
+  assertMatch(rendererSrc, /if \(accConfig\) applyAccountabilitySettings\(accConfig\);/, 'applyAccountabilitySettings must be driven by the dedicated getter result, not appSettings.accountability (always undefined)');
+  // Guard against the bug's exact shape ever coming back.
+  assert(!/if \(appSettings\.wifiGuard\)/.test(rendererSrc), 'regression: appSettings.wifiGuard check reintroduced (always undefined, get-app-settings never returns it)');
+  assert(!/if \(appSettings\.contentBlocker\)/.test(rendererSrc), 'regression: appSettings.contentBlocker check reintroduced');
+  assert(!/if \(appSettings\.accountability\)/.test(rendererSrc), 'regression: appSettings.accountability check reintroduced');
+});
+
 check('companion: settings panel loads remote control state on open', () => {
   assertMatch(rendererSrc, /function openSettingsPanel\(\) \{[\s\S]*?loadRemoteControlState\(\)/s, 'openSettingsPanel must load remote control state');
   assertMatch(rendererSrc, /async function loadRemoteControlState\(\) \{\s*if \(!els\.remoteControlConfig\) return;\s*try \{ renderRemoteControl\(await api\.getRemoteControl\?\.\(\)\); \} catch \{\}/, 'loadRemoteControlState should not bail on missing checkbox');
@@ -572,6 +696,18 @@ if (fs.existsSync(rrPath)) {
     assert(latest && latest.id, 'latest should exist');
   });
 
+  check('receipts: getAllReceiptsForExport returns the full ledger, not just the display-limited list', () => {
+    rr.clearReceipts();
+    const r1 = rr.createRunReceipt({ action: 'shutdown', totalSeconds: 1800 });
+    const r2 = rr.createRunReceipt({ action: 'sleep', totalSeconds: 900 });
+    const all = rr.getAllReceiptsForExport();
+    assert(Array.isArray(all) && all.length === 2, `expected 2 receipts, got ${all.length}`);
+    assert(all[0].id === r1.id && all[1].id === r2.id, 'export should be oldest-first, matching storage order');
+    // Mutating the returned array must not corrupt the live cache.
+    all.pop();
+    assert(rr.getAllReceiptsForExport().length === 2, 'export should return a copy, not the live array');
+  });
+
   check('receipts: pause/snooze/warning increments', () => {
     const r = rr.createRunReceipt({ action: 'sleep', totalSeconds: 600 });
     rr.receiptPaused(r.id);
@@ -604,6 +740,35 @@ if (fs.existsSync(rrPath)) {
   });
 }
 
+check('receipts: export-receipts IPC handler and preload bridge wired', () => {
+  assertMatch(mainSrc, /ipcMain\.handle\('export-receipts'.*\n.*runReceipts\.getAllReceiptsForExport\(\)/, 'export-receipts IPC handler missing or not wired to runReceipts.getAllReceiptsForExport');
+  assertMatch(preloadSrc, /exportReceipts:\s*\(\)\s*=>\s*ipcRenderer\.invoke\('export-receipts'\)/, 'preload exportReceipts bridge missing');
+  assert(htmlSrc.includes('id="btn-export-receipts"'), 'btn-export-receipts missing from HTML');
+  assertMatch(rendererSrc, /els\.btnExportReceipts/, 'renderer does not wire up btnExportReceipts');
+});
+
+check('receipts: humanizeReceiptResult turns raw result codes into readable proof text', () => {
+  // Extract and eval the pure function directly (no DOM deps) so this
+  // actually exercises the mapping logic, not just source-text presence.
+  const fnMatch = rendererSrc.match(/function humanizeReceiptResult\([\s\S]*?\n}/);
+  assert(fnMatch, 'humanizeReceiptResult function not found in renderer-receipts.js');
+  const humanizeReceiptResult = new Function(`${fnMatch[0]}; return humanizeReceiptResult;`)();
+
+  assert(humanizeReceiptResult('power_executed') === 'Completed', 'power_executed should read "Completed"');
+  assert(humanizeReceiptResult('dry_run_completed') === 'Dry Run Completed', 'dry_run_completed should read "Dry Run Completed"');
+  assert(humanizeReceiptResult('cancelled') === 'Cancelled', 'cancelled should read "Cancelled"');
+  assert(humanizeReceiptResult(null) === 'Unknown', 'null/undefined result should read "Unknown", not crash');
+  // Unmapped codes still get title-cased with underscores turned to spaces,
+  // instead of leaking a raw snake_case enum into "proof" a user reads.
+  assert(humanizeReceiptResult('some_new_result') === 'Some New Result', 'unmapped codes should title-case, not leak snake_case');
+
+  // And confirm both clipboard-copy call sites actually use it instead of
+  // the raw result/timestamp fields (the bug this fixes).
+  assertMatch(rendererSrc, /Result: \$\{humanizeReceiptResult\(receipt\.result\)\}/, 'Copy Proof handler should humanize the result, not dump the raw code');
+  assertMatch(rendererSrc, /Started: \$\{receipt\.startedAt \? new Date\(receipt\.startedAt\)\.toLocaleString\(\)/, 'Copy Proof handler should format startedAt, not paste the raw ISO string');
+  assertMatch(rendererSrc, /Result: \$\{humanizeReceiptResult\(r\.result\)\}/, 'Export Ledger handler should humanize the result, not dump the raw code');
+});
+
 // 14. Override Tax integration.
 check('override-tax: module exists and exports expected API', () => {
   assert(mainSrc.includes("require('./overrideTax')"), 'overrideTax not required in main');
@@ -620,6 +785,43 @@ check('override-tax: IPC handlers registered', () => {
 check('override-tax: preload exposes assessSnoozeCost', () => {
   assertMatch(preloadSrc, /assessSnoozeCost:/, 'preload assessSnoozeCost bridge missing');
   assertMatch(preloadSrc, /getOverrideTaxStats:/, 'preload getOverrideTaxStats bridge missing');
+});
+
+check('fullscreen-clock: IPC handler, window sync, preload, HTML, and renderer wiring', () => {
+  assertMatch(mainSrc, /ipcMain\.handle\('set-fullscreen-clock', \(event, flag\) => \{[\s\S]*?mainWindow\.miniMode\) return \{ fullScreen: false \};[\s\S]*?mainWindow\.setFullScreen\(!!flag\);/, 'set-fullscreen-clock IPC handler missing or not disabled in mini mode');
+  assertMatch(mainSrc, /mainWindow\.on\('enter-full-screen', \(\) => \{[\s\S]*?send\('fullscreen-changed', true\)/, 'enter-full-screen -> fullscreen-changed(true) missing');
+  assertMatch(mainSrc, /mainWindow\.on\('leave-full-screen', \(\) => \{[\s\S]*?send\('fullscreen-changed', false\)/, 'leave-full-screen -> fullscreen-changed(false) missing, OS-level exits would desync the renderer');
+  assertMatch(preloadSrc, /setFullScreenClock:\s*\(flag\)\s*=>\s*ipcRenderer\.invoke\('set-fullscreen-clock', flag\)/, 'preload setFullScreenClock bridge missing');
+  assertMatch(preloadSrc, /onFullScreenChanged:\s*\(cb\)\s*=>\s*ipcRenderer\.on\('fullscreen-changed'/, 'preload onFullScreenChanged bridge missing');
+  assert(htmlSrc.includes('id="btn-fullscreen-clock"'), 'btn-fullscreen-clock missing from HTML');
+  assert(htmlSrc.includes('id="btn-fullscreen-clock-exit"'), 'btn-fullscreen-clock-exit missing from HTML');
+  assertMatch(rendererSrc, /fullscreenClock: false,/, 'state.fullscreenClock missing');
+  assertMatch(rendererSrc, /if \(state\.fullscreenClock\) \{\s*exitFullscreenClock\(\);/, 'Escape should exit fullscreen clock mode before any other action');
+  assertMatch(rendererSrc, /els\.body\.classList\.toggle\('fullscreen-clock-mode', state\.fullscreenClock\)/, 'applyFullscreenClockState should drive the body class from main-process state, not a local guess');
+
+  // Regression coverage for three bugs a manual runtime pass caught (the
+  // whole point of this feature's "Ship only if: Manual runtime proof
+  // exists" gate) that static wiring checks alone would have missed:
+
+  // 1. .fullscreen-clock-btn defaults to display:none in CSS, so toggling
+  //    the inline style to '' falls back to that CSS default (still
+  //    hidden) instead of showing the button -- must set an explicit value.
+  assertMatch(rendererSrc, /btnFullscreenClock\.style\.display = \(idleClockVisible && !state\.fullscreenClock\) \? 'flex' : 'none'/, "fullscreen button must toggle to an explicit 'flex', not '' (falls back to the CSS class's display:none), and must hide itself once already fullscreen");
+
+  // 2. The exit button must NOT be a descendant of the transformed
+  //    .timer-section: a transformed ancestor turns a descendant's
+  //    position:fixed into "fixed relative to that ancestor," so the
+  //    2.8x scale would blow up its size and reposition it off in a corner
+  //    of the scaled ring instead of the actual screen corner.
+  const exitBtnIdx = htmlSrc.indexOf('id="btn-fullscreen-clock-exit"');
+  const timerSectionIdx = htmlSrc.indexOf('<section class="timer-section">');
+  assert(exitBtnIdx >= 0 && timerSectionIdx >= 0 && exitBtnIdx < timerSectionIdx, 'btn-fullscreen-clock-exit must be defined before/outside .timer-section, not nested inside the transformed ring section');
+
+  // 3. Entering fullscreen must force the Library tab active first -- the
+  //    fullscreen CSS only hides content within #ns-panel-lib, so a stale
+  //    nsActiveTab left on Schedule/Stats from a prior session would leak
+  //    that panel's content into the fullscreen view instead of the clock.
+  assertMatch(rendererSrc, /function enterFullscreenClock\(\) \{\s*[\s\S]*?handleSidebarNavigation\('lib', \{ persist: false \}\);/, 'enterFullscreenClock must force the lib panel active before entering fullscreen');
 });
 check('override-tax: snooze-tax-modal in HTML', () => {
   assert(htmlSrc.includes('id="snooze-tax-modal"'), 'snooze-tax-modal missing from HTML');

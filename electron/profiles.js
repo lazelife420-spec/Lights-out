@@ -108,7 +108,10 @@ function normalizeProfile(raw) {
     lastLightSequence: raw.lastLightSequence || 'ClassicFade',
     lastLightSound: raw.lastLightSound || 'Off',
     createdAt: raw.createdAt || new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
+    // When this profile was last loaded via apply() -- distinct from
+    // updatedAt (which tracks metadata edits). Null until first used.
+    lastUsedAt: raw.lastUsedAt || null
   };
 }
 
@@ -248,6 +251,18 @@ function applyProfile(profileId, currentState = {}) {
     },
     autoStart: profile.autoStart
   };
+}
+
+// Stamps lastUsedAt and persists to disk. Kept separate from applyProfile()
+// (which stays pure/side-effect-free for unit testing) -- callers invoke
+// this only after a successful apply.
+function markProfileUsed(profileId) {
+  const index = profilesCache.findIndex(p => p.id === profileId);
+  if (index < 0) return null;
+
+  profilesCache[index] = { ...profilesCache[index], lastUsedAt: new Date().toISOString() };
+  saveProfilesToDisk();
+  return profilesCache[index];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -398,6 +413,7 @@ module.exports = {
   
   // Application
   apply: applyProfile,
+  markUsed: markProfileUsed,
   
   // Utilities
   getHint: getProfileHint,

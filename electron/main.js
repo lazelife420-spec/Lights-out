@@ -172,6 +172,11 @@ const timerState = {
   phase: 'idle'        // idle | focus | dim | lastlight
 };
 
+// Whether a Content Blocker recurring schedule currently has sites blocked --
+// tracked so checkContentBlockerSchedules() only calls block/unblock on an
+// actual state transition, not every 60s tick.
+let contentBlockerScheduleActive = false;
+
 // Wind-down phase boundaries (fraction of total time remaining).
 // Focus: 100% → 25%, Dim: 25% → gracePeriod, Last Light: gracePeriod → 0.
 function computePhase(remaining, total, gracePeriod) {
@@ -305,6 +310,16 @@ function createWindow() {
     event.preventDefault();
     mainWindow.hide();
     refreshTrayMenu();
+  });
+
+  // Keep the renderer's fullscreen-clock UI state in sync however fullscreen
+  // was exited -- our own Esc/exit-button handler, or an OS-level shortcut
+  // (e.g. the taskbar, Alt+Tab away and back) that never went through IPC.
+  mainWindow.on('enter-full-screen', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('fullscreen-changed', true);
+  });
+  mainWindow.on('leave-full-screen', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('fullscreen-changed', false);
   });
 
   mainWindow.on('closed', () => {
@@ -878,10 +893,13 @@ function restoreAfterTimer() {
       }
     }).catch(() => {});
   }
-  // Unblock distracting websites.
+  // Unblock distracting websites -- but not if a recurring schedule
+  // (independent of this timer) still wants them blocked right now.
   const cbConfig = settingsStore.getSection('contentBlocker');
   if (cbConfig && cbConfig.enabled && cbConfig.unblockOnComplete !== false) {
-    contentBlocker.unblockSites().catch(() => {});
+    if (!contentBlocker.isAnyScheduleActive(cbConfig.schedules, new Date())) {
+      contentBlocker.unblockSites().catch(() => {});
+    }
   }
   // Undo progressive lockout: restore normal window behavior. The window is
   // created with autoHideMenuBar:true, so re-show the bar (Alt-accessible) here
@@ -1014,6 +1032,44 @@ function isBedtimeEvent(event) {
   const title = getEventTitle(event).toLowerCase();
   // Must contain a keyword to qualify.
   return AUTO_START_KEYWORDS.some(kw => title.includes(kw));
+}
+
+// Content Blocker recurring schedules: independent of the shutdown timer's
+// own dim-phase blocking, so this can (for example) keep social media
+// blocked all night whether or not a Lights Out timer happens to be
+// running. Only calls block/unblock on an actual on/off transition.
+function checkContentBlockerSchedules() {
+  const cbConfig = settingsStore.getSection('contentBlocker');
+  if (!cbConfig || !cbConfig.enabled) {
+    contentBlockerScheduleActive = false;
+    return;
+  }
+
+  const scheduleWantsBlock = contentBlocker.isAnyScheduleActive(cbConfig.schedules, new Date());
+  if (scheduleWantsBlock === contentBlockerScheduleActive) return;
+  contentBlockerScheduleActive = scheduleWantsBlock;
+
+  if (scheduleWantsBlock) {
+    const sites = (cbConfig.useDefault !== false) ? contentBlocker.DEFAULT_BLOCKLIST : (cbConfig.blocklist || []);
+    contentBlocker.blockSites(sites).then(result => {
+      if (result.success && mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('content-blocked', { sites: result.sites, blocked: true, source: 'schedule' });
+      }
+    }).catch(() => {});
+  } else {
+    // Schedule window just ended -- don't unblock if the shutdown timer's
+    // own dim-phase blocking still wants it blocked right now.
+    const timerAlsoWantsBlock = timerState.running && !timerState.paused &&
+      (timerState.phase === 'dim' || timerState.phase === 'lastlight') &&
+      cbConfig.blockOnDim !== false;
+    if (!timerAlsoWantsBlock) {
+      contentBlocker.unblockSites().then(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('content-blocked', { blocked: false, source: 'schedule' });
+        }
+      }).catch(() => {});
+    }
+  }
 }
 
 async function checkCalendarAutoStart() {
@@ -1487,6 +1543,9 @@ ipcMain.handle('get-sleep-score', async () => {
 ipcMain.handle('get-streaks-history', async () => {
   try { return streaks.getHistory30(); } catch { return []; }
 });
+ipcMain.handle('get-streaks-trend', async (event, granularity) => {
+  try { return streaks.getTrend(granularity); } catch { return []; }
+});
 ipcMain.handle('add-custom-sequence', async (event, seq) => {
   const entry = lastLight.addCustomSequence(seq);
   if (entry) {
@@ -1688,6 +1747,7 @@ ipcMain.handle('content-block-status', async () => {
 });
 ipcMain.handle('save-content-blocker-settings', async (e, s) => {
   settingsStore.updateSection('contentBlocker', s);
+  checkContentBlockerSchedules(); // re-evaluate immediately, don't wait up to 60s
   return { saved: true };
 });
 ipcMain.handle('get-content-blocker-settings', async () => {
@@ -1764,6 +1824,9 @@ ipcMain.handle('get-latest-receipt', async () => {
 });
 ipcMain.handle('list-receipts', async (e, limit) => {
   return runReceipts.listReceipts(limit || 20);
+});
+ipcMain.handle('export-receipts', async () => {
+  return runReceipts.getAllReceiptsForExport();
 });
 ipcMain.handle('clear-receipts', async () => {
   return runReceipts.clearReceipts();
@@ -1885,7 +1948,14 @@ ipcMain.handle('profiles-create', async (event, data) => profiles.create(data));
 ipcMain.handle('profiles-update', async (event, id, data) => profiles.update(id, data));
 ipcMain.handle('profiles-delete', async (event, id) => profiles.delete(id));
 ipcMain.handle('profiles-reorder', async (event, orderedIds) => profiles.reorder(orderedIds));
-ipcMain.handle('profiles-apply', async (event, id) => profiles.apply(id));
+ipcMain.handle('profiles-apply', async (event, id) => {
+  const result = profiles.apply(id);
+  if (result.success) {
+    const updated = profiles.markUsed(id);
+    if (updated) result.profile = updated;
+  }
+  return result;
+});
 ipcMain.handle('profiles-get-hint', async (event, profile) => profiles.getHint(profile));
 ipcMain.handle('profiles-export', async () => profiles.export());
 ipcMain.handle('profiles-import', async (event, jsonString) => profiles.import(jsonString));
@@ -2080,6 +2150,16 @@ ipcMain.on('fit-window-height', (event, contentHeight) => {
   const maxH = Math.max(600, work.height - 48);
   const target = Math.max(600, Math.min(desired, maxH));
   if (Math.abs(curH - target) > 2) mainWindow.setContentSize(w, target);
+});
+
+// Full-screen clock mode: reuses the existing main window (no new
+// BrowserWindow, no multi-monitor picker) -- the renderer hides all other
+// chrome and enlarges the analog clock via CSS. Disabled in mini mode,
+// where the window is deliberately small and always-on-top instead.
+ipcMain.handle('set-fullscreen-clock', (event, flag) => {
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.miniMode) return { fullScreen: false };
+  mainWindow.setFullScreen(!!flag);
+  return { fullScreen: mainWindow.isFullScreen() };
 });
 
 function setupJumpList() {
@@ -2380,6 +2460,12 @@ app.whenReady().then(async () => {
 
   // Calendar Auto-Start: check for upcoming events and auto-start timer.
   setInterval(checkCalendarAutoStart, 60000);
+
+  // Content Blocker recurring schedules: check every minute, plus once
+  // immediately so a schedule that's already active doesn't wait up to a
+  // minute after launch to take effect.
+  setInterval(checkContentBlockerSchedules, 60000);
+  checkContentBlockerSchedules();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

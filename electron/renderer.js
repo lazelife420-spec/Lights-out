@@ -126,11 +126,14 @@ const fallbackApi = (() => {
     onDimPhaseStarted: () => {},
     onDimPhaseEnded: () => {},
     onOpenSettings: () => {},
+    setFullScreenClock: async () => ({ fullScreen: false }),
+    onFullScreenChanged: () => {},
     getStreaks: async () => ({ streak: 0, bestStreak: 0, totalNights: 0, achievements: [], weekAvg: '--:--', weekOnTime: 0, weekDays: [] }),
     getAchievementsCatalog: async () => [],
     getWeeklyReport: async () => null,
     getSleepScore: async () => ({ score: null, label: 'Preview', breakdown: {} }),
     getStreaksHistory: async () => [],
+    getStreaksTrend: async () => [],
     getCompanionStatus: async () => ({ running: false, port: 0, clients: 0, url: '' }),
     getRemoteControl: async () => ({ enabled: false, mode: 'off', token: '', port: 0, lanIp: '', url: '', pcName: 'Preview PC', clients: 0, connected: false, failed: false, statusLabel: 'Off' }),
     setRemoteControlMode: async () => ({ enabled: false, mode: 'off', token: '', url: '', statusLabel: 'Off' }),
@@ -161,7 +164,7 @@ const fallbackApi = (() => {
     contentBlockStatus: async () => ({ blocked: false, sites: [] }),
     saveContentBlockerSettings: async () => {},
     getContentBlockerSettings: async () => ({
-      enabled: false, blockOnDim: true, unblockOnComplete: true, blocklist: [], useDefault: true
+      enabled: false, blockOnDim: true, unblockOnComplete: true, blocklist: [], useDefault: true, schedules: []
     }),
     onContentBlocked: (cb) => {},
     saveAccountabilitySettings: async () => {},
@@ -188,6 +191,7 @@ const fallbackApi = (() => {
     executeOverride: async () => ({ overridden: true }),
     getLatestReceipt: async () => null,
     listReceipts: async () => [],
+    exportReceipts: async () => [],
     clearReceipts: async () => ({ cleared: true }),
     getReceiptStats: async () => ({ total: 0, completed: 0, cancelled: 0, dryRun: 0, blocked: 0 }),
     getIdleSeconds: async () => 0,
@@ -318,6 +322,8 @@ const els = {
   // Clock face elements
   czClockFace: document.getElementById('cz-clockface'),
   analogClock: document.getElementById('analog-clock'),
+  btnFullscreenClock: document.getElementById('btn-fullscreen-clock'),
+  btnFullscreenClockExit: document.getElementById('btn-fullscreen-clock-exit'),
   analogTicks: document.getElementById('analog-ticks'),
   analogNumerals: document.getElementById('analog-numerals'),
   analogArabic: document.getElementById('analog-arabic'),
@@ -406,6 +412,8 @@ const els = {
   streakCalloutCount: document.getElementById('streak-callout-count'),
   streakCalloutBest: document.getElementById('streak-callout-best'),
   achievementsGrid: document.getElementById('achievements-grid'),
+  trendList: document.getElementById('trend-list'),
+  trendGranularityToggle: document.getElementById('trend-granularity-toggle'),
   // Sleep score
   scoreValue: document.getElementById('score-value'),
   scoreLabel: document.getElementById('score-label'),
@@ -426,6 +434,7 @@ const els = {
   // Remote control
   chkRemoteControl: document.getElementById('chk-remote-control'),
   remoteControlConfig: document.getElementById('remote-control-config'),
+  remoteModeDescription: document.getElementById('remote-mode-description'),
   remoteUrl: document.getElementById('remote-url'),
   remoteToken: document.getElementById('remote-token'),
   remoteQr: document.getElementById('remote-qr'),
@@ -470,6 +479,15 @@ const els = {
   btnContentBlockTest: document.getElementById('btn-content-block-test'),
   btnContentUnblockTest: document.getElementById('btn-content-unblock-test'),
   contentTestResult: document.getElementById('content-test-result'),
+  cbSchedulesList: document.getElementById('cb-schedules-list'),
+  btnAddCbSchedule: document.getElementById('btn-add-cb-schedule'),
+  cbScheduleForm: document.getElementById('cb-schedule-form'),
+  cbRuleLabel: document.getElementById('cb-rule-label'),
+  cbRuleStart: document.getElementById('cb-rule-start'),
+  cbRuleEnd: document.getElementById('cb-rule-end'),
+  cbRuleDays: document.getElementById('cb-rule-days'),
+  btnCancelCbRule: document.getElementById('btn-cancel-cb-rule'),
+  btnSaveCbRule: document.getElementById('btn-save-cb-rule'),
 
   // Accountability
   chkAccountability: document.getElementById('chk-accountability'),
@@ -559,6 +577,7 @@ const els = {
   receiptStats: document.getElementById('receipt-stats'),
   receiptsList: document.getElementById('receipts-list'),
   btnClearReceipts: document.getElementById('btn-clear-receipts'),
+  btnExportReceipts: document.getElementById('btn-export-receipts'),
   // Northstar sidebar destinations (LIB/SCH/STATS)
   panelLib: document.getElementById('ns-panel-lib'),
   panelSch: document.getElementById('ns-panel-sch'),
@@ -671,6 +690,8 @@ const state = {
   phase: 'idle',
   // Clock Mode: show current time when idle
   clockMode: true,
+  // Full screen clock mode (reuses the main window, no separate BrowserWindow)
+  fullscreenClock: false,
   // Clock face style when idle: 'digital' | 'analog' | 'hybrid'. Hybrid is the default.
   clockFace: 'hybrid',
   // Analog/hybrid clock customization.
@@ -692,6 +713,8 @@ const state = {
   currentProfileId: null,
   profileSearchQuery: '',
   profileActiveFilter: 'all',
+  // Streaks trend view (Weekly/Monthly toggle)
+  trendGranularity: 'week',
   // Calendar state
   calendarEvents: [],
   calendarSource: null,
@@ -1243,6 +1266,10 @@ function render() {
   els.body.classList.toggle('is-paused', state.paused);
   els.body.classList.toggle('mini-mode', state.miniMode);
   els.timerDisplay?.classList.toggle('clock-idle', idleClockVisible);
+  // Full screen only makes sense over the idle clock face -- once a timer's
+  // running the ring switches to a countdown, and setup-controls/action-bar
+  // (hidden in fullscreen-clock-mode) are what pause/snooze/cancel live in.
+  if (els.btnFullscreenClock) els.btnFullscreenClock.style.display = (idleClockVisible && !state.fullscreenClock) ? 'flex' : 'none';
 
   // Clock Mode: show current time when idle instead of countdown input.
   if (idleClockVisible) {
@@ -1765,8 +1792,42 @@ async function loadStreaks() {
     const report = await api.getWeeklyReport();
     const sleepScore = await api.getSleepScore();
     const history = await api.getStreaksHistory?.() || [];
-    renderStreaks(summary, catalog, report, sleepScore, history);
+    const trend = await api.getStreaksTrend?.(state.trendGranularity) || [];
+    renderStreaks(summary, catalog, report, sleepScore, history, trend);
   } catch { /* streaks are decorative, never block */ }
+}
+
+// Re-fetches and re-renders just the trend rows, without a full loadStreaks()
+// round trip -- used by the Weekly/Monthly toggle.
+async function refreshTrend() {
+  try {
+    const trend = await api.getStreaksTrend?.(state.trendGranularity) || [];
+    renderTrend(trend);
+  } catch { /* decorative, never block */ }
+}
+
+function renderTrend(trend) {
+  if (!els.trendList) return;
+
+  if (!trend || !trend.length) {
+    els.trendList.innerHTML = '<div class="trend-empty">Not enough history yet.</div>';
+    return;
+  }
+
+  // Most recent period first; bar width relative to the period's own length
+  // (7 days for a week, actual days for a month) so a partial current period
+  // doesn't look like a slump next to full past periods.
+  const rows = [...trend].reverse();
+  els.trendList.innerHTML = rows.map(t => {
+    const pct = Math.round(clamp(t.nights / t.periodLength, 0, 1) * 100);
+    return `
+      <div class="trend-row">
+        <span class="trend-row-label">${escapeHtml(t.label)}</span>
+        <div class="trend-row-track"><div class="trend-row-fill" style="width:${pct}%"></div></div>
+        <span class="trend-row-val">${t.nights}/${t.periodLength}n · ${t.avgBedTime} · ${t.onTimePercent}% on-time</span>
+      </div>
+    `;
+  }).join('');
 }
 
 // Home streak callout: show the current streak above Saved Profiles, but only
@@ -1804,7 +1865,7 @@ function showStreakCelebration(count) {
   }
 }
 
-function renderStreaks(summary, catalog, report, sleepScore, history) {
+function renderStreaks(summary, catalog, report, sleepScore, history, trend) {
   if (!summary) return;
 
   // Sleep Score.
@@ -1868,6 +1929,8 @@ function renderStreaks(summary, catalog, report, sleepScore, history) {
     }).join('');
   }
 
+  renderTrend(trend);
+
   // Achievements grid.
   if (els.achievementsGrid && catalog?.length) {
     const unlocked = summary.achievements || [];
@@ -1899,6 +1962,27 @@ function toggleMiniMode() {
   api.toggleMiniMode();
   render();
   notify(state.miniMode ? 'Mini mode' : 'Full view', 'info');
+}
+
+// Full screen clock mode: reuses the existing window (main.js setFullScreen),
+// no separate BrowserWindow. state.fullscreenClock is only ever set from
+// applyFullscreenClockState() -- the main process's isFullScreen() is the
+// single source of truth, reached either by these calls or by an OS-level
+// exit (Alt+Tab, taskbar) that never goes through our IPC.
+function enterFullscreenClock() {
+  // The fullscreen CSS only hides content within #ns-panel-lib; force that
+  // panel active first so a stale nsActiveTab (e.g. left on Schedule/Stats
+  // from a prior session) can't leak its content into the fullscreen view.
+  handleSidebarNavigation('lib', { persist: false });
+  api.setFullScreenClock?.(true);
+}
+function exitFullscreenClock() {
+  api.setFullScreenClock?.(false);
+}
+function applyFullscreenClockState(isFullScreen) {
+  state.fullscreenClock = !!isFullScreen;
+  els.body.classList.toggle('fullscreen-clock-mode', state.fullscreenClock);
+  render();
 }
 
 function selectClockTarget(timeValue) {
@@ -1950,6 +2034,9 @@ function wireEvents() {
   els.btnMinimize.addEventListener('click', () => api.minimizeWindow());
   els.btnClose.addEventListener('click', () => api.closeWindow());
   els.btnMini?.addEventListener('click', toggleMiniMode);
+  els.btnFullscreenClock?.addEventListener('click', enterFullscreenClock);
+  els.btnFullscreenClockExit?.addEventListener('click', exitFullscreenClock);
+  api.onFullScreenChanged?.(applyFullscreenClockState);
   els.btnWidget?.addEventListener('click', () => {
     api.toggleWidget?.();
     notify('Desktop widget toggled', 'info');
@@ -2336,11 +2423,11 @@ if (els.btnProofCopy) {
       if (!receipt) return;
       const text = [
         `Lights Out - Morning Proof`,
-        `Result: ${receipt.result}`,
+        `Result: ${humanizeReceiptResult(receipt.result)}`,
         `Action: ${receipt.action}${receipt.forceShutdown ? ' (Force)' : ''}${receipt.dryRun ? ' (Dry Run)' : ''}`,
         `Duration: ${Math.floor(receipt.durationSeconds / 60)}m`,
-        `Started: ${receipt.startedAt}`,
-        `Ended: ${receipt.endedAt || 'N/A'}`,
+        `Started: ${receipt.startedAt ? new Date(receipt.startedAt).toLocaleString() : 'N/A'}`,
+        `Ended: ${receipt.endedAt ? new Date(receipt.endedAt).toLocaleString() : 'N/A'}`,
         `Pauses: ${receipt.pauseCount}, Snoozes: ${receipt.snoozeCount}, Warnings: ${receipt.warningsShown}`,
         receipt.powerCommand ? `Command: ${receipt.powerCommand}` : '',
         receipt.notes ? `Notes: ${receipt.notes}` : ''
@@ -2370,6 +2457,44 @@ if (els.morningProofSection) {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && els.morningProofSection.style.display !== 'none') {
       dismissMorningProof();
+    }
+  });
+}
+
+// Export the full receipts ledger (not just the modal's visible/limited
+// list) as a readable text summary, copied to clipboard -- mirrors the
+// Streaks tab's "Export Ledger" pattern.
+if (els.btnExportReceipts) {
+  els.btnExportReceipts.addEventListener('click', async () => {
+    try {
+      const receipts = await api.exportReceipts?.() || [];
+      if (!receipts.length) {
+        notify('No receipts to export', 'info');
+        return;
+      }
+
+      let ledger = `LIGHTS OUT RUN RECEIPTS\n`;
+      ledger += `=========================\n`;
+      ledger += `Generated: ${new Date().toLocaleString()}\n`;
+      ledger += `Total Runs: ${receipts.length}\n\n`;
+
+      [...receipts].reverse().forEach(r => {
+        const start = r.startedAt ? new Date(r.startedAt).toLocaleString() : 'N/A';
+        const end = r.endedAt ? new Date(r.endedAt).toLocaleString() : 'N/A';
+        const durMin = r.durationSeconds ? Math.floor(r.durationSeconds / 60) : 0;
+        ledger += `${start}\n`;
+        ledger += `  Result: ${humanizeReceiptResult(r.result)}\n`;
+        ledger += `  Action: ${r.action || 'N/A'}${r.forceShutdown ? ' (Force)' : ''}${r.dryRun ? ' (Dry Run)' : ''}\n`;
+        ledger += `  Duration: ${durMin}m | Ended: ${end}\n`;
+        ledger += `  Pauses: ${r.pauseCount || 0}, Snoozes: ${r.snoozeCount || 0}, Warnings: ${r.warningsShown || 0}\n`;
+        if (r.notes) ledger += `  Notes: ${r.notes}\n`;
+        ledger += `\n`;
+      });
+
+      await navigator.clipboard.writeText(ledger);
+      notify(`${receipts.length} receipts copied to clipboard`, 'success', 3000);
+    } catch (e) {
+      notify('Failed to export receipts', 'error');
     }
   });
 }
@@ -2500,6 +2625,18 @@ if (els.btnClearReceipts) {
 
   document.getElementById('btn-celebration-dismiss')?.addEventListener('click', () => {
     document.getElementById('streak-celebration-modal')?.classList.remove('active');
+  });
+
+  els.trendGranularityToggle?.querySelectorAll('.trend-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const granularity = btn.dataset.granularity;
+      if (!granularity || granularity === state.trendGranularity) return;
+      state.trendGranularity = granularity;
+      els.trendGranularityToggle.querySelectorAll('.trend-toggle-btn').forEach(b => {
+        b.classList.toggle('active', b === btn);
+      });
+      refreshTrend();
+    });
   });
 
   document.getElementById('btn-export-streaks')?.addEventListener('click', async () => {
@@ -2750,7 +2887,9 @@ if (els.btnClearReceipts) {
 
     if (event.key === 'Escape') {
       // Close the topmost active modal/drawer.
-      if (els.optionsModal.classList.contains('active')) {
+      if (state.fullscreenClock) {
+        exitFullscreenClock();
+      } else if (els.optionsModal.classList.contains('active')) {
         els.optionsModal.classList.remove('active');
       } else if (els.profilesModal?.classList.contains('active')) {
         els.profilesModal.classList.remove('active');
@@ -3096,10 +3235,13 @@ function updateLightsUI() {
 
 async function loadInitialData() {
   try {
-    const [systemInfo, appSettings, lightConfig] = await Promise.all([
+    const [systemInfo, appSettings, lightConfig, wifiConfig, cbConfig, accConfig] = await Promise.all([
       api.getSystemInfo(),
       api.getAppSettings(),
-      api.getSmartLightConfig()
+      api.getSmartLightConfig(),
+      api.getWifiGuardSettings?.(),
+      api.getContentBlockerSettings?.(),
+      api.getAccountabilitySettings?.()
     ]);
 
     // --- Critical: rehydrate persisted settings FIRST. A failure in any
@@ -3150,18 +3292,19 @@ async function loadInitialData() {
       updateLightsUIFromState();
     }
 
-    // Load WiFi Guard config
-    if (appSettings.wifiGuard) {
-      applyWifiGuardSettings(appSettings.wifiGuard);
-    }
-    // Load Content Blocker config
-    if (appSettings.contentBlocker) {
-      applyContentBlockerSettings(appSettings.contentBlocker);
-    }
-    // Load Accountability config
-    if (appSettings.accountability) {
-      applyAccountabilitySettings(appSettings.accountability);
-    }
+    // Load WiFi Guard / Content Blocker / Accountability config. These live
+    // in their own settings sections (not nested under appSettings, which
+    // only carries app/customization/lastLight/calendar) -- fetched above
+    // via their own dedicated getters, same pattern as smartLights/lightConfig.
+    // PRE-EXISTING BUG fixed here: this used to check `appSettings.wifiGuard`
+    // etc., which was always undefined, so these three sections' saved state
+    // (including the enable checkboxes) never rehydrated into the UI on
+    // launch -- reopening Settings always showed them unchecked/default even
+    // when actually enabled, and re-saving the Options modal from that state
+    // would have silently disabled them.
+    if (wifiConfig) applyWifiGuardSettings(wifiConfig);
+    if (cbConfig) applyContentBlockerSettings(cbConfig);
+    if (accConfig) applyAccountabilitySettings(accConfig);
   } catch (e) {
     console.error('loadInitialData failed:', e);
     els.batteryLevel.textContent = 'N/A';
@@ -3271,6 +3414,7 @@ setupWarningHandlers();
 setupAlarmHandlers();
 setupCalendarHandlers();
 setupRemoteControlHandlers();
+setupCbScheduleHandlers();
 setAction(state.action);
 loadInitialData().finally(render);
 applyAppVersion();

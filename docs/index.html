@@ -872,7 +872,16 @@
       </div>
       <div class="feature">
         <h3 class="feature-title">How do I verify the download?</h3>
-        <p class="feature-body">Use the release checksum file, SHA256SUMS.txt, published with the release assets.</p>
+        <p class="feature-body">
+          Every release ships a <code>SHA256SUMS.txt</code> file alongside the installer and portable build. To check
+          your download hasn't been tampered with, open PowerShell in the folder where you saved both files and run:
+        </p>
+        <p class="feature-body"><code>Get-FileHash "Lights Out Setup &lt;version&gt;.exe" -Algorithm SHA256</code></p>
+        <p class="feature-body">
+          Compare the printed hash against the matching line in <code>SHA256SUMS.txt</code> (open it in Notepad) —
+          the hex string should match exactly. If it doesn't, don't run the installer; re-download from the
+          <a href="https://github.com/lazelife420-spec/Lights-out/releases">official releases page</a>.
+        </p>
       </div>
     </div>
   </section>
