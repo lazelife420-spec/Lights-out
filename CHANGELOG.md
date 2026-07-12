@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **Phone companion reconnection diagnostics and recovery.** The phone now
+  preflights its pairing token so a revoked or stale code is reported as
+  "Pairing expired" instead of being misdiagnosed as an offline PC. Reconnect
+  attempts ignore stale WebSocket callbacks and cancel pending retries after a
+  healthy connection, preventing an older attempt from replacing the live
+  socket. The Android wrapper also preserves the page's existing pairing token
+  in native preferences so automatic recovery can reuse it when the desktop's
+  LAN address changes. Verified with a physical phone connected to the desktop;
+  automated Electron tests, Android debug assembly, and Electron packaging also
+  pass.
+
 ## v11.0.0 — Serious Night Mode (2026-07-09)
 
 ### Fixed

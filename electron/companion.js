@@ -62,6 +62,12 @@ function tokenFromUrl(url) {
   catch { return ''; }
 }
 
+function pairCheckStatus(provided, expected) {
+  if (!expected) return 401;
+  if (!provided || !remoteControl.tokensMatch(provided, expected)) return 403;
+  return 204;
+}
+
 function computeStatus(patch = {}) {
   return {
     ...status,
@@ -266,7 +272,17 @@ function broadcast(data) {
 
 function requestHandler(req, res) {
   const pathOnly = String(req.url || '').split('?')[0];
-  if (pathOnly === '/' || pathOnly === '/index.html') {
+  if (pathOnly === '/pair-check') {
+    // Browsers intentionally hide the HTTP status of a failed WebSocket
+    // upgrade and surface it only as close code 1006. This same-origin
+    // preflight lets the phone distinguish an expired pairing code from an
+    // offline PC without exposing state or accepting an unauthenticated
+    // WebSocket connection.
+    const statusCode = pairCheckStatus(tokenFromUrl(req.url), expectedToken);
+    if (statusCode !== 204) recordFailedAttempt(req.socket || {});
+    res.writeHead(statusCode, { 'Cache-Control': 'no-store' });
+    res.end();
+  } else if (pathOnly === '/' || pathOnly === '/index.html') {
     // Serve the static shell as an inert pairing-only view. It contains no
     // secrets and all controls are disabled until the WebSocket control plane
     // (upgradeHandler) validates the pairing token. This lets a phone load the
@@ -421,6 +437,7 @@ module.exports = {
   PWA_PORT,
   // Exposed for unit testing the WebSocket handshake.
   computeAccept,
+  pairCheckStatus,
   // Exposed for unit testing the hand-rolled RFC 6455 frame codec. These are
   // pure with respect to the (test-supplied) client object; consumeFrames /
   // dispatchFrame only read/write client.buf, client.alive, and client.socket.

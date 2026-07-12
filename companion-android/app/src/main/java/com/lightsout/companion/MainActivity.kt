@@ -27,6 +27,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import org.json.JSONArray
 
 /**
  * Thin WebView wrapper around the Lights Out desktop companion page.
@@ -159,6 +160,11 @@ class MainActivity : AppCompatActivity() {
                         val uri = try { java.net.URI(url) } catch (_: Exception) { null }
                         uri?.host?.let { failedConnections.remove(it) }
                     }
+                    // Existing installs saved the pairing token only in the
+                    // companion page's localStorage. Mirror it into native
+                    // preferences after a successful load so those users also
+                    // gain IP-change recovery without having to pair again.
+                    capturePersistedPageToken(view)
                 }
                 super.onPageFinished(view, url)
             }
@@ -258,6 +264,21 @@ class MainActivity : AppCompatActivity() {
         webView.visibility = View.GONE
         setup.visibility = View.VISIBLE
         if (prefill != null) urlInput.setText(prefill)
+    }
+
+    private fun capturePersistedPageToken(view: WebView?) {
+        view?.evaluateJavascript(
+            "(function(){try{return localStorage.getItem('$PAGE_TOKEN_KEY')||''}catch(e){return ''}})()"
+        ) { encodedValue ->
+            val token = try {
+                JSONArray("[$encodedValue]").optString(0).takeIf { it.isNotBlank() }
+            } catch (_: Exception) {
+                null
+            }
+            if (token != null) {
+                prefs.edit().putString(KEY_TOKEN, token).apply()
+            }
+        }
     }
 
     private fun handleLoadFailure(url: String?, detail: String?) {
@@ -418,6 +439,7 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val KEY_URL = "companion_url"
         private const val KEY_TOKEN = "companion_token"
+        private const val PAGE_TOKEN_KEY = "lightsout_pair_token"
         private const val SCAN_COOLDOWN_MS = 20_000L
     }
 }

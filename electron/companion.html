@@ -292,6 +292,7 @@
 
     let ws = null;
     let reconnectTimer = null;
+    let connectionAttempt = 0;
 
     const TOKEN_KEY = 'lightsout_pair_token';
     const HOST_KEY = 'lightsout_pair_host';
@@ -389,32 +390,66 @@
       setTimeout(() => toast.classList.remove('show'), 2000);
     }
 
-    function connect() {
+    async function connect() {
       if (!pairToken) { showPairing(); return; }
+      const attempt = ++connectionAttempt;
       const host = pairHost || location.host;
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
 
       setConnectionState('connecting', 'Connecting…');
-      if (ws) { try { ws.close(); } catch {} }
+      // A browser reports an HTTP 401/403 WebSocket upgrade rejection only as
+      // generic close code 1006. Ask the same-origin server first so a stale
+      // token can produce an actionable "Pairing expired" state instead of
+      // incorrectly blaming the network.
+      if (location.host) {
+        try {
+          const response = await fetch(`/pair-check?t=${encodeURIComponent(pairToken)}`, { cache: 'no-store' });
+          if (attempt !== connectionAttempt) return;
+          if (response.status === 401 || response.status === 403) {
+            localStorage.removeItem(TOKEN_KEY);
+            pairToken = '';
+            setConnectionState('expired', 'Pairing expired');
+            showPairing();
+            return;
+          }
+          if (!response.ok) throw new Error(`Pair check failed: ${response.status}`);
+        } catch {
+          if (attempt !== connectionAttempt) return;
+          setConnectionState('offline', 'Wrong network or PC offline');
+          scheduleReconnect();
+          return;
+        }
+      }
 
-      ws = new WebSocket(`${proto}//${host}/?t=${encodeURIComponent(pairToken)}`);
+      const previous = ws;
+      const socket = new WebSocket(`${proto}//${host}/?t=${encodeURIComponent(pairToken)}`);
+      ws = socket;
+      if (previous && previous.readyState < WebSocket.CLOSING) {
+        try { previous.close(); } catch {}
+      }
 
-      ws.onopen = () => {
+      socket.onopen = () => {
+        if (ws !== socket) return;
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        reconnectTimer = null;
         setConnectionState('connected', pcName ? `Connected to ${pcName}` : 'Connected');
         showToast('Connected to PC');
       };
 
-      ws.onmessage = (e) => {
+      socket.onmessage = (e) => {
+        if (ws !== socket) return;
         try { handleUpdate(JSON.parse(e.data)); } catch {}
       };
 
-      ws.onclose = (e) => {
+      socket.onclose = (e) => {
+        if (ws !== socket) return;
         // 1008 = policy violation / bad token, 1011 = server error, 1006 = abnormal close.
         if (e.code === 1008) {
           localStorage.removeItem(TOKEN_KEY);
           pairToken = '';
           setConnectionState('expired', 'Pairing expired');
           showPairing();
+          return;
         } else if (e.code === 1006) {
           setConnectionState('offline', 'Wrong network or PC offline');
         } else {
@@ -423,7 +458,8 @@
         scheduleReconnect();
       };
 
-      ws.onerror = () => {
+      socket.onerror = () => {
+        if (ws !== socket) return;
         setConnectionState('offline', 'Wrong network or PC offline');
         scheduleReconnect();
       };
@@ -436,7 +472,10 @@
         }
       });
     }
-    function scheduleReconnect() { if (reconnectTimer) clearTimeout(reconnectTimer); reconnectTimer = setTimeout(connect, 3000); }
+    function scheduleReconnect() {
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, 3000);
+    }
     function send(data) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); }
 
     function startTimer(seconds) {

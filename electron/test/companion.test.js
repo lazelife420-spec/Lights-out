@@ -39,6 +39,13 @@ test('computeAccept changes with the key', () => {
   );
 });
 
+test('pair-check distinguishes a valid token from missing or expired pairing', () => {
+  assert.equal(companion.pairCheckStatus('current-token', 'current-token'), 204);
+  assert.equal(companion.pairCheckStatus('old-token', 'current-token'), 403);
+  assert.equal(companion.pairCheckStatus('', 'current-token'), 403);
+  assert.equal(companion.pairCheckStatus('current-token', ''), 401);
+});
+
 // Failed-pairing-attempt visibility: purely informational (see the comment
 // above recordFailedAttempt in companion.js for why this is not a lockout).
 // Tests use relative deltas rather than absolute counts since the counter

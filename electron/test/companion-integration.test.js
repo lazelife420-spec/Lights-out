@@ -19,6 +19,16 @@ function freePort() {
   });
 }
 
+function getResponse(url) {
+  return new Promise((resolve, reject) => {
+    http.get(url, { agent: false }, (res) => {
+      const result = { statusCode: res.statusCode, headers: res.headers };
+      res.resume();
+      res.on('end', () => resolve(result));
+    }).on('error', reject);
+  });
+}
+
 test('Companion integration: Off mode (no listener)', async (t) => {
   await companion.stop();
   companion.start({ token: '', host: '127.0.0.1' });
@@ -79,6 +89,36 @@ test('Companion integration: Token authentication', async (t) => {
 
     req.end();
   });
+
+  await companion.stop();
+});
+
+test('Companion integration: Pair-check reports stale and rotated tokens', async () => {
+  const originalToken = 'original-token';
+  const rotatedToken = 'rotated-token';
+  const port = await freePort();
+
+  await companion.stop();
+  companion.start({ token: originalToken, host: '127.0.0.1', port });
+
+  const valid = await getResponse(`http://127.0.0.1:${port}/pair-check?t=${originalToken}`);
+  assert.equal(valid.statusCode, 204, 'Current pairing token should pass preflight');
+  assert.equal(valid.headers['cache-control'], 'no-store', 'Pairing decisions must never be cached');
+
+  const missing = await getResponse(`http://127.0.0.1:${port}/pair-check`);
+  assert.equal(missing.statusCode, 403, 'Missing token should be rejected');
+
+  const stale = await getResponse(`http://127.0.0.1:${port}/pair-check?t=stale-token`);
+  assert.equal(stale.statusCode, 403, 'Stale token should be reported as expired');
+
+  await companion.stop();
+  companion.start({ token: rotatedToken, host: '127.0.0.1', port });
+
+  const revoked = await getResponse(`http://127.0.0.1:${port}/pair-check?t=${originalToken}`);
+  assert.equal(revoked.statusCode, 403, 'Rotating the token should revoke the previous token');
+
+  const replacement = await getResponse(`http://127.0.0.1:${port}/pair-check?t=${rotatedToken}`);
+  assert.equal(replacement.statusCode, 204, 'Rotated token should pass preflight');
 
   await companion.stop();
 });

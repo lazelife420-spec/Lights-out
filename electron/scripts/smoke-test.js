@@ -623,6 +623,14 @@ check('companion: phone page has explicit connection states', () => {
   assert(companionHtml.includes('Wrong network or PC offline'), 'companion page missing offline state');
 });
 
+check('companion: reconnects cannot let stale sockets replace a healthy connection', () => {
+  const companionHtml = fs.readFileSync(path.join(root, 'companion.html'), 'utf8');
+  assert(companionHtml.includes('if (ws !== socket) return;'), 'stale WebSocket callbacks must be ignored');
+  assertMatch(companionHtml, /socket\.onopen = \(\) => \{\s*if \(ws !== socket\) return;\s*if \(reconnectTimer\) clearTimeout\(reconnectTimer\);\s*reconnectTimer = null;/, 'a successful connection must cancel its pending reconnect timer');
+  assert(companionHtml.includes('reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, 3000);'), 'reconnect timer state must clear before a new connection attempt');
+  assert(companionHtml.includes("fetch(`/pair-check?t=${encodeURIComponent(pairToken)}`"), 'companion should preflight pairing so an expired token is not reported as an offline PC');
+});
+
 check('companion: host query cannot override location.host for the pairing token', () => {
   const companionHtml = fs.readFileSync(path.join(root, 'companion.html'), 'utf8');
   // location.host must be checked and returned before the URL `host` param is
