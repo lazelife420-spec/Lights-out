@@ -5039,3 +5039,59 @@ body.fullscreen-clock-mode .fullscreen-clock-exit {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+
+/* ── Remote Control pairing polish ─────────────────────────────────────── */
+.pairing-qr-wrap {
+  text-align: center;
+  margin: 4px 0 14px;
+}
+.pairing-qr-card {
+  display: inline-block;
+  background: #fff;
+  padding: 12px;
+  border-radius: 16px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.40);
+  line-height: 0;
+}
+.pairing-qr-card img {
+  display: block;
+  border-radius: 8px;
+}
+.pairing-qr-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 10px 0 0;
+}
+.pairing-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 10px 0 5px;
+}
+.pairing-code {
+  display: block;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+  word-break: break-all;
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 9px 11px;
+  border-radius: 8px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.pairing-code:hover {
+  border-color: rgba(91, 140, 255, 0.35);
+}
+.pairing-code-short {
+  display: inline-block;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 18px;
+  letter-spacing: 2px;
+  font-weight: bold;
+  color: var(--accent-color, #5b8cff);
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 4px 10px;
+  border-radius: 6px;
+  margin-top: 2px;
+}
+
