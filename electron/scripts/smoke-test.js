@@ -514,6 +514,13 @@ check('renderer: footer and ledger controls provide real feedback', () => {
   assertMatch(rendererSrc, /if \(els\.btnProofDetails\) \{[\s\S]*openReceiptsLedger\(\)/s, 'proof ledger button wiring missing');
 });
 
+check('renderer: advanced options immediate persistence wiring', () => {
+  assertMatch(rendererSrc, /els\.chkDryRun\?\.addEventListener\('change'[\s\S]*persistAdvancedOptions/, 'chkDryRun immediate persistence missing');
+  assertMatch(rendererSrc, /els\.chkForceShutdown\?\.addEventListener\('change'[\s\S]*persistAdvancedOptions/, 'chkForceShutdown immediate persistence missing');
+  assertMatch(rendererSrc, /els\.chkMute\?\.addEventListener\('change'[\s\S]*persistAdvancedOptions/, 'chkMute immediate persistence missing');
+  assertMatch(rendererSrc, /els\.graceMinutes\?\.addEventListener\('change'[\s\S]*persistAdvancedOptions/, 'graceMinutes immediate persistence missing');
+});
+
 // Companion Easy Connect UI contract.
 check('companion: mode buttons present in settings', () => {
   assert(htmlSrc.includes('data-mode="off"'), 'off mode button missing');

@@ -2765,10 +2765,35 @@ if (els.btnClearReceipts) {
   });
 
   els.selAction.addEventListener('change', () => setAction(els.selAction.value));
+
+  // Persist these advanced options immediately when changed.
+  const persistAdvancedOptions = () => {
+    try { api.saveAppSettings({ app: collectAppSettings() }); } catch (_) { /* no-op */ }
+  };
+
   els.chkDryRun?.addEventListener('change', () => {
     state.dryRun = els.chkDryRun.checked;
     render();
+    persistAdvancedOptions();
   });
+
+  els.chkForceShutdown?.addEventListener('change', () => {
+    state.forceShutdown = els.chkForceShutdown.checked;
+    render();
+    persistAdvancedOptions();
+  });
+
+  els.chkMute?.addEventListener('change', () => {
+    state.muteSystem = els.chkMute.checked;
+    render();
+    persistAdvancedOptions();
+  });
+
+  els.graceMinutes?.addEventListener('change', () => {
+    state.graceMinutes = clamp(Number(els.graceMinutes.value) || 0, 0, 10);
+    persistAdvancedOptions();
+  });
+
 
   document.querySelectorAll('.tonight-card').forEach(card => {
     card.addEventListener('click', () => applyTonightCard(card));
