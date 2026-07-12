@@ -63,3 +63,4 @@ function showContextMenu(x, y, items) {
   menu.style.visibility = 'visible';
   contextMenuEl = menu;
 }
+/* exported clamp, formatTimeAgo, hexToRgba, escapeHtml, showContextMenu */

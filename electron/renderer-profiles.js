@@ -420,3 +420,4 @@ async function importProfiles(event) {
   // Reset file input
   event.target.value = '';
 }
+/* exported openProfilesModal, saveNewProfile, exportProfiles, importProfiles */

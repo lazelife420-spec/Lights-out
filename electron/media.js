@@ -113,12 +113,16 @@ async function unmuteSystemVolume() {
 }
 
 // Set system volume (0-100).
+function buildSystemVolumeCommand(percent) {
+  const numeric = Number(percent);
+  const vol = Number.isFinite(numeric) ? Math.max(0, Math.min(100, numeric)) : 0;
+  const steps = Math.floor(vol / 2);
+  return `$wsh = New-Object -ComObject WScript.Shell; 1..50 | ForEach-Object { $wsh.SendKeys([char]174) }; if (${steps} -gt 0) { 1..${steps} | ForEach-Object { $wsh.SendKeys([char]175) } }`;
+}
+
 async function setSystemVolume(percent) {
-  const vol = Math.max(0, Math.min(100, percent));
   try {
-    await executePS(
-      `$wsh = New-Object -ComObject WScript.Shell; 1..50 | ForEach-Object { $wsh.SendKeys([char]174) }; 1..([math]::Floor($vol / 2)) | ForEach-Object { $wsh.SendKeys([char]175) }`
-    );
+    await executePS(buildSystemVolumeCommand(percent));
   } catch { /* best-effort */ }
 }
 
@@ -146,5 +150,6 @@ module.exports = {
   resumeAllMedia,
   muteSystemVolume,
   unmuteSystemVolume,
-  setSystemVolume
+  setSystemVolume,
+  buildSystemVolumeCommand
 };

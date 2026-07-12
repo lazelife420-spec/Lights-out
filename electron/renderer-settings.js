@@ -487,3 +487,4 @@ function setupWarningHandlers() {
     if (event.target === els.warningModal) hideWarningModal();
   });
 }
+/* exported collectAppSettings, applyAppSettings, collectWifiGuardSettings, collectContentBlockerSettings, collectAccountabilitySettings, applyWifiGuardSettings, applyContentBlockerSettings, setupCbScheduleHandlers, applyAccountabilitySettings, setupCustomizeHandlers, showWarningModal, applyWarmFilter, removeWarmFilter, setupWarningHandlers */

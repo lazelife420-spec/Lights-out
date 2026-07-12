@@ -260,3 +260,4 @@ async function refreshAutopilotStatus() {
     }
   } catch {}
 }
+/* exported setupRemoteControlHandlers, renderFamilyPeers, renderWifiDevices, refreshTaxStats, refreshAutopilotStatus */

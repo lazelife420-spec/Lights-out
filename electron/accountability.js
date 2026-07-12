@@ -143,7 +143,6 @@ async function sendEmail(to, subject, body) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function testPartner(partner) {
-  const testEvent = EVENTS.TIMER_STARTED;
   return notifyPartner('TIMER_STARTED', {
     config: { partners: [partner] },
     timerName: 'Test Notification',

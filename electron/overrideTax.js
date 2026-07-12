@@ -5,7 +5,6 @@
 // - 4th+: must type a reason (like emergency override)
 // Override (cancel via override) breaks streak + all above.
 
-const settingsStore = require('./settings');
 const path = require('path');
 const fs = require('fs');
 const { app } = require('electron');

@@ -1,7 +1,6 @@
 // Calendar provider integrations.
 // Supports: Built-in (default recurring), iCal/ICS, Google Calendar, Outlook/MS Graph, Calendly.
 
-const { net } = require('electron');
 const https = require('https');
 const http = require('http');
 const icsParser = require('./calendar');

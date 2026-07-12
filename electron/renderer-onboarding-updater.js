@@ -219,3 +219,4 @@ async function checkOnboarding() {
     // If settings can't load, skip onboarding.
   }
 }
+/* exported runUpdateCheck, refreshUpdaterStatus, applyAppVersion, checkOnboarding */

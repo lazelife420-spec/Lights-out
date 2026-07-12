@@ -3,7 +3,6 @@
 // works for all browsers, brutal and effective.
 
 const fs = require('fs');
-const path = require('path');
 const { spawn } = require('child_process');
 
 const HOSTS_PATH = 'C:\\Windows\\System32\\drivers\\etc\\hosts';

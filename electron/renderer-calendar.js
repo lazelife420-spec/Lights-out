@@ -371,3 +371,4 @@ function renderCalendarEvents() {
     }
   }
 }
+/* exported importCalendarFile, importCalendarUrl, setupCalendarHandlers */

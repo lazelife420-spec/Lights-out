@@ -169,3 +169,4 @@ function renderReceiptsModal(receipts, stats) {
     </div>`;
   }).join('');
 }
+/* exported loadMorningProof, renderReceiptsModal */

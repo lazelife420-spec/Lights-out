@@ -186,12 +186,9 @@ function drawRain() {
 // Starfield
 // ─────────────────────────────────────────────────────────────────────────────
 
-let starTime = 0;
 function drawStarfield() {
   ctx.fillStyle = 'rgba(5, 5, 20, 0.05)';
   ctx.fillRect(0, 0, W, H);
-  starTime += 0.016;
-
   for (const p of particles) {
     p.phase += p.speed;
     const alpha = 0.3 + Math.sin(p.phase) * 0.4;

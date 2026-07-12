@@ -3,6 +3,15 @@
 ## Unreleased
 
 ### Fixed
+- **System volume setting now honors the requested percentage.** The media
+  helper previously calculated a clamped volume but referenced an undefined
+  PowerShell variable instead of inserting that value into the command. Volume
+  commands now sanitize and clamp input, convert it to two-percent key steps,
+  and guard the zero-step case so PowerShell cannot interpret `1..0` as a
+  descending range. Unit coverage locks the 0%, 50%, 100%, invalid, and
+  out-of-range cases. Confirmed dead bindings were removed and intentional
+  cross-script renderer exports are now declared explicitly, leaving ESLint
+  clean without suppressing dead-local detection.
 - **Phone companion reconnection diagnostics and recovery.** The phone now
   preflights its pairing token so a revoked or stale code is reported as
   "Pairing expired" instead of being misdiagnosed as an offline PC. Reconnect

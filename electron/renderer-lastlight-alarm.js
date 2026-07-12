@@ -288,3 +288,4 @@ function promptTimerRecovery(snapshot) {
   });
   document.body.appendChild(banner);
 }
+/* exported setupAlarmHandlers, updateLastLightUIFromState, setupLastLightHandlers, promptTimerRecovery */

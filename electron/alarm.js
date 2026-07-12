@@ -3,7 +3,6 @@
 // brightening sequence when the PC resumes from sleep/hibernate.
 
 const { spawn } = require('child_process');
-const path = require('path');
 
 const TASK_NAME = 'LightsOut_FirstLight';
 
