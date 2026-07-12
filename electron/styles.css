@@ -4251,15 +4251,15 @@ body.ns-lobby .dashboard {
   text-transform: uppercase;
 }
 
-/* ── Centered header wordmark ── */
+/* ── Header wordmark: its own row below .chrome-header (not absolutely
+   centered over it) so it can never overlap the Power/Settings/Help menu --
+   see index.html for why that used to collide. ── */
 .ns-header-wordmark {
   display: none;                        /* hidden until .ns-lobby active */
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
   flex-direction: column;
   align-items: center;
   gap: 1px;
+  padding: 6px 0 2px;
   pointer-events: none;
   user-select: none;
 }

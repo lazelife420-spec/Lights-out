@@ -141,12 +141,6 @@
           <span>Lights Out</span>
         </div>
       </div>
-      <!-- Northstar centered wordmark -->
-      <div class="ns-header-wordmark" aria-hidden="true">
-        <img src="assets/brand/lights-out-icon.svg" alt="" draggable="false" class="ns-wordmark-icon">
-        <span class="ns-wordmark-title">Lights Out PC</span>
-        <span class="ns-wordmark-sub">Bedtime Mode for Windows</span>
-      </div>
       <nav class="main-menu">
         <div class="menu-item" id="menu-power">
           <span>Power</span>
@@ -219,6 +213,16 @@
         </button>
       </div>
     </header>
+
+    <!-- Northstar wordmark: own row below the header so it can never collide
+         with the Power/Settings/Help menu regardless of window width (was
+         absolutely centered over the header itself, which overlapped
+         "Settings" at the app's normal/default 520px window width). -->
+    <div class="ns-header-wordmark" aria-hidden="true">
+      <img src="assets/brand/lights-out-icon.svg" alt="" draggable="false" class="ns-wordmark-icon">
+      <span class="ns-wordmark-title">Lights Out PC</span>
+      <span class="ns-wordmark-sub">Bedtime Mode for Windows</span>
+    </div>
 
     <!-- Main Dashboard -->
     <main class="dashboard">
