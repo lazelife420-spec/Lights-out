@@ -126,6 +126,7 @@
     .pair-input::placeholder { color: var(--dim); }
     .pair-input:focus { border-color: var(--accent); }
     .pair-submit { width: 100%; }
+    .pair-status { color: #ffb454; font-size: 13px; line-height: 1.45; margin: 0 0 14px; }
     .pair-error { color: #ff6b6b; font-size: 12px; margin-top: 10px; }
   </style>
 </head>
@@ -159,6 +160,7 @@
     <!-- Pairing (shown when no token is stored yet) -->
     <div class="pair-card" id="pair-card" style="display:none">
       <div class="pair-title">Connect to this PC?</div>
+      <div class="pair-status" id="pair-status" role="alert" style="display:none"></div>
       <div class="pair-hint">Scan the QR code in the desktop app's Remote Control settings, or type the PC address and pairing code shown beneath it.</div>
       <input class="pair-input" id="pair-host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="PC address (e.g. 192.168.1.5:58732)" aria-label="PC address" style="margin-bottom:8px">
       <input class="pair-input" id="pair-input" type="text" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Pairing code" aria-label="Pairing code">
@@ -269,6 +271,7 @@
     const pairInput = document.getElementById('pair-input');
     const pairSubmit = document.getElementById('pair-submit');
     const pairError = document.getElementById('pair-error');
+    const pairStatus = document.getElementById('pair-status');
 
     const RING_C = 2 * Math.PI * 54;
     const PHASE_COLORS = { focus: '#5b8cff', dim: '#d4a50a', lastlight: '#ff4d4d', idle: '#5b8cff' };
@@ -348,12 +351,14 @@
       }
     }
 
-    function showPairing() {
+    function showPairing(message = '') {
       pairCard.style.display = '';
       statusPill.style.display = 'none';
       idleControls.style.display = 'none';
       activeControls.style.display = 'none';
       document.getElementById('pc-name').style.display = 'none';
+      pairStatus.textContent = message;
+      pairStatus.style.display = message ? '' : 'none';
       pairError.style.display = 'none';
       try { hostInput.value = pairHost || ''; } catch {}
       setTimeout(() => { try { pairInput.focus(); } catch {} }, 80);
@@ -383,13 +388,6 @@
       setTimeout(() => toast.classList.remove('show'), 2000);
     }
 
-    function showToast(msg) {
-      const toast = document.getElementById('toast');
-      toast.textContent = msg;
-      toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), 2000);
-    }
-
     async function connect() {
       if (!pairToken) { showPairing(); return; }
       const attempt = ++connectionAttempt;
@@ -409,7 +407,7 @@
             localStorage.removeItem(TOKEN_KEY);
             pairToken = '';
             setConnectionState('expired', 'Pairing expired');
-            showPairing();
+            showPairing('Pairing expired. Enter the current pairing code from the desktop app.');
             return;
           }
           if (!response.ok) throw new Error(`Pair check failed: ${response.status}`);
@@ -448,7 +446,7 @@
           localStorage.removeItem(TOKEN_KEY);
           pairToken = '';
           setConnectionState('expired', 'Pairing expired');
-          showPairing();
+          showPairing('Pairing expired. Enter the current pairing code from the desktop app.');
           return;
         } else if (e.code === 1006) {
           setConnectionState('offline', 'Wrong network or PC offline');

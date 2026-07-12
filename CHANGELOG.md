@@ -10,9 +10,12 @@
   healthy connection, preventing an older attempt from replacing the live
   socket. The Android wrapper also preserves the page's existing pairing token
   in native preferences so automatic recovery can reuse it when the desktop's
-  LAN address changes. Verified with a physical phone connected to the desktop;
-  automated Electron tests, Android debug assembly, and Electron packaging also
-  pass.
+  LAN address changes. The pairing form now keeps the expiry explanation visible
+  instead of hiding it with the connection-status pill, and a duplicate toast
+  helper left in the phone page was removed. Verified with a physical phone
+  connected to the desktop and with live browser checks of both connected and
+  expired-token states; automated Electron tests, Android debug assembly, and
+  Electron packaging also pass.
 
 ## v11.0.0 — Serious Night Mode (2026-07-09)
 
