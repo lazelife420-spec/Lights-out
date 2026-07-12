@@ -1163,6 +1163,11 @@ check('version: HTML fallback text matches electron/package.json (fails the buil
   assertMatch(htmlSrc, new RegExp(`id="about-version">Version ${escaped}<`), `About modal fallback version text does not match package.json version (${pkgVersion})`);
 });
 
+// 22. Wordmark overlap layout prevention
+check('layout: wordmark positioned outside header to avoid menu overlap', () => {
+  assert(htmlSrc.indexOf('</header>') < htmlSrc.indexOf('class="ns-header-wordmark"'), 'ns-header-wordmark should be placed after header closes');
+});
+
 // Cleanup.
 try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
 
