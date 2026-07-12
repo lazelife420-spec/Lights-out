@@ -394,14 +394,20 @@
       const host = pairHost || location.host;
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
 
-      setConnectionState('connecting', 'Connecting…');
+      // Keep the actionable offline explanation visible during background
+      // retries. Only the initial attempt should replace the status with a
+      // generic "Connecting…" message.
+      if (connectionState !== 'offline') setConnectionState('connecting', 'Connecting…');
       // A browser reports an HTTP 401/403 WebSocket upgrade rejection only as
       // generic close code 1006. Ask the same-origin server first so a stale
       // token can produce an actionable "Pairing expired" state instead of
       // incorrectly blaming the network.
       if (location.host) {
         try {
-          const response = await fetch(`/pair-check?t=${encodeURIComponent(pairToken)}`, { cache: 'no-store' });
+          const response = await fetch(`/pair-check?t=${encodeURIComponent(pairToken)}`, {
+            cache: 'no-store',
+            signal: AbortSignal.timeout(5000)
+          });
           if (attempt !== connectionAttempt) return;
           if (response.status === 401 || response.status === 403) {
             localStorage.removeItem(TOKEN_KEY);

@@ -629,6 +629,8 @@ check('companion: reconnects cannot let stale sockets replace a healthy connecti
   assertMatch(companionHtml, /socket\.onopen = \(\) => \{\s*if \(ws !== socket\) return;\s*if \(reconnectTimer\) clearTimeout\(reconnectTimer\);\s*reconnectTimer = null;/, 'a successful connection must cancel its pending reconnect timer');
   assert(companionHtml.includes('reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, 3000);'), 'reconnect timer state must clear before a new connection attempt');
   assert(companionHtml.includes("fetch(`/pair-check?t=${encodeURIComponent(pairToken)}`"), 'companion should preflight pairing so an expired token is not reported as an offline PC');
+  assert(companionHtml.includes("if (connectionState !== 'offline') setConnectionState('connecting', 'Connecting…');"), 'background retries must keep the actionable offline state visible');
+  assert(companionHtml.includes('signal: AbortSignal.timeout(5000)'), 'pair-check preflight must not hang forever on an unreachable old PC address');
   assert(companionHtml.includes('id="pair-status" role="alert"'), 'pairing form must have a visible status region');
   assert(companionHtml.includes("showPairing('Pairing expired. Enter the current pairing code from the desktop app.')"), 'expired pairing must remain visible after the pairing form opens');
   assert((companionHtml.match(/function showToast\(msg\)/g) || []).length === 1, 'companion page must not contain duplicate function declarations');

@@ -24,7 +24,16 @@
   helper left in the phone page was removed. Verified with a physical phone
   connected to the desktop and with live browser checks of both connected and
   expired-token states; automated Electron tests, Android debug assembly, and
-  Electron packaging also pass.
+  Electron packaging also pass. Background retries now keep the actionable
+  offline explanation visible instead of flashing back to "Connecting…", and
+  unreachable preflight requests time out after five seconds rather than
+  hanging indefinitely. The Android wrapper also has an eight-second native
+  main-frame watchdog: if a saved desktop URL never finishes loading, it shows
+  the setup/recovery UI while scanning instead of leaving a permanent black
+  WebView. Verified on the release-signed physical phone with an in-place update:
+  stopping the real desktop listener produced "Wrong network or PC offline,"
+  and restoring it automatically returned to "Connected to VIP-SHADOW-NODE"
+  without losing the saved pairing.
 
 ## v11.0.0 — Serious Night Mode (2026-07-09)
 

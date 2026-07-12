@@ -6,6 +6,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Menu
 import android.view.MenuItem
 import android.util.Log
@@ -50,6 +52,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var urlInput: EditText
     private var lastRequestedUrl: String? = null
     private var mainFrameLoadFailed = false
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val loadTimeout = Runnable {
+        if (!mainFrameLoadFailed && webView.visibility == View.VISIBLE) {
+            handleLoadFailure(lastRequestedUrl, "Connection timed out")
+        }
+    }
 
     // Auto-discovery properties
     private var udpSocket: java.net.DatagramSocket? = null
@@ -151,6 +159,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
+                mainHandler.removeCallbacks(loadTimeout)
                 if (!mainFrameLoadFailed && url != null) {
                     lastRequestedUrl = url
                     // Failsafe: Only save to persistent preferences on successful load to prevent polluting with broken URLs
@@ -243,6 +252,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showWeb(url: String) {
+        mainHandler.removeCallbacks(loadTimeout)
         lastRequestedUrl = url
         mainFrameLoadFailed = false
         // Captured here, at the moment a URL is actually provided (QR scan,
@@ -258,9 +268,11 @@ class MainActivity : AppCompatActivity() {
         webView.visibility = View.VISIBLE
         autoDetectCard.visibility = View.GONE
         webView.loadUrl(url)
+        mainHandler.postDelayed(loadTimeout, MAIN_FRAME_TIMEOUT_MS)
     }
 
     private fun showSetup(prefill: String?) {
+        mainHandler.removeCallbacks(loadTimeout)
         webView.visibility = View.GONE
         setup.visibility = View.VISIBLE
         if (prefill != null) urlInput.setText(prefill)
@@ -284,6 +296,7 @@ class MainActivity : AppCompatActivity() {
     private fun handleLoadFailure(url: String?, detail: String?) {
         if (mainFrameLoadFailed) return
         mainFrameLoadFailed = true
+        mainHandler.removeCallbacks(loadTimeout)
         Log.w("LightsOutApp", "Failed to load companion URL ${url ?: "(unknown)"}: ${detail ?: "unknown error"}")
 
         // Failsafe: add IP to failed connection registry to trigger cool-down
@@ -306,6 +319,9 @@ class MainActivity : AppCompatActivity() {
         val now = System.currentTimeMillis()
         if (token != null && now - lastScanAttemptAt > SCAN_COOLDOWN_MS) {
             lastScanAttemptAt = now
+            // Never leave the user staring at an empty WebView while the
+            // bounded subnet recovery scan runs in the background.
+            showSetup(url ?: prefs.getString(KEY_URL, null))
             Toast.makeText(this, R.string.reconnecting, Toast.LENGTH_SHORT).show()
             SubnetScanner.findCompanion(applicationContext) { foundHost ->
                 runOnUiThread {
@@ -335,6 +351,13 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         stopUdpDiscovery()
+    }
+
+    override fun onDestroy() {
+        mainHandler.removeCallbacks(loadTimeout)
+        webView.stopLoading()
+        webView.destroy()
+        super.onDestroy()
     }
 
     private fun startUdpDiscovery() {
@@ -441,5 +464,6 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_TOKEN = "companion_token"
         private const val PAGE_TOKEN_KEY = "lightsout_pair_token"
         private const val SCAN_COOLDOWN_MS = 20_000L
+        private const val MAIN_FRAME_TIMEOUT_MS = 8_000L
     }
 }
