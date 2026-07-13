@@ -4,6 +4,25 @@
 // `actionLabel`/`inputSeconds`/`setInputFromSeconds`/`setAction`/`startTimer`
 // from the core script, and is called from wireEvents()/render() there.
 
+const PROFILE_ACCENT_VALUES = new Set([
+  '#5b8cff', '#a855f7', '#22d3ee', '#34d399', '#f59e0b', '#fb7185'
+]);
+
+function applyProfileAccentStyles(container) {
+  if (!container) return;
+  const profilesById = new Map(state.profiles.map(profile => [profile.id, profile]));
+  container.querySelectorAll('.profile-card[data-profile-id], .profile-item[data-profile-id]').forEach(element => {
+    const accent = profilesById.get(element.dataset.profileId)?.accent;
+    if (PROFILE_ACCENT_VALUES.has(accent)) {
+      element.style.setProperty('--profile-accent', accent);
+      element.classList.add('has-profile-accent');
+    } else {
+      element.style.removeProperty('--profile-accent');
+      element.classList.remove('has-profile-accent');
+    }
+  });
+}
+
 async function loadProfiles() {
   try {
     const profiles = await api.getAllProfiles();
@@ -78,6 +97,8 @@ function renderProfiles() {
       </div>
     `;
   }).join('');
+
+  applyProfileAccentStyles(els.profilesGrid);
 
   // Add click handlers
   els.profilesGrid.querySelectorAll('.profile-card').forEach(card => {
@@ -259,6 +280,15 @@ function renderProfilesList() {
               <option value="timer" ${profile.kind !== 'family' ? 'selected' : ''}>Saved routine</option>
             </select>
             <input type="text" class="profile-item-avatar-input" value="${escapeHtml(profile.avatar || '')}" data-profile-id="${profile.id}" maxlength="4" spellcheck="false" aria-label="Profile avatar" placeholder="Avatar">
+            <select class="profile-item-accent-input" data-profile-id="${profile.id}" aria-label="Profile accent">
+              <option value="" ${!profile.accent ? 'selected' : ''}>App default</option>
+              <option value="#5b8cff" ${profile.accent === '#5b8cff' ? 'selected' : ''}>Blue</option>
+              <option value="#a855f7" ${profile.accent === '#a855f7' ? 'selected' : ''}>Purple</option>
+              <option value="#22d3ee" ${profile.accent === '#22d3ee' ? 'selected' : ''}>Cyan</option>
+              <option value="#34d399" ${profile.accent === '#34d399' ? 'selected' : ''}>Green</option>
+              <option value="#f59e0b" ${profile.accent === '#f59e0b' ? 'selected' : ''}>Amber</option>
+              <option value="#fb7185" ${profile.accent === '#fb7185' ? 'selected' : ''}>Rose</option>
+            </select>
           </div>
           <input type="text" class="profile-item-notes-input" value="${escapeHtml(profile.notes || '')}" data-profile-id="${profile.id}" maxlength="280" spellcheck="false" placeholder="Add a note...">
         </div>
@@ -274,6 +304,8 @@ function renderProfilesList() {
       </div>
     `;
   }).join('');
+
+  applyProfileAccentStyles(els.profilesList);
 
   // Rename handler (save on blur/enter).
   els.profilesList.querySelectorAll('.profile-item-name-input').forEach(input => {
@@ -302,6 +334,14 @@ function renderProfilesList() {
   els.profilesList.querySelectorAll('.profile-item-avatar-input').forEach(input => {
     input.addEventListener('change', async () => {
       await api.updateProfile(input.dataset.profileId, { avatar: input.value.trim() });
+      await loadProfiles();
+      renderProfilesList();
+    });
+  });
+
+  els.profilesList.querySelectorAll('.profile-item-accent-input').forEach(input => {
+    input.addEventListener('change', async () => {
+      await api.updateProfile(input.dataset.profileId, { accent: input.value || null });
       await loadProfiles();
       renderProfilesList();
     });
@@ -375,6 +415,7 @@ async function saveNewProfile() {
     name: name,
     kind: els.newProfileKind?.value === 'timer' ? 'timer' : 'family',
     avatar: els.newProfileAvatar?.value?.trim() || '',
+    accent: document.getElementById('new-profile-accent')?.value || null,
     notes: els.newProfileNotes?.value?.trim() || '',
     action: state.action,
     mode: 'duration',
@@ -401,6 +442,8 @@ async function saveNewProfile() {
       notify(`Profile "${result.profile.name}" ${result.action === 'created' ? 'created' : 'updated'}`, 'success');
       els.newProfileName.value = '';
       if (els.newProfileAvatar) els.newProfileAvatar.value = '';
+      const newProfileAccent = document.getElementById('new-profile-accent');
+      if (newProfileAccent) newProfileAccent.value = '';
       if (els.newProfileNotes) els.newProfileNotes.value = '';
       await loadProfiles();
       renderProfilesList();

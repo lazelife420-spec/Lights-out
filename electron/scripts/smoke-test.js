@@ -118,6 +118,39 @@ check('profiles: family identity metadata is safe and legacy-compatible', () => 
   assert(legacy.kind === 'timer' && legacy.avatar === '', 'legacy profile identity defaults changed');
 });
 
+check('profiles: display-only accents normalize and round-trip through profile import/export', () => {
+  const profiles = require(path.join(root, 'profiles.js'));
+  const imported = profiles.import(JSON.stringify([
+    { name: 'Accent Valid', kind: 'family', accent: '#a855f7' },
+    { name: 'Accent Invalid', kind: 'family', accent: 'red' },
+    { name: 'Accent Legacy' }
+  ]));
+  assert(imported.success && imported.count === 3, 'accent profile import failed');
+  const exported = JSON.parse(profiles.export());
+  assert(exported.find(p => p.name === 'Accent Valid')?.accent === '#a855f7', 'valid accent did not round-trip');
+  assert(exported.find(p => p.name === 'Accent Invalid')?.accent === null, 'invalid accent survived import');
+  assert(exported.find(p => p.name === 'Accent Legacy')?.accent === null, 'legacy accent default changed');
+
+  const mainSrc = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+  assertMatch(mainSrc, /const importedProfiles = profiles\.import\(JSON\.stringify\(parsed\.profiles\)\);/, 'full-data import bypasses profile normalization');
+});
+
+check('profiles: accent presentation stays element-scoped and selection stays inert', () => {
+  const rendererProfilesSrc = fs.readFileSync(path.join(root, 'renderer-profiles.js'), 'utf8');
+  const profileStylesSrc = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  assertMatch(rendererProfilesSrc, /element\.style\.setProperty\('--profile-accent', accent\)/, 'profile accent is not element-scoped');
+  assertMatch(profileStylesSrc, /\.profile-card\.has-profile-accent::before[\s\S]*var\(--profile-accent\)/, 'profile card accent styling missing');
+  assertMatch(profileStylesSrc, /\.profile-item\.has-profile-accent[\s\S]*var\(--profile-accent\)/, 'profile row accent styling missing');
+  assert(!rendererProfilesSrc.includes('applyCustomization'), 'profile accents call global customization');
+  assert(!rendererProfilesSrc.includes('settings.customization'), 'profile accents write customization settings');
+  assert(!rendererProfilesSrc.includes('document.documentElement'), 'profile accents write root theme variables');
+  assert(!rendererProfilesSrc.includes('body.dataset.theme'), 'profile accents change the global theme');
+  const startFnMatch = rendererProfilesSrc.match(/function shouldStartOnProfileSelection\(options = \{\}\) \{[\s\S]*?\n\}/);
+  const shouldStart = Function(`return (${startFnMatch[0]})`)();
+  assert(shouldStart({ accent: '#a855f7', autoStart: true }) === false, 'accented selection starts a timer');
+  assert(!/ritualStart/.test(rendererProfilesSrc), 'profile selection gained ritual behavior');
+});
+
 check('profiles: markUsed stamps lastUsedAt and persists to disk', () => {
   const profiles = require(path.join(root, 'profiles.js'));
   const created = profiles.create({ name: 'Last-Used Smoke Test' });

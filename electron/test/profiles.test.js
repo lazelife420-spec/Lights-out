@@ -21,8 +21,19 @@ test('normalize fills in defaults for a minimal profile', () => {
   assert.equal(p.autoStart, false);
   assert.equal(p.kind, 'timer');
   assert.equal(p.avatar, '');
+  assert.equal(p.accent, null);
   assert.ok(p.id);
   assert.ok(p.createdAt);
+});
+
+test('normalize preserves only fixed-palette profile accents', () => {
+  for (const accent of profiles.PROFILE_ACCENT_PALETTE) {
+    assert.equal(profiles.normalize({ name: accent, accent }).accent, accent);
+  }
+  assert.equal(profiles.normalize({ name: 'Uppercase', accent: ' #A855F7 ' }).accent, '#a855f7');
+  assert.equal(profiles.normalize({ name: 'Named color', accent: 'red' }).accent, null);
+  assert.equal(profiles.normalize({ name: 'CSS payload', accent: '#fff;--accent:red' }).accent, null);
+  assert.equal(profiles.normalize({ name: 'Missing' }).accent, null);
 });
 
 test('normalize preserves safe family identity metadata', () => {
