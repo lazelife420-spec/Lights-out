@@ -529,6 +529,23 @@ check('companion: mode buttons present in settings', () => {
   assert(htmlSrc.includes('Connect Phone'), 'Connect Phone button missing');
 });
 
+check('companion: pairing UI layout classes exist in HTML and CSS', () => {
+  const cssSrc = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  assertMatch(htmlSrc, /class="pairing-qr-wrap"/, 'pairing-qr-wrap class missing in index.html');
+  assertMatch(htmlSrc, /class="pairing-code"/, 'pairing-code class missing in index.html');
+  assertMatch(htmlSrc, /class="pairing-code-short"/, 'pairing-code-short class missing in index.html');
+  assertMatch(cssSrc, /\.pairing-qr-card/, 'pairing-qr-card styles missing in styles.css');
+  assertMatch(cssSrc, /\.pairing-code-short/, 'pairing-code-short styles missing in styles.css');
+});
+
+check('companion: PWA pairing card and stats sections use classes', () => {
+  const companionSrc = fs.readFileSync(path.join(root, 'companion.html'), 'utf8');
+  assertMatch(companionSrc, /class="pair-card"/, 'pair-card class missing in companion.html');
+  assertMatch(companionSrc, /class="pair-icon"/, 'pair-icon class missing in companion.html');
+  assertMatch(companionSrc, /class="comp-stats"/, 'comp-stats class missing in companion.html');
+  assertMatch(companionSrc, /class="comp-metrics"/, 'comp-metrics class missing in companion.html');
+});
+
 check('companion: mode buttons have explanatory tooltips, and a live description reflects the selected mode', () => {
   // "This PC only" reads like it enables remote control from your phone --
   // it actually means the opposite (loopback-only). Tooltips + a dynamic
