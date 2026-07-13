@@ -8,6 +8,14 @@ const fs = require('fs');
 
 // Default profiles storage
 const PROFILES_FILE = 'profiles.json';
+const PROFILE_ACCENT_PALETTE = Object.freeze([
+  '#5b8cff',
+  '#a855f7',
+  '#22d3ee',
+  '#34d399',
+  '#f59e0b',
+  '#fb7185'
+]);
 
 // In-memory cache
 let profilesCache = [];
@@ -84,12 +92,15 @@ function normalizeProfile(raw) {
   const kind = raw.kind === 'family' ? 'family' : 'timer';
   const avatarValue = String(raw.avatar || '').trim().replace(/[\x00-\x1f\x7f]/g, '');
   const avatar = Array.from(avatarValue).slice(0, 4).join('');
+  const accentValue = typeof raw.accent === 'string' ? raw.accent.trim().toLowerCase() : '';
+  const accent = PROFILE_ACCENT_PALETTE.includes(accentValue) ? accentValue : null;
 
   return {
     id,
     name: name.substring(0, 32),
     kind,
     avatar,
+    accent,
     action,
     mode,
     seconds,
@@ -424,6 +435,7 @@ module.exports = {
   // Utilities
   getHint: getProfileHint,
   formatDuration,
+  PROFILE_ACCENT_PALETTE,
   normalize: normalizeProfile,
   
   // Import/Export

@@ -2347,6 +2347,17 @@ body.mini-mode .action-btn {
   background: var(--accent-cyan);
 }
 
+.profile-card.has-profile-accent::before {
+  background: var(--profile-accent);
+  opacity: 0.55;
+}
+
+.profile-card.has-profile-accent:hover::before,
+.profile-card.has-profile-accent.active::before {
+  background: var(--profile-accent);
+  opacity: 1;
+}
+
 .profile-card .profile-name {
   font-size: 13.5px;
   font-weight: 700;
@@ -2433,6 +2444,10 @@ body.mini-mode .action-btn {
   border-color: var(--accent-cyan);
 }
 
+.profile-item.has-profile-accent {
+  box-shadow: inset 3px 0 0 var(--profile-accent);
+}
+
 .profile-item-info {
   flex: 1;
   min-width: 0;
@@ -2473,7 +2488,8 @@ body.mini-mode .action-btn {
 }
 
 .profile-item-kind-input,
-.profile-item-avatar-input {
+.profile-item-avatar-input,
+.profile-item-accent-input {
   min-width: 0;
   padding: 3px 6px;
   border: 1px solid var(--border-soft);
@@ -2485,6 +2501,10 @@ body.mini-mode .action-btn {
 
 .profile-item-avatar-input {
   width: 64px;
+}
+
+.profile-item-accent-input {
+  width: 92px;
 }
 
 .profile-item-notes-input {
