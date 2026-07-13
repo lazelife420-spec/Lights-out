@@ -373,9 +373,31 @@ check('tray: hide/show and toggle logic', () => {
 
 check('mini-mode: toggle and resizing', () => {
   assertMatch(mainSrc, /let miniMode = false;/, 'miniMode variable missing');
-  assertMatch(mainSrc, /ipcMain\.on\('toggle-mini-mode', \(\) => \{[\s\S]*miniMode = !miniMode;/s, 'miniMode toggle missing');
+  assertMatch(mainSrc, /ipcMain\.on\('toggle-mini-mode', \(\) => \{[\s\S]*const enteringMiniMode = !miniMode;[\s\S]*miniMode = enteringMiniMode;/s, 'miniMode toggle missing');
   assertMatch(mainSrc, /if \(miniMode\) \{[\s\S]*mainWindow\.setSize\(260, 320\);/s, 'mini-mode resize missing');
   assertMatch(mainSrc, /mainWindow\.webContents\.send\('mini-mode-changed', miniMode\);/, 'mini-mode-changed event missing');
+});
+
+check('window chrome: frameless window remains movable and resizable', () => {
+  const windowHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const windowRenderer = fs.readFileSync(path.join(root, 'renderer.js'), 'utf8');
+  const windowCss = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  assertMatch(mainSrc, /frame: false,[\s\S]*thickFrame: true,/s, 'native frameless resize border missing');
+  assertMatch(mainSrc, /const windowConfig = miniMode \?[\s\S]*resizable: true[\s\S]*resizable: true/s, 'main window must remain resizable in both modes');
+  assertMatch(mainSrc, /ipcMain\.on\('toggle-maximize-window',[\s\S]*mainWindow\.isMaximized\(\)[\s\S]*mainWindow\.unmaximize\(\)[\s\S]*mainWindow\.maximize\(\)/s, 'maximize/restore IPC missing');
+  assert(windowHtml.includes('id="btn-maximize"'), 'maximize/restore button missing');
+  assertMatch(windowRenderer, /btnMaximize\?\.addEventListener\('click', \(\) => api\.toggleMaximizeWindow\(\)\)/, 'maximize/restore button not wired');
+  assertMatch(windowCss, /\.window-controls\s*\{[\s\S]*-webkit-app-region:\s*drag;/s, 'title area must remain draggable');
+});
+
+check('window state: normal bounds persist safely across launches and mini mode', () => {
+  const settingsSrc = fs.readFileSync(path.join(root, 'settings.js'), 'utf8');
+  assertMatch(settingsSrc, /window:\s*\{\s*bounds: null,\s*maximized: false\s*\}/, 'window-state defaults missing');
+  assertMatch(mainSrc, /function getRestoredWindowState\(\)[\s\S]*screen\.getDisplayMatching\(candidate\)\.workArea[\s\S]*Math\.min\(Math\.max\(candidate\.x[\s\S]*Math\.min\(Math\.max\(candidate\.y/s, 'restored bounds must be clamped to a visible display');
+  assertMatch(mainSrc, /mainWindow\.on\('move', scheduleWindowStateSave\);[\s\S]*mainWindow\.on\('resize', scheduleWindowStateSave\);/s, 'move/resize persistence wiring missing');
+  assertMatch(mainSrc, /if \(!maximized\) patch\.bounds = mainWindow\.getBounds\(\);[\s\S]*settingsStore\.updateSection\('window', patch\);/s, 'normal bounds persistence missing');
+  assertMatch(mainSrc, /mainWindow\.normalModeBounds = mainWindow\.isMaximized\(\) \? mainWindow\.getNormalBounds\(\) : mainWindow\.getBounds\(\);[\s\S]*if \(mainWindow\.normalModeBounds\) mainWindow\.setBounds\(mainWindow\.normalModeBounds\);/s, 'mini mode must preserve normal window bounds');
+  assertMatch(mainSrc, /if \(mainWindow\.restoredBounds\) return;/, 'initial auto-fit must not overwrite restored height');
 });
 
 check('tray: close-to-tray behavior remains the default window close action', () => {
@@ -472,7 +494,7 @@ check('backup: export/import all-data uses the live profile API and restores str
 });
 
 check('mini-mode: toggling keeps the auto-fit guard in sync', () => {
-  assertMatch(mainSrc, /ipcMain\.on\('toggle-mini-mode', \(\) => \{[\s\S]*miniMode = !miniMode;[\s\S]*mainWindow\.miniMode = miniMode;/s, 'mainWindow.miniMode sync missing');
+  assertMatch(mainSrc, /ipcMain\.on\('toggle-mini-mode', \(\) => \{[\s\S]*miniMode = enteringMiniMode;[\s\S]*mainWindow\.miniMode = miniMode;/s, 'mainWindow.miniMode sync missing');
   assertMatch(mainSrc, /ipcMain\.on\('fit-window-height', \(event, contentHeight\) => \{[\s\S]*mainWindow\.miniMode\) return;/s, 'fit-window-height mini-mode guard missing');
 });
 
@@ -1234,7 +1256,7 @@ check('tray: no duplicate tray icons on state change', () => {
 
 check('mini-mode: toggle and window resize logic', () => {
   assertMatch(mainSrc, /let miniMode = false;/, 'miniMode variable missing');
-  assertMatch(mainSrc, /ipcMain\.on\('toggle-mini-mode'[\s\S]*miniMode = !miniMode;/s, 'miniMode toggle missing');
+  assertMatch(mainSrc, /ipcMain\.on\('toggle-mini-mode'[\s\S]*miniMode = enteringMiniMode;/s, 'miniMode toggle missing');
   assertMatch(mainSrc, /if \(miniMode\) \{[\s\S]*mainWindow\.setSize\(260, 320\);/s, 'mini-mode resize missing');
 });
 

@@ -212,8 +212,30 @@ function parseLaunchOptions(argv) {
   return options;
 }
 
+function getRestoredWindowState() {
+  const saved = settingsStore.getSection('window') || {};
+  const bounds = saved.bounds;
+  if (!bounds || !['x', 'y', 'width', 'height'].every(key => Number.isFinite(bounds[key]))) {
+    return { bounds: null, maximized: false };
+  }
+
+  const candidate = {
+    x: Math.round(bounds.x),
+    y: Math.round(bounds.y),
+    width: Math.round(bounds.width),
+    height: Math.round(bounds.height)
+  };
+  const work = screen.getDisplayMatching(candidate).workArea;
+  const width = Math.min(Math.max(candidate.width, 480), work.width);
+  const height = Math.min(Math.max(candidate.height, 600), work.height);
+  const x = Math.min(Math.max(candidate.x, work.x), work.x + work.width - width);
+  const y = Math.min(Math.max(candidate.y, work.y), work.y + work.height - height);
+  return { bounds: { x, y, width, height }, maximized: Boolean(saved.maximized) };
+}
+
 function createWindow() {
   let startupActionsApplied = false;
+  let saveWindowStateTimer = null;
 
   function applyLaunchPresentation(source) {
     if (!mainWindow || mainWindow.isDestroyed() || startupActionsApplied) return;
@@ -237,6 +259,7 @@ function createWindow() {
     }
   }
 
+  const restoredWindowState = miniMode ? { bounds: null, maximized: false } : getRestoredWindowState();
   const windowConfig = miniMode ? {
     width: 260,
     height: 320,
@@ -252,12 +275,17 @@ function createWindow() {
     minWidth: 480,
     minHeight: 600,
     alwaysOnTop: false,
-    resizable: true
+    resizable: true,
+    ...(restoredWindowState.bounds || {})
   };
 
   mainWindow = new BrowserWindow({
     ...windowConfig,
     frame: false,
+    // Keep the native Windows resize border even though the app draws its own
+    // title bar. Without an explicit thick frame, frameless resize handles can
+    // be effectively impossible to grab on some Windows configurations.
+    thickFrame: true,
     title: 'Lights Out',
     autoHideMenuBar: true,
     show: false,
@@ -271,6 +299,25 @@ function createWindow() {
   });
 
   mainWindow.miniMode = miniMode;
+  mainWindow.restoredBounds = Boolean(restoredWindowState.bounds);
+  if (restoredWindowState.maximized) mainWindow.maximize();
+
+  const saveWindowState = () => {
+    if (!mainWindow || mainWindow.isDestroyed() || mainWindow.miniMode || mainWindow.isFullScreen()) return;
+    const maximized = mainWindow.isMaximized();
+    const patch = { maximized };
+    if (!maximized) patch.bounds = mainWindow.getBounds();
+    settingsStore.updateSection('window', patch);
+  };
+  const scheduleWindowStateSave = () => {
+    clearTimeout(saveWindowStateTimer);
+    saveWindowStateTimer = setTimeout(saveWindowState, 250);
+  };
+  mainWindow.on('move', scheduleWindowStateSave);
+  mainWindow.on('resize', scheduleWindowStateSave);
+  mainWindow.on('maximize', scheduleWindowStateSave);
+  mainWindow.on('unmaximize', scheduleWindowStateSave);
+
   mainWindow.loadFile('index.html').catch(error => {
     writeStartupLog('loadFile failed', { message: error.message });
   });
@@ -326,6 +373,7 @@ function createWindow() {
   });
 
   mainWindow.on('closed', () => {
+    clearTimeout(saveWindowStateTimer);
     mainWindow = null;
     if (app.isQuitting) clearTimerInterval();
   });
@@ -2062,17 +2110,34 @@ ipcMain.on('minimize-window', () => {
   if (mainWindow) mainWindow.minimize();
 });
 
+ipcMain.on('toggle-maximize-window', () => {
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.miniMode) return;
+  if (mainWindow.isMaximized()) mainWindow.unmaximize();
+  else mainWindow.maximize();
+});
+
 ipcMain.on('toggle-mini-mode', () => {
-  miniMode = !miniMode;
   if (!mainWindow) return;
+  const enteringMiniMode = !miniMode;
+  if (enteringMiniMode) {
+    mainWindow.normalModeBounds = mainWindow.isMaximized() ? mainWindow.getNormalBounds() : mainWindow.getBounds();
+    mainWindow.wasMaximizedBeforeMini = mainWindow.isMaximized();
+    if (mainWindow.isMaximized()) mainWindow.unmaximize();
+  }
+
+  miniMode = enteringMiniMode;
   mainWindow.miniMode = miniMode;
 
   if (miniMode) {
     mainWindow.setSize(260, 320);
     mainWindow.setAlwaysOnTop(true, 'floating');
   } else {
-    mainWindow.setSize(520, 720);
     mainWindow.setAlwaysOnTop(false);
+    if (mainWindow.normalModeBounds) mainWindow.setBounds(mainWindow.normalModeBounds);
+    else mainWindow.setSize(520, 720);
+    if (mainWindow.wasMaximizedBeforeMini) mainWindow.maximize();
+    mainWindow.normalModeBounds = null;
+    mainWindow.wasMaximizedBeforeMini = false;
   }
 
   mainWindow.webContents.send('mini-mode-changed', miniMode);
@@ -2173,6 +2238,7 @@ ipcMain.on('open-external', (event, url) => {
 // clamped to a sensible floor and the current display's work area.
 ipcMain.on('fit-window-height', (event, contentHeight) => {
   if (!mainWindow || mainWindow.isDestroyed() || mainWindow.miniMode) return;
+  if (mainWindow.restoredBounds) return;
   if (mainWindow.isMaximized() || mainWindow.isFullScreen()) return;
   const desired = Math.round(Number(contentHeight) || 0);
   if (desired < 200) return;

@@ -2,7 +2,16 @@
 
 ## Unreleased
 
+## v11.0.1 — Desktop Control Polish (2026-07-13)
+
 ### Fixed
+- **Desktop window movement, resizing, and placement persistence.** The custom
+  frameless header now exposes a usable drag region, retains the native Windows
+  resize border, and includes an explicit maximize/restore control. Manual
+  dimensions are no longer overwritten by content mutations, the layout uses
+  the available width, and normal window bounds survive Mini Mode and app
+  restarts. Restored coordinates are clamped to an available display so a
+  monitor change cannot strand the app off-screen.
 - **System volume setting now honors the requested percentage.** The media
   helper previously calculated a clamped volume but referenced an undefined
   PowerShell variable instead of inserting that value into the command. Volume

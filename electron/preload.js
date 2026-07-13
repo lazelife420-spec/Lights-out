@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Window control
   minimizeWindow: () => ipcRenderer.send('minimize-window'),
+  toggleMaximizeWindow: () => ipcRenderer.send('toggle-maximize-window'),
   closeWindow: () => ipcRenderer.send('close-window'),
   quitApp: () => ipcRenderer.send('quit-app'),
   toggleMiniMode: () => ipcRenderer.send('toggle-mini-mode'),

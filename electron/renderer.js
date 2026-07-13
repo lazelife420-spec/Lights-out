@@ -111,6 +111,7 @@ const fallbackApi = (() => {
     resumeRecoverableTimer: async () => ({ success: false }),
     discardRecoverableTimer: async () => ({ success: true }),
     minimizeWindow: () => {},
+    toggleMaximizeWindow: () => {},
     closeWindow: () => {},
     quitApp: () => {},
     toggleMiniMode: () => {},
@@ -262,6 +263,7 @@ const els = {
   btnPause: document.getElementById('btn-pause'),
   btnSnooze: document.getElementById('btn-snooze'),
   btnMinimize: document.getElementById('btn-minimize'),
+  btnMaximize: document.getElementById('btn-maximize'),
   btnClose: document.getElementById('btn-close'),
   btnMini: document.getElementById('btn-mini'),
   btnPlus: document.getElementById('btn-plus'),
@@ -2042,6 +2044,7 @@ function wireEvents() {
   els.btnPause.addEventListener('click', togglePause);
   els.btnSnooze.addEventListener('click', () => snooze(5 * 60));
   els.btnMinimize.addEventListener('click', () => api.minimizeWindow());
+  els.btnMaximize?.addEventListener('click', () => api.toggleMaximizeWindow());
   els.btnClose.addEventListener('click', () => api.closeWindow());
   els.btnMini?.addEventListener('click', toggleMiniMode);
   els.btnFullscreenClock?.addEventListener('click', enterFullscreenClock);
@@ -3474,9 +3477,9 @@ refreshStreakCallout();
 
 checkOnboarding();
 
-// ───────────── Auto-fit window height to content ─────────────
-// Keeps the window sized to what is actually shown (no dead space, no forced
-// scroll) within a sensible floor and the display work area. Electron only.
+// ───────────── Initial window height fit ─────────────
+// Pick a useful starting height once. Subsequent sizing belongs to the user;
+// reacting to every DOM mutation made a manually resized window snap back.
 (function setupAutoFitWindow() {
   if (!window.electronAPI || typeof window.electronAPI.fitWindowHeight !== 'function') return;
 
@@ -3498,26 +3501,13 @@ checkOnboarding();
     return Math.ceil((header ? header.offsetHeight : 0) + inner + (footer ? footer.offsetHeight : 0));
   };
 
-  let scheduled = false;
   const fit = () => {
-    if (scheduled || document.body.classList.contains('mini-mode')) return;
-    scheduled = true;
+    if (document.body.classList.contains('mini-mode')) return;
     requestAnimationFrame(() => {
-      scheduled = false;
       const h = measure();
       if (h > 0) window.electronAPI.fitWindowHeight(h);
     });
   };
-
-  const dashboard = document.querySelector('.dashboard');
-  if (dashboard && 'MutationObserver' in window) {
-    let debounce = null;
-    const obs = new MutationObserver(() => {
-      clearTimeout(debounce);
-      debounce = setTimeout(fit, 120);
-    });
-    obs.observe(dashboard, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class', 'hidden'] });
-  }
   setTimeout(fit, 150);
 })();
 
