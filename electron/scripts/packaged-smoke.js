@@ -18,7 +18,9 @@ const fs = require('fs');
  */
 
 const root = path.join(__dirname, '..');
-const distDir = path.join(root, '..', 'dist');
+const distDir = process.env.LIGHTS_OUT_DIST_DIR
+  ? path.resolve(root, process.env.LIGHTS_OUT_DIST_DIR)
+  : path.join(root, '..', 'dist');
 const exePath = path.join(distDir, 'LightsOut.exe');
 
 let passed = 0;

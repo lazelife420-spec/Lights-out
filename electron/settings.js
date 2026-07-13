@@ -71,6 +71,10 @@ let configPath = null;
 let cache = null;
 
 const DEFAULTS = {
+  window: {
+    bounds: null,
+    maximized: false
+  },
   app: {
     action: 'shutdown',
     unit: 'min',

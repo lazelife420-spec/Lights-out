@@ -65,8 +65,14 @@ jobs:
       - name: Regenerate icons
         run: npm run icons
 
+      - name: Window geometry runtime test
+        run: npm run test:geometry
+
       - name: Build portable + installer
         run: npm run build
+
+      - name: Packaged runtime smoke
+        run: npm run smoke:packaged
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7

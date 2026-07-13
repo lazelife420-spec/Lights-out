@@ -2,7 +2,50 @@
 
 ## Unreleased
 
+## v11.0.1 — Windows Production Readiness (2026-07-13)
+
+This release includes all desktop work merged after v11.0.0. Android companion
+source also changed in the same repository range, but it is not part of the
+Windows installer and is not certified by the Windows production proof.
+
+### Added
+- **Family Profiles identity and receipt attribution.** Saved profiles can carry
+  local family identity metadata, selected identity remains inert until a user
+  explicitly starts a timer, and completed-run proof records the selected
+  profile without breaking legacy profiles or receipts (PR #24).
+- **Display-only profile accents.** Profiles can use an optional accent from a
+  constrained palette. The accent is scoped to profile cards and manager rows;
+  it never changes the desktop theme or timer behavior (PR #25).
+
+### Changed
+- **Settings, header, and pairing presentation.** Advanced options persist as
+  they change, the wordmark no longer overlaps narrow desktop layouts, and the
+  desktop/PWA pairing and companion-stat cards have clearer presentation
+  (PRs #21–#23).
+- **Companion diagnostics and host recovery.** Failed pairing attempts are
+  surfaced, phone battery display is wired, stale socket callbacks cannot
+  replace healthy connections, expired pairing is explained, and offline-host
+  retries recover cleanly (commits `8d1e353`, `522adf7`, `85953c7`, `3675674`,
+  and `5442ad1`). The Windows installer contains the Electron companion host
+  and PWA changes.
+- **Android companion recovery source.** Native Android recovery gained saved
+  token reuse, subnet discovery, and a load watchdog (`e8dd021`, `85953c7`, and
+  `5442ad1`). These sources require a separately signed, installed, and tested
+  APK; this Windows release does not claim Android production readiness.
+
 ### Fixed
+- **Desktop window movement, resizing, and placement persistence.** The custom
+  frameless header now exposes a usable drag region, retains the native Windows
+  resize border, and includes an explicit maximize/restore control. Manual
+  dimensions are no longer overwritten by content mutations, the layout uses
+  the available width, and normal window bounds survive Mini Mode and app
+  restarts. Restored coordinates are clamped to an available display so a
+  monitor change cannot strand the app off-screen.
+- **Mini Mode geometry.** Entering Mini Mode now lowers the active minimum
+  before requesting its 260×320 geometry. Exiting restores the 480×600 normal
+  minimum, display-clamped saved bounds, and the prior maximized state. A real
+  isolated Electron BrowserWindow test verifies the resulting geometry and
+  relaunch behavior.
 - **System volume setting now honors the requested percentage.** The media
   helper previously calculated a clamped volume but referenced an undefined
   PowerShell variable instead of inserting that value into the command. Volume
@@ -12,29 +55,6 @@
   out-of-range cases. Confirmed dead bindings were removed and intentional
   cross-script renderer exports are now declared explicitly, leaving ESLint
   clean without suppressing dead-local detection.
-- **Phone companion reconnection diagnostics and recovery.** The phone now
-  preflights its pairing token so a revoked or stale code is reported as
-  "Pairing expired" instead of being misdiagnosed as an offline PC. Reconnect
-  attempts ignore stale WebSocket callbacks and cancel pending retries after a
-  healthy connection, preventing an older attempt from replacing the live
-  socket. The Android wrapper also preserves the page's existing pairing token
-  in native preferences so automatic recovery can reuse it when the desktop's
-  LAN address changes. The pairing form now keeps the expiry explanation visible
-  instead of hiding it with the connection-status pill, and a duplicate toast
-  helper left in the phone page was removed. Verified with a physical phone
-  connected to the desktop and with live browser checks of both connected and
-  expired-token states; automated Electron tests, Android debug assembly, and
-  Electron packaging also pass. Background retries now keep the actionable
-  offline explanation visible instead of flashing back to "Connecting…", and
-  unreachable preflight requests time out after five seconds rather than
-  hanging indefinitely. The Android wrapper also has an eight-second native
-  main-frame watchdog: if a saved desktop URL never finishes loading, it shows
-  the setup/recovery UI while scanning instead of leaving a permanent black
-  WebView. Verified on the release-signed physical phone with an in-place update:
-  stopping the real desktop listener produced "Wrong network or PC offline,"
-  and restoring it automatically returned to "Connected to VIP-SHADOW-NODE"
-  without losing the saved pairing.
-
 ## v11.0.0 — Serious Night Mode (2026-07-09)
 
 ### Fixed
