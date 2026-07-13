@@ -81,10 +81,15 @@ function normalizeProfile(raw) {
   // Auto-start is opt-in (default OFF) so selecting a profile never launches a
   // power action without the user pressing Start.
   const autoStart = raw.autoStart !== undefined ? Boolean(raw.autoStart) : false;
+  const kind = raw.kind === 'family' ? 'family' : 'timer';
+  const avatarValue = String(raw.avatar || '').trim().replace(/[\x00-\x1f\x7f]/g, '');
+  const avatar = Array.from(avatarValue).slice(0, 4).join('');
 
   return {
     id,
     name: name.substring(0, 32),
+    kind,
+    avatar,
     action,
     mode,
     seconds,
@@ -252,6 +257,7 @@ function applyProfile(profileId, currentState = {}) {
     autoStart: profile.autoStart
   };
 }
+
 
 // Stamps lastUsedAt and persists to disk. Kept separate from applyProfile()
 // (which stays pure/side-effect-free for unit testing) -- callers invoke

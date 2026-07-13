@@ -19,8 +19,26 @@ test('normalize fills in defaults for a minimal profile', () => {
   assert.equal(p.notes, '');
   assert.equal(p.pinned, false);
   assert.equal(p.autoStart, false);
+  assert.equal(p.kind, 'timer');
+  assert.equal(p.avatar, '');
   assert.ok(p.id);
   assert.ok(p.createdAt);
+});
+
+test('normalize preserves safe family identity metadata', () => {
+  const p = profiles.normalize({ name: ' Alex ', kind: 'family', avatar: '  A  ' });
+  assert.equal(p.kind, 'family');
+  assert.equal(p.avatar, 'A');
+
+  const legacy = profiles.normalize({ name: 'Movie Night', kind: 'unknown', avatar: '\u0000Moon\u007f' });
+  assert.equal(legacy.kind, 'timer');
+  assert.equal(legacy.avatar, 'Moon');
+});
+
+test('normalize truncates avatars by Unicode code point without splitting emoji', () => {
+  const p = profiles.normalize({ name: 'Alex', kind: 'family', avatar: 'A🌙BC✨' });
+  assert.equal(p.avatar, 'A🌙BC');
+  assert.equal(Array.from(p.avatar).length, 4);
 });
 
 test('normalize returns null for missing/blank name', () => {

@@ -315,8 +315,9 @@ const els = {
   profilesModalClose: document.getElementById('profiles-modal-close'),
   btnCloseProfiles: document.getElementById('btn-close-profiles'),
   newProfileName: document.getElementById('new-profile-name'),
+  newProfileKind: document.getElementById('new-profile-kind'),
+  newProfileAvatar: document.getElementById('new-profile-avatar'),
   newProfileNotes: document.getElementById('new-profile-notes'),
-  newProfileAutostart: document.getElementById('new-profile-autostart'),
   btnSaveProfile: document.getElementById('btn-save-profile'),
   scheduleHint: document.getElementById('schedule-hint'),
   // Clock face elements
@@ -1539,7 +1540,8 @@ async function startTimer(seconds = inputSeconds()) {
       dryRun: state.dryRun,
       forceShutdown: state.forceShutdown,
       muteSystem: state.muteSystem,
-      gracePeriod: state.graceMinutes
+      gracePeriod: state.graceMinutes,
+      profileId: state.currentProfileId
     });
 
     if (result?.success === false) {
@@ -2432,6 +2434,7 @@ if (els.btnProofCopy) {
       const text = [
         `Lights Out - Morning Proof`,
         `Result: ${humanizeReceiptResult(receipt.result)}`,
+        getReceiptProfileLabel(receipt),
         `Action: ${receipt.action}${receipt.forceShutdown ? ' (Force)' : ''}${receipt.dryRun ? ' (Dry Run)' : ''}`,
         `Duration: ${Math.floor(receipt.durationSeconds / 60)}m`,
         `Started: ${receipt.startedAt ? new Date(receipt.startedAt).toLocaleString() : 'N/A'}`,
@@ -2492,6 +2495,7 @@ if (els.btnExportReceipts) {
         const durMin = r.durationSeconds ? Math.floor(r.durationSeconds / 60) : 0;
         ledger += `${start}\n`;
         ledger += `  Result: ${humanizeReceiptResult(r.result)}\n`;
+        if (getReceiptProfileLabel(r)) ledger += `  ${getReceiptProfileLabel(r)}\n`;
         ledger += `  Action: ${r.action || 'N/A'}${r.forceShutdown ? ' (Force)' : ''}${r.dryRun ? ' (Dry Run)' : ''}\n`;
         ledger += `  Duration: ${durMin}m | Ended: ${end}\n`;
         ledger += `  Pauses: ${r.pauseCount || 0}, Snoozes: ${r.snoozeCount || 0}, Warnings: ${r.warningsShown || 0}\n`;
@@ -3312,7 +3316,10 @@ async function loadInitialData() {
 
     // Non-critical loaders: isolate each so one failure cannot abort the rest.
     // (Sleep debt and morning proof load from wireEvents, where they are scoped.)
-    try { await loadProfiles(); } catch (e) { console.error('loadProfiles failed:', e); }
+    try {
+      await loadProfiles();
+      await restoreSelectedProfile(appSettings.app?.lastSelectedProfileId);
+    } catch (e) { console.error('loadProfiles failed:', e); }
     try { loadStreaks(); } catch (e) { console.error('loadStreaks failed:', e); }
 
     // Offer recovery of an interrupted timer

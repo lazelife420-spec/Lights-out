@@ -112,7 +112,9 @@ const DEFAULTS = {
     clockSweep: true,              // smooth sweep vs per-second tick
     // Northstar UI state
     nsActiveTab: 'lib',            // last active sidebar tab
-    nsSelectedMode: ''             // last selected lobby mode card
+    nsSelectedMode: '',            // last selected lobby mode card
+    // Identity only: restoring this selection never applies or starts a timer.
+    lastSelectedProfileId: null
   },
   calendar: {
     enabled: true,

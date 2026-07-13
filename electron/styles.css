@@ -2466,6 +2466,27 @@ body.mini-mode .action-btn {
   color: var(--text-muted);
 }
 
+.profile-identity-fields {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.profile-item-kind-input,
+.profile-item-avatar-input {
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.profile-item-avatar-input {
+  width: 64px;
+}
+
 .profile-item-notes-input {
   font-size: 11px;
   font-style: italic;
@@ -5094,4 +5115,3 @@ body.fullscreen-clock-mode .fullscreen-clock-exit {
   border-radius: 6px;
   margin-top: 2px;
 }
-

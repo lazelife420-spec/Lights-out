@@ -62,6 +62,8 @@ function createRunReceipt(timerState) {
     startedAt: new Date().toISOString(),
     endedAt: null,
     action: timerState.action || 'shutdown',
+    profileId: timerState.profileId || null,
+    profileName: timerState.profileName || null,
     durationSeconds: timerState.totalSeconds || 0,
     remainingSeconds: null,
     dryRun: !!timerState.dryRun,
