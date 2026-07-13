@@ -65,6 +65,9 @@ jobs:
       - name: Regenerate icons
         run: npm run icons
 
+      - name: Window geometry runtime test
+        run: npm run test:geometry
+
       - name: Build portable + installer
         run: npm run build
 

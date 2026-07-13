@@ -33,6 +33,7 @@ const autopilot = require('./autopilot');
 const ritualMode = require('./ritualMode');
 const statsDashboard = require('./statsDashboard');
 const smartSuggestions = require('./smartSuggestions');
+const windowGeometry = require('./windowGeometry');
 
 const APP_ICON = path.join(__dirname, 'assets', 'icon.ico');
 const TRAY_ICON = path.join(__dirname, 'assets', 'tray-32.png');
@@ -214,23 +215,10 @@ function parseLaunchOptions(argv) {
 
 function getRestoredWindowState() {
   const saved = settingsStore.getSection('window') || {};
-  const bounds = saved.bounds;
-  if (!bounds || !['x', 'y', 'width', 'height'].every(key => Number.isFinite(bounds[key]))) {
-    return { bounds: null, maximized: false };
-  }
-
-  const candidate = {
-    x: Math.round(bounds.x),
-    y: Math.round(bounds.y),
-    width: Math.round(bounds.width),
-    height: Math.round(bounds.height)
+  return {
+    bounds: windowGeometry.clampNormalBounds(saved.bounds, screen),
+    maximized: Boolean(saved.maximized)
   };
-  const work = screen.getDisplayMatching(candidate).workArea;
-  const width = Math.min(Math.max(candidate.width, 480), work.width);
-  const height = Math.min(Math.max(candidate.height, 600), work.height);
-  const x = Math.min(Math.max(candidate.x, work.x), work.x + work.width - width);
-  const y = Math.min(Math.max(candidate.y, work.y), work.y + work.height - height);
-  return { bounds: { x, y, width, height }, maximized: Boolean(saved.maximized) };
 }
 
 function createWindow() {
@@ -261,10 +249,10 @@ function createWindow() {
 
   const restoredWindowState = miniMode ? { bounds: null, maximized: false } : getRestoredWindowState();
   const windowConfig = miniMode ? {
-    width: 260,
-    height: 320,
-    minWidth: 240,
-    minHeight: 280,
+    width: windowGeometry.MINI_GEOMETRY.width,
+    height: windowGeometry.MINI_GEOMETRY.height,
+    minWidth: windowGeometry.MINI_GEOMETRY.width,
+    minHeight: windowGeometry.MINI_GEOMETRY.height,
     maxWidth: 340,
     maxHeight: 420,
     alwaysOnTop: true,
@@ -272,11 +260,10 @@ function createWindow() {
   } : {
     width: 520,
     height: 800,
-    minWidth: 480,
-    minHeight: 600,
+    minWidth: windowGeometry.NORMAL_MINIMUM.width,
+    minHeight: windowGeometry.NORMAL_MINIMUM.height,
     alwaysOnTop: false,
-    resizable: true,
-    ...(restoredWindowState.bounds || {})
+    resizable: true
   };
 
   mainWindow = new BrowserWindow({
@@ -300,6 +287,7 @@ function createWindow() {
 
   mainWindow.miniMode = miniMode;
   mainWindow.restoredBounds = Boolean(restoredWindowState.bounds);
+  if (restoredWindowState.bounds) windowGeometry.applyNormalBounds(mainWindow, restoredWindowState.bounds, screen);
   if (restoredWindowState.maximized) mainWindow.maximize();
 
   const saveWindowState = () => {
@@ -2119,25 +2107,16 @@ ipcMain.on('toggle-maximize-window', () => {
 ipcMain.on('toggle-mini-mode', () => {
   if (!mainWindow) return;
   const enteringMiniMode = !miniMode;
-  if (enteringMiniMode) {
-    mainWindow.normalModeBounds = mainWindow.isMaximized() ? mainWindow.getNormalBounds() : mainWindow.getBounds();
-    mainWindow.wasMaximizedBeforeMini = mainWindow.isMaximized();
-    if (mainWindow.isMaximized()) mainWindow.unmaximize();
-  }
+  if (enteringMiniMode) windowGeometry.enterMiniMode(mainWindow);
 
   miniMode = enteringMiniMode;
   mainWindow.miniMode = miniMode;
 
   if (miniMode) {
-    mainWindow.setSize(260, 320);
     mainWindow.setAlwaysOnTop(true, 'floating');
   } else {
     mainWindow.setAlwaysOnTop(false);
-    if (mainWindow.normalModeBounds) mainWindow.setBounds(mainWindow.normalModeBounds);
-    else mainWindow.setSize(520, 720);
-    if (mainWindow.wasMaximizedBeforeMini) mainWindow.maximize();
-    mainWindow.normalModeBounds = null;
-    mainWindow.wasMaximizedBeforeMini = false;
+    windowGeometry.exitMiniMode(mainWindow, screen);
   }
 
   mainWindow.webContents.send('mini-mode-changed', miniMode);

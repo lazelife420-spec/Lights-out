@@ -12,6 +12,7 @@
     "smoke": "node scripts/smoke-test.js",
     "smoke:companion": "node scripts/companion-smoke.js",
     "smoke:packaged": "node scripts/packaged-smoke.js",
+    "test:geometry": "electron scripts/window-geometry-runtime.js",
     "test": "node --test"
   },
   "author": "Lights Out",
@@ -40,6 +41,7 @@
       "smartLights.js",
       "profiles.js",
       "profileIdentity.js",
+      "windowGeometry.js",
       "calendar.js",
       "settings.js",
       "lastLight.js",

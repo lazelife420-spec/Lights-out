@@ -1,19 +1,52 @@
-# Lights Out v11.0.1 Production Proof Pack
+# Lights Out v11.0.1 Windows Production Proof Pack
 
 - Date: 2026-07-13
 - Branch: `codex/v11.0.1-production-readiness`
 - Pull request: [#26](https://github.com/lazelife420-spec/Lights-out/pull/26)
-- Verified commit: `822fa011223864805dd812a323f60874bb235878`
+- Current PR review baseline: `c224bfc4885bb1ec9c16bfbe137989ceb43ae16f`
 
 ## Scope
 
-This proof pack covers the v11.0.1 desktop-control fix and the local release
-gates available while GitHub Actions is disabled at the account level.
+This proof pack covers the complete Windows desktop payload between `v11.0.0`
+and PR #26, plus the local release gates available while GitHub Actions is
+disabled at the account level. The detailed payload and evidence mapping is in
+[`LIGHTS_OUT_V11_0_1_PAYLOAD_INVENTORY.md`](LIGHTS_OUT_V11_0_1_PAYLOAD_INVENTORY.md).
 
 The release restores practical movement and resizing for the frameless desktop
 window, adds maximize/restore, persists usable window geometry across restarts,
 preserves normal bounds across Mini Mode, and clamps restored coordinates onto
-an available display.
+an available display. It also includes already-merged Family Profiles identity,
+profile accents, settings/header/pairing polish, companion-host recovery, and
+the system-volume fix.
+
+Native Android source changed in the same repository range. It is not packaged
+by the Windows installer and is not certified by this proof pack. A separate
+signed APK receipt is required before claiming Android production readiness.
+
+## Evidence Boundaries
+
+### Proven by Windows Sandbox
+
+- clean v11.0.0 installation
+- safe minimized/idle launch
+- upgrade to v11.0.1
+- settings preservation
+- safe v11.0.1 launch
+- silent uninstall, registry cleanup, and executable cleanup
+
+### Proven by local automated or manual project evidence
+
+- lint, syntax, unit, smoke, package build, and packaged smoke
+- Family Profiles identity and receipt compatibility
+- display-only profile accents
+- desktop window movement, resizing, persistence, and Mini Mode geometry
+- settings persistence, media input handling, and covered companion-host paths
+
+### Not proven by the Windows installer lifecycle
+
+- Android APK installation or runtime behavior
+- trusted Authenticode signing
+- GitHub Actions execution
 
 ## Automated Verification
 
@@ -26,6 +59,10 @@ All commands completed successfully on Windows 10:
 - `npm audit --audit-level=low`: 0 vulnerabilities
 - `npm run build`: portable and NSIS artifacts produced
 - `npm run smoke:packaged`: 11 checks passed, 0 failed
+
+These counts and the artifact hashes below describe the historical pre-patch
+candidate. The Mini Mode runtime patch requires a new complete validation run,
+new output directory, and new hashes before this proof becomes final.
 
 The Windows CI workflow now includes `npm run smoke:packaged` after packaging
 and before artifact upload. GitHub has not executed that workflow because its
@@ -60,7 +97,11 @@ The sandbox verified:
 
 Sandbox result: 6 lifecycle assertions passed, 0 failed.
 
-## Artifact Receipt
+## Historical Pre-patch Artifact Receipt
+
+Artifact-producing commit: `822fa011223864805dd812a323f60874bb235878`
+
+Electron tree: `1d590f1567bac9c1c0f3db6219764169c49f1854`
 
 | Artifact | Bytes | SHA-256 |
 |---|---:|---|
@@ -70,6 +111,16 @@ Sandbox result: 6 lifecycle assertions passed, 0 failed.
 The matching local checksum file is `dist/SHA256SUMS.txt`. The `dist` directory
 is build output and remains intentionally untracked.
 
+These candidate artifacts remain valid historical evidence for the earlier
+window patch, but they are superseded for final release purposes by the pending
+Mini Mode geometry patch. They must not be published as the final v11.0.1
+artifacts.
+
+## Final Post-patch Artifact Receipt
+
+Pending the new runtime commit, validation, isolated build, packaged smoke, and
+repeat Windows Sandbox lifecycle proof.
+
 ## Open Production Gates
 
 - **GitHub Actions:** repository permissions and billing are healthy, but the
@@ -78,5 +129,7 @@ is build output and remains intentionally untracked.
 - **Authenticode:** both artifacts are unsigned. The only certificate available
   locally is a self-signed development certificate and was intentionally not
   presented as production signing.
+- **Android:** native source is present in the release range, but no final
+  v11.0.1 signed APK artifact/hash receipt is part of this Windows proof.
 - **Release:** PR #26 remains a draft. No merge, v11.0.1 tag, or public GitHub
-  release has been created while the two gates above remain open.
+  release has been created while the gates above remain open.

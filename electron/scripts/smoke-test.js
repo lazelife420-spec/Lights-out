@@ -34,7 +34,7 @@ function assertMatch(src, pattern, msg) {
 }
 
 // 1. Syntax-check every first-party JS file.
-const jsFiles = ['main.js', 'preload.js', 'renderer-utils.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'renderer.js', 'settings.js', 'smartLights.js', 'profiles.js', 'profileIdentity.js', 'calendar.js', 'lastLight.js'];
+const jsFiles = ['main.js', 'preload.js', 'renderer-utils.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'renderer.js', 'settings.js', 'smartLights.js', 'profiles.js', 'profileIdentity.js', 'windowGeometry.js', 'calendar.js', 'lastLight.js'];
 for (const file of jsFiles) {
   check(`syntax: ${file}`, () => {
     execFileSync(process.execPath, ['--check', path.join(root, file)], { stdio: 'pipe' });
@@ -335,6 +335,7 @@ check('icon: assets/icon.ico is a valid multi-size ICO', () => {
 
 // 6. Safe-startup guarantees (guards against AGENTS.md "Do Not Reintroduce").
 const mainSrc = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+const windowGeometrySrc = fs.readFileSync(path.join(root, 'windowGeometry.js'), 'utf8');
 check('startup: login wording stays "minimized and idle"', () => {
   assert(/Starts minimized and idle/.test(mainSrc), 'login wording changed');
 });
@@ -374,7 +375,8 @@ check('tray: hide/show and toggle logic', () => {
 check('mini-mode: toggle and resizing', () => {
   assertMatch(mainSrc, /let miniMode = false;/, 'miniMode variable missing');
   assertMatch(mainSrc, /ipcMain\.on\('toggle-mini-mode', \(\) => \{[\s\S]*const enteringMiniMode = !miniMode;[\s\S]*miniMode = enteringMiniMode;/s, 'miniMode toggle missing');
-  assertMatch(mainSrc, /if \(miniMode\) \{[\s\S]*mainWindow\.setSize\(260, 320\);/s, 'mini-mode resize missing');
+  assertMatch(mainSrc, /if \(enteringMiniMode\) windowGeometry\.enterMiniMode\(mainWindow\);/, 'mini-mode geometry transition missing');
+  assertMatch(windowGeometrySrc, /setMinimumSize\(MINI_GEOMETRY\.width, MINI_GEOMETRY\.height\);[\s\S]*setSize\(MINI_GEOMETRY\.width, MINI_GEOMETRY\.height\);/s, 'mini-mode minimum must change before resize');
   assertMatch(mainSrc, /mainWindow\.webContents\.send\('mini-mode-changed', miniMode\);/, 'mini-mode-changed event missing');
 });
 
@@ -393,10 +395,11 @@ check('window chrome: frameless window remains movable and resizable', () => {
 check('window state: normal bounds persist safely across launches and mini mode', () => {
   const settingsSrc = fs.readFileSync(path.join(root, 'settings.js'), 'utf8');
   assertMatch(settingsSrc, /window:\s*\{\s*bounds: null,\s*maximized: false\s*\}/, 'window-state defaults missing');
-  assertMatch(mainSrc, /function getRestoredWindowState\(\)[\s\S]*screen\.getDisplayMatching\(candidate\)\.workArea[\s\S]*Math\.min\(Math\.max\(candidate\.x[\s\S]*Math\.min\(Math\.max\(candidate\.y/s, 'restored bounds must be clamped to a visible display');
+  assertMatch(mainSrc, /bounds: windowGeometry\.clampNormalBounds\(saved\.bounds, screen\)/, 'startup must use shared display clamping');
+  assertMatch(windowGeometrySrc, /screenApi\.getDisplayMatching\(candidate\)\.workArea[\s\S]*Math\.min\(Math\.max\(candidate\.x[\s\S]*Math\.min\(Math\.max\(candidate\.y/s, 'restored bounds must be clamped to a visible display');
   assertMatch(mainSrc, /mainWindow\.on\('move', scheduleWindowStateSave\);[\s\S]*mainWindow\.on\('resize', scheduleWindowStateSave\);/s, 'move/resize persistence wiring missing');
   assertMatch(mainSrc, /if \(!maximized\) patch\.bounds = mainWindow\.getBounds\(\);[\s\S]*settingsStore\.updateSection\('window', patch\);/s, 'normal bounds persistence missing');
-  assertMatch(mainSrc, /mainWindow\.normalModeBounds = mainWindow\.isMaximized\(\) \? mainWindow\.getNormalBounds\(\) : mainWindow\.getBounds\(\);[\s\S]*if \(mainWindow\.normalModeBounds\) mainWindow\.setBounds\(mainWindow\.normalModeBounds\);/s, 'mini mode must preserve normal window bounds');
+  assertMatch(windowGeometrySrc, /win\.normalModeBounds = win\.isMaximized\(\) \? win\.getNormalBounds\(\) : win\.getBounds\(\);[\s\S]*applyNormalBounds\(win, win\.normalModeBounds, screenApi\)/s, 'mini mode must preserve and safely restore normal window bounds');
   assertMatch(mainSrc, /if \(mainWindow\.restoredBounds\) return;/, 'initial auto-fit must not overwrite restored height');
 });
 
@@ -1257,7 +1260,8 @@ check('tray: no duplicate tray icons on state change', () => {
 check('mini-mode: toggle and window resize logic', () => {
   assertMatch(mainSrc, /let miniMode = false;/, 'miniMode variable missing');
   assertMatch(mainSrc, /ipcMain\.on\('toggle-mini-mode'[\s\S]*miniMode = enteringMiniMode;/s, 'miniMode toggle missing');
-  assertMatch(mainSrc, /if \(miniMode\) \{[\s\S]*mainWindow\.setSize\(260, 320\);/s, 'mini-mode resize missing');
+  assertMatch(mainSrc, /if \(enteringMiniMode\) windowGeometry\.enterMiniMode\(mainWindow\);/, 'mini-mode enter transition missing');
+  assertMatch(mainSrc, /windowGeometry\.exitMiniMode\(mainWindow, screen\);/, 'mini-mode exit transition missing');
 });
 
 check('mini-mode: state broadcast to renderer', () => {
