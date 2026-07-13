@@ -5,7 +5,7 @@ it does not package `companion-android/`, repository documentation, or CI files.
 
 | Payload group | PR / commits | Affected artifact | Automated evidence | Manual evidence | In Windows installer | Separate Android proof |
 |---|---|---|---|---|---|---|
-| Window lifecycle and responsive desktop UI | PR #26: `822fa01` plus the Mini Mode patch | Windows EXE and installer | lint, syntax, unit, smoke, isolated real-BrowserWindow geometry test, packaged smoke | live move/resize/relaunch proof; Sandbox safe-launch lifecycle | Yes | No |
+| Window lifecycle and responsive desktop UI | PR #26: `822fa01` plus Mini Mode patch `0a091e7` | Windows EXE and installer | lint, syntax, unit, smoke, isolated real-BrowserWindow geometry test, packaged smoke | live move/resize/relaunch proof; Sandbox safe-launch lifecycle | Yes | No |
 | Family Profiles identity and proof | PR #24 (`3ab18cd`, `de13fa6`, merge `e5b050e`) | Windows EXE and installer; local receipts/settings | PR gate: 114 unit tests, 181 smoke checks, build; repeated by final v11.0.1 gates | No separate manual claim required; selection remains inert | Yes | No |
 | Display-only profile accents | PR #25 (`1240a7a`, merge `b96c02b`) | Windows EXE and installer | PR gate: 123 unit tests, 187 smoke checks, build; repeated by final v11.0.1 gates | Visual behavior is scoped to profile elements | Yes | No |
 | Settings persistence and header/pairing polish | PRs #21–#23 (`3dfcf26`/`b285d6c`, `905af3f`/`09d16d8`, `9d6a0b7`/`f86f98b`) | Windows EXE/installer and desktop-served companion PWA | PR gates: lint, syntax, 113 unit tests, 175–178 smoke checks; repeated by final gates | No separate production-artifact claim | Yes | No native Android source in these PRs |

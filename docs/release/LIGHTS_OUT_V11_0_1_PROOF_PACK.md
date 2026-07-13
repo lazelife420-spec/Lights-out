@@ -3,7 +3,8 @@
 - Date: 2026-07-13
 - Branch: `codex/v11.0.1-production-readiness`
 - Pull request: [#26](https://github.com/lazelife420-spec/Lights-out/pull/26)
-- Current PR review baseline: `c224bfc4885bb1ec9c16bfbe137989ceb43ae16f`
+- Final runtime/artifact commit: `0a091e7d2a02aff66fa8028c0d1ea532bd6fd32b`
+- Final Electron tree: `a24193576aa54e1bbb1edf6cf85f9c5a2d499195`
 
 ## Scope
 
@@ -48,21 +49,26 @@ signed APK receipt is required before claiming Android production readiness.
 - trusted Authenticode signing
 - GitHub Actions execution
 
-## Automated Verification
+## Final Automated Verification
 
 All commands completed successfully on Windows 10:
 
 - `npm run lint`
-- syntax checks for `main.js`, `renderer.js`, `preload.js`, and `settings.js`
+- syntax checks for every shipped `electron/*.js` file
 - `npm test`: 123 tests passed, 0 failed
-- `npm run smoke`: 190 checks passed, 0 failed
+- `npm run smoke`: 191 checks passed, 0 failed
+- `npm run test:geometry`: passed against a real isolated BrowserWindow
 - `npm audit --audit-level=low`: 0 vulnerabilities
 - `npm run build`: portable and NSIS artifacts produced
 - `npm run smoke:packaged`: 11 checks passed, 0 failed
 
-These counts and the artifact hashes below describe the historical pre-patch
-candidate. The Mini Mode runtime patch requires a new complete validation run,
-new output directory, and new hashes before this proof becomes final.
+The geometry test requested 260 x 320 Mini Mode geometry. Windows/Electron
+reported the expected native-frame-adjusted outer size of 262 x 321 while the
+active minimum reported 260 x 320. Exiting restored the 480 x 600 normal
+minimum and saved 710 x 725 test bounds exactly; display clamping and a fresh
+normal-window relaunch also passed. The test used isolated temporary app data
+and did not initialize timers, rituals, tray quick starts, global shortcuts, or
+companion commands.
 
 The Windows CI workflow now includes `npm run smoke:packaged` after packaging
 and before artifact upload. GitHub has not executed that workflow because its
@@ -76,7 +82,7 @@ restored after restart at 703 x 722 pixels, position 180,140.
 
 No timer or power action was started during this proof.
 
-## Disposable Clean-Machine Proof
+## Final Disposable Clean-Machine Proof
 
 The installer lifecycle was exercised inside a fresh Windows Sandbox. The host
 had no Lights Out installation and was not modified by this test.
@@ -95,7 +101,12 @@ The sandbox verified:
 9. `Uninstall Lights Out.exe /S` completed successfully.
 10. The uninstall registration and installed executable were removed.
 
-Sandbox result: 6 lifecycle assertions passed, 0 failed.
+The lifecycle was repeated after the Mini Mode runtime patch using the final
+installer from `dist-v11.0.1-final-0a091e7`. Result: 13 assertions passed, 0
+failed. The repeated assertions covered clean registration state, both silent
+installer exits, both registered versions, installed executable presence, both
+safe minimized/idle launches, settings-file creation and sentinel preservation,
+silent uninstall, uninstall-registration cleanup, and executable cleanup.
 
 ## Historical Pre-patch Artifact Receipt
 
@@ -118,8 +129,23 @@ artifacts.
 
 ## Final Post-patch Artifact Receipt
 
-Pending the new runtime commit, validation, isolated build, packaged smoke, and
-repeat Windows Sandbox lifecycle proof.
+Artifact-producing commit: `0a091e7d2a02aff66fa8028c0d1ea532bd6fd32b`
+
+Electron tree: `a24193576aa54e1bbb1edf6cf85f9c5a2d499195`
+
+Isolated output: `dist-v11.0.1-final-0a091e7/`
+
+| Artifact | Bytes | SHA-256 | Authenticode |
+|---|---:|---|---|
+| `LightsOut.exe` | 96,351,798 | `acf56af17c938ed0bca460bfc2a30dd8162aa703a759b0367988eb9f69d0d5c7` | Not signed |
+| `Lights Out Setup 11.0.1.exe` | 96,612,447 | `55114184ddc2186f4586e4646b2241f1b39c241267fcd0f18a6671314ba2118d` | Not signed |
+
+`dist-v11.0.1-final-0a091e7/SHA256SUMS.txt` records the same values. The
+historical `dist/` artifacts and their earlier hashes were not overwritten.
+
+The correct release claim is: **v11.0.1 Windows production proof complete
+locally; public trust remains blocked by GitHub Actions account access and
+trusted Authenticode signing.** This is not an all-platform production claim.
 
 ## Open Production Gates
 
