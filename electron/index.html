@@ -1680,17 +1680,22 @@
           <div class="profile-save-preview" id="profile-save-preview">Will save the current timer.</div>
           <div class="option-group">
             <label>Profile Name</label>
-            <input type="text" id="new-profile-name" placeholder="e.g., Movie Night" maxlength="32">
+            <input type="text" id="new-profile-name" placeholder="e.g., Alex" maxlength="32">
+          </div>
+          <div class="option-group">
+            <label>Profile Type</label>
+            <select id="new-profile-kind">
+              <option value="family">Family member</option>
+              <option value="timer">Saved routine</option>
+            </select>
+          </div>
+          <div class="option-group">
+            <label>Avatar (optional)</label>
+            <input type="text" id="new-profile-avatar" placeholder="e.g., A or 🌙" maxlength="4">
           </div>
           <div class="option-group">
             <label>Notes (optional)</label>
             <textarea id="new-profile-notes" placeholder="Any details worth remembering about this routine..." maxlength="280" rows="2"></textarea>
-          </div>
-          <div class="option-group checkbox-row">
-            <label class="checkbox-label">
-              <input type="checkbox" id="new-profile-autostart">
-              Auto-start timer when profile is selected
-            </label>
           </div>
           <button class="btn-primary" id="btn-save-profile">Save Profile</button>
         </div>

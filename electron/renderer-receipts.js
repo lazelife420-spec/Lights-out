@@ -100,6 +100,8 @@ async function renderMorningProof(receipt) {
   const actionLabel = receipt.action ? (receipt.action.charAt(0).toUpperCase() + receipt.action.slice(1)) + (receipt.forceShutdown ? ' ⚡' : '') + (receipt.dryRun ? ' \u{1F4CB}' : '') : null;
   showPill('ns-pill-action', 'ns-pill-action-val', actionLabel);
 
+  if (timestamp && receipt.profileName) timestamp.textContent += ` · ${receipt.profileName}`;
+
   const snoozes = receipt.snoozeCount || 0;
   showPill('ns-pill-snoozes', 'ns-pill-snoozes-val', snoozes > 0 ? snoozes : null);
 
@@ -149,6 +151,7 @@ function renderReceiptsModal(receipts, stats) {
     // Only show meta chips that carry real information -- a "0 pauses,
     // 0 snoozes" chip on every row is noise, not proof.
     const chips = [
+      r.profileName ? `Profile: ${escapeHtml(r.profileName)}` : null,
       `${escapeHtml((r.action || '').charAt(0).toUpperCase() + (r.action || '').slice(1))}`,
       `${dur}m`,
       r.dryRun ? 'Dry Run' : null,

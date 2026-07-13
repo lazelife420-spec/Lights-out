@@ -64,8 +64,10 @@ function renderProfiles() {
     return `
       <div class="profile-card ${isActive ? 'active' : ''} ${profile.pinned ? 'pinned' : ''}" data-profile-id="${profile.id}" title="${escapeHtml(cardTitle)}">
         <div class="profile-name">
+          ${profile.avatar ? `<span class="profile-avatar" aria-hidden="true">${escapeHtml(profile.avatar)}</span>` : ''}
           ${profile.pinned ? '<span class="pin-badge" style="color:var(--accent-amber); margin-right:4px;">📌</span>' : ''}
           ${escapeHtml(profile.name)}
+          ${profile.kind === 'family' ? '<span class="last-used-badge">family</span>' : ''}
           ${profile.notes ? '<span class="notes-badge" aria-hidden="true">📝</span>' : ''}
         </div>
         <div class="profile-hint">${escapeHtml(hint)}${isLastUsed ? ' <span class="last-used-badge">· last used</span>' : ''}</div>
@@ -93,6 +95,19 @@ function getLastUsedProfileId() {
   return latest ? latest.id : null;
 }
 
+async function restoreSelectedProfile(profileId) {
+  const selected = profileId && state.profiles.some(profile => profile.id === profileId)
+    ? profileId
+    : null;
+  state.currentProfileId = selected;
+  if (profileId && !selected) await persistSelectedProfile(null);
+  renderProfiles();
+}
+
+async function persistSelectedProfile(profileId) {
+  await api.saveAppSettings({ app: { lastSelectedProfileId: profileId || null } });
+}
+
 function getProfileHint(profile) {
   if (!profile) return '';
   const action = profile.action.charAt(0).toUpperCase() + profile.action.slice(1);
@@ -114,6 +129,7 @@ async function applyProfile(profileId, opts = {}) {
     }
 
     state.currentProfileId = profileId;
+    await persistSelectedProfile(profileId);
 
     // Pick up the fresh lastUsedAt stamp so the "last used" badge updates
     // immediately, without a full loadProfiles() round trip.
@@ -150,9 +166,8 @@ async function applyProfile(profileId, opts = {}) {
     renderProfiles();
     notify(`Profile "${result.profile.name}" loaded`, 'success');
 
-    // Auto-start if configured, or when started explicitly from the context menu.
-    const shouldStart = opts.start || result.autoStart;
-    if (shouldStart && !state.running && !state.paused) {
+    // Selection is always inert. Only an explicit "start" action may run it.
+    if (opts.start && !state.running && !state.paused) {
       state._clockDismissedByProfile = false; // timer starting, no restore needed
       startTimer(result.timerOptions?.durationSeconds);
     }
@@ -228,6 +243,13 @@ function renderProfilesList() {
         <div class="profile-item-info">
           <input type="text" class="profile-item-name-input" value="${escapeHtml(profile.name)}" data-profile-id="${profile.id}" maxlength="32" spellcheck="false">
           <div class="profile-item-hint">${escapeHtml(hint)}${escapeHtml(lastUsedHint)}</div>
+          <div class="profile-identity-fields">
+            <select class="profile-item-kind-input" data-profile-id="${profile.id}" aria-label="Profile type">
+              <option value="family" ${profile.kind === 'family' ? 'selected' : ''}>Family member</option>
+              <option value="timer" ${profile.kind !== 'family' ? 'selected' : ''}>Saved routine</option>
+            </select>
+            <input type="text" class="profile-item-avatar-input" value="${escapeHtml(profile.avatar || '')}" data-profile-id="${profile.id}" maxlength="4" spellcheck="false" aria-label="Profile avatar" placeholder="Avatar">
+          </div>
           <input type="text" class="profile-item-notes-input" value="${escapeHtml(profile.notes || '')}" data-profile-id="${profile.id}" maxlength="280" spellcheck="false" placeholder="Add a note...">
         </div>
         <div class="profile-item-actions">
@@ -256,6 +278,22 @@ function renderProfilesList() {
     });
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') input.blur();
+    });
+  });
+
+  els.profilesList.querySelectorAll('.profile-item-kind-input').forEach(input => {
+    input.addEventListener('change', async () => {
+      await api.updateProfile(input.dataset.profileId, { kind: input.value });
+      await loadProfiles();
+      renderProfilesList();
+    });
+  });
+
+  els.profilesList.querySelectorAll('.profile-item-avatar-input').forEach(input => {
+    input.addEventListener('change', async () => {
+      await api.updateProfile(input.dataset.profileId, { avatar: input.value.trim() });
+      await loadProfiles();
+      renderProfilesList();
     });
   });
 
@@ -325,11 +363,13 @@ async function saveNewProfile() {
 
   const profileData = {
     name: name,
+    kind: els.newProfileKind?.value === 'timer' ? 'timer' : 'family',
+    avatar: els.newProfileAvatar?.value?.trim() || '',
     notes: els.newProfileNotes?.value?.trim() || '',
     action: state.action,
     mode: 'duration',
     seconds: inputSeconds(),
-    autoStart: els.newProfileAutostart?.checked ?? false,
+    autoStart: false,
     dryRun: state.dryRun,
     forceShutdown: state.forceShutdown,
     muteSystem: state.muteSystem,
@@ -350,6 +390,7 @@ async function saveNewProfile() {
     if (result.success) {
       notify(`Profile "${result.profile.name}" ${result.action === 'created' ? 'created' : 'updated'}`, 'success');
       els.newProfileName.value = '';
+      if (els.newProfileAvatar) els.newProfileAvatar.value = '';
       if (els.newProfileNotes) els.newProfileNotes.value = '';
       await loadProfiles();
       renderProfilesList();
@@ -370,6 +411,7 @@ async function deleteProfile(profileId) {
       notify('Profile deleted', 'success');
       if (state.currentProfileId === profileId) {
         state.currentProfileId = null;
+        await persistSelectedProfile(null);
       }
       await loadProfiles();
       renderProfiles();
@@ -420,4 +462,4 @@ async function importProfiles(event) {
   // Reset file input
   event.target.value = '';
 }
-/* exported openProfilesModal, saveNewProfile, exportProfiles, importProfiles */
+/* exported openProfilesModal, saveNewProfile, exportProfiles, importProfiles, restoreSelectedProfile */

@@ -169,7 +169,9 @@ const timerState = {
   muteSystem: false,
   gracePeriod: 2,
   endsAt: null,
-  phase: 'idle'        // idle | focus | dim | lastlight
+  phase: 'idle',       // idle | focus | dim | lastlight
+  profileId: null,
+  profileName: null
 };
 
 // Whether a Content Blocker recurring schedule currently has sites blocked --
@@ -546,7 +548,9 @@ function normalizeTimerOptions(input, legacyAction) {
     dryRun: Boolean(options.dryRun),
     forceShutdown: Boolean(options.forceShutdown),
     muteSystem: Boolean(options.muteSystem),
-    gracePeriod: Number.isFinite(Number(options.gracePeriod)) ? Math.max(0, Number(options.gracePeriod)) : 2
+    gracePeriod: Number.isFinite(Number(options.gracePeriod)) ? Math.max(0, Number(options.gracePeriod)) : 2,
+    profileId: typeof options.profileId === 'string' ? options.profileId.substring(0, 128) : null,
+    profileName: typeof options.profileName === 'string' ? options.profileName.trim().substring(0, 32) : null
   };
 }
 
@@ -573,6 +577,8 @@ function startTimer(input, legacyAction) {
   timerState.forceShutdown = options.forceShutdown;
   timerState.muteSystem = options.muteSystem;
   timerState.gracePeriod = options.gracePeriod;
+  timerState.profileId = options.profileId;
+  timerState.profileName = options.profileName;
   timerState.endsAt = new Date(Date.now() + options.durationSeconds * 1000).toISOString();
   timerState.phase = 'focus';
 

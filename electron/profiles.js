@@ -81,10 +81,14 @@ function normalizeProfile(raw) {
   // Auto-start is opt-in (default OFF) so selecting a profile never launches a
   // power action without the user pressing Start.
   const autoStart = raw.autoStart !== undefined ? Boolean(raw.autoStart) : false;
+  const kind = raw.kind === 'family' ? 'family' : 'timer';
+  const avatar = String(raw.avatar || '').trim().replace(/[\x00-\x1f\x7f]/g, '').substring(0, 4);
 
   return {
     id,
     name: name.substring(0, 32),
+    kind,
+    avatar,
     action,
     mode,
     seconds,

@@ -102,6 +102,14 @@ check('profiles: lastLight fields in normalized profile', () => {
   assert(norm && norm.lastLightEnabled === true && norm.lastLightSequence === 'ExitTheGrid' && norm.lastLightSound === 'Soft', 'lastLight fields not preserved');
 });
 
+check('profiles: family identity metadata is safe and legacy-compatible', () => {
+  const profiles = require(path.join(root, 'profiles.js'));
+  const family = profiles.normalize({ name: 'Alex', kind: 'family', avatar: 'A' });
+  const legacy = profiles.normalize({ name: 'Movie Night' });
+  assert(family.kind === 'family' && family.avatar === 'A', 'family identity fields not preserved');
+  assert(legacy.kind === 'timer' && legacy.avatar === '', 'legacy profile identity defaults changed');
+});
+
 check('profiles: markUsed stamps lastUsedAt and persists to disk', () => {
   const profiles = require(path.join(root, 'profiles.js'));
   const created = profiles.create({ name: 'Last-Used Smoke Test' });
@@ -124,6 +132,19 @@ check('profiles: markUsed stamps lastUsedAt and persists to disk', () => {
 check('main.js: profiles-apply handler stamps lastUsedAt via markUsed on success', () => {
   const mainSrc = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
   assertMatch(mainSrc, /profiles-apply[\s\S]{0,200}profiles\.markUsed\(id\)/, 'profiles-apply IPC handler should call profiles.markUsed on success');
+});
+
+check('family profiles: selection stays inert and identity reaches receipts', () => {
+  const familySettingsSrc = fs.readFileSync(path.join(root, 'settings.js'), 'utf8');
+  const familyMainSrc = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+  const familyRendererSrc = ['renderer-profiles.js', 'renderer-receipts.js', 'renderer.js']
+    .map(file => fs.readFileSync(path.join(root, file), 'utf8')).join('\n');
+  assertMatch(familySettingsSrc, /lastSelectedProfileId:\s*null/, 'selected profile default missing');
+  assertMatch(familyRendererSrc, /await persistSelectedProfile\(profileId\)/, 'profile selection is not persisted');
+  assertMatch(familyRendererSrc, /if \(opts\.start && !state\.running && !state\.paused\)/, 'profile selection may auto-start a timer');
+  assert(!/opts\.start \|\| result\.autoStart/.test(familyRendererSrc), 'legacy auto-start still runs on selection');
+  assertMatch(familyRendererSrc, /profileId:\s*state\.currentProfileId,[\s\S]*profileName:/, 'selected identity is not sent with timer start');
+  assertMatch(familyMainSrc, /timerState\.profileId = options\.profileId;[\s\S]*timerState\.profileName = options\.profileName;/, 'main timer state does not retain profile identity');
 });
 
 check('streaks: export/import round-trip restores event history', () => {
@@ -828,11 +849,20 @@ if (fs.existsSync(rrPath)) {
   const rr = require(rrPath);
 
   check('receipts: create + update receipt', () => {
-    const r = rr.createRunReceipt({ action: 'shutdown', totalSeconds: 1800, dryRun: true, forceShutdown: false });
+    const r = rr.createRunReceipt({
+      action: 'shutdown', totalSeconds: 1800, dryRun: true, forceShutdown: false,
+      profileId: 'profile-alex', profileName: 'Alex'
+    });
     assert(r.id, 'receipt needs id');
     assert(r.result === 'running', 'initial result should be running');
+    assert(r.profileId === 'profile-alex' && r.profileName === 'Alex', 'profile identity not snapshotted');
     const updated = rr.updateRunReceipt(r.id, { result: 'dry_run_completed', endedAt: new Date().toISOString() });
     assert(updated.result === 'dry_run_completed', 'update failed');
+  });
+
+  check('receipts: legacy timer state remains compatible without profile identity', () => {
+    const r = rr.createRunReceipt({ action: 'sleep', totalSeconds: 600 });
+    assert(r.profileId === null && r.profileName === null, 'legacy receipt identity defaults changed');
   });
 
   check('receipts: list and latest', () => {
