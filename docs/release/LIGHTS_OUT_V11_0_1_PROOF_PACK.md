@@ -1,9 +1,9 @@
 # Lights Out v11.0.1 Production Proof Pack
 
-Date: 2026-07-13  
-Branch: `codex/v11.0.1-production-readiness`  
-Pull request: [#26](https://github.com/lazelife420-spec/Lights-out/pull/26)  
-Verified commit: `822fa011223864805dd812a323f60874bb235878`
+- Date: 2026-07-13
+- Branch: `codex/v11.0.1-production-readiness`
+- Pull request: [#26](https://github.com/lazelife420-spec/Lights-out/pull/26)
+- Verified commit: `822fa011223864805dd812a323f60874bb235878`
 
 ## Scope
 
