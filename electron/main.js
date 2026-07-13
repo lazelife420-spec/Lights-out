@@ -5,6 +5,7 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 const smartLights = require('./smartLights');
 const profiles = require('./profiles');
+const profileIdentity = require('./profileIdentity');
 const calendar = require('./calendar');
 const settingsStore = require('./settings');
 const lastLight = require('./lastLight');
@@ -549,13 +550,24 @@ function normalizeTimerOptions(input, legacyAction) {
     forceShutdown: Boolean(options.forceShutdown),
     muteSystem: Boolean(options.muteSystem),
     gracePeriod: Number.isFinite(Number(options.gracePeriod)) ? Math.max(0, Number(options.gracePeriod)) : 2,
-    profileId: typeof options.profileId === 'string' ? options.profileId.substring(0, 128) : null,
-    profileName: typeof options.profileName === 'string' ? options.profileName.trim().substring(0, 32) : null
+    profileId: typeof options.profileId === 'string' ? options.profileId : null,
+    source: options.source === 'remote' ? 'remote' : 'local'
   };
+}
+
+function resolveTimerProfileIdentity(profileId, source) {
+  const appSettings = settingsStore.getSection('app') || {};
+  return profileIdentity.resolveTimerProfileIdentity({
+    source,
+    requestedProfileId: profileId,
+    fallbackProfileId: appSettings.lastSelectedProfileId,
+    getProfileById: profiles.getById
+  });
 }
 
 function startTimer(input, legacyAction) {
   const options = normalizeTimerOptions(input, legacyAction);
+  const identity = resolveTimerProfileIdentity(options.profileId, options.source);
   clearTimerInterval();
 
   // Override Tax: reset session snooze count for this new run.
@@ -577,8 +589,8 @@ function startTimer(input, legacyAction) {
   timerState.forceShutdown = options.forceShutdown;
   timerState.muteSystem = options.muteSystem;
   timerState.gracePeriod = options.gracePeriod;
-  timerState.profileId = options.profileId;
-  timerState.profileName = options.profileName;
+  timerState.profileId = identity.profileId;
+  timerState.profileName = identity.profileName;
   timerState.endsAt = new Date(Date.now() + options.durationSeconds * 1000).toISOString();
   timerState.phase = 'focus';
 
@@ -1126,7 +1138,8 @@ function handleCompanionMessage(msg, client) {
     case 'start':
       startTimer({
         durationSeconds: msg.durationSeconds || 1800,
-        action: msg.timerAction || 'shutdown'
+        action: msg.timerAction || 'shutdown',
+        source: 'remote'
       });
       break;
     case 'togglePause':
@@ -1206,7 +1219,8 @@ function familyCommandHandler(cmd) {
     case 'start':
       startTimer({
         durationSeconds: cmd.durationSeconds || 1800,
-        action: cmd.action || 'shutdown'
+        action: cmd.action || 'shutdown',
+        source: 'remote'
       });
       break;
     case 'pause':
@@ -1626,6 +1640,7 @@ ipcMain.handle('import-all-data', async (event, jsonData) => {
     if (parsed.profiles && Array.isArray(parsed.profiles)) {
       const importedProfiles = profiles.import(JSON.stringify(parsed.profiles));
       if (!importedProfiles.success) return importedProfiles;
+      profileIdentity.reconcilePersistedSelection(settingsStore, profiles);
     }
     if (parsed.streaks && typeof parsed.streaks === 'object') streaks.replaceAll(parsed.streaks);
     return { success: true };
@@ -1954,7 +1969,11 @@ ipcMain.handle('profiles-get-all', async () => profiles.getAll());
 ipcMain.handle('profiles-get-by-id', async (event, id) => profiles.getById(id));
 ipcMain.handle('profiles-create', async (event, data) => profiles.create(data));
 ipcMain.handle('profiles-update', async (event, id, data) => profiles.update(id, data));
-ipcMain.handle('profiles-delete', async (event, id) => profiles.delete(id));
+ipcMain.handle('profiles-delete', async (event, id) => {
+  const result = profiles.delete(id);
+  if (result.success) profileIdentity.reconcilePersistedSelection(settingsStore, profiles);
+  return result;
+});
 ipcMain.handle('profiles-reorder', async (event, orderedIds) => profiles.reorder(orderedIds));
 ipcMain.handle('profiles-apply', async (event, id) => {
   const result = profiles.apply(id);
@@ -1966,7 +1985,11 @@ ipcMain.handle('profiles-apply', async (event, id) => {
 });
 ipcMain.handle('profiles-get-hint', async (event, profile) => profiles.getHint(profile));
 ipcMain.handle('profiles-export', async () => profiles.export());
-ipcMain.handle('profiles-import', async (event, jsonString) => profiles.import(jsonString));
+ipcMain.handle('profiles-import', async (event, jsonString) => {
+  const result = profiles.import(jsonString);
+  if (result.success) profileIdentity.reconcilePersistedSelection(settingsStore, profiles);
+  return result;
+});
 ipcMain.handle('profiles-create-defaults', async () => profiles.createDefaults());
 
 // Calendar IPC handlers

@@ -8,6 +8,10 @@ async function loadProfiles() {
   try {
     const profiles = await api.getAllProfiles();
     state.profiles = profiles || [];
+    if (state.currentProfileId && !state.profiles.some(profile => profile.id === state.currentProfileId)) {
+      state.currentProfileId = null;
+      await persistSelectedProfile(null);
+    }
     renderProfiles();
     return profiles;
   } catch (error) {
@@ -120,6 +124,12 @@ function getProfileHint(profile) {
   return `${action} in ${minutes}m`;
 }
 
+// Legacy autoStart metadata remains import-compatible, but selection itself
+// is inert. Only an explicit Start Profile command may run the timer.
+function shouldStartOnProfileSelection(options = {}) {
+  return options.start === true;
+}
+
 async function applyProfile(profileId, opts = {}) {
   try {
     const result = await api.applyProfile(profileId);
@@ -167,7 +177,7 @@ async function applyProfile(profileId, opts = {}) {
     notify(`Profile "${result.profile.name}" loaded`, 'success');
 
     // Selection is always inert. Only an explicit "start" action may run it.
-    if (opts.start && !state.running && !state.paused) {
+    if (shouldStartOnProfileSelection(opts) && !state.running && !state.paused) {
       state._clockDismissedByProfile = false; // timer starting, no restore needed
       startTimer(result.timerOptions?.durationSeconds);
     }

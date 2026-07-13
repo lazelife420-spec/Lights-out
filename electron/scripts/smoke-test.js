@@ -34,7 +34,7 @@ function assertMatch(src, pattern, msg) {
 }
 
 // 1. Syntax-check every first-party JS file.
-const jsFiles = ['main.js', 'preload.js', 'renderer-utils.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'renderer.js', 'settings.js', 'smartLights.js', 'profiles.js', 'calendar.js', 'lastLight.js'];
+const jsFiles = ['main.js', 'preload.js', 'renderer-utils.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'renderer.js', 'settings.js', 'smartLights.js', 'profiles.js', 'profileIdentity.js', 'calendar.js', 'lastLight.js'];
 for (const file of jsFiles) {
   check(`syntax: ${file}`, () => {
     execFileSync(process.execPath, ['--check', path.join(root, file)], { stdio: 'pipe' });
@@ -69,6 +69,14 @@ check('settings: updateSection persists to disk', () => {
   const disk = JSON.parse(fs.readFileSync(file, 'utf8'));
   assert(disk.customization.accent === '#a855f7', 'accent not persisted');
   assert(disk.customization.theme === 'midnight', 'merge dropped sibling key');
+});
+
+check('settings: selected profile persists and reloads from disk', () => {
+  const settings = require(path.join(root, 'settings.js'));
+  settings.updateSection('app', { lastSelectedProfileId: 'profile-alex' });
+  settings.load();
+  assert(settings.getSection('app').lastSelectedProfileId === 'profile-alex', 'selected profile did not reload');
+  settings.updateSection('app', { lastSelectedProfileId: null });
 });
 
 check('settings: active-timer round-trip', () => {
@@ -141,10 +149,33 @@ check('family profiles: selection stays inert and identity reaches receipts', ()
     .map(file => fs.readFileSync(path.join(root, file), 'utf8')).join('\n');
   assertMatch(familySettingsSrc, /lastSelectedProfileId:\s*null/, 'selected profile default missing');
   assertMatch(familyRendererSrc, /await persistSelectedProfile\(profileId\)/, 'profile selection is not persisted');
-  assertMatch(familyRendererSrc, /if \(opts\.start && !state\.running && !state\.paused\)/, 'profile selection may auto-start a timer');
-  assert(!/opts\.start \|\| result\.autoStart/.test(familyRendererSrc), 'legacy auto-start still runs on selection');
-  assertMatch(familyRendererSrc, /profileId:\s*state\.currentProfileId,[\s\S]*profileName:/, 'selected identity is not sent with timer start');
-  assertMatch(familyMainSrc, /timerState\.profileId = options\.profileId;[\s\S]*timerState\.profileName = options\.profileName;/, 'main timer state does not retain profile identity');
+  const startFnMatch = familyRendererSrc.match(/function shouldStartOnProfileSelection\(options = \{\}\) \{[\s\S]*?\n\}/);
+  assert(startFnMatch, 'selection start policy helper missing');
+  const shouldStart = Function(`return (${startFnMatch[0]})`)();
+  assert(shouldStart({ autoStart: true }) === false, 'legacy autoStart starts a timer on selection');
+  assert(shouldStart({ start: true }) === true, 'explicit Start Profile action is blocked');
+  assertMatch(familyRendererSrc, /profileId:\s*state\.currentProfileId\s*\}/, 'selected profile ID is not sent with timer start');
+  assert(!/profileName:\s*state\.profiles/.test(familyRendererSrc), 'renderer profile name still crosses the trust boundary');
+  assertMatch(familyMainSrc, /timerState\.profileId = identity\.profileId;[\s\S]*timerState\.profileName = identity\.profileName;/, 'main timer state does not use canonical identity');
+  assertMatch(familyMainSrc, /source:\s*'remote'/, 'remote starts are not explicitly marked unattributed');
+  assertMatch(familyMainSrc, /profileIdentity\.resolveTimerProfileIdentity\(/, 'main does not use the tested attribution policy');
+});
+
+check('profiles: deleting or replacing the selected profile clears persisted selection', () => {
+  const settings = require(path.join(root, 'settings.js'));
+  const profiles = require(path.join(root, 'profiles.js'));
+  const identity = require(path.join(root, 'profileIdentity.js'));
+
+  const created = profiles.create({ name: 'Temporary Family Member', kind: 'family' });
+  settings.updateSection('app', { lastSelectedProfileId: created.profile.id });
+  profiles.delete(created.profile.id);
+  identity.reconcilePersistedSelection(settings, profiles);
+  assert(settings.getSection('app').lastSelectedProfileId === null, 'delete left a stale selected profile');
+
+  settings.updateSection('app', { lastSelectedProfileId: 'removed-by-import' });
+  profiles.import(JSON.stringify([{ name: 'Imported Routine' }]));
+  identity.reconcilePersistedSelection(settings, profiles);
+  assert(settings.getSection('app').lastSelectedProfileId === null, 'import left a stale selected profile');
 });
 
 check('streaks: export/import round-trip restores event history', () => {
@@ -943,6 +974,16 @@ check('receipts: humanizeReceiptResult turns raw result codes into readable proo
   assertMatch(rendererSrc, /Result: \$\{humanizeReceiptResult\(receipt\.result\)\}/, 'Copy Proof handler should humanize the result, not dump the raw code');
   assertMatch(rendererSrc, /Started: \$\{receipt\.startedAt \? new Date\(receipt\.startedAt\)\.toLocaleString\(\)/, 'Copy Proof handler should format startedAt, not paste the raw ISO string');
   assertMatch(rendererSrc, /Result: \$\{humanizeReceiptResult\(r\.result\)\}/, 'Export Ledger handler should humanize the result, not dump the raw code');
+});
+
+check('receipts: profile label renders only when canonical identity exists', () => {
+  const receiptRendererSrc = fs.readFileSync(path.join(root, 'renderer-receipts.js'), 'utf8');
+  const fnMatch = receiptRendererSrc.match(/function getReceiptProfileLabel\(receipt\) \{[\s\S]*?\n\}/);
+  assert(fnMatch, 'getReceiptProfileLabel function not found');
+  const getLabel = Function(`return (${fnMatch[0]})`)();
+  assert(getLabel({}) === '', 'legacy receipt should omit Profile label');
+  assert(getLabel({ profileName: null }) === '', 'null identity should omit Profile label');
+  assert(getLabel({ profileName: 'Alex' }) === 'Profile: Alex', 'profile receipt label is wrong');
 });
 
 // 14. Override Tax integration.

@@ -35,6 +35,12 @@ test('normalize preserves safe family identity metadata', () => {
   assert.equal(legacy.avatar, 'Moon');
 });
 
+test('normalize truncates avatars by Unicode code point without splitting emoji', () => {
+  const p = profiles.normalize({ name: 'Alex', kind: 'family', avatar: 'A🌙BC✨' });
+  assert.equal(p.avatar, 'A🌙BC');
+  assert.equal(Array.from(p.avatar).length, 4);
+});
+
 test('normalize returns null for missing/blank name', () => {
   assert.equal(profiles.normalize({ name: '' }), null);
   assert.equal(profiles.normalize({ name: '   ' }), null);

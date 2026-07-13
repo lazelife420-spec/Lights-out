@@ -1541,8 +1541,7 @@ async function startTimer(seconds = inputSeconds()) {
       forceShutdown: state.forceShutdown,
       muteSystem: state.muteSystem,
       gracePeriod: state.graceMinutes,
-      profileId: state.currentProfileId,
-      profileName: state.profiles.find(profile => profile.id === state.currentProfileId)?.name || null
+      profileId: state.currentProfileId
     });
 
     if (result?.success === false) {
@@ -2435,7 +2434,7 @@ if (els.btnProofCopy) {
       const text = [
         `Lights Out - Morning Proof`,
         `Result: ${humanizeReceiptResult(receipt.result)}`,
-        receipt.profileName ? `Profile: ${receipt.profileName}` : '',
+        getReceiptProfileLabel(receipt),
         `Action: ${receipt.action}${receipt.forceShutdown ? ' (Force)' : ''}${receipt.dryRun ? ' (Dry Run)' : ''}`,
         `Duration: ${Math.floor(receipt.durationSeconds / 60)}m`,
         `Started: ${receipt.startedAt ? new Date(receipt.startedAt).toLocaleString() : 'N/A'}`,
@@ -2496,7 +2495,7 @@ if (els.btnExportReceipts) {
         const durMin = r.durationSeconds ? Math.floor(r.durationSeconds / 60) : 0;
         ledger += `${start}\n`;
         ledger += `  Result: ${humanizeReceiptResult(r.result)}\n`;
-        if (r.profileName) ledger += `  Profile: ${r.profileName}\n`;
+        if (getReceiptProfileLabel(r)) ledger += `  ${getReceiptProfileLabel(r)}\n`;
         ledger += `  Action: ${r.action || 'N/A'}${r.forceShutdown ? ' (Force)' : ''}${r.dryRun ? ' (Dry Run)' : ''}\n`;
         ledger += `  Duration: ${durMin}m | Ended: ${end}\n`;
         ledger += `  Pauses: ${r.pauseCount || 0}, Snoozes: ${r.snoozeCount || 0}, Warnings: ${r.warningsShown || 0}\n`;

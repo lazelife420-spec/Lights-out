@@ -82,7 +82,8 @@ function normalizeProfile(raw) {
   // power action without the user pressing Start.
   const autoStart = raw.autoStart !== undefined ? Boolean(raw.autoStart) : false;
   const kind = raw.kind === 'family' ? 'family' : 'timer';
-  const avatar = String(raw.avatar || '').trim().replace(/[\x00-\x1f\x7f]/g, '').substring(0, 4);
+  const avatarValue = String(raw.avatar || '').trim().replace(/[\x00-\x1f\x7f]/g, '');
+  const avatar = Array.from(avatarValue).slice(0, 4).join('');
 
   return {
     id,
@@ -256,6 +257,7 @@ function applyProfile(profileId, currentState = {}) {
     autoStart: profile.autoStart
   };
 }
+
 
 // Stamps lastUsedAt and persists to disk. Kept separate from applyProfile()
 // (which stays pure/side-effect-free for unit testing) -- callers invoke

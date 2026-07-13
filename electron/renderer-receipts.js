@@ -35,6 +35,11 @@ function humanizeReceiptResult(result) {
   return result.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
+function getReceiptProfileLabel(receipt) {
+  const name = typeof receipt?.profileName === 'string' ? receipt.profileName.trim() : '';
+  return name ? `Profile: ${name}` : '';
+}
+
 async function loadMorningProof() {
   try {
     const receipt = await api.getLatestReceipt?.();
@@ -151,7 +156,7 @@ function renderReceiptsModal(receipts, stats) {
     // Only show meta chips that carry real information -- a "0 pauses,
     // 0 snoozes" chip on every row is noise, not proof.
     const chips = [
-      r.profileName ? `Profile: ${escapeHtml(r.profileName)}` : null,
+      getReceiptProfileLabel(r) ? escapeHtml(getReceiptProfileLabel(r)) : null,
       `${escapeHtml((r.action || '').charAt(0).toUpperCase() + (r.action || '').slice(1))}`,
       `${dur}m`,
       r.dryRun ? 'Dry Run' : null,
@@ -172,4 +177,4 @@ function renderReceiptsModal(receipts, stats) {
     </div>`;
   }).join('');
 }
-/* exported loadMorningProof, renderReceiptsModal */
+/* exported loadMorningProof, renderReceiptsModal, getReceiptProfileLabel */
