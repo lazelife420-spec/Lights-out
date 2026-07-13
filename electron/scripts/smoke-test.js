@@ -41,6 +41,18 @@ for (const file of jsFiles) {
   });
 }
 
+check('package: local main-process modules are included in the build', () => {
+  const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const packagedFiles = new Set(packageJson.build?.files || []);
+  const mainSrc = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+  const localRequires = [...mainSrc.matchAll(/require\(['"]\.\/([^'"]+)['"]\)/g)]
+    .map(match => path.extname(match[1]) ? match[1] : `${match[1]}.js`);
+
+  for (const requiredFile of localRequires) {
+    assert(packagedFiles.has(requiredFile), `${requiredFile} is required by main.js but missing from build.files`);
+  }
+});
+
 // 2. Mock electron so main-process modules load under plain Node.
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-smoke-'));
 const origLoad = Module._load;

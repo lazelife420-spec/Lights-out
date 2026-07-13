@@ -39,6 +39,7 @@
       "renderer.js",
       "smartLights.js",
       "profiles.js",
+      "profileIdentity.js",
       "calendar.js",
       "settings.js",
       "lastLight.js",
