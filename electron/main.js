@@ -35,6 +35,7 @@ const profileRitualContext = require('./profileRitualContext');
 const statsDashboard = require('./statsDashboard');
 const smartSuggestions = require('./smartSuggestions');
 const windowGeometry = require('./windowGeometry');
+const nightModes = require('./nightModes');
 
 const APP_ICON = path.join(__dirname, 'assets', 'icon.ico');
 const TRAY_ICON = path.join(__dirname, 'assets', 'tray-32.png');
@@ -174,7 +175,9 @@ const timerState = {
   endsAt: null,
   phase: 'idle',       // idle | focus | dim | lastlight
   profileId: null,
-  profileName: null
+  profileName: null,
+  nightModeId: null,
+  nightModeTitle: null
 };
 
 // Whether a Content Blocker recurring schedule currently has sites blocked --
@@ -673,6 +676,8 @@ function beginValidatedCountdown(options, identity) {
   timerState.gracePeriod = options.gracePeriod;
   timerState.profileId = identity.profileId;
   timerState.profileName = identity.profileName;
+  timerState.nightModeId = options.nightModeId || null;
+  timerState.nightModeTitle = options.nightModeTitle || null;
   timerState.endsAt = new Date(Date.now() + options.durationSeconds * 1000).toISOString();
   timerState.phase = 'focus';
 
@@ -1939,6 +1944,34 @@ ipcMain.handle('clear-receipts', async () => {
 ipcMain.handle('get-receipt-stats', async () => {
   return runReceipts.getReceiptStats();
 });
+// Night Modes IPC.
+ipcMain.handle('get-night-modes-catalogue', async () => {
+  return nightModes.getCatalogue();
+});
+ipcMain.handle('get-night-mode', async (e, id) => {
+  return nightModes.getById(id);
+});
+ipcMain.handle('resolve-night-mode', async (e, nightModeId) => {
+  return nightModes.resolveForExecution(nightModeId);
+});
+// "Use Tonight" — resolves the mode and returns canonical timer options
+// without starting anything. The renderer loads these into the lobby.
+ipcMain.handle('use-night-mode-tonight', async (e, nightModeId) => {
+  const resolution = nightModes.resolveForExecution(nightModeId);
+  if (!resolution.success) return resolution;
+  // Return resolved options for the renderer to display in lobby.
+  // The timer is NOT started here — selection remains inert.
+  return {
+    success: true,
+    nightModeId: resolution.resolved.nightModeId,
+    nightModeTitle: resolution.resolved.nightModeTitle,
+    nightModeVersion: resolution.resolved.nightModeVersion,
+    durationSeconds: resolution.resolved.durationSeconds,
+    action: resolution.resolved.action,
+    ritualId: resolution.resolved.ritualId
+  };
+});
+
 // Override Tax IPC.
 ipcMain.handle('assess-snooze-cost', async () => {
   return overrideTax.assessSnoozeCost();

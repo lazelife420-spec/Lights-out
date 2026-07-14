@@ -525,7 +525,7 @@ check('ui: warning modal keeps snooze and cancel choices', () => {
 });
 
 check('ui: icon-only navigation and footer buttons have accessible labels', () => {
-  assertMatch(htmlSrc, /data-ns-tab="lib"[^>]*aria-label="Open library"/, 'LIB aria-label missing');
+  assertMatch(htmlSrc, /data-ns-tab="lib"[^>]*aria-label="Open tonight"/, 'TONIGHT aria-label missing');
   assertMatch(htmlSrc, /data-ns-tab="sch"[^>]*aria-label="Open schedule"/, 'SCH aria-label missing');
   assertMatch(htmlSrc, /data-ns-tab="set"[^>]*aria-label="Open settings"/, 'SET aria-label missing');
   assertMatch(htmlSrc, /data-ns-tab="help"[^>]*aria-label="Open help and about"/, 'Help aria-label missing');
@@ -1446,6 +1446,87 @@ check('version: HTML fallback text matches electron/package.json (fails the buil
 // 22. Wordmark overlap layout prevention
 check('layout: wordmark positioned outside header to avoid menu overlap', () => {
   assert(htmlSrc.indexOf('</header>') < htmlSrc.indexOf('class="ns-header-wordmark"'), 'ns-header-wordmark should be placed after header closes');
+});
+
+// 23. Night Modes library vertical slice.
+const nightModesSrc = fs.readFileSync(path.join(root, 'nightModes.js'), 'utf8');
+
+check('night-modes: module exists and exports catalogue', () => {
+  assert(mainSrc.includes("require('./nightModes')"), 'nightModes not required in main');
+  assertMatch(nightModesSrc, /function getCatalogue\(\)/, 'getCatalogue missing');
+  assertMatch(nightModesSrc, /function resolveForExecution\(/, 'resolveForExecution missing');
+  assertMatch(nightModesSrc, /function validateMode\(/, 'validateMode missing');
+});
+
+check('night-modes: six built-in modes with unique IDs', () => {
+  assertMatch(nightModesSrc, /id: 'quick-sleep'/, 'quick-sleep missing');
+  assertMatch(nightModesSrc, /id: 'lights-down'/, 'lights-down missing');
+  assertMatch(nightModesSrc, /id: 'movie-wind-down'/, 'movie-wind-down missing');
+  assertMatch(nightModesSrc, /id: 'full-shutdown'/, 'full-shutdown missing');
+  assertMatch(nightModesSrc, /id: 'quiet-house'/, 'quiet-house missing');
+  assertMatch(nightModesSrc, /id: 'school-night'/, 'school-night missing');
+});
+
+check('night-modes: disabled modes have honest unavailability reasons', () => {
+  assertMatch(nightModesSrc, /quiet-house[\s\S]*?status: 'coming_soon'/s, 'quiet-house not marked coming_soon');
+  assertMatch(nightModesSrc, /school-night[\s\S]*?status: 'needs_router_setup'/s, 'school-night not marked needs_router_setup');
+  assertMatch(nightModesSrc, /Multi-device control is not yet supported/, 'quiet-house reason missing');
+  assertMatch(nightModesSrc, /router-level Wi-Fi control/, 'school-night reason missing');
+});
+
+check('night-modes: only allowed execution paths (no arbitrary scripts)', () => {
+  assertMatch(nightModesSrc, /ALLOWED_EXECUTION_PATHS.*Object\.freeze\(\[/, 'execution paths not frozen');
+  assertMatch(nightModesSrc, /'start-timer'/, 'start-timer path missing');
+  assertMatch(nightModesSrc, /'start-standard-ritual'/, 'start-standard-ritual path missing');
+  assert(!nightModesSrc.includes('run-script'), 'arbitrary script execution path present');
+  assert(!nightModesSrc.includes('shell'), 'shell execution path present');
+});
+
+check('night-modes: IPC handlers registered in main', () => {
+  assertMatch(mainSrc, /ipcMain\.handle\('get-night-modes-catalogue'/, 'catalogue IPC missing');
+  assertMatch(mainSrc, /ipcMain\.handle\('get-night-mode'/, 'get-night-mode IPC missing');
+  assertMatch(mainSrc, /ipcMain\.handle\('resolve-night-mode'/, 'resolve IPC missing');
+  assertMatch(mainSrc, /ipcMain\.handle\('use-night-mode-tonight'/, 'use-tonight IPC missing');
+});
+
+check('night-modes: preload exposes night mode API', () => {
+  assertMatch(preloadSrc, /getNightModesCatalogue:/, 'preload getNightModesCatalogue missing');
+  assertMatch(preloadSrc, /getNightMode:/, 'preload getNightMode missing');
+  assertMatch(preloadSrc, /resolveNightMode:/, 'preload resolveNightMode missing');
+  assertMatch(preloadSrc, /useNightModeTonight:/, 'preload useNightModeTonight missing');
+});
+
+check('night-modes: receipt creation includes nightModeId field', () => {
+  const receiptsSrc = fs.readFileSync(path.join(root, 'runReceipts.js'), 'utf8');
+  assertMatch(receiptsSrc, /nightModeId: timerState\.nightModeId/, 'nightModeId missing from receipt');
+  assertMatch(receiptsSrc, /nightModeTitle: timerState\.nightModeTitle/, 'nightModeTitle missing from receipt');
+});
+
+check('night-modes: timerState carries nightModeId and nightModeTitle', () => {
+  assertMatch(mainSrc, /nightModeId: null/, 'timerState nightModeId init missing');
+  assertMatch(mainSrc, /nightModeTitle: null/, 'timerState nightModeTitle init missing');
+  assertMatch(mainSrc, /timerState\.nightModeId = options\.nightModeId/, 'timerState nightModeId assignment missing');
+  assertMatch(mainSrc, /timerState\.nightModeTitle = options\.nightModeTitle/, 'timerState nightModeTitle assignment missing');
+});
+
+check('night-modes: MODES panel exists in HTML', () => {
+  assertMatch(htmlSrc, /id="ns-panel-modes"/, 'MODES panel missing from HTML');
+  assertMatch(htmlSrc, /id="nm-cards-grid"/, 'cards grid missing from HTML');
+  assertMatch(htmlSrc, /id="nm-detail-panel"/, 'detail panel missing from HTML');
+  assertMatch(htmlSrc, /id="nm-btn-use-tonight"/, 'Use Tonight button missing from HTML');
+});
+
+check('night-modes: sidebar has MODES nav item', () => {
+  assertMatch(htmlSrc, /data-ns-tab="modes"/, 'MODES sidebar nav missing');
+});
+
+check('night-modes: renderer handles modes panel visibility', () => {
+  assertMatch(rendererSrc, /panelModes:.*getElementById\('ns-panel-modes'\)/, 'panelModes element reference missing');
+  assertMatch(rendererSrc, /els\.panelModes[\s\S]*display.*=.*panel === 'modes'/, 'modes visibility toggle missing');
+});
+
+check('night-modes: Use Tonight does not auto-start timer', () => {
+  assertMatch(mainSrc, /use-night-mode-tonight[\s\S]*?timer is NOT started here/s, 'use-tonight comment about non-start missing');
 });
 
 // Cleanup.

@@ -72,6 +72,8 @@
       "profileRitualContext.js",
       "statsDashboard.js",
       "smartSuggestions.js",
+      "nightModes.js",
+      "renderer-night-modes.js",
       "widget.html",
       "assets/**"
     ],

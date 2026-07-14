@@ -257,6 +257,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   clearReceipts: () => ipcRenderer.invoke('clear-receipts'),
   getReceiptStats: () => ipcRenderer.invoke('get-receipt-stats'),
 
+  // Night Modes
+  getNightModesCatalogue: () => ipcRenderer.invoke('get-night-modes-catalogue'),
+  getNightMode: (id) => ipcRenderer.invoke('get-night-mode', id),
+  resolveNightMode: (id) => ipcRenderer.invoke('resolve-night-mode', id),
+  useNightModeTonight: (id) => ipcRenderer.invoke('use-night-mode-tonight', id),
+
   // Idle Detection
   getIdleSeconds: () => ipcRenderer.invoke('get-idle-seconds'),
   setIdleThreshold: (sec) => ipcRenderer.invoke('set-idle-threshold', sec),

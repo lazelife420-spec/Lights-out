@@ -585,8 +585,9 @@ const els = {
   receiptsList: document.getElementById('receipts-list'),
   btnClearReceipts: document.getElementById('btn-clear-receipts'),
   btnExportReceipts: document.getElementById('btn-export-receipts'),
-  // Northstar sidebar destinations (LIB/SCH/STATS)
+  // Northstar sidebar destinations (LIB/SCH/MODES/STATS)
   panelLib: document.getElementById('ns-panel-lib'),
+  panelModes: document.getElementById('ns-panel-modes'),
   panelSch: document.getElementById('ns-panel-sch'),
   panelStats: document.getElementById('ns-panel-stats'),
   statsCompanionMode: document.getElementById('stats-companion-mode'),
@@ -1164,6 +1165,7 @@ function openHelpPanel() {
 // working independently underneath — this only toggles the panel-level wrapper.
 function applyMainPanelVisibility(panel) {
   if (els.panelLib) els.panelLib.style.display = panel === 'lib' ? '' : 'none';
+  if (els.panelModes) els.panelModes.style.display = panel === 'modes' ? '' : 'none';
   if (els.panelSch) els.panelSch.style.display = panel === 'sch' ? '' : 'none';
   if (els.panelStats) els.panelStats.style.display = panel === 'stats' ? '' : 'none';
   if (panel === 'sch') activateTopTab('schedule');
@@ -1209,6 +1211,10 @@ async function handleSidebarNavigation(tab, { persist = true } = {}) {
 
   if (tab === 'lib') {
     applyMainPanelVisibility('lib');
+    handled = true;
+  }
+  if (tab === 'modes') {
+    applyMainPanelVisibility('modes');
     handled = true;
   }
   if (tab === 'sch') {
@@ -1536,6 +1542,7 @@ async function startTimer(seconds = inputSeconds(), origin = null) {
 
   try {
     SoundSystem.playStart();
+    const nmSel = window.__nightModeSelection || null;
     const result = await api.startTimer({
       durationSeconds,
       action: state.action,
@@ -1544,8 +1551,11 @@ async function startTimer(seconds = inputSeconds(), origin = null) {
       muteSystem: state.muteSystem,
       gracePeriod: state.graceMinutes,
       profileId: state.currentProfileId,
-      startOrigin: origin
+      startOrigin: origin,
+      nightModeId: nmSel ? nmSel.nightModeId : undefined,
+      nightModeTitle: nmSel ? nmSel.nightModeTitle : undefined
     });
+    window.__nightModeSelection = null;
 
     if (result?.success === false) {
       notify(result.error || 'Timer could not start', 'error');
@@ -3325,6 +3335,7 @@ async function loadInitialData() {
       await restoreSelectedProfile(appSettings.app?.lastSelectedProfileId);
     } catch (e) { console.error('loadProfiles failed:', e); }
     try { loadStreaks(); } catch (e) { console.error('loadStreaks failed:', e); }
+    try { if (typeof initNightModes === 'function') await initNightModes(); } catch (e) { console.error('initNightModes failed:', e); }
 
     // Offer recovery of an interrupted timer
     if (appSettings.recoverableTimer) {

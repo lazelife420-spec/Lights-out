@@ -108,9 +108,13 @@
         <img src="assets/brand/lights-out-icon.svg" alt="Lights Out" draggable="false">
       </div>
       <nav class="ns-sidebar-nav">
-        <button class="ns-nav-item active" data-ns-tab="lib" title="Library" aria-label="Open library">
+        <button class="ns-nav-item active" data-ns-tab="lib" title="Tonight" aria-label="Open tonight">
+          <span class="ns-nav-icon" aria-hidden="true">&#x1F319;</span>
+          <span class="ns-nav-label">TONIGHT</span>
+        </button>
+        <button class="ns-nav-item" data-ns-tab="modes" title="Night Modes" aria-label="Open night modes">
           <span class="ns-nav-icon" aria-hidden="true">&#x1F4DA;</span>
-          <span class="ns-nav-label">LIB</span>
+          <span class="ns-nav-label">MODES</span>
         </button>
         <button class="ns-nav-item" data-ns-tab="sch" title="Open schedule" aria-label="Open schedule">
           <span class="ns-nav-icon" aria-hidden="true">&#x1F4C5;</span>
@@ -495,6 +499,43 @@
 
       </div>
       <!-- /LIB panel -->
+
+      <!-- MODES: Night Modes library panel -->
+      <div class="ns-main-panel" id="ns-panel-modes" style="display:none">
+        <div class="nm-library">
+          <div class="nm-library-header">
+            <h2 class="nm-library-title">Your Night Modes</h2>
+            <p class="nm-library-subtitle">Choose what happens tonight.</p>
+          </div>
+          <div class="nm-library-body">
+            <div class="nm-cards-grid" id="nm-cards-grid">
+              <!-- Cards rendered dynamically by renderer -->
+            </div>
+            <div class="nm-detail-panel" id="nm-detail-panel" style="display:none">
+              <button class="nm-detail-back" id="nm-detail-back" title="Back to modes">&larr; Back</button>
+              <div class="nm-detail-artwork" id="nm-detail-artwork"></div>
+              <h3 class="nm-detail-title" id="nm-detail-title"></h3>
+              <p class="nm-detail-subtitle" id="nm-detail-subtitle"></p>
+              <div class="nm-detail-section">
+                <div class="nm-detail-section-title">What Happens</div>
+                <ol class="nm-detail-timeline" id="nm-detail-timeline"></ol>
+              </div>
+              <div class="nm-detail-section">
+                <div class="nm-detail-section-title">Details</div>
+                <div class="nm-detail-meta" id="nm-detail-meta"></div>
+              </div>
+              <div class="nm-detail-section">
+                <div class="nm-detail-section-title">Status</div>
+                <div class="nm-detail-status" id="nm-detail-status"></div>
+              </div>
+              <div class="nm-detail-actions">
+                <button class="nm-btn-use-tonight" id="nm-btn-use-tonight" disabled>Use Tonight</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- /MODES panel -->
 
       <!-- SCH: Schedule panel (duration/clock mode, calendar controls) -->
       <section class="tabs-section ns-main-panel" id="ns-panel-sch" style="display:none">
@@ -2004,6 +2045,7 @@
   <script src="renderer-settings.js"></script>
   <script src="renderer-lastlight-alarm.js"></script>
   <script src="renderer-onboarding-updater.js"></script>
+  <script src="renderer-night-modes.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>
