@@ -2599,9 +2599,10 @@ app.whenReady().then(async () => {
         }
       }
     } catch (err) {
-      // On step-handler error: token-safe cleanup, cancel the run, leave idle.
+      // On step-handler error: run-owned cleanup and cancellation.
+      // An obsolete callback from run A cannot cancel a newer run B.
       profileRitualContext.clearIfOwned(runToken);
-      ritualMode.cancelRitual();
+      ritualMode.cancelIfOwned(runToken);
       console.error('[ritual-step-error]', err);
     }
   });

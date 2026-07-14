@@ -14,6 +14,9 @@ const DEFAULT_STEPS = [
   { id: 'lights', label: 'Smart Lights to Night Mode', durationSeconds: 0, skippable: true, auto: true }
 ];
 
+// Monotonically increasing run ID so delayed callbacks can detect staleness.
+let runIdCounter = 0;
+
 let ritualState = {
   active: false,
   currentStep: 0,
@@ -21,7 +24,8 @@ let ritualState = {
   startedAt: null,
   completedSteps: [],
   skippedSteps: [],
-  runMeta: null  // immutable per-run metadata (e.g. { profileRitualToken })
+  runMeta: null,  // immutable per-run metadata (e.g. { profileRitualToken })
+  runId: 0        // unique identity for this run
 };
 
 let onStepCallback = null;
@@ -43,7 +47,11 @@ function startRitual(customSteps, meta) {
   const config = getConfig();
   if (!config.enabled) return { active: false, reason: 'disabled' };
 
+  // Clear any pending auto-advance timer from a previous run.
+  if (stepTimer) { clearTimeout(stepTimer); stepTimer = null; }
+
   const steps = customSteps || config.steps;
+  runIdCounter++;
   ritualState = {
     active: true,
     currentStep: 0,
@@ -51,7 +59,8 @@ function startRitual(customSteps, meta) {
     startedAt: new Date().toISOString(),
     completedSteps: [],
     skippedSteps: [],
-    runMeta: meta && typeof meta === 'object' ? Object.freeze({ ...meta }) : null
+    runMeta: meta && typeof meta === 'object' ? Object.freeze({ ...meta }) : null,
+    runId: runIdCounter
   };
 
   emitStep();
@@ -92,6 +101,17 @@ function cancelRitual() {
   return getState();
 }
 
+// Run-owned cancellation: cancels only when the active ritual's
+// profileRitualToken matches the supplied token. Returns true if
+// the cancellation was applied, false if it was a no-op.
+function cancelIfOwned(token) {
+  if (!token) return false;
+  if (!ritualState.active) return false;
+  if (!ritualState.runMeta || ritualState.runMeta.profileRitualToken !== token) return false;
+  cancelRitual();
+  return true;
+}
+
 function getRunMeta() {
   return ritualState.runMeta;
 }
@@ -118,9 +138,12 @@ function emitStep() {
 
   if (onStepCallback) onStepCallback(current, getState(), ritualState.runMeta);
 
-  // Auto-advance timed steps.
+  // Auto-advance timed steps. The closure captures this run's ID so it
+  // becomes a no-op if a new ritual has started in the meantime.
   if (current.auto && current.durationSeconds > 0) {
+    const capturedRunId = ritualState.runId;
     stepTimer = setTimeout(() => {
+      if (ritualState.runId !== capturedRunId) return;
       advanceStep(false);
     }, current.durationSeconds * 1000);
   }
@@ -142,6 +165,7 @@ module.exports = {
   advanceStep,
   skipStep,
   cancelRitual,
+  cancelIfOwned,
   getState,
   getRunMeta,
   onStep,

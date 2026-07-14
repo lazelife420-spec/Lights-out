@@ -130,12 +130,71 @@ test('clearIfOwned: old completion cannot clear newer context', () => {
   assert.ok(!profileRitualContext.hasPending());
 });
 
-test('ritual error cancels the run (simulated via cancelRitual)', () => {
-  ritualMode.startRitual(null, { profileRitualToken: 'err-token' });
+test('cancelIfOwned cancels matching run', () => {
+  const token = 'cancel-owned-token';
+  ritualMode.startRitual(null, { profileRitualToken: token });
   assert.ok(ritualMode.getState().active);
-  // Simulate error path: cancel + clearIfOwned
-  ritualMode.cancelRitual();
+  assert.equal(ritualMode.cancelIfOwned(token), true);
   assert.ok(!ritualMode.getState().active);
+});
+
+test('cancelIfOwned is a no-op for mismatched token', () => {
+  ritualMode.startRitual(null, { profileRitualToken: 'run-B-token' });
+  assert.ok(ritualMode.getState().active);
+  // Old run A token cannot cancel run B
+  assert.equal(ritualMode.cancelIfOwned('run-A-token'), false);
+  assert.ok(ritualMode.getState().active); // B still active
+  ritualMode.cancelRitual();
+});
+
+test('cancelIfOwned is a no-op for null token (manual ritual)', () => {
+  ritualMode.startRitual(); // no meta → manual
+  assert.ok(ritualMode.getState().active);
+  assert.equal(ritualMode.cancelIfOwned(null), false);
+  assert.ok(ritualMode.getState().active); // still active
+  ritualMode.cancelRitual();
+});
+
+test('cancelIfOwned is a no-op when no ritual is active', () => {
+  ritualMode.cancelRitual(); // ensure idle
+  assert.equal(ritualMode.cancelIfOwned('any-token'), false);
+});
+
+test('old callback cannot cancel newer run (full concurrency scenario)', () => {
+  // 1. Start ritual A
+  profileRitualContext.clear();
+  const tokenA = profileRitualContext.createContext(VALID_CTX);
+  ritualMode.startRitual(null, { profileRitualToken: tokenA });
+  assert.ok(ritualMode.getState().active);
+
+  // 2. Capture A's callback identity
+  const capturedTokenA = tokenA;
+
+  // 3. Start ritual B (overwrites A)
+  const tokenB = profileRitualContext.createContext({ ...VALID_CTX, durationSeconds: 9999 });
+  ritualMode.startRitual(null, { profileRitualToken: tokenB });
+  assert.ok(ritualMode.getState().active);
+  assert.equal(ritualMode.getRunMeta().profileRitualToken, tokenB);
+
+  // 4. A's delayed error callback fires with A's token
+  profileRitualContext.clearIfOwned(capturedTokenA); // no-op: B's context
+  ritualMode.cancelIfOwned(capturedTokenA);           // no-op: B is active
+
+  // 5. B remains active
+  assert.ok(ritualMode.getState().active);
+
+  // 6. B's context remains intact
+  assert.ok(profileRitualContext.hasPending());
+
+  // 7. A cannot consume B's context
+  assert.equal(profileRitualContext.consume(capturedTokenA), null);
+
+  // Verify B can still consume its own context
+  const ctx = profileRitualContext.consume(tokenB);
+  assert.ok(ctx);
+  assert.equal(ctx.durationSeconds, 9999);
+
+  ritualMode.cancelRitual();
 });
 
 test('repeated consume with same token returns null (exact-once)', () => {
