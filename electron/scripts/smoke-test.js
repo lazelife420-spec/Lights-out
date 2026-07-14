@@ -34,7 +34,7 @@ function assertMatch(src, pattern, msg) {
 }
 
 // 1. Syntax-check every first-party JS file.
-const jsFiles = ['main.js', 'preload.js', 'renderer-utils.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'renderer.js', 'settings.js', 'smartLights.js', 'profiles.js', 'profileIdentity.js', 'windowGeometry.js', 'calendar.js', 'lastLight.js'];
+const jsFiles = ['main.js', 'preload.js', 'renderer-utils.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'renderer.js', 'settings.js', 'smartLights.js', 'profiles.js', 'profileIdentity.js', 'profileRitualContext.js', 'windowGeometry.js', 'calendar.js', 'lastLight.js'];
 for (const file of jsFiles) {
   check(`syntax: ${file}`, () => {
     execFileSync(process.execPath, ['--check', path.join(root, file)], { stdio: 'pipe' });
@@ -199,7 +199,7 @@ check('family profiles: selection stays inert and identity reaches receipts', ()
   const shouldStart = Function(`return (${startFnMatch[0]})`)();
   assert(shouldStart({ autoStart: true }) === false, 'legacy autoStart starts a timer on selection');
   assert(shouldStart({ start: true }) === true, 'explicit Start Profile action is blocked');
-  assertMatch(familyRendererSrc, /profileId:\s*state\.currentProfileId\s*\}/, 'selected profile ID is not sent with timer start');
+  assertMatch(familyRendererSrc, /profileId:\s*state\.currentProfileId/, 'selected profile ID is not sent with timer start');
   assert(!/profileName:\s*state\.profiles/.test(familyRendererSrc), 'renderer profile name still crosses the trust boundary');
   assertMatch(familyMainSrc, /timerState\.profileId = identity\.profileId;[\s\S]*timerState\.profileName = identity\.profileName;/, 'main timer state does not use canonical identity');
   assertMatch(familyMainSrc, /source:\s*'remote'/, 'remote starts are not explicitly marked unattributed');
@@ -562,7 +562,7 @@ check('renderer: running-state controls still swap start-stop-pause visibility a
 });
 
 check('renderer: keyboard shortcuts - Space (Start/Pause)', () => {
-  assertMatch(rendererSrc, /if \(event\.key === ' ' \|\| event\.code === 'Space'\) \{[\s\S]*if \(state\.running \|\| state\.paused\) togglePause\(\);[\s\S]*else startTimer\(\);/s, 'space shortcut changed');
+  assertMatch(rendererSrc, /if \(event\.key === ' ' \|\| event\.code === 'Space'\) \{[\s\S]*if \(state\.running \|\| state\.paused\) togglePause\(\);[\s\S]*else startTimer\(inputSeconds\(\), 'play'\);/s, 'space shortcut changed');
 });
 
 check('renderer: keyboard shortcuts - Escape (Cancel/Modals)', () => {
@@ -1180,6 +1180,120 @@ check('ritual-mode: lights step uses a real smart-lights scene helper', () => {
   assertMatch(mainSrc, /smartLights\.applyScene\('night'\)\.catch\(\(\) => \{\}\);/, 'ritual lights step should use exported applyScene helper');
 });
 
+// 16b. Profile Ritual Gateway.
+check('profile-ritual-gateway: context module loaded and ritual gateway in startTimer', () => {
+  assert(mainSrc.includes("require('./profileRitualContext')"), 'profileRitualContext not required in main');
+  assertMatch(mainSrc, /profileRitualContext\.isEligibleOrigin\(options\.startOrigin\)/, 'ritual gateway eligibility check missing');
+  assertMatch(mainSrc, /profile\.ritualId === 'standard'/, 'ritual gateway ritualId check missing');
+  assertMatch(mainSrc, /profileRitualContext\.createContext\(/, 'ritual gateway does not create pending context');
+  assertMatch(mainSrc, /ritualMode\.startRitual\(null, \{ profileRitualToken: runToken \}\)/, 'ritual gateway does not pass token as run metadata');
+});
+
+check('profile-ritual-gateway: timer step uses run-owned token from runMeta', () => {
+  assertMatch(mainSrc, /profileRitualContext\.consume\(runToken\)/, 'timer step does not use run-owned token');
+  assert(!mainSrc.includes('consumeAny'), 'consumeAny reference still in main.js');
+  assertMatch(mainSrc, /beginValidatedCountdown\(/, 'timer step does not call beginValidatedCountdown');
+  assertMatch(mainSrc, /ritualMode\.getConfig\(\)[\s\S]{0,80}beginValidatedCountdown/, 'timer step fallback to global config missing');
+});
+
+check('profile-ritual-gateway: beginValidatedCountdown split from startTimer', () => {
+  assertMatch(mainSrc, /function beginValidatedCountdown\(options, identity\)/, 'beginValidatedCountdown function not found');
+  // Ritual timer step must not re-enter startTimer (would cause self-cancel).
+  const timerStepBlock = mainSrc.match(/step\.id === 'timer'[\s\S]{0,1100}step\.id === 'lights'/);
+  assert(timerStepBlock, 'timer step block not found');
+  assert(!timerStepBlock[0].includes('startTimer('), 'timer step re-enters startTimer — should use beginValidatedCountdown');
+});
+
+check('profile-ritual-gateway: direct supersession only for non-ritual source', () => {
+  assertMatch(mainSrc, /options\.source !== 'ritual' && ritualMode\.getState\(\)\.active/, 'direct supersession is not guarded by source !== ritual');
+  assertMatch(mainSrc, /options\.source !== 'ritual'[\s\S]{0,80}profileRitualContext\.clear\(\)/, 'supersession unconditional clear not guarded by source !== ritual');
+});
+
+check('profile-ritual-gateway: context cleared on cancel, complete, and manual start', () => {
+  // Cancel clears context (unconditional)
+  assertMatch(mainSrc, /ritual-cancel[\s\S]{0,150}profileRitualContext\.clear\(\)/, 'cancel does not clear profile ritual context');
+  // Manual Begin Ritual clears context (unconditional)
+  assertMatch(mainSrc, /ritual-start[\s\S]{0,250}profileRitualContext\.clear\(\)/, 'manual ritual-start does not clear pending context');
+  // Completion uses token-safe clearIfOwned (guarded by runToken)
+  assertMatch(mainSrc, /ritualMode\.onComplete[\s\S]{0,400}profileRitualContext\.clearIfOwned\(runToken\)/, 'ritual completion does not use token-safe clearIfOwned');
+});
+
+check('profile-ritual-gateway: renderer sends startOrigin without ritual branching', () => {
+  const rendererSrc = fs.readFileSync(path.join(root, 'renderer.js'), 'utf8');
+  const rendererProfilesSrc = fs.readFileSync(path.join(root, 'renderer-profiles.js'), 'utf8');
+  assertMatch(rendererSrc, /startOrigin:\s*origin/, 'renderer startTimer does not send startOrigin');
+  assertMatch(rendererProfilesSrc, /'profile-start'/, 'renderer-profiles does not pass profile-start origin');
+  assert(!/ritualStart/.test(rendererProfilesSrc), 'renderer-profiles gained ritual branching');
+  assert(!/ritualId/.test(rendererProfilesSrc), 'renderer-profiles inspects ritualId');
+  assert(!/ritualId/.test(rendererSrc), 'renderer.js inspects ritualId');
+  // Default origin must not be 'play' — only explicit callers should be eligible.
+  assertMatch(rendererSrc, /origin = null\)/, 'renderer startTimer default origin should be null, not play');
+  // Only PLAY buttons and Space key pass 'play' explicitly.
+  const playExplicit = (rendererSrc.match(/startTimer\(inputSeconds\(\), 'play'\)/g) || []).length;
+  assert(playExplicit === 3, `expected exactly 3 explicit 'play' callers, found ${playExplicit}`);
+});
+
+check('profile-ritual-gateway: remote source cannot trigger profile ritual', () => {
+  assertMatch(mainSrc, /options\.source !== 'remote'/, 'ritual gateway does not block remote starts');
+});
+
+check('profile-ritual-gateway: normalizeTimerOptions accepts startOrigin field', () => {
+  assertMatch(mainSrc, /startOrigin:\s*typeof options\.startOrigin === 'string'/, 'normalizeTimerOptions does not parse startOrigin');
+});
+
+check('profile-ritual-gateway: run-owned token via ritualMode metadata', () => {
+  const ritualSrc = fs.readFileSync(path.join(root, 'ritualMode.js'), 'utf8');
+  assertMatch(ritualSrc, /runMeta: meta && typeof meta === 'object'/, 'ritualMode does not store run metadata');
+  assertMatch(ritualSrc, /Object\.freeze\(\{ \.\.\.meta \}\)/, 'ritualMode does not freeze run metadata');
+  assertMatch(ritualSrc, /onStepCallback\(current, getState\(\), ritualState\.runMeta, ritualState\.runId\)/, 'onStep does not pass runMeta+runId');
+  assertMatch(ritualSrc, /onCompleteCallback\(getState\(\), ritualState\.runMeta, ritualState\.runId\)/, 'onComplete does not pass runMeta+runId');
+});
+
+check('profile-ritual-gateway: error uses runId-owned cancellation and token-owned cleanup', () => {
+  assertMatch(mainSrc, /catch \(err\)[\s\S]{0,400}ritualMode\.cancelIfCurrent\(runId\)/, 'step error does not use cancelIfCurrent(runId)');
+  assertMatch(mainSrc, /catch \(err\)[\s\S]{0,400}profileRitualContext\.clearIfOwned\(runToken\)/, 'step error does not use clearIfOwned(runToken)');
+  assert(!mainSrc.match(/catch \(err\)[\s\S]{0,400}ritualMode\.cancelRitual\(\)/), 'step error uses unconditional cancelRitual');
+  assert(!mainSrc.match(/catch \(err\)[\s\S]{0,400}ritualMode\.cancelIfOwned/), 'step error still uses deprecated cancelIfOwned');
+});
+
+check('profile-ritual-gateway: cancelIfCurrent exported from ritualMode', () => {
+  const ritualSrc = fs.readFileSync(path.join(root, 'ritualMode.js'), 'utf8');
+  assertMatch(ritualSrc, /function cancelIfCurrent\(runId\)/, 'cancelIfCurrent not found in ritualMode');
+  assertMatch(ritualSrc, /cancelIfCurrent,/, 'cancelIfCurrent not exported from ritualMode');
+  assert(!ritualSrc.includes('cancelIfOwned'), 'deprecated cancelIfOwned still exists in ritualMode');
+});
+
+check('profile-ritual-gateway: onStep callback receives runId as 4th param', () => {
+  assertMatch(mainSrc, /onStep\(\(step, state, runMeta, runId\)/, 'onStep does not receive runId as 4th param');
+});
+
+check('profile-ritual-gateway: getRunId exported from ritualMode', () => {
+  const ritualSrc = fs.readFileSync(path.join(root, 'ritualMode.js'), 'utf8');
+  assertMatch(ritualSrc, /function getRunId/, 'getRunId not found');
+  assertMatch(ritualSrc, /getRunId,/, 'getRunId not exported');
+});
+
+check('profile-ritual-gateway: auto-advance timer captures runId for staleness', () => {
+  const ritualSrc = fs.readFileSync(path.join(root, 'ritualMode.js'), 'utf8');
+  assertMatch(ritualSrc, /const capturedRunId = ritualState\.runId/, 'auto-advance timer does not capture runId');
+  assertMatch(ritualSrc, /ritualState\.runId !== capturedRunId/, 'auto-advance timer does not check runId staleness');
+});
+
+check('profile-ritual-gateway: shutdown cleanup', () => {
+  assertMatch(mainSrc, /before-quit[\s\S]{0,200}profileRitualContext\.clear\(\)/, 'app shutdown does not clear context');
+});
+
+check('profile-ritual-gateway: no activeRitualRunToken global', () => {
+  assert(!mainSrc.includes('activeRitualRunToken'), 'mutable global activeRitualRunToken still exists in main.js');
+});
+
+check('profile-ritual-gateway: consumeAny completely removed', () => {
+  const ctxSrc = fs.readFileSync(path.join(root, 'profileRitualContext.js'), 'utf8');
+  assert(!ctxSrc.includes('consumeAny'), 'consumeAny still exists in profileRitualContext.js');
+  assert(!ctxSrc.includes('_consumeAny'), '_consumeAny still exists in profileRitualContext.js');
+  assert(!mainSrc.includes('consumeAny'), 'consumeAny still referenced in main.js');
+});
+
 // 17. Stats Dashboard.
 check('stats-dashboard: module and IPC', () => {
   assert(mainSrc.includes("require('./statsDashboard')"), 'statsDashboard not required');
@@ -1189,7 +1303,7 @@ check('stats-dashboard: module and IPC', () => {
 
 // 18. Runtime UX truth: every visible nav/control has a real action or is disabled.
 check('ux: ns-play-btn is wired to startTimer', () => {
-  assertMatch(rendererSrc, /getElementById\('ns-play-btn'\)\?\.addEventListener\('click', \(\) => startTimer\(\)\)/, 'ns-play-btn not wired');
+  assertMatch(rendererSrc, /getElementById\('ns-play-btn'\)\?\.addEventListener\('click', \(\) => startTimer\(inputSeconds\(\), 'play'\)\)/, 'ns-play-btn not wired');
 });
 
 check('ux: ns-play-btn has exactly one click handler (no duplicate startTimer)', () => {

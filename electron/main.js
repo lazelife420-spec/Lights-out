@@ -31,6 +31,7 @@ const bedtimeReminder = require('./bedtimeReminder');
 const overrideTax = require('./overrideTax');
 const autopilot = require('./autopilot');
 const ritualMode = require('./ritualMode');
+const profileRitualContext = require('./profileRitualContext');
 const statsDashboard = require('./statsDashboard');
 const smartSuggestions = require('./smartSuggestions');
 const windowGeometry = require('./windowGeometry');
@@ -587,7 +588,8 @@ function normalizeTimerOptions(input, legacyAction) {
     muteSystem: Boolean(options.muteSystem),
     gracePeriod: Number.isFinite(Number(options.gracePeriod)) ? Math.max(0, Number(options.gracePeriod)) : 2,
     profileId: typeof options.profileId === 'string' ? options.profileId : null,
-    source: options.source === 'remote' ? 'remote' : 'local'
+    source: options.source === 'remote' ? 'remote' : 'local',
+    startOrigin: typeof options.startOrigin === 'string' ? options.startOrigin : null
   };
 }
 
@@ -604,6 +606,50 @@ function resolveTimerProfileIdentity(profileId, source) {
 function startTimer(input, legacyAction) {
   const options = normalizeTimerOptions(input, legacyAction);
   const identity = resolveTimerProfileIdentity(options.profileId, options.source);
+
+  // Profile Ritual Gateway: if an eligible start origin targets a profile with
+  // ritualId 'standard', start the standard ritual and hold validated timer
+  // context for consumption by the ritual's timer step.
+  if (profileRitualContext.isEligibleOrigin(options.startOrigin) && identity.profileId) {
+    const profile = profiles.getById(identity.profileId);
+    if (profile && profile.ritualId === 'standard' && options.source !== 'remote') {
+      // Clear any stale pending context before creating a new one.
+      profileRitualContext.clear();
+      const runToken = profileRitualContext.createContext({
+        durationSeconds: options.durationSeconds,
+        action: options.action,
+        dryRun: options.dryRun,
+        forceShutdown: options.forceShutdown,
+        muteSystem: options.muteSystem,
+        gracePeriod: options.gracePeriod,
+        profileId: identity.profileId,
+        profileName: identity.profileName
+      });
+      // Start the standard ritual with run metadata binding the token to this
+      // exact run. The ritual's onStep/onComplete callbacks receive the meta.
+      ritualMode.startRitual(null, { profileRitualToken: runToken });
+      return { success: true, ritualStarted: true };
+    }
+  }
+
+  // Direct timer supersession: if a profile ritual is in progress, a genuine
+  // non-ritual direct start cancels it and clears pending context.
+  // The ritual's own timer step uses beginValidatedCountdown() directly and
+  // never reaches this path.
+  if (options.source !== 'ritual' && ritualMode.getState().active) {
+    ritualMode.cancelRitual();
+  }
+  if (options.source !== 'ritual') {
+    profileRitualContext.clear();
+  }
+
+  return beginValidatedCountdown(options, identity);
+}
+
+// Internal canonical countdown entry. Used by both startTimer (after gateway
+// resolution and supersession) and the ritual timer step (directly, without
+// re-entering profile ritual gating or supersession logic).
+function beginValidatedCountdown(options, identity) {
   clearTimerInterval();
 
   // Override Tax: reset session snooze count for this new run.
@@ -1924,6 +1970,9 @@ ipcMain.handle('enable-autopilot', async (e, enabled) => {
 
 // Ritual Mode IPC.
 ipcMain.handle('ritual-start', async (e, customSteps) => {
+  // Manual Begin Ritual clears any pending profile-sourced context so it cannot
+  // leak into this independently triggered ritual (unconditional clear).
+  profileRitualContext.clear();
   return ritualMode.startRitual(customSteps);
 });
 ipcMain.handle('ritual-advance', async () => {
@@ -1933,6 +1982,8 @@ ipcMain.handle('ritual-skip', async () => {
   return ritualMode.skipStep();
 });
 ipcMain.handle('ritual-cancel', async () => {
+  // User-initiated cancel: unconditional clear (no stale context left behind).
+  profileRitualContext.clear();
   return ritualMode.cancelRitual();
 });
 ipcMain.handle('ritual-state', async () => {
@@ -2504,31 +2555,64 @@ app.whenReady().then(async () => {
   autopilot.schedule(startTimer, mainWindow);
 
   // Ritual Mode: forward steps to renderer and execute side effects.
-  ritualMode.onStep((step, state) => {
+  // Each callback receives:
+  //   runMeta: immutable metadata (profileRitualToken for profile rituals, null for manual)
+  //   runId:   internal numeric run identity (always present, both profile and manual)
+  ritualMode.onStep((step, state, runMeta, runId) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('ritual-step', { step, state });
     }
-    // Execute step side effects.
-    if (step.id === 'block') {
-      const cbConfig = settingsStore.getSection('contentBlocker');
-      if (cbConfig && cbConfig.enabled) {
-        const sites = contentBlocker.DEFAULT_BLOCKLIST;
-        contentBlocker.blockSites(sites).catch(() => {});
+    const runToken = runMeta && runMeta.profileRitualToken ? runMeta.profileRitualToken : null;
+    // Execute step side effects (wrapped in try/catch for error safety).
+    try {
+      if (step.id === 'block') {
+        const cbConfig = settingsStore.getSection('contentBlocker');
+        if (cbConfig && cbConfig.enabled) {
+          const sites = contentBlocker.DEFAULT_BLOCKLIST;
+          contentBlocker.blockSites(sites).catch(() => {});
+        }
+      } else if (step.id === 'dim') {
+        const appSettings = settingsStore.getSection('app') || {};
+        if (appSettings.nightLightOnDim) applyDimPhase(0, 0);
+      } else if (step.id === 'timer') {
+        // Token-verified consumption: proves this timer step belongs to the
+        // exact ritual run that created the context. Falls back to global ritual
+        // config for manual Begin Ritual (runToken is null → consume rejects).
+        const ctx = profileRitualContext.consume(runToken);
+        if (ctx) {
+          beginValidatedCountdown(
+            { durationSeconds: ctx.durationSeconds, action: ctx.action, dryRun: ctx.dryRun,
+              forceShutdown: ctx.forceShutdown, muteSystem: ctx.muteSystem, gracePeriod: ctx.gracePeriod,
+              source: 'ritual' },
+            { profileId: ctx.profileId, profileName: ctx.profileName }
+          );
+        } else {
+          const config = ritualMode.getConfig();
+          beginValidatedCountdown(
+            { durationSeconds: config.timerDuration, action: config.timerAction, source: 'ritual' },
+            { profileId: null, profileName: null }
+          );
+        }
+      } else if (step.id === 'lights') {
+        const lightsConfig = settingsStore.getSection('smartLights');
+        if (lightsConfig && lightsConfig.enabled) {
+          smartLights.applyScene('night').catch(() => {});
+        }
       }
-    } else if (step.id === 'dim') {
-      const appSettings = settingsStore.getSection('app') || {};
-      if (appSettings.nightLightOnDim) applyDimPhase(0, 0);
-    } else if (step.id === 'timer') {
-      const config = ritualMode.getConfig();
-      startTimer({ durationSeconds: config.timerDuration, action: config.timerAction, source: 'ritual' });
-    } else if (step.id === 'lights') {
-      const lightsConfig = settingsStore.getSection('smartLights');
-      if (lightsConfig && lightsConfig.enabled) {
-        smartLights.applyScene('night').catch(() => {});
-      }
+    } catch (err) {
+      // On step-handler error:
+      // 1. Profile-context cleanup: owned by profileRitualToken (no-op if null/manual).
+      // 2. Run cancellation: owned by runId (works for BOTH profile and manual rituals).
+      if (runToken) profileRitualContext.clearIfOwned(runToken);
+      ritualMode.cancelIfCurrent(runId);
+      console.error('[ritual-step-error]', err);
     }
   });
-  ritualMode.onComplete((state) => {
+  ritualMode.onComplete((state, runMeta, runId) => {
+    // Token-safe cleanup: clear only this run's profile context (if unconsumed).
+    // runId is available but not needed here — completion is already the end state.
+    const runToken = runMeta && runMeta.profileRitualToken ? runMeta.profileRitualToken : null;
+    if (runToken) profileRitualContext.clearIfOwned(runToken);
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('ritual-complete', state);
     }
@@ -2560,6 +2644,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   app.isQuitting = true;
   clearTimerInterval();
+  profileRitualContext.clear();
   globalShortcut.unregisterAll();
   stopRemoteControl();
   idleDetection.stopMonitoring();

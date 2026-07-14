@@ -123,6 +123,7 @@ function normalizeProfile(raw) {
     lastLightEnabled: Boolean(raw.lastLightEnabled),
     lastLightSequence: raw.lastLightSequence || 'ClassicFade',
     lastLightSound: raw.lastLightSound || 'Off',
+    ritualId: raw.ritualId === 'standard' ? 'standard' : 'none',
     createdAt: raw.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     // When this profile was last loaded via apply() -- distinct from

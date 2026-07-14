@@ -1531,7 +1531,7 @@ function updateAnalogHands(now) {
   }
 }
 
-async function startTimer(seconds = inputSeconds()) {
+async function startTimer(seconds = inputSeconds(), origin = null) {
   const durationSeconds = Math.max(1, Math.round(seconds));
 
   try {
@@ -1543,7 +1543,8 @@ async function startTimer(seconds = inputSeconds()) {
       forceShutdown: state.forceShutdown,
       muteSystem: state.muteSystem,
       gracePeriod: state.graceMinutes,
-      profileId: state.currentProfileId
+      profileId: state.currentProfileId,
+      startOrigin: origin
     });
 
     if (result?.success === false) {
@@ -2039,7 +2040,7 @@ function applyTonightCard(card) {
   notify(`Selected: ${card.querySelector('.card-title')?.textContent || 'Timer'}`, 'info');
 }
 function wireEvents() {
-  els.btnStart.addEventListener('click', () => startTimer());
+  els.btnStart.addEventListener('click', () => startTimer(inputSeconds(), 'play'));
   els.btnStop.addEventListener('click', cancelTimer);
   els.btnPause.addEventListener('click', togglePause);
   els.btnSnooze.addEventListener('click', () => snooze(5 * 60));
@@ -2631,7 +2632,7 @@ if (els.btnClearReceipts) {
   });
 
   // Northstar hero card PLAY button starts the timer.
-  document.getElementById('ns-play-btn')?.addEventListener('click', () => startTimer());
+  document.getElementById('ns-play-btn')?.addEventListener('click', () => startTimer(inputSeconds(), 'play'));
 
   // Home streak callout jumps to the Streaks tab for the full breakdown.
   els.streakCallout?.addEventListener('click', () => {
@@ -2931,7 +2932,7 @@ if (els.btnClearReceipts) {
     if (event.key === ' ' || event.code === 'Space') {
       event.preventDefault();
       if (state.running || state.paused) togglePause();
-      else startTimer();
+      else startTimer(inputSeconds(), 'play');
       return;
     }
 
