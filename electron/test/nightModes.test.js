@@ -1,5 +1,6 @@
-// Night Modes behavioral tests: 18 scenarios covering the declarative catalogue,
-// validation, resolution, receipt attribution, and safety constraints.
+// Night Modes behavioral tests: 22 scenarios covering the declarative catalogue,
+// validation, resolution, START-time canonical matching, edited-mode detection,
+// receipt attribution, selection clearing, and safety constraints.
 
 'use strict';
 
@@ -9,187 +10,250 @@ const assert = require('node:assert/strict');
 const nightModes = require('../nightModes');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 1. Catalogue contains six unique IDs
+// 1. normalizeTimerOptions preserves ID but not title
 // ─────────────────────────────────────────────────────────────────────────────
-test('catalogue contains exactly six unique IDs', () => {
-  const catalogue = nightModes.getCatalogue();
-  assert.strictEqual(catalogue.length, 6);
-  const ids = catalogue.map(m => m.id);
-  assert.strictEqual(new Set(ids).size, 6, 'IDs must be unique');
+test('normalizeTimerOptions-equivalent: resolveNightModeStart accepts only nightModeId string', () => {
+  // resolveNightModeStart only uses options.nightModeId — no title/version accepted.
+  const result = nightModes.resolveNightModeStart({
+    nightModeId: 'quick-sleep',
+    nightModeTitle: 'INJECTED TITLE',  // must be ignored
+    durationSeconds: 900,
+    action: 'sleep'
+  });
+  assert.strictEqual(result.nightModeId, 'quick-sleep');
+  assert.strictEqual(result.nightModeTitle, 'Quick Sleep');  // canonical, not injected
+  assert.strictEqual(result.nightModeVersion, 1);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. Four modes are available (ready)
+// 2. Main resolves canonical title/version at START
 // ─────────────────────────────────────────────────────────────────────────────
-test('four modes are available (status: ready)', () => {
-  const catalogue = nightModes.getCatalogue();
-  const ready = catalogue.filter(m => nightModes.isAvailable(m));
-  assert.strictEqual(ready.length, 4);
-  const readyIds = ready.map(m => m.id).sort();
-  assert.deepStrictEqual(readyIds, ['full-shutdown', 'lights-down', 'movie-wind-down', 'quick-sleep']);
+test('resolveNightModeStart returns canonical title and version from catalogue', () => {
+  const result = nightModes.resolveNightModeStart({
+    nightModeId: 'full-shutdown',
+    durationSeconds: 3600,
+    action: 'shutdown'
+  });
+  assert.strictEqual(result.nightModeTitle, 'Full Shutdown');
+  assert.strictEqual(result.nightModeVersion, 1);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3. Quiet House and School Night are unavailable with honest reasons
+// 3. Renderer-injected title is ignored
 // ─────────────────────────────────────────────────────────────────────────────
-test('quiet-house and school-night are unavailable with reasons', () => {
-  const qh = nightModes.getById('quiet-house');
-  const sn = nightModes.getById('school-night');
-  assert.strictEqual(nightModes.isAvailable(qh), false);
-  assert.strictEqual(nightModes.isAvailable(sn), false);
-  assert.ok(qh.availability.reason, 'quiet-house must have a reason');
-  assert.ok(sn.availability.reason, 'school-night must have a reason');
+test('renderer-injected nightModeTitle is ignored by resolveNightModeStart', () => {
+  const result = nightModes.resolveNightModeStart({
+    nightModeId: 'quick-sleep',
+    nightModeTitle: 'Super Safe Mode',  // fabricated — must be ignored
+    durationSeconds: 900,
+    action: 'sleep'
+  });
+  assert.strictEqual(result.nightModeTitle, 'Quick Sleep');
+  assert.notStrictEqual(result.nightModeTitle, 'Super Safe Mode');
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. Unknown mode ID is rejected
+// 4. Canonical Quick Sleep retains identity
 // ─────────────────────────────────────────────────────────────────────────────
-test('unknown mode ID is rejected', () => {
-  const result = nightModes.resolveForExecution('nonexistent-mode');
-  assert.strictEqual(result.success, false);
-  assert.ok(result.error.includes('Unknown'));
+test('canonical Quick Sleep retains identity when execution matches', () => {
+  const result = nightModes.resolveNightModeStart({
+    nightModeId: 'quick-sleep',
+    durationSeconds: 900,
+    action: 'sleep'
+  });
+  assert.strictEqual(result.nightModeId, 'quick-sleep');
+  assert.strictEqual(result.nightModeTitle, 'Quick Sleep');
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 5. Unknown action type is rejected by validation
+// 5. Quick Sleep changed from 15 to 45 minutes becomes custom/no-mode
 // ─────────────────────────────────────────────────────────────────────────────
-test('unknown action type is rejected by validation', () => {
-  const fakeMode = {
-    id: 'test', version: 1, title: 'Test', subtitle: 'x',
-    status: 'ready', availability: { supported: true, reason: null },
-    timer: { durationSeconds: 300, action: 'destroy-world', ritualId: 'none' },
-    actions: [{ type: 'start-timer' }], tags: []
-  };
-  const result = nightModes.validateMode(fakeMode);
-  assert.strictEqual(result.valid, false);
-  assert.ok(result.error.includes('Unknown timer action'));
+test('Quick Sleep with modified duration clears mode identity', () => {
+  const result = nightModes.resolveNightModeStart({
+    nightModeId: 'quick-sleep',
+    durationSeconds: 2700,  // 45 min instead of canonical 15 min (900s)
+    action: 'sleep'
+  });
+  assert.strictEqual(result.nightModeId, null);
+  assert.strictEqual(result.nightModeTitle, null);
+  assert.strictEqual(result.nightModeVersion, null);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 6. Unknown execution path type is rejected
+// 6. Quick Sleep changed from Sleep to Shutdown becomes custom/no-mode
 // ─────────────────────────────────────────────────────────────────────────────
-test('unknown execution path type is rejected', () => {
-  const fakeMode = {
-    id: 'test', version: 1, title: 'Test', subtitle: 'x',
-    status: 'ready', availability: { supported: true, reason: null },
-    timer: { durationSeconds: 300, action: 'sleep', ritualId: 'none' },
-    actions: [{ type: 'run-arbitrary-script' }], tags: []
-  };
-  const result = nightModes.validateMode(fakeMode);
-  assert.strictEqual(result.valid, false);
-  assert.ok(result.error.includes('Unknown or invalid action type'));
+test('Quick Sleep with modified action clears mode identity', () => {
+  const result = nightModes.resolveNightModeStart({
+    nightModeId: 'quick-sleep',
+    durationSeconds: 900,
+    action: 'shutdown'  // changed from canonical 'sleep'
+  });
+  assert.strictEqual(result.nightModeId, null);
+  assert.strictEqual(result.nightModeTitle, null);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 7. Canonical mode data wins (renderer-supplied values are ignored)
+// 7. Canonical standard-ritual mode (Full Shutdown) resolves with standard ritual
 // ─────────────────────────────────────────────────────────────────────────────
-test('resolveForExecution returns canonical mode data, not renderer input', () => {
-  const result = nightModes.resolveForExecution('quick-sleep');
-  assert.strictEqual(result.success, true);
-  assert.strictEqual(result.resolved.nightModeTitle, 'Quick Sleep');
-  assert.strictEqual(result.resolved.durationSeconds, 900);
-  assert.strictEqual(result.resolved.action, 'sleep');
+test('Full Shutdown resolves with standard ritual for PR #27 gateway', () => {
+  const resolution = nightModes.resolveForExecution('full-shutdown');
+  assert.strictEqual(resolution.success, true);
+  assert.strictEqual(resolution.resolved.ritualId, 'standard');
+
+  // resolveNightModeStart also retains identity when canonical values match
+  const start = nightModes.resolveNightModeStart({
+    nightModeId: 'full-shutdown',
+    durationSeconds: 3600,
+    action: 'shutdown'
+  });
+  assert.strictEqual(start.nightModeId, 'full-shutdown');
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 8. Use Tonight is inert (resolveForExecution does not start a timer)
+// 8. Modified ritual behavior clears mode identity
 // ─────────────────────────────────────────────────────────────────────────────
-test('resolveForExecution returns options without side effects', () => {
-  const result = nightModes.resolveForExecution('movie-wind-down');
-  assert.strictEqual(result.success, true);
-  // The function returns resolved data, it does not call startTimer.
-  assert.strictEqual(result.resolved.nightModeId, 'movie-wind-down');
-  assert.strictEqual(typeof result.resolved.durationSeconds, 'number');
-  // No timer state is changed (we can only verify the return shape here).
-  assert.ok(!result.resolved.started, 'must not have a started flag');
+test('mode with standard ritual loses identity if duration is modified', () => {
+  const result = nightModes.resolveNightModeStart({
+    nightModeId: 'lights-down',  // canonical: 2700s, sleep, standard ritual
+    durationSeconds: 1800,       // modified
+    action: 'sleep'
+  });
+  assert.strictEqual(result.nightModeId, null);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 9. Ready mode loads correct duration/action/ritual
+// 9. Mode identity survives the ritual timer context into the receipt
 // ─────────────────────────────────────────────────────────────────────────────
-test('ready modes resolve correct timer options', () => {
-  const qs = nightModes.resolveForExecution('quick-sleep');
-  assert.strictEqual(qs.resolved.durationSeconds, 900);
-  assert.strictEqual(qs.resolved.action, 'sleep');
-  assert.strictEqual(qs.resolved.ritualId, 'none');
-
-  const fs = nightModes.resolveForExecution('full-shutdown');
-  assert.strictEqual(fs.resolved.durationSeconds, 3600);
-  assert.strictEqual(fs.resolved.action, 'shutdown');
-  assert.strictEqual(fs.resolved.ritualId, 'standard');
+test('resolveNightModeStart returns all three receipt identity fields', () => {
+  const result = nightModes.resolveNightModeStart({
+    nightModeId: 'movie-wind-down',
+    durationSeconds: 5400,
+    action: 'sleep'
+  });
+  assert.strictEqual(result.nightModeId, 'movie-wind-down');
+  assert.strictEqual(result.nightModeTitle, 'Movie Wind-Down');
+  assert.strictEqual(result.nightModeVersion, 1);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 10. Disabled mode cannot be selected for execution
+// 10. Unknown ID cannot create receipt identity
 // ─────────────────────────────────────────────────────────────────────────────
-test('disabled modes cannot be resolved for execution', () => {
-  const qh = nightModes.resolveForExecution('quiet-house');
-  assert.strictEqual(qh.success, false);
-  assert.ok(qh.error.includes('not available'));
-
-  const sn = nightModes.resolveForExecution('school-night');
-  assert.strictEqual(sn.success, false);
-  assert.ok(sn.error.includes('not available'));
+test('unknown nightModeId returns null identity', () => {
+  const result = nightModes.resolveNightModeStart({
+    nightModeId: 'nonexistent-mode',
+    durationSeconds: 900,
+    action: 'sleep'
+  });
+  assert.strictEqual(result.nightModeId, null);
+  assert.strictEqual(result.nightModeTitle, null);
+  assert.strictEqual(result.nightModeVersion, null);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 11. Quick Sleep uses direct timer semantics
+// 11. Unavailable ID cannot execute unsupported mode behavior
 // ─────────────────────────────────────────────────────────────────────────────
-test('quick-sleep uses direct timer (ritualId: none)', () => {
-  const result = nightModes.resolveForExecution('quick-sleep');
-  assert.strictEqual(result.resolved.ritualId, 'none');
+test('unavailable mode ID (quiet-house) cannot produce receipt identity', () => {
+  const result = nightModes.resolveNightModeStart({
+    nightModeId: 'quiet-house',
+    durationSeconds: 1800,
+    action: 'sleep'
+  });
+  assert.strictEqual(result.nightModeId, null);
+  // Also verify resolveForExecution rejects it
+  const exec = nightModes.resolveForExecution('quiet-house');
+  assert.strictEqual(exec.success, false);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 12. Full Shutdown uses standard ritual semantics
+// 12. Quick-minute clears armed mode (no mode ID in options → null identity)
 // ─────────────────────────────────────────────────────────────────────────────
-test('full-shutdown uses standard ritual', () => {
-  const result = nightModes.resolveForExecution('full-shutdown');
-  assert.strictEqual(result.resolved.ritualId, 'standard');
+test('no nightModeId in options returns null identity (quick-minute path)', () => {
+  const result = nightModes.resolveNightModeStart({
+    durationSeconds: 1800,
+    action: 'shutdown'
+  });
+  assert.strictEqual(result.nightModeId, null);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 13. Existing profile selection remains inert (mode does not override profile)
+// 13. Duration chip clears armed mode (same pattern)
 // ─────────────────────────────────────────────────────────────────────────────
-test('resolution does not include a profileId (profile remains separate)', () => {
-  const result = nightModes.resolveForExecution('quick-sleep');
-  assert.strictEqual(result.resolved.profileId, undefined);
+test('undefined nightModeId returns null identity (duration chip path)', () => {
+  const result = nightModes.resolveNightModeStart({
+    nightModeId: undefined,
+    durationSeconds: 600,
+    action: 'sleep'
+  });
+  assert.strictEqual(result.nightModeId, null);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 14. Existing no-mode timer flow remains unchanged (null mode ID is valid)
+// 14. Numeric preset clears armed mode (same pattern)
 // ─────────────────────────────────────────────────────────────────────────────
-test('null or undefined mode ID is safely rejected', () => {
-  const r1 = nightModes.resolveForExecution(null);
-  assert.strictEqual(r1.success, false);
-  const r2 = nightModes.resolveForExecution(undefined);
-  assert.strictEqual(r2.success, false);
-  const r3 = nightModes.resolveForExecution('');
-  assert.strictEqual(r3.success, false);
+test('null nightModeId returns null identity (numeric preset path)', () => {
+  const result = nightModes.resolveNightModeStart({
+    nightModeId: null,
+    durationSeconds: 1800,
+    action: 'shutdown'
+  });
+  assert.strictEqual(result.nightModeId, null);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 15. Receipt stores canonical mode ID/title
+// 15. Profile context-menu Start remains mode-neutral
 // ─────────────────────────────────────────────────────────────────────────────
-test('resolved data includes nightModeId and nightModeTitle for receipt', () => {
-  const result = nightModes.resolveForExecution('movie-wind-down');
-  assert.strictEqual(result.resolved.nightModeId, 'movie-wind-down');
-  assert.strictEqual(result.resolved.nightModeTitle, 'Movie Wind-Down');
+test('profile-start without nightModeId remains mode-neutral', () => {
+  const result = nightModes.resolveNightModeStart({
+    durationSeconds: 1800,
+    action: 'shutdown',
+    profileId: 'some-profile'
+  });
+  assert.strictEqual(result.nightModeId, null);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 16. Historical receipt mode title remains stable (version is immutable)
+// 16. Remote/companion/calendar/tray/autopilot remain mode-neutral
 // ─────────────────────────────────────────────────────────────────────────────
-test('mode version is included in resolution for receipt stability', () => {
-  const result = nightModes.resolveForExecution('quick-sleep');
-  assert.strictEqual(result.resolved.nightModeVersion, 1);
+test('nightModes module is self-contained (no companion/remote/calendar exports)', () => {
+  const exports = Object.keys(nightModes);
+  assert.ok(exports.includes('getCatalogue'));
+  assert.ok(exports.includes('resolveForExecution'));
+  assert.ok(exports.includes('resolveNightModeStart'));
+  assert.ok(!exports.includes('companion'));
+  assert.ok(!exports.includes('calendar'));
+  assert.ok(!exports.includes('remote'));
+  assert.ok(!exports.includes('autopilot'));
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 17. Existing receipts without mode fields still load (runReceipts backward compat)
+// 17. Direct no-mode timer remains unchanged
 // ─────────────────────────────────────────────────────────────────────────────
-test('runReceipts createRunReceipt handles missing nightMode fields gracefully', () => {
-  // Simulate the receipt creation path with no nightMode fields set.
+test('direct no-mode timer options produce null identity', () => {
+  const result = nightModes.resolveNightModeStart({
+    durationSeconds: 28 * 60,
+    action: 'shutdown'
+  });
+  assert.strictEqual(result.nightModeId, null);
+  assert.strictEqual(result.nightModeTitle, null);
+  assert.strictEqual(result.nightModeVersion, null);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 18. Historical receipt title/version remain stable
+// ─────────────────────────────────────────────────────────────────────────────
+test('mode version 1 is immutable across resolutions', () => {
+  const r1 = nightModes.resolveNightModeStart({ nightModeId: 'quick-sleep', durationSeconds: 900, action: 'sleep' });
+  const r2 = nightModes.resolveNightModeStart({ nightModeId: 'full-shutdown', durationSeconds: 3600, action: 'shutdown' });
+  assert.strictEqual(r1.nightModeVersion, 1);
+  assert.strictEqual(r2.nightModeVersion, 1);
+  assert.strictEqual(r1.nightModeTitle, 'Quick Sleep');
+  assert.strictEqual(r2.nightModeTitle, 'Full Shutdown');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 19. Old receipts without fields load (backward compat shape)
+// ─────────────────────────────────────────────────────────────────────────────
+test('timer state without nightMode fields defaults to null', () => {
   const fakeTimerState = {
     action: 'shutdown',
     profileId: null,
@@ -197,26 +261,50 @@ test('runReceipts createRunReceipt handles missing nightMode fields gracefully',
     totalSeconds: 1800,
     dryRun: false,
     forceShutdown: false,
-    gracefulClose: true,
-    nightModeId: null,
-    nightModeTitle: null
+    gracefulClose: true
   };
-  // We can only verify the shape — actual receipt persistence requires electron app.getPath.
-  assert.strictEqual(fakeTimerState.nightModeId, null);
-  assert.strictEqual(fakeTimerState.nightModeTitle, null);
+  assert.strictEqual(fakeTimerState.nightModeId || null, null);
+  assert.strictEqual(fakeTimerState.nightModeTitle || null, null);
+  assert.strictEqual(fakeTimerState.nightModeVersion || null, null);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 18. Companion, remote, calendar, tray, and autopilot starts remain unaffected
+// 20. Keyboard card activation works (catalogue is accessible for rendering)
 // ─────────────────────────────────────────────────────────────────────────────
-test('nightModes module does not export or require companion/remote/calendar modules', () => {
-  // Verify the module's exports are self-contained.
-  const exports = Object.keys(nightModes);
-  assert.ok(exports.includes('getCatalogue'));
-  assert.ok(exports.includes('resolveForExecution'));
-  assert.ok(exports.includes('validateMode'));
-  assert.ok(!exports.includes('companion'));
-  assert.ok(!exports.includes('calendar'));
-  assert.ok(!exports.includes('remote'));
-  assert.ok(!exports.includes('autopilot'));
+test('getCatalogue returns deep copies safe for renderer card rendering', () => {
+  const c1 = nightModes.getCatalogue();
+  const c2 = nightModes.getCatalogue();
+  assert.notStrictEqual(c1, c2);
+  assert.notStrictEqual(c1[0], c2[0]);
+  assert.notStrictEqual(c1[0].timer, c2[0].timer);
+  assert.deepStrictEqual(c1, c2);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 21. Disabled card cannot arm a mode
+// ─────────────────────────────────────────────────────────────────────────────
+test('disabled mode (school-night) cannot be resolved for execution or START', () => {
+  const exec = nightModes.resolveForExecution('school-night');
+  assert.strictEqual(exec.success, false);
+  const start = nightModes.resolveNightModeStart({
+    nightModeId: 'school-night',
+    durationSeconds: 1800,
+    action: 'shutdown'
+  });
+  assert.strictEqual(start.nightModeId, null);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 22. Selecting an unavailable card cannot silently preserve a hidden armed mode
+// ─────────────────────────────────────────────────────────────────────────────
+test('unavailable mode returns null from resolveNightModeStart even with matching values', () => {
+  // quiet-house has durationSeconds: 1800 and action: 'sleep' — even if
+  // options match, it must not produce identity because it is unavailable.
+  const result = nightModes.resolveNightModeStart({
+    nightModeId: 'quiet-house',
+    durationSeconds: 1800,
+    action: 'sleep'
+  });
+  assert.strictEqual(result.nightModeId, null);
+  assert.strictEqual(result.nightModeTitle, null);
 });

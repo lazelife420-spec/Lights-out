@@ -728,7 +728,11 @@ const state = {
   calendarSource: null,
   // Transient outcome of the last session, shown briefly on the idle face:
   // 'completed' | 'dryrun' | 'cancelled' | null.
-  lastOutcome: null
+  lastOutcome: null,
+  // Armed Night Mode: set by Use Tonight, cleared on any lobby edit or non-PLAY start.
+  // Contains { nightModeId, nightModeTitle, durationSeconds, action } or null.
+  // This is untrusted presentation state; main is authoritative at START time.
+  armedNightMode: null
 };
 
 if (previewMode) {
@@ -1027,6 +1031,7 @@ function setAction(action) {
   document.querySelectorAll('[data-action]').forEach(item => {
     item.classList.toggle('selected', item.dataset.action === action);
   });
+  checkArmedModeMatch();
   render();
 }
 
@@ -1537,12 +1542,65 @@ function updateAnalogHands(now) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Armed Night Mode: explicit presentation state for the selected Night Mode.
+// Main is authoritative — this is cleared on any lobby edit so stale identity
+// cannot leak into unrelated starts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function clearArmedNightMode() {
+  state.armedNightMode = null;
+  renderArmedModeBanner();
+}
+
+function armNightMode(mode) {
+  state.armedNightMode = {
+    nightModeId: mode.nightModeId,
+    nightModeTitle: mode.nightModeTitle,
+    durationSeconds: mode.durationSeconds,
+    action: mode.action
+  };
+  renderArmedModeBanner();
+}
+
+function renderArmedModeBanner() {
+  const banner = document.getElementById('armed-mode-banner');
+  if (!banner) return;
+  if (!state.armedNightMode) {
+    banner.style.display = 'none';
+    return;
+  }
+  const m = state.armedNightMode;
+  const durMin = Math.round(m.durationSeconds / 60);
+  const actionLabel = { shutdown: 'Shutdown', sleep: 'Sleep', restart: 'Restart', hibernate: 'Hibernate', lock: 'Lock', logout: 'Log out' }[m.action] || m.action;
+  banner.style.display = '';
+  const titleEl = document.getElementById('armed-mode-title');
+  const metaEl = document.getElementById('armed-mode-meta');
+  if (titleEl) titleEl.textContent = m.nightModeTitle;
+  if (metaEl) metaEl.textContent = `${durMin} min \u00B7 ${actionLabel}`;
+}
+
+// Check whether the current lobby values still match the armed mode's canonical values.
+// If not, the user has edited the execution → clear the armed mode.
+function checkArmedModeMatch() {
+  if (!state.armedNightMode) return;
+  const armed = state.armedNightMode;
+  const currentSeconds = inputSeconds();
+  if (currentSeconds !== armed.durationSeconds || state.action !== armed.action) {
+    clearArmedNightMode();
+  }
+}
+
 async function startTimer(seconds = inputSeconds(), origin = null) {
   const durationSeconds = Math.max(1, Math.round(seconds));
 
   try {
     SoundSystem.playStart();
-    const nmSel = window.__nightModeSelection || null;
+    // Only genuine PLAY origins may carry the armed Night Mode ID.
+    // All other callers (chips, presets, quick-minute) clear the armed mode
+    // before reaching here, so armedNightMode is already null for those paths.
+    const isPlayOrigin = origin === 'play';
+    const nightModeId = (isPlayOrigin && state.armedNightMode) ? state.armedNightMode.nightModeId : undefined;
     const result = await api.startTimer({
       durationSeconds,
       action: state.action,
@@ -1552,10 +1610,9 @@ async function startTimer(seconds = inputSeconds(), origin = null) {
       gracePeriod: state.graceMinutes,
       profileId: state.currentProfileId,
       startOrigin: origin,
-      nightModeId: nmSel ? nmSel.nightModeId : undefined,
-      nightModeTitle: nmSel ? nmSel.nightModeTitle : undefined
+      nightModeId
     });
-    window.__nightModeSelection = null;
+    clearArmedNightMode();
 
     if (result?.success === false) {
       notify(result.error || 'Timer could not start', 'error');
@@ -2541,17 +2598,20 @@ if (els.btnClearReceipts) {
   els.btnPlus.addEventListener('click', () => {
     els.timerInput.value = inputValue() + 1;
     setInputFromSeconds(inputSeconds());
+    checkArmedModeMatch();
   });
 
   els.btnMinus.addEventListener('click', () => {
     els.timerInput.value = Math.max(1, inputValue() - 1);
     setInputFromSeconds(inputSeconds());
+    checkArmedModeMatch();
   });
 
   els.timerInput.addEventListener('input', () => {
     if (!state.running && !state.paused) {
       state.remainingSeconds = inputSeconds();
       state.totalSeconds = state.remainingSeconds;
+      checkArmedModeMatch();
       render();
     }
   });
@@ -2578,6 +2638,7 @@ if (els.btnClearReceipts) {
       if (item.dataset.minutes) {
         state.unit = 'min';
         setInputFromSeconds(Number(item.dataset.minutes) * 60);
+        clearArmedNightMode();
         startTimer(Number(item.dataset.minutes) * 60);
         return;
       }
@@ -2623,6 +2684,7 @@ if (els.btnClearReceipts) {
       const minutes = Number(chip.dataset.min);
       state.unit = 'min';
       setInputFromSeconds(minutes * 60);
+      clearArmedNightMode();
       startTimer(minutes * 60);
     });
   });
@@ -2643,6 +2705,9 @@ if (els.btnClearReceipts) {
 
   // Northstar hero card PLAY button starts the timer.
   document.getElementById('ns-play-btn')?.addEventListener('click', () => startTimer(inputSeconds(), 'play'));
+
+  // Armed Night Mode clear button.
+  document.getElementById('armed-mode-clear')?.addEventListener('click', clearArmedNightMode);
 
   // Home streak callout jumps to the Streaks tab for the full breakdown.
   els.streakCallout?.addEventListener('click', () => {
@@ -2982,6 +3047,7 @@ if (els.btnClearReceipts) {
     if (presets[event.key] && !state.running && !state.paused) {
       state.unit = 'min';
       setInputFromSeconds(presets[event.key] * 60);
+      clearArmedNightMode();
       startTimer(presets[event.key] * 60);
       return;
     }

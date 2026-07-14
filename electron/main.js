@@ -177,7 +177,8 @@ const timerState = {
   profileId: null,
   profileName: null,
   nightModeId: null,
-  nightModeTitle: null
+  nightModeTitle: null,
+  nightModeVersion: null
 };
 
 // Whether a Content Blocker recurring schedule currently has sites blocked --
@@ -592,7 +593,8 @@ function normalizeTimerOptions(input, legacyAction) {
     gracePeriod: Number.isFinite(Number(options.gracePeriod)) ? Math.max(0, Number(options.gracePeriod)) : 2,
     profileId: typeof options.profileId === 'string' ? options.profileId : null,
     source: options.source === 'remote' ? 'remote' : 'local',
-    startOrigin: typeof options.startOrigin === 'string' ? options.startOrigin : null
+    startOrigin: typeof options.startOrigin === 'string' ? options.startOrigin : null,
+    nightModeId: typeof options.nightModeId === 'string' ? options.nightModeId : null
   };
 }
 
@@ -606,6 +608,9 @@ function resolveTimerProfileIdentity(profileId, source) {
   });
 }
 
+// Delegate to nightModes module (single source of truth for canonical resolution).
+const resolveNightModeStart = nightModes.resolveNightModeStart;
+
 function startTimer(input, legacyAction) {
   const options = normalizeTimerOptions(input, legacyAction);
   const identity = resolveTimerProfileIdentity(options.profileId, options.source);
@@ -618,6 +623,9 @@ function startTimer(input, legacyAction) {
     if (profile && profile.ritualId === 'standard' && options.source !== 'remote') {
       // Clear any stale pending context before creating a new one.
       profileRitualContext.clear();
+      // Resolve Night Mode identity before storing in ritual context so the
+      // eventual countdown and receipt carry canonical mode identity.
+      const nmIdentity = resolveNightModeStart(options);
       const runToken = profileRitualContext.createContext({
         durationSeconds: options.durationSeconds,
         action: options.action,
@@ -626,7 +634,10 @@ function startTimer(input, legacyAction) {
         muteSystem: options.muteSystem,
         gracePeriod: options.gracePeriod,
         profileId: identity.profileId,
-        profileName: identity.profileName
+        profileName: identity.profileName,
+        nightModeId: nmIdentity.nightModeId,
+        nightModeTitle: nmIdentity.nightModeTitle,
+        nightModeVersion: nmIdentity.nightModeVersion
       });
       // Start the standard ritual with run metadata binding the token to this
       // exact run. The ritual's onStep/onComplete callbacks receive the meta.
@@ -646,13 +657,16 @@ function startTimer(input, legacyAction) {
     profileRitualContext.clear();
   }
 
-  return beginValidatedCountdown(options, identity);
+  // Resolve Night Mode identity at START time (main is authoritative).
+  const nmIdentity = resolveNightModeStart(options);
+  return beginValidatedCountdown(options, identity, nmIdentity);
 }
 
 // Internal canonical countdown entry. Used by both startTimer (after gateway
 // resolution and supersession) and the ritual timer step (directly, without
 // re-entering profile ritual gating or supersession logic).
-function beginValidatedCountdown(options, identity) {
+// nmIdentity: main-resolved { nightModeId, nightModeTitle, nightModeVersion }.
+function beginValidatedCountdown(options, identity, nmIdentity) {
   clearTimerInterval();
 
   // Override Tax: reset session snooze count for this new run.
@@ -676,8 +690,10 @@ function beginValidatedCountdown(options, identity) {
   timerState.gracePeriod = options.gracePeriod;
   timerState.profileId = identity.profileId;
   timerState.profileName = identity.profileName;
-  timerState.nightModeId = options.nightModeId || null;
-  timerState.nightModeTitle = options.nightModeTitle || null;
+  const nm = nmIdentity || { nightModeId: null, nightModeTitle: null, nightModeVersion: null };
+  timerState.nightModeId = nm.nightModeId || null;
+  timerState.nightModeTitle = nm.nightModeTitle || null;
+  timerState.nightModeVersion = nm.nightModeVersion || null;
   timerState.endsAt = new Date(Date.now() + options.durationSeconds * 1000).toISOString();
   timerState.phase = 'focus';
 
@@ -2617,13 +2633,15 @@ app.whenReady().then(async () => {
             { durationSeconds: ctx.durationSeconds, action: ctx.action, dryRun: ctx.dryRun,
               forceShutdown: ctx.forceShutdown, muteSystem: ctx.muteSystem, gracePeriod: ctx.gracePeriod,
               source: 'ritual' },
-            { profileId: ctx.profileId, profileName: ctx.profileName }
+            { profileId: ctx.profileId, profileName: ctx.profileName },
+            { nightModeId: ctx.nightModeId || null, nightModeTitle: ctx.nightModeTitle || null, nightModeVersion: ctx.nightModeVersion || null }
           );
         } else {
           const config = ritualMode.getConfig();
           beginValidatedCountdown(
             { durationSeconds: config.timerDuration, action: config.timerAction, source: 'ritual' },
-            { profileId: null, profileName: null }
+            { profileId: null, profileName: null },
+            null
           );
         }
       } else if (step.id === 'lights') {

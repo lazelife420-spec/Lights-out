@@ -61,7 +61,14 @@ function renderCards() {
       </div>
     `;
 
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('aria-label', `${mode.title}${mode.status !== 'ready' ? ' (unavailable)' : ''}`);
+    if (mode.id === nmSelectedId) card.setAttribute('aria-pressed', 'true');
     card.addEventListener('click', () => selectMode(mode.id));
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectMode(mode.id); }
+    });
     grid.appendChild(card);
   }
 }
@@ -141,9 +148,16 @@ function selectMode(id) {
   if (!mode) return;
   nmSelectedId = id;
 
-  // Update card selection state
+  // Selecting an unavailable mode must clear any previously armed ready mode
+  if (mode.status !== 'ready' && typeof clearArmedNightMode === 'function') {
+    clearArmedNightMode();
+  }
+
+  // Update card selection state and aria-pressed
   document.querySelectorAll('.nm-card').forEach(c => {
-    c.classList.toggle('selected', c.dataset.modeId === id);
+    const isSelected = c.dataset.modeId === id;
+    c.classList.toggle('selected', isSelected);
+    c.setAttribute('aria-pressed', String(isSelected));
   });
 
   renderDetail(mode);
@@ -165,18 +179,34 @@ async function useTonight() {
   const timerInput = document.getElementById('timer-input');
   if (timerInput) timerInput.value = String(durationMinutes);
 
-  // Set action selector
-  const actionBtns = document.querySelectorAll('.action-btn-group .action-opt, .setup-controls [data-action]');
-  actionBtns.forEach(btn => {
-    if (btn.dataset.action === result.action) btn.click();
-  });
-
-  // Store night mode selection for startTimer to pick up
-  window.__nightModeSelection = {
-    nightModeId: result.nightModeId,
-    nightModeTitle: result.nightModeTitle,
-    ritualId: result.ritualId
-  };
+  // Set action via the renderer's canonical setAction (avoids simulated click)
+  if (typeof setAction === 'function') {
+    // Temporarily arm first so setAction's checkArmedModeMatch sees the new
+    // canonical values and does not clear it.
+    if (typeof armNightMode === 'function') {
+      armNightMode({
+        nightModeId: result.nightModeId,
+        nightModeTitle: result.nightModeTitle,
+        durationSeconds: result.durationSeconds,
+        action: result.action
+      });
+    }
+    setAction(result.action);
+  } else {
+    // Fallback: simulate click on matching action button
+    const actionBtns = document.querySelectorAll('.setup-controls [data-action]');
+    actionBtns.forEach(btn => {
+      if (btn.dataset.action === result.action) btn.click();
+    });
+    if (typeof armNightMode === 'function') {
+      armNightMode({
+        nightModeId: result.nightModeId,
+        nightModeTitle: result.nightModeTitle,
+        durationSeconds: result.durationSeconds,
+        action: result.action
+      });
+    }
+  }
 
   // Navigate to Tonight panel
   const tonightBtn = document.querySelector('[data-ns-tab="lib"]');

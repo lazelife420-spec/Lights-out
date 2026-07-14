@@ -239,6 +239,25 @@ function resolveForExecution(nightModeId) {
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// START-time resolution: compare actual execution against canonical mode.
+// Returns main-resolved identity or null fields if execution was modified.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function resolveNightModeStart(options) {
+  const empty = { nightModeId: null, nightModeTitle: null, nightModeVersion: null };
+  if (!options || !options.nightModeId) return empty;
+  const mode = getById(options.nightModeId);
+  if (!mode || !isAvailable(mode)) return empty;
+  if (options.durationSeconds !== mode.timer.durationSeconds) return empty;
+  if (options.action !== mode.timer.action) return empty;
+  return {
+    nightModeId: mode.id,
+    nightModeTitle: mode.title,
+    nightModeVersion: mode.version
+  };
+}
+
 module.exports = {
   SCHEMA_VERSION,
   ALLOWED_ACTIONS,
@@ -249,5 +268,6 @@ module.exports = {
   isAvailable,
   getCatalogue,
   getById,
-  resolveForExecution
+  resolveForExecution,
+  resolveNightModeStart
 };

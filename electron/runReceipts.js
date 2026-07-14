@@ -66,6 +66,7 @@ function createRunReceipt(timerState) {
     profileName: timerState.profileName || null,
     nightModeId: timerState.nightModeId || null,
     nightModeTitle: timerState.nightModeTitle || null,
+    nightModeVersion: timerState.nightModeVersion || null,
     durationSeconds: timerState.totalSeconds || 0,
     remainingSeconds: null,
     dryRun: !!timerState.dryRun,

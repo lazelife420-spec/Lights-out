@@ -1197,9 +1197,9 @@ check('profile-ritual-gateway: timer step uses run-owned token from runMeta', ()
 });
 
 check('profile-ritual-gateway: beginValidatedCountdown split from startTimer', () => {
-  assertMatch(mainSrc, /function beginValidatedCountdown\(options, identity\)/, 'beginValidatedCountdown function not found');
+  assertMatch(mainSrc, /function beginValidatedCountdown\(options, identity, nmIdentity\)/, 'beginValidatedCountdown function not found');
   // Ritual timer step must not re-enter startTimer (would cause self-cancel).
-  const timerStepBlock = mainSrc.match(/step\.id === 'timer'[\s\S]{0,1100}step\.id === 'lights'/);
+  const timerStepBlock = mainSrc.match(/step\.id === 'timer'[\s\S]{0,1500}step\.id === 'lights'/);
   assert(timerStepBlock, 'timer step block not found');
   assert(!timerStepBlock[0].includes('startTimer('), 'timer step re-enters startTimer — should use beginValidatedCountdown');
 });
@@ -1502,11 +1502,13 @@ check('night-modes: receipt creation includes nightModeId field', () => {
   assertMatch(receiptsSrc, /nightModeTitle: timerState\.nightModeTitle/, 'nightModeTitle missing from receipt');
 });
 
-check('night-modes: timerState carries nightModeId and nightModeTitle', () => {
+check('night-modes: timerState carries nightModeId, nightModeTitle, and nightModeVersion', () => {
   assertMatch(mainSrc, /nightModeId: null/, 'timerState nightModeId init missing');
   assertMatch(mainSrc, /nightModeTitle: null/, 'timerState nightModeTitle init missing');
-  assertMatch(mainSrc, /timerState\.nightModeId = options\.nightModeId/, 'timerState nightModeId assignment missing');
-  assertMatch(mainSrc, /timerState\.nightModeTitle = options\.nightModeTitle/, 'timerState nightModeTitle assignment missing');
+  assertMatch(mainSrc, /nightModeVersion: null/, 'timerState nightModeVersion init missing');
+  assertMatch(mainSrc, /timerState\.nightModeId = nm\.nightModeId/, 'timerState nightModeId assignment from resolved nm missing');
+  assertMatch(mainSrc, /timerState\.nightModeTitle = nm\.nightModeTitle/, 'timerState nightModeTitle assignment from resolved nm missing');
+  assertMatch(mainSrc, /timerState\.nightModeVersion = nm\.nightModeVersion/, 'timerState nightModeVersion assignment missing');
 });
 
 check('night-modes: MODES panel exists in HTML', () => {
@@ -1527,6 +1529,65 @@ check('night-modes: renderer handles modes panel visibility', () => {
 
 check('night-modes: Use Tonight does not auto-start timer', () => {
   assertMatch(mainSrc, /use-night-mode-tonight[\s\S]*?timer is NOT started here/s, 'use-tonight comment about non-start missing');
+});
+
+check('night-modes: resolveNightModeStart exported from nightModes module', () => {
+  assertMatch(nightModesSrc, /function resolveNightModeStart\(/, 'resolveNightModeStart missing');
+  assertMatch(nightModesSrc, /resolveNightModeStart/, 'resolveNightModeStart not in exports');
+});
+
+check('night-modes: main delegates to nightModes.resolveNightModeStart', () => {
+  assertMatch(mainSrc, /nightModes\.resolveNightModeStart/, 'main does not delegate to nightModes.resolveNightModeStart');
+});
+
+check('night-modes: normalizeTimerOptions preserves nightModeId only', () => {
+  assertMatch(mainSrc, /nightModeId: typeof options\.nightModeId === 'string'/, 'normalizeTimerOptions does not preserve nightModeId');
+  assert(!mainSrc.includes("nightModeTitle: typeof options.nightModeTitle"), 'normalizeTimerOptions should NOT preserve nightModeTitle');
+});
+
+check('night-modes: renderer sends only nightModeId (not title) in startTimer', () => {
+  const rendNm = fs.readFileSync(path.join(root, 'renderer-night-modes.js'), 'utf8');
+  assert(!rendererSrc.includes('nightModeTitle: nmSel'), 'renderer sends nightModeTitle — trust violation');
+  assert(!rendNm.includes('window.__nightModeSelection'), 'renderer-night-modes still uses window.__nightModeSelection');
+});
+
+check('night-modes: armed mode state replaces window.__nightModeSelection', () => {
+  assertMatch(rendererSrc, /armedNightMode: null/, 'armedNightMode state init missing');
+  assertMatch(rendererSrc, /function clearArmedNightMode\(\)/, 'clearArmedNightMode function missing');
+  assertMatch(rendererSrc, /function armNightMode\(/, 'armNightMode function missing');
+  assertMatch(rendererSrc, /function checkArmedModeMatch\(\)/, 'checkArmedModeMatch function missing');
+  assert(!rendererSrc.includes('window.__nightModeSelection'), 'renderer.js still uses window.__nightModeSelection');
+});
+
+check('night-modes: armed mode banner in HTML', () => {
+  assertMatch(htmlSrc, /id="armed-mode-banner"/, 'armed-mode-banner missing from HTML');
+  assertMatch(htmlSrc, /id="armed-mode-title"/, 'armed-mode-title missing from HTML');
+  assertMatch(htmlSrc, /id="armed-mode-clear"/, 'armed-mode-clear button missing from HTML');
+});
+
+check('night-modes: cards have keyboard accessibility', () => {
+  const rendNm = fs.readFileSync(path.join(root, 'renderer-night-modes.js'), 'utf8');
+  assertMatch(rendNm, /role.*button/, 'cards missing role=button');
+  assertMatch(rendNm, /tabindex.*0/, 'cards missing tabindex=0');
+  assertMatch(rendNm, /aria-pressed/, 'cards missing aria-pressed');
+  assertMatch(rendNm, /keydown/, 'cards missing keydown handler');
+});
+
+check('night-modes: receipt includes nightModeVersion', () => {
+  const receiptsSrc = fs.readFileSync(path.join(root, 'runReceipts.js'), 'utf8');
+  assertMatch(receiptsSrc, /nightModeVersion: timerState\.nightModeVersion/, 'nightModeVersion missing from receipt');
+});
+
+check('night-modes: profileRitualContext preserves night mode identity', () => {
+  const ctxSrc = fs.readFileSync(path.join(root, 'profileRitualContext.js'), 'utf8');
+  assertMatch(ctxSrc, /nightModeId:/, 'nightModeId missing from profileRitualContext');
+  assertMatch(ctxSrc, /nightModeTitle:/, 'nightModeTitle missing from profileRitualContext');
+  assertMatch(ctxSrc, /nightModeVersion:/, 'nightModeVersion missing from profileRitualContext');
+});
+
+check('night-modes: responsive breakpoint for detail panel', () => {
+  const stylesSrc = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  assertMatch(stylesSrc, /@media.*max-width.*680px/, 'responsive breakpoint for detail panel missing');
 });
 
 // Cleanup.
