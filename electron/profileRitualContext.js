@@ -38,7 +38,9 @@ function consume(token) {
   return ctx;
 }
 
-function consumeAny() {
+// consumeAny is intentionally not exported. The timer step must use
+// token-verified consume(token) to prove ownership of the active run.
+function _consumeAny() {
   if (!pendingContext) return null;
   const ctx = { ...pendingContext };
   pendingContext = null;
@@ -65,7 +67,6 @@ module.exports = {
   ELIGIBLE_ORIGINS,
   createContext,
   consume,
-  consumeAny,
   clear,
   hasPending,
   getPendingToken,

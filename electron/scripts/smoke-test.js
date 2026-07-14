@@ -562,7 +562,7 @@ check('renderer: running-state controls still swap start-stop-pause visibility a
 });
 
 check('renderer: keyboard shortcuts - Space (Start/Pause)', () => {
-  assertMatch(rendererSrc, /if \(event\.key === ' ' \|\| event\.code === 'Space'\) \{[\s\S]*if \(state\.running \|\| state\.paused\) togglePause\(\);[\s\S]*else startTimer\(\);/s, 'space shortcut changed');
+  assertMatch(rendererSrc, /if \(event\.key === ' ' \|\| event\.code === 'Space'\) \{[\s\S]*if \(state\.running \|\| state\.paused\) togglePause\(\);[\s\S]*else startTimer\(inputSeconds\(\), 'play'\);/s, 'space shortcut changed');
 });
 
 check('renderer: keyboard shortcuts - Escape (Cancel/Modals)', () => {
@@ -1189,8 +1189,9 @@ check('profile-ritual-gateway: context module loaded and ritual gateway in start
   assertMatch(mainSrc, /ritualMode\.startRitual\(\)/, 'ritual gateway does not start standard ritual');
 });
 
-check('profile-ritual-gateway: timer step consumes pending context with fallback', () => {
-  assertMatch(mainSrc, /profileRitualContext\.consumeAny\(\)/, 'timer step does not consume pending context');
+check('profile-ritual-gateway: timer step uses token-verified consume with fallback', () => {
+  assertMatch(mainSrc, /profileRitualContext\.consume\(activeRitualRunToken\)/, 'timer step does not use token-verified consume');
+  assert(!mainSrc.includes('profileRitualContext.consumeAny'), 'consumeAny still called in main — should use token-verified consume');
   assertMatch(mainSrc, /ritualMode\.getConfig\(\)[\s\S]{0,50}startTimer/, 'timer step fallback to global config missing');
 });
 
@@ -1211,6 +1212,11 @@ check('profile-ritual-gateway: renderer sends startOrigin without ritual branchi
   assert(!/ritualStart/.test(rendererProfilesSrc), 'renderer-profiles gained ritual branching');
   assert(!/ritualId/.test(rendererProfilesSrc), 'renderer-profiles inspects ritualId');
   assert(!/ritualId/.test(rendererSrc), 'renderer.js inspects ritualId');
+  // Default origin must not be 'play' — only explicit callers should be eligible.
+  assertMatch(rendererSrc, /origin = null\)/, 'renderer startTimer default origin should be null, not play');
+  // Only PLAY buttons and Space key pass 'play' explicitly.
+  const playExplicit = (rendererSrc.match(/startTimer\(inputSeconds\(\), 'play'\)/g) || []).length;
+  assert(playExplicit === 3, `expected exactly 3 explicit 'play' callers, found ${playExplicit}`);
 });
 
 check('profile-ritual-gateway: remote source cannot trigger profile ritual', () => {
@@ -1219,6 +1225,21 @@ check('profile-ritual-gateway: remote source cannot trigger profile ritual', () 
 
 check('profile-ritual-gateway: normalizeTimerOptions accepts startOrigin field', () => {
   assertMatch(mainSrc, /startOrigin:\s*typeof options\.startOrigin === 'string'/, 'normalizeTimerOptions does not parse startOrigin');
+});
+
+check('profile-ritual-gateway: direct timer supersession cancels active ritual', () => {
+  assertMatch(mainSrc, /ritualMode\.getState\(\)\.active[\s\S]{0,50}ritualMode\.cancelRitual\(\)/, 'direct timer does not cancel active ritual');
+  assertMatch(mainSrc, /profileRitualContext\.clear\(\);\s*\n\s*activeRitualRunToken = null;\s*\n\s*\n\s*clearTimerInterval/, 'supersession does not clear context before countdown');
+});
+
+check('profile-ritual-gateway: token threaded through ritual run', () => {
+  assertMatch(mainSrc, /activeRitualRunToken = profileRitualContext\.createContext\(/, 'gateway does not store run token');
+  assertMatch(mainSrc, /profileRitualContext\.consume\(activeRitualRunToken\)/, 'timer step does not use stored run token');
+});
+
+check('profile-ritual-gateway: error and shutdown cleanup', () => {
+  assertMatch(mainSrc, /catch \(err\)[\s\S]{0,120}profileRitualContext\.clear\(\)/, 'step error does not clear context');
+  assertMatch(mainSrc, /before-quit[\s\S]{0,200}profileRitualContext\.clear\(\)/, 'app shutdown does not clear context');
 });
 
 // 17. Stats Dashboard.
@@ -1230,7 +1251,7 @@ check('stats-dashboard: module and IPC', () => {
 
 // 18. Runtime UX truth: every visible nav/control has a real action or is disabled.
 check('ux: ns-play-btn is wired to startTimer', () => {
-  assertMatch(rendererSrc, /getElementById\('ns-play-btn'\)\?\.addEventListener\('click', \(\) => startTimer\(\)\)/, 'ns-play-btn not wired');
+  assertMatch(rendererSrc, /getElementById\('ns-play-btn'\)\?\.addEventListener\('click', \(\) => startTimer\(inputSeconds\(\), 'play'\)\)/, 'ns-play-btn not wired');
 });
 
 check('ux: ns-play-btn has exactly one click handler (no duplicate startTimer)', () => {

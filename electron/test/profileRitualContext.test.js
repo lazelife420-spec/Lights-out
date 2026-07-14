@@ -62,27 +62,33 @@ test('consume returns context only with matching token', () => {
   assert.ok(!ctx.hasPending()); // consumed
 });
 
-test('consumeAny returns context regardless of token and clears', () => {
+test('consume with null token returns null (manual ritual has no token)', () => {
   ctx.clear();
   ctx.createContext(VALID_CONTEXT);
-  const result = ctx.consumeAny();
-  assert.ok(result);
-  assert.equal(result.durationSeconds, 1800);
-  assert.ok(!ctx.hasPending());
+  assert.equal(ctx.consume(null), null);
+  assert.ok(ctx.hasPending()); // still there — not consumed
+  ctx.clear();
 });
 
-test('consumeAny returns null when nothing pending', () => {
+test('consume with undefined token returns null', () => {
   ctx.clear();
-  assert.equal(ctx.consumeAny(), null);
+  ctx.createContext(VALID_CONTEXT);
+  assert.equal(ctx.consume(undefined), null);
+  assert.ok(ctx.hasPending());
+  ctx.clear();
+});
+
+test('consumeAny is not exported (token-verified consume only)', () => {
+  assert.equal(typeof ctx.consumeAny, 'undefined');
 });
 
 test('clear removes pending context', () => {
   ctx.clear();
-  ctx.createContext(VALID_CONTEXT);
+  const token = ctx.createContext(VALID_CONTEXT);
   assert.ok(ctx.hasPending());
   ctx.clear();
   assert.ok(!ctx.hasPending());
-  assert.equal(ctx.consumeAny(), null);
+  assert.equal(ctx.consume(token), null);
 });
 
 test('createContext overwrites stale context (new ritual start)', () => {
@@ -98,12 +104,12 @@ test('createContext overwrites stale context (new ritual start)', () => {
   assert.equal(result.durationSeconds, 3600);
 });
 
-test('double consume returns null (one-use)', () => {
+test('double consume with same token returns null (one-use)', () => {
   ctx.clear();
-  ctx.createContext(VALID_CONTEXT);
-  const first = ctx.consumeAny();
+  const token = ctx.createContext(VALID_CONTEXT);
+  const first = ctx.consume(token);
   assert.ok(first);
-  const second = ctx.consumeAny();
+  const second = ctx.consume(token);
   assert.equal(second, null);
 });
 
@@ -119,8 +125,8 @@ test('context preserves validated fields accurately', () => {
     profileId: 'xyz789',
     profileName: 'Quick Nap'
   };
-  ctx.createContext(input);
-  const result = ctx.consumeAny();
+  const token = ctx.createContext(input);
+  const result = ctx.consume(token);
   assert.equal(result.durationSeconds, 900);
   assert.equal(result.action, 'sleep');
   assert.equal(result.dryRun, true);
@@ -131,6 +137,27 @@ test('context preserves validated fields accurately', () => {
   assert.equal(result.profileName, 'Quick Nap');
   assert.ok(result.token);
   assert.ok(result.createdAt);
+});
+
+test('stale token from a previous context cannot consume a newer context', () => {
+  ctx.clear();
+  const staleToken = ctx.createContext(VALID_CONTEXT);
+  // Simulate new ritual replacing context.
+  const freshToken = ctx.createContext({ ...VALID_CONTEXT, durationSeconds: 7200 });
+  // Stale token must not work.
+  assert.equal(ctx.consume(staleToken), null);
+  // Fresh token works.
+  const result = ctx.consume(freshToken);
+  assert.ok(result);
+  assert.equal(result.durationSeconds, 7200);
+});
+
+test('safe origin defaults: null, undefined, empty string are not eligible', () => {
+  assert.ok(!ctx.isEligibleOrigin(null));
+  assert.ok(!ctx.isEligibleOrigin(undefined));
+  assert.ok(!ctx.isEligibleOrigin(''));
+  assert.ok(!ctx.isEligibleOrigin('direct'));
+  assert.ok(!ctx.isEligibleOrigin('unknown'));
 });
 
 test('getPendingToken returns null when empty', () => {
