@@ -1553,12 +1553,13 @@ function clearArmedNightMode() {
   renderArmedModeBanner();
 }
 
-function armNightMode(mode) {
+function armNightMode(mode) { // eslint-disable-line no-unused-vars -- called from renderer-night-modes.js
   state.armedNightMode = {
     nightModeId: mode.nightModeId,
     nightModeTitle: mode.nightModeTitle,
     durationSeconds: mode.durationSeconds,
-    action: mode.action
+    action: mode.action,
+    ritualId: mode.ritualId || 'none'
   };
   renderArmedModeBanner();
 }
@@ -1577,7 +1578,8 @@ function renderArmedModeBanner() {
   const titleEl = document.getElementById('armed-mode-title');
   const metaEl = document.getElementById('armed-mode-meta');
   if (titleEl) titleEl.textContent = m.nightModeTitle;
-  if (metaEl) metaEl.textContent = `${durMin} min \u00B7 ${actionLabel}`;
+  const ritualLabel = m.ritualId === 'standard' ? 'Standard ritual' : 'Direct';
+  if (metaEl) metaEl.textContent = `${durMin} min \u00B7 ${actionLabel} \u00B7 ${ritualLabel}`;
 }
 
 // Check whether the current lobby values still match the armed mode's canonical values.

@@ -6,14 +6,10 @@
 
 'use strict';
 
-const { execSync, spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
 const electronRoot = path.resolve(__dirname, '..');
-const electronBin = path.join(electronRoot, 'node_modules', '.bin', 'electron.cmd');
-
-let electronProc = null;
 let passed = 0;
 let failed = 0;
 
@@ -148,11 +144,11 @@ check('Use Tonight navigates to TONIGHT panel', () => {
   assert(rendererNmSrc.includes('tonightBtn') && rendererNmSrc.includes('.click()'), 'click navigation missing');
 });
 
-check('renderer passes nightModeId through startTimer', () => {
+check('renderer passes nightModeId through startTimer via armed mode', () => {
   const rendererSrc = fs.readFileSync(path.join(electronRoot, 'renderer.js'), 'utf8');
-  assert(rendererSrc.includes('nightModeId: nmSel ? nmSel.nightModeId'), 'nightModeId pass-through missing');
-  assert(rendererSrc.includes('nightModeTitle: nmSel ? nmSel.nightModeTitle'), 'nightModeTitle pass-through missing');
-  assert(rendererSrc.includes('window.__nightModeSelection = null'), 'selection cleanup missing');
+  assert(rendererSrc.includes('state.armedNightMode'), 'armed mode state missing');
+  assert(rendererSrc.includes('.nightModeId'), 'nightModeId pass-through missing');
+  assert(!rendererSrc.includes('window.__nightModeSelection'), 'stale __nightModeSelection still present');
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -171,10 +167,10 @@ check('timerState initialized with nightMode fields', () => {
   assert(mainSrc.includes('nightModeTitle: null'), 'init nightModeTitle missing');
 });
 
-check('beginValidatedCountdown sets nightMode fields from options', () => {
+check('beginValidatedCountdown sets nightMode fields from nmIdentity', () => {
   const mainSrc = fs.readFileSync(path.join(electronRoot, 'main.js'), 'utf8');
-  assert(mainSrc.includes('timerState.nightModeId = options.nightModeId'), 'nightModeId assignment missing');
-  assert(mainSrc.includes('timerState.nightModeTitle = options.nightModeTitle'), 'nightModeTitle assignment missing');
+  assert(mainSrc.includes('timerState.nightModeId = nm.nightModeId'), 'nightModeId assignment missing');
+  assert(mainSrc.includes('timerState.nightModeTitle = nm.nightModeTitle'), 'nightModeTitle assignment missing');
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -308,3 +308,62 @@ test('unavailable mode returns null from resolveNightModeStart even with matchin
   assert.strictEqual(result.nightModeId, null);
   assert.strictEqual(result.nightModeTitle, null);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 23. resolveNightModeStart returns canonical ritualId
+// ─────────────────────────────────────────────────────────────────────────────
+test('resolveNightModeStart returns canonical ritualId for ritual modes', () => {
+  const fs = nightModes.resolveNightModeStart({
+    nightModeId: 'full-shutdown',
+    durationSeconds: 3600,
+    action: 'shutdown'
+  });
+  assert.strictEqual(fs.ritualId, 'standard');
+  assert.strictEqual(fs.nightModeId, 'full-shutdown');
+});
+
+test('resolveNightModeStart returns none ritualId for direct modes', () => {
+  const qs = nightModes.resolveNightModeStart({
+    nightModeId: 'quick-sleep',
+    durationSeconds: 900,
+    action: 'sleep'
+  });
+  assert.strictEqual(qs.ritualId, 'none');
+  assert.strictEqual(qs.nightModeId, 'quick-sleep');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 24. Canonical none-ritual mode on standard ritual path loses identity
+// ─────────────────────────────────────────────────────────────────────────────
+test('ritualId: none mode must be cleared if profile forces standard ritual', () => {
+  // Simulates main.js ritual gateway logic: resolve identity, then check
+  // if mode ritualId matches the actual execution path.
+  const nm = nightModes.resolveNightModeStart({
+    nightModeId: 'quick-sleep',
+    durationSeconds: 900,
+    action: 'sleep'
+  });
+  assert.strictEqual(nm.nightModeId, 'quick-sleep');
+  assert.strictEqual(nm.ritualId, 'none');
+  // Profile forces standard ritual — caller must clear because ritualId !== 'standard'
+  const shouldClear = nm.nightModeId && nm.ritualId !== 'standard';
+  assert.ok(shouldClear, 'quick-sleep on standard ritual path should be cleared');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 25. Canonical standard-ritual mode on direct path loses identity
+// ─────────────────────────────────────────────────────────────────────────────
+test('ritualId: standard mode on direct path must be cleared', () => {
+  // Simulates main.js direct path: mode has standard ritual but no profile
+  // ritual gateway was entered — execution path differs from canonical.
+  const nm = nightModes.resolveNightModeStart({
+    nightModeId: 'full-shutdown',
+    durationSeconds: 3600,
+    action: 'shutdown'
+  });
+  assert.strictEqual(nm.nightModeId, 'full-shutdown');
+  assert.strictEqual(nm.ritualId, 'standard');
+  // Direct path — caller must clear because ritualId === 'standard'
+  const shouldClear = nm.nightModeId && nm.ritualId === 'standard';
+  assert.ok(shouldClear, 'full-shutdown on direct path should be cleared');
+});

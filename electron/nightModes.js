@@ -254,7 +254,8 @@ function resolveNightModeStart(options) {
   return {
     nightModeId: mode.id,
     nightModeTitle: mode.title,
-    nightModeVersion: mode.version
+    nightModeVersion: mode.version,
+    ritualId: mode.timer.ritualId || 'none'
   };
 }
 

@@ -625,7 +625,12 @@ function startTimer(input, legacyAction) {
       profileRitualContext.clear();
       // Resolve Night Mode identity before storing in ritual context so the
       // eventual countdown and receipt carry canonical mode identity.
-      const nmIdentity = resolveNightModeStart(options);
+      // Canonical ritual enforcement: if the mode's ritualId is not 'standard',
+      // the profile's standard ritual changes the execution path — clear identity.
+      let nmIdentity = resolveNightModeStart(options);
+      if (nmIdentity.nightModeId && nmIdentity.ritualId !== 'standard') {
+        nmIdentity = { nightModeId: null, nightModeTitle: null, nightModeVersion: null };
+      }
       const runToken = profileRitualContext.createContext({
         durationSeconds: options.durationSeconds,
         action: options.action,
@@ -658,7 +663,12 @@ function startTimer(input, legacyAction) {
   }
 
   // Resolve Night Mode identity at START time (main is authoritative).
-  const nmIdentity = resolveNightModeStart(options);
+  // Canonical ritual enforcement: if the mode's ritualId is 'standard' but
+  // we reached the direct path (no profile ritual gateway), clear identity.
+  let nmIdentity = resolveNightModeStart(options);
+  if (nmIdentity.nightModeId && nmIdentity.ritualId === 'standard') {
+    nmIdentity = { nightModeId: null, nightModeTitle: null, nightModeVersion: null };
+  }
   return beginValidatedCountdown(options, identity, nmIdentity);
 }
 

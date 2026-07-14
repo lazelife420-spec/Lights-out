@@ -188,7 +188,8 @@ async function useTonight() {
         nightModeId: result.nightModeId,
         nightModeTitle: result.nightModeTitle,
         durationSeconds: result.durationSeconds,
-        action: result.action
+        action: result.action,
+        ritualId: result.ritualId
       });
     }
     setAction(result.action);
@@ -203,7 +204,8 @@ async function useTonight() {
         nightModeId: result.nightModeId,
         nightModeTitle: result.nightModeTitle,
         durationSeconds: result.durationSeconds,
-        action: result.action
+        action: result.action,
+        ritualId: result.ritualId
       });
     }
   }

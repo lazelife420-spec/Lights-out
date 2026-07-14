@@ -1225,7 +1225,9 @@ check('profile-ritual-gateway: renderer sends startOrigin without ritual branchi
   assertMatch(rendererProfilesSrc, /'profile-start'/, 'renderer-profiles does not pass profile-start origin');
   assert(!/ritualStart/.test(rendererProfilesSrc), 'renderer-profiles gained ritual branching');
   assert(!/ritualId/.test(rendererProfilesSrc), 'renderer-profiles inspects ritualId');
-  assert(!/ritualId/.test(rendererSrc), 'renderer.js inspects ritualId');
+  // renderer.js may reference ritualId for armed-mode banner display (presentation only),
+  // but must not use it for execution routing decisions.
+  assert(!/profile\.ritualId/.test(rendererSrc), 'renderer.js inspects profile.ritualId for routing');
   // Default origin must not be 'play' — only explicit callers should be eligible.
   assertMatch(rendererSrc, /origin = null\)/, 'renderer startTimer default origin should be null, not play');
   // Only PLAY buttons and Space key pass 'play' explicitly.
@@ -1588,6 +1590,22 @@ check('night-modes: profileRitualContext preserves night mode identity', () => {
 check('night-modes: responsive breakpoint for detail panel', () => {
   const stylesSrc = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
   assertMatch(stylesSrc, /@media.*max-width.*680px/, 'responsive breakpoint for detail panel missing');
+});
+
+check('night-modes: resolveNightModeStart returns canonical ritualId', () => {
+  assertMatch(nightModesSrc, /ritualId: mode\.timer\.ritualId/, 'resolveNightModeStart does not return ritualId');
+});
+
+check('night-modes: ritual path enforcement in startTimer (gateway clears none-ritual modes)', () => {
+  assertMatch(mainSrc, /nmIdentity\.ritualId !== 'standard'/, 'gateway does not enforce ritualId !== standard');
+});
+
+check('night-modes: ritual path enforcement in startTimer (direct clears standard-ritual modes)', () => {
+  assertMatch(mainSrc, /nmIdentity\.ritualId === 'standard'/, 'direct path does not enforce ritualId === standard');
+});
+
+check('night-modes: armed mode banner shows ritual state', () => {
+  assertMatch(rendererSrc, /ritualId === 'standard'.*Standard ritual/, 'banner does not show ritual state');
 });
 
 // Cleanup.
