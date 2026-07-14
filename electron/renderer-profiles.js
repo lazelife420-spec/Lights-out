@@ -200,7 +200,7 @@ async function applyProfile(profileId, opts = {}) {
     // Selection is always inert. Only an explicit "start" action may run it.
     if (shouldStartOnProfileSelection(opts) && !state.running && !state.paused) {
       state._clockDismissedByProfile = false; // timer starting, no restore needed
-      startTimer(result.timerOptions?.durationSeconds);
+      startTimer(result.timerOptions?.durationSeconds, 'profile-start');
     }
   } catch (error) {
     notify(`Failed to apply profile: ${error.message}`, 'error');

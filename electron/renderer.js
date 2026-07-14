@@ -1531,7 +1531,7 @@ function updateAnalogHands(now) {
   }
 }
 
-async function startTimer(seconds = inputSeconds()) {
+async function startTimer(seconds = inputSeconds(), origin = 'play') {
   const durationSeconds = Math.max(1, Math.round(seconds));
 
   try {
@@ -1543,7 +1543,8 @@ async function startTimer(seconds = inputSeconds()) {
       forceShutdown: state.forceShutdown,
       muteSystem: state.muteSystem,
       gracePeriod: state.graceMinutes,
-      profileId: state.currentProfileId
+      profileId: state.currentProfileId,
+      startOrigin: origin
     });
 
     if (result?.success === false) {

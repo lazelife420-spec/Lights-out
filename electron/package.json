@@ -69,6 +69,7 @@
       "overrideTax.js",
       "autopilot.js",
       "ritualMode.js",
+      "profileRitualContext.js",
       "statsDashboard.js",
       "smartSuggestions.js",
       "widget.html",

@@ -109,6 +109,43 @@ test('getHint formats duration, clock, and calendar modes', () => {
   assert.equal(profiles.getHint(null), '');
 });
 
+test('normalize defaults ritualId to none for legacy profiles', () => {
+  const p = profiles.normalize({ name: 'Legacy' });
+  assert.equal(p.ritualId, 'none');
+});
+
+test('normalize preserves valid ritualId standard', () => {
+  const p = profiles.normalize({ name: 'Rituals', ritualId: 'standard' });
+  assert.equal(p.ritualId, 'standard');
+});
+
+test('normalize rejects invalid ritualId values', () => {
+  assert.equal(profiles.normalize({ name: 'X', ritualId: 'custom' }).ritualId, 'none');
+  assert.equal(profiles.normalize({ name: 'X', ritualId: 'extended' }).ritualId, 'none');
+  assert.equal(profiles.normalize({ name: 'X', ritualId: '' }).ritualId, 'none');
+  assert.equal(profiles.normalize({ name: 'X', ritualId: null }).ritualId, 'none');
+  assert.equal(profiles.normalize({ name: 'X', ritualId: 123 }).ritualId, 'none');
+  assert.equal(profiles.normalize({ name: 'X', ritualId: true }).ritualId, 'none');
+});
+
+test('normalize drops arbitrary ritual step arrays from profile data', () => {
+  const p = profiles.normalize({
+    name: 'Injected',
+    ritualId: 'standard',
+    steps: [{ id: 'malicious', label: 'Bad', durationSeconds: 9999 }],
+    ritualSteps: [{ id: 'also-bad' }]
+  });
+  assert.equal(p.ritualId, 'standard');
+  assert.equal(p.steps, undefined);
+  assert.equal(p.ritualSteps, undefined);
+});
+
+test('normalize preserves ritualId across re-normalization (update path)', () => {
+  const first = profiles.normalize({ name: 'Night', ritualId: 'standard' });
+  const updated = profiles.normalize({ ...first, name: 'Night v2' });
+  assert.equal(updated.ritualId, 'standard');
+});
+
 test('formatDuration renders hours+minutes or minutes-only', () => {
   assert.equal(profiles.formatDuration(90 * 60), '1h 30m');
   assert.equal(profiles.formatDuration(45 * 60), '45m');

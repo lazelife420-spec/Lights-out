@@ -34,7 +34,7 @@ function assertMatch(src, pattern, msg) {
 }
 
 // 1. Syntax-check every first-party JS file.
-const jsFiles = ['main.js', 'preload.js', 'renderer-utils.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'renderer.js', 'settings.js', 'smartLights.js', 'profiles.js', 'profileIdentity.js', 'windowGeometry.js', 'calendar.js', 'lastLight.js'];
+const jsFiles = ['main.js', 'preload.js', 'renderer-utils.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'renderer.js', 'settings.js', 'smartLights.js', 'profiles.js', 'profileIdentity.js', 'profileRitualContext.js', 'windowGeometry.js', 'calendar.js', 'lastLight.js'];
 for (const file of jsFiles) {
   check(`syntax: ${file}`, () => {
     execFileSync(process.execPath, ['--check', path.join(root, file)], { stdio: 'pipe' });
@@ -199,7 +199,7 @@ check('family profiles: selection stays inert and identity reaches receipts', ()
   const shouldStart = Function(`return (${startFnMatch[0]})`)();
   assert(shouldStart({ autoStart: true }) === false, 'legacy autoStart starts a timer on selection');
   assert(shouldStart({ start: true }) === true, 'explicit Start Profile action is blocked');
-  assertMatch(familyRendererSrc, /profileId:\s*state\.currentProfileId\s*\}/, 'selected profile ID is not sent with timer start');
+  assertMatch(familyRendererSrc, /profileId:\s*state\.currentProfileId/, 'selected profile ID is not sent with timer start');
   assert(!/profileName:\s*state\.profiles/.test(familyRendererSrc), 'renderer profile name still crosses the trust boundary');
   assertMatch(familyMainSrc, /timerState\.profileId = identity\.profileId;[\s\S]*timerState\.profileName = identity\.profileName;/, 'main timer state does not use canonical identity');
   assertMatch(familyMainSrc, /source:\s*'remote'/, 'remote starts are not explicitly marked unattributed');
@@ -1178,6 +1178,47 @@ check('ritual-mode: lights step uses a real smart-lights scene helper', () => {
   assertMatch(smartLightsSrc, /async function applyScene\(sceneId\) \{/, 'smart-lights scene helper missing');
   assertMatch(smartLightsSrc, /module\.exports = \{[\s\S]*applyScene,/s, 'smart-lights scene helper not exported');
   assertMatch(mainSrc, /smartLights\.applyScene\('night'\)\.catch\(\(\) => \{\}\);/, 'ritual lights step should use exported applyScene helper');
+});
+
+// 16b. Profile Ritual Gateway.
+check('profile-ritual-gateway: context module loaded and ritual gateway in startTimer', () => {
+  assert(mainSrc.includes("require('./profileRitualContext')"), 'profileRitualContext not required in main');
+  assertMatch(mainSrc, /profileRitualContext\.isEligibleOrigin\(options\.startOrigin\)/, 'ritual gateway eligibility check missing');
+  assertMatch(mainSrc, /profile\.ritualId === 'standard'/, 'ritual gateway ritualId check missing');
+  assertMatch(mainSrc, /profileRitualContext\.createContext\(/, 'ritual gateway does not create pending context');
+  assertMatch(mainSrc, /ritualMode\.startRitual\(\)/, 'ritual gateway does not start standard ritual');
+});
+
+check('profile-ritual-gateway: timer step consumes pending context with fallback', () => {
+  assertMatch(mainSrc, /profileRitualContext\.consumeAny\(\)/, 'timer step does not consume pending context');
+  assertMatch(mainSrc, /ritualMode\.getConfig\(\)[\s\S]{0,50}startTimer/, 'timer step fallback to global config missing');
+});
+
+check('profile-ritual-gateway: context cleared on cancel, complete, and manual start', () => {
+  // Cancel clears context
+  assertMatch(mainSrc, /ritual-cancel[\s\S]{0,120}profileRitualContext\.clear\(\)/, 'cancel does not clear profile ritual context');
+  // Manual Begin Ritual clears context
+  assertMatch(mainSrc, /ritual-start[\s\S]{0,250}profileRitualContext\.clear\(\)/, 'manual ritual-start does not clear pending context');
+  // Completion clears context
+  assertMatch(mainSrc, /onComplete[\s\S]{0,200}profileRitualContext\.clear\(\)/, 'ritual completion does not clear pending context');
+});
+
+check('profile-ritual-gateway: renderer sends startOrigin without ritual branching', () => {
+  const rendererSrc = fs.readFileSync(path.join(root, 'renderer.js'), 'utf8');
+  const rendererProfilesSrc = fs.readFileSync(path.join(root, 'renderer-profiles.js'), 'utf8');
+  assertMatch(rendererSrc, /startOrigin:\s*origin/, 'renderer startTimer does not send startOrigin');
+  assertMatch(rendererProfilesSrc, /'profile-start'/, 'renderer-profiles does not pass profile-start origin');
+  assert(!/ritualStart/.test(rendererProfilesSrc), 'renderer-profiles gained ritual branching');
+  assert(!/ritualId/.test(rendererProfilesSrc), 'renderer-profiles inspects ritualId');
+  assert(!/ritualId/.test(rendererSrc), 'renderer.js inspects ritualId');
+});
+
+check('profile-ritual-gateway: remote source cannot trigger profile ritual', () => {
+  assertMatch(mainSrc, /options\.source !== 'remote'/, 'ritual gateway does not block remote starts');
+});
+
+check('profile-ritual-gateway: normalizeTimerOptions accepts startOrigin field', () => {
+  assertMatch(mainSrc, /startOrigin:\s*typeof options\.startOrigin === 'string'/, 'normalizeTimerOptions does not parse startOrigin');
 });
 
 // 17. Stats Dashboard.

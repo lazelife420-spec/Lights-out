@@ -31,6 +31,7 @@ const bedtimeReminder = require('./bedtimeReminder');
 const overrideTax = require('./overrideTax');
 const autopilot = require('./autopilot');
 const ritualMode = require('./ritualMode');
+const profileRitualContext = require('./profileRitualContext');
 const statsDashboard = require('./statsDashboard');
 const smartSuggestions = require('./smartSuggestions');
 const windowGeometry = require('./windowGeometry');
@@ -587,7 +588,8 @@ function normalizeTimerOptions(input, legacyAction) {
     muteSystem: Boolean(options.muteSystem),
     gracePeriod: Number.isFinite(Number(options.gracePeriod)) ? Math.max(0, Number(options.gracePeriod)) : 2,
     profileId: typeof options.profileId === 'string' ? options.profileId : null,
-    source: options.source === 'remote' ? 'remote' : 'local'
+    source: options.source === 'remote' ? 'remote' : 'local',
+    startOrigin: typeof options.startOrigin === 'string' ? options.startOrigin : null
   };
 }
 
@@ -604,6 +606,31 @@ function resolveTimerProfileIdentity(profileId, source) {
 function startTimer(input, legacyAction) {
   const options = normalizeTimerOptions(input, legacyAction);
   const identity = resolveTimerProfileIdentity(options.profileId, options.source);
+
+  // Profile Ritual Gateway: if an eligible start origin targets a profile with
+  // ritualId 'standard', start the standard ritual and hold validated timer
+  // context for consumption by the ritual's timer step.
+  if (profileRitualContext.isEligibleOrigin(options.startOrigin) && identity.profileId) {
+    const profile = profiles.getById(identity.profileId);
+    if (profile && profile.ritualId === 'standard' && options.source !== 'remote') {
+      // Clear any stale pending context before creating a new one.
+      profileRitualContext.clear();
+      profileRitualContext.createContext({
+        durationSeconds: options.durationSeconds,
+        action: options.action,
+        dryRun: options.dryRun,
+        forceShutdown: options.forceShutdown,
+        muteSystem: options.muteSystem,
+        gracePeriod: options.gracePeriod,
+        profileId: identity.profileId,
+        profileName: identity.profileName
+      });
+      // Start the standard ritual; its timer step will consume the context.
+      ritualMode.startRitual();
+      return { success: true, ritualStarted: true };
+    }
+  }
+
   clearTimerInterval();
 
   // Override Tax: reset session snooze count for this new run.
@@ -1924,6 +1951,9 @@ ipcMain.handle('enable-autopilot', async (e, enabled) => {
 
 // Ritual Mode IPC.
 ipcMain.handle('ritual-start', async (e, customSteps) => {
+  // Manual Begin Ritual clears any pending profile-sourced context so it cannot
+  // leak into this independently triggered ritual.
+  profileRitualContext.clear();
   return ritualMode.startRitual(customSteps);
 });
 ipcMain.handle('ritual-advance', async () => {
@@ -1933,6 +1963,7 @@ ipcMain.handle('ritual-skip', async () => {
   return ritualMode.skipStep();
 });
 ipcMain.handle('ritual-cancel', async () => {
+  profileRitualContext.clear();
   return ritualMode.cancelRitual();
 });
 ipcMain.handle('ritual-state', async () => {
@@ -2519,8 +2550,25 @@ app.whenReady().then(async () => {
       const appSettings = settingsStore.getSection('app') || {};
       if (appSettings.nightLightOnDim) applyDimPhase(0, 0);
     } else if (step.id === 'timer') {
-      const config = ritualMode.getConfig();
-      startTimer({ durationSeconds: config.timerDuration, action: config.timerAction, source: 'ritual' });
+      // Profile ritual context takes precedence: use the validated timer options
+      // stashed when the profile-sourced ritual was started. Falls back to global
+      // ritual config for manual Begin Ritual (no pending context).
+      const ctx = profileRitualContext.consumeAny();
+      if (ctx) {
+        startTimer({
+          durationSeconds: ctx.durationSeconds,
+          action: ctx.action,
+          dryRun: ctx.dryRun,
+          forceShutdown: ctx.forceShutdown,
+          muteSystem: ctx.muteSystem,
+          gracePeriod: ctx.gracePeriod,
+          profileId: ctx.profileId,
+          source: 'ritual'
+        });
+      } else {
+        const config = ritualMode.getConfig();
+        startTimer({ durationSeconds: config.timerDuration, action: config.timerAction, source: 'ritual' });
+      }
     } else if (step.id === 'lights') {
       const lightsConfig = settingsStore.getSection('smartLights');
       if (lightsConfig && lightsConfig.enabled) {
@@ -2529,6 +2577,9 @@ app.whenReady().then(async () => {
     }
   });
   ritualMode.onComplete((state) => {
+    // Clear any unconsumed profile-ritual context on completion (covers the case
+    // where the ritual completes without reaching or executing the timer step).
+    profileRitualContext.clear();
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('ritual-complete', state);
     }
