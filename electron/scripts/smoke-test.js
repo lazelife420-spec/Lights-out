@@ -1214,8 +1214,8 @@ check('profile-ritual-gateway: context cleared on cancel, complete, and manual s
   assertMatch(mainSrc, /ritual-cancel[\s\S]{0,150}profileRitualContext\.clear\(\)/, 'cancel does not clear profile ritual context');
   // Manual Begin Ritual clears context (unconditional)
   assertMatch(mainSrc, /ritual-start[\s\S]{0,250}profileRitualContext\.clear\(\)/, 'manual ritual-start does not clear pending context');
-  // Completion uses token-safe clearIfOwned
-  assertMatch(mainSrc, /onComplete[\s\S]{0,200}profileRitualContext\.clearIfOwned\(runToken\)/, 'ritual completion does not use token-safe clearIfOwned');
+  // Completion uses token-safe clearIfOwned (guarded by runToken)
+  assertMatch(mainSrc, /ritualMode\.onComplete[\s\S]{0,400}profileRitualContext\.clearIfOwned\(runToken\)/, 'ritual completion does not use token-safe clearIfOwned');
 });
 
 check('profile-ritual-gateway: renderer sends startOrigin without ritual branching', () => {
@@ -1245,20 +1245,32 @@ check('profile-ritual-gateway: run-owned token via ritualMode metadata', () => {
   const ritualSrc = fs.readFileSync(path.join(root, 'ritualMode.js'), 'utf8');
   assertMatch(ritualSrc, /runMeta: meta && typeof meta === 'object'/, 'ritualMode does not store run metadata');
   assertMatch(ritualSrc, /Object\.freeze\(\{ \.\.\.meta \}\)/, 'ritualMode does not freeze run metadata');
-  assertMatch(ritualSrc, /onStepCallback\(current, getState\(\), ritualState\.runMeta\)/, 'onStep does not pass runMeta');
-  assertMatch(ritualSrc, /onCompleteCallback\(getState\(\), ritualState\.runMeta\)/, 'onComplete does not pass runMeta');
+  assertMatch(ritualSrc, /onStepCallback\(current, getState\(\), ritualState\.runMeta, ritualState\.runId\)/, 'onStep does not pass runMeta+runId');
+  assertMatch(ritualSrc, /onCompleteCallback\(getState\(\), ritualState\.runMeta, ritualState\.runId\)/, 'onComplete does not pass runMeta+runId');
 });
 
-check('profile-ritual-gateway: error uses run-owned cancellation and cleanup', () => {
-  assertMatch(mainSrc, /catch \(err\)[\s\S]{0,150}profileRitualContext\.clearIfOwned\(runToken\)/, 'step error does not use token-safe clearIfOwned');
-  assertMatch(mainSrc, /catch \(err\)[\s\S]{0,200}ritualMode\.cancelIfOwned\(runToken\)/, 'step error does not use run-owned cancelIfOwned');
-  assert(!mainSrc.match(/catch \(err\)[\s\S]{0,200}ritualMode\.cancelRitual\(\)/), 'step error uses unconditional cancelRitual instead of cancelIfOwned');
+check('profile-ritual-gateway: error uses runId-owned cancellation and token-owned cleanup', () => {
+  assertMatch(mainSrc, /catch \(err\)[\s\S]{0,400}ritualMode\.cancelIfCurrent\(runId\)/, 'step error does not use cancelIfCurrent(runId)');
+  assertMatch(mainSrc, /catch \(err\)[\s\S]{0,400}profileRitualContext\.clearIfOwned\(runToken\)/, 'step error does not use clearIfOwned(runToken)');
+  assert(!mainSrc.match(/catch \(err\)[\s\S]{0,400}ritualMode\.cancelRitual\(\)/), 'step error uses unconditional cancelRitual');
+  assert(!mainSrc.match(/catch \(err\)[\s\S]{0,400}ritualMode\.cancelIfOwned/), 'step error still uses deprecated cancelIfOwned');
 });
 
-check('profile-ritual-gateway: cancelIfOwned exported from ritualMode', () => {
+check('profile-ritual-gateway: cancelIfCurrent exported from ritualMode', () => {
   const ritualSrc = fs.readFileSync(path.join(root, 'ritualMode.js'), 'utf8');
-  assertMatch(ritualSrc, /function cancelIfOwned\(token\)/, 'cancelIfOwned function not found in ritualMode');
-  assertMatch(ritualSrc, /cancelIfOwned,/, 'cancelIfOwned not exported from ritualMode');
+  assertMatch(ritualSrc, /function cancelIfCurrent\(runId\)/, 'cancelIfCurrent not found in ritualMode');
+  assertMatch(ritualSrc, /cancelIfCurrent,/, 'cancelIfCurrent not exported from ritualMode');
+  assert(!ritualSrc.includes('cancelIfOwned'), 'deprecated cancelIfOwned still exists in ritualMode');
+});
+
+check('profile-ritual-gateway: onStep callback receives runId as 4th param', () => {
+  assertMatch(mainSrc, /onStep\(\(step, state, runMeta, runId\)/, 'onStep does not receive runId as 4th param');
+});
+
+check('profile-ritual-gateway: getRunId exported from ritualMode', () => {
+  const ritualSrc = fs.readFileSync(path.join(root, 'ritualMode.js'), 'utf8');
+  assertMatch(ritualSrc, /function getRunId/, 'getRunId not found');
+  assertMatch(ritualSrc, /getRunId,/, 'getRunId not exported');
 });
 
 check('profile-ritual-gateway: auto-advance timer captures runId for staleness', () => {

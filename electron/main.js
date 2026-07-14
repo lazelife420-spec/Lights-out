@@ -2555,9 +2555,10 @@ app.whenReady().then(async () => {
   autopilot.schedule(startTimer, mainWindow);
 
   // Ritual Mode: forward steps to renderer and execute side effects.
-  // Each callback receives the run's immutable metadata (including the
-  // profileRitualToken belonging to that exact run, or null for manual rituals).
-  ritualMode.onStep((step, state, runMeta) => {
+  // Each callback receives:
+  //   runMeta: immutable metadata (profileRitualToken for profile rituals, null for manual)
+  //   runId:   internal numeric run identity (always present, both profile and manual)
+  ritualMode.onStep((step, state, runMeta, runId) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('ritual-step', { step, state });
     }
@@ -2599,17 +2600,19 @@ app.whenReady().then(async () => {
         }
       }
     } catch (err) {
-      // On step-handler error: run-owned cleanup and cancellation.
-      // An obsolete callback from run A cannot cancel a newer run B.
-      profileRitualContext.clearIfOwned(runToken);
-      ritualMode.cancelIfOwned(runToken);
+      // On step-handler error:
+      // 1. Profile-context cleanup: owned by profileRitualToken (no-op if null/manual).
+      // 2. Run cancellation: owned by runId (works for BOTH profile and manual rituals).
+      if (runToken) profileRitualContext.clearIfOwned(runToken);
+      ritualMode.cancelIfCurrent(runId);
       console.error('[ritual-step-error]', err);
     }
   });
-  ritualMode.onComplete((state, runMeta) => {
-    // Token-safe cleanup: clear only this run's context (if unconsumed).
+  ritualMode.onComplete((state, runMeta, runId) => {
+    // Token-safe cleanup: clear only this run's profile context (if unconsumed).
+    // runId is available but not needed here — completion is already the end state.
     const runToken = runMeta && runMeta.profileRitualToken ? runMeta.profileRitualToken : null;
-    profileRitualContext.clearIfOwned(runToken);
+    if (runToken) profileRitualContext.clearIfOwned(runToken);
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('ritual-complete', state);
     }

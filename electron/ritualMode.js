@@ -83,7 +83,7 @@ function advanceStep(skipped = false) {
   if (ritualState.currentStep >= ritualState.steps.length) {
     // Ritual complete.
     ritualState.active = false;
-    if (onCompleteCallback) onCompleteCallback(getState(), ritualState.runMeta);
+    if (onCompleteCallback) onCompleteCallback(getState(), ritualState.runMeta, ritualState.runId);
     return getState();
   }
 
@@ -101,19 +101,23 @@ function cancelRitual() {
   return getState();
 }
 
-// Run-owned cancellation: cancels only when the active ritual's
-// profileRitualToken matches the supplied token. Returns true if
-// the cancellation was applied, false if it was a no-op.
-function cancelIfOwned(token) {
-  if (!token) return false;
+// Run-ID-owned cancellation: cancels only when the supplied runId
+// matches the currently active ritual's internal run ID. Works for
+// both profile and manual/global rituals.
+function cancelIfCurrent(runId) {
+  if (!runId) return false;
   if (!ritualState.active) return false;
-  if (!ritualState.runMeta || ritualState.runMeta.profileRitualToken !== token) return false;
+  if (ritualState.runId !== runId) return false;
   cancelRitual();
   return true;
 }
 
 function getRunMeta() {
   return ritualState.runMeta;
+}
+
+function getRunId() {
+  return ritualState.runId;
 }
 
 function getState() {
@@ -136,7 +140,7 @@ function emitStep() {
   const current = ritualState.steps[ritualState.currentStep];
   if (!current) return;
 
-  if (onStepCallback) onStepCallback(current, getState(), ritualState.runMeta);
+  if (onStepCallback) onStepCallback(current, getState(), ritualState.runMeta, ritualState.runId);
 
   // Auto-advance timed steps. The closure captures this run's ID so it
   // becomes a no-op if a new ritual has started in the meantime.
@@ -165,9 +169,10 @@ module.exports = {
   advanceStep,
   skipStep,
   cancelRitual,
-  cancelIfOwned,
+  cancelIfCurrent,
   getState,
   getRunMeta,
+  getRunId,
   onStep,
   onComplete,
   updateConfig

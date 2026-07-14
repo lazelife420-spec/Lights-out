@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// Full GUI Walkthrough: Profile Ritual Gateway
+// Real Electron Main/Preload/IPC Integration Proof: Profile Ritual Gateway
 //
-// Launches a real Electron BrowserWindow with isolated userData and Dry Run.
-// Exercises the complete renderer → preload → IPC → main → ritual → countdown
-// → receipt flow. No real power actions.
+// Launches the real main.js as Electron entry with isolated userData and Dry Run.
+// Exercises BrowserWindow + preload bridge + IPC handlers + ritual + countdown
+// + receipt flow. The renderer HTML loads successfully, enabling full IPC.
+// No real power actions.
 //
 // Usage: node scripts/ritual-gateway-gui-proof.js
 
@@ -15,7 +16,7 @@ const fs = require('fs');
 const os = require('os');
 
 const isolatedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-gui-proof-'));
-console.log('\nFull GUI Walkthrough — Profile Ritual Gateway');
+console.log('\nReal Electron Main/Preload/IPC Integration Proof — Profile Ritual Gateway');
 console.log(`Isolated userData: ${isolatedDir}`);
 console.log('Dry Run: ENABLED\n');
 
@@ -51,8 +52,9 @@ process.argv.push('--minimized');
 // Pass --no-auto-start so no timer starts automatically.
 process.argv.push('--no-auto-start');
 
-// Set CWD to the electron root so loadFile('index.html') in main.js works.
+// Set both CWD and app path so loadFile('index.html') in main.js resolves correctly.
 process.chdir(${JSON.stringify(electronRoot)});
+app.setAppPath(${JSON.stringify(electronRoot)});
 
 let proofReady = null;
 const proofPromise = new Promise(r => { proofReady = r; });
@@ -123,6 +125,18 @@ proofPromise.then(async (mainWindow) => {
     if (!p || !p.id) throw new Error('create failed: ' + JSON.stringify(result));
     standardProfile = p;
     if (standardProfile.ritualId !== 'standard') throw new Error('ritualId wrong');
+  });
+
+  // ── 1b. Verify index.html loaded (renderer DOM exists) ──
+  await asyncCheck('1b. index.html loaded (renderer DOM present)', async () => {
+    const title = await mainWindow.webContents.executeJavaScript('document.title');
+    if (!title) throw new Error('document.title is empty — index.html did not load');
+    const hasBody = await mainWindow.webContents.executeJavaScript(
+      'document.body && document.body.children.length > 0 ? "yes" : "no"'
+    );
+    if (hasBody !== 'yes') throw new Error('document.body is empty — renderer did not paint');
+    console.log('  [info] document.title = ' + title);
+    console.log('  [info] index.html loaded = true');
   });
 
   // ── 2. Verify electronAPI is available in renderer (real preload bridge) ──
@@ -333,7 +347,7 @@ proofPromise.then(async (mainWindow) => {
   console.log('');
   results.forEach(r => console.log(r));
   console.log('');
-  console.log('Full GUI Walkthrough: ' + passed + ' passed, ' + failed + ' failed');
+  console.log('Electron IPC Integration Proof: ' + passed + ' passed, ' + failed + ' failed');
   console.log('Isolated userData: ' + ${JSON.stringify(isolatedDir)});
   console.log('Dry Run: ' + ((settingsStore.getSection('app') || {}).dryRun || false));
 
@@ -377,9 +391,9 @@ child.stderr.on('data', (data) => {
 child.on('close', (code) => {
   try { fs.rmSync(isolatedDir, { recursive: true, force: true }); } catch (_e) { /* ok */ }
   if (code === 0) {
-    console.log('\n✓ Full GUI walkthrough completed successfully.');
+    console.log('\n✓ Electron IPC integration proof completed successfully.');
   } else {
-    console.log('\n✗ Full GUI walkthrough FAILED (exit code: ' + code + ')');
+    console.log('\n✗ Electron IPC integration proof FAILED (exit code: ' + code + ')');
   }
   process.exit(code);
 });
