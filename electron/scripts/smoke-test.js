@@ -1186,22 +1186,36 @@ check('profile-ritual-gateway: context module loaded and ritual gateway in start
   assertMatch(mainSrc, /profileRitualContext\.isEligibleOrigin\(options\.startOrigin\)/, 'ritual gateway eligibility check missing');
   assertMatch(mainSrc, /profile\.ritualId === 'standard'/, 'ritual gateway ritualId check missing');
   assertMatch(mainSrc, /profileRitualContext\.createContext\(/, 'ritual gateway does not create pending context');
-  assertMatch(mainSrc, /ritualMode\.startRitual\(\)/, 'ritual gateway does not start standard ritual');
+  assertMatch(mainSrc, /ritualMode\.startRitual\(null, \{ profileRitualToken: runToken \}\)/, 'ritual gateway does not pass token as run metadata');
 });
 
-check('profile-ritual-gateway: timer step uses token-verified consume with fallback', () => {
-  assertMatch(mainSrc, /profileRitualContext\.consume\(activeRitualRunToken\)/, 'timer step does not use token-verified consume');
-  assert(!mainSrc.includes('profileRitualContext.consumeAny'), 'consumeAny still called in main — should use token-verified consume');
-  assertMatch(mainSrc, /ritualMode\.getConfig\(\)[\s\S]{0,50}startTimer/, 'timer step fallback to global config missing');
+check('profile-ritual-gateway: timer step uses run-owned token from runMeta', () => {
+  assertMatch(mainSrc, /profileRitualContext\.consume\(runToken\)/, 'timer step does not use run-owned token');
+  assert(!mainSrc.includes('consumeAny'), 'consumeAny reference still in main.js');
+  assertMatch(mainSrc, /beginValidatedCountdown\(/, 'timer step does not call beginValidatedCountdown');
+  assertMatch(mainSrc, /ritualMode\.getConfig\(\)[\s\S]{0,80}beginValidatedCountdown/, 'timer step fallback to global config missing');
+});
+
+check('profile-ritual-gateway: beginValidatedCountdown split from startTimer', () => {
+  assertMatch(mainSrc, /function beginValidatedCountdown\(options, identity\)/, 'beginValidatedCountdown function not found');
+  // Ritual timer step must not re-enter startTimer (would cause self-cancel).
+  const timerStepBlock = mainSrc.match(/step\.id === 'timer'[\s\S]{0,1100}step\.id === 'lights'/);
+  assert(timerStepBlock, 'timer step block not found');
+  assert(!timerStepBlock[0].includes('startTimer('), 'timer step re-enters startTimer — should use beginValidatedCountdown');
+});
+
+check('profile-ritual-gateway: direct supersession only for non-ritual source', () => {
+  assertMatch(mainSrc, /options\.source !== 'ritual' && ritualMode\.getState\(\)\.active/, 'direct supersession is not guarded by source !== ritual');
+  assertMatch(mainSrc, /options\.source !== 'ritual'[\s\S]{0,80}profileRitualContext\.clear\(\)/, 'supersession unconditional clear not guarded by source !== ritual');
 });
 
 check('profile-ritual-gateway: context cleared on cancel, complete, and manual start', () => {
-  // Cancel clears context
-  assertMatch(mainSrc, /ritual-cancel[\s\S]{0,120}profileRitualContext\.clear\(\)/, 'cancel does not clear profile ritual context');
-  // Manual Begin Ritual clears context
+  // Cancel clears context (unconditional)
+  assertMatch(mainSrc, /ritual-cancel[\s\S]{0,150}profileRitualContext\.clear\(\)/, 'cancel does not clear profile ritual context');
+  // Manual Begin Ritual clears context (unconditional)
   assertMatch(mainSrc, /ritual-start[\s\S]{0,250}profileRitualContext\.clear\(\)/, 'manual ritual-start does not clear pending context');
-  // Completion clears context
-  assertMatch(mainSrc, /onComplete[\s\S]{0,200}profileRitualContext\.clear\(\)/, 'ritual completion does not clear pending context');
+  // Completion uses token-safe clearIfOwned
+  assertMatch(mainSrc, /onComplete[\s\S]{0,200}profileRitualContext\.clearIfOwned\(runToken\)/, 'ritual completion does not use token-safe clearIfOwned');
 });
 
 check('profile-ritual-gateway: renderer sends startOrigin without ritual branching', () => {
@@ -1227,19 +1241,32 @@ check('profile-ritual-gateway: normalizeTimerOptions accepts startOrigin field',
   assertMatch(mainSrc, /startOrigin:\s*typeof options\.startOrigin === 'string'/, 'normalizeTimerOptions does not parse startOrigin');
 });
 
-check('profile-ritual-gateway: direct timer supersession cancels active ritual', () => {
-  assertMatch(mainSrc, /ritualMode\.getState\(\)\.active[\s\S]{0,50}ritualMode\.cancelRitual\(\)/, 'direct timer does not cancel active ritual');
-  assertMatch(mainSrc, /profileRitualContext\.clear\(\);\s*\n\s*activeRitualRunToken = null;\s*\n\s*\n\s*clearTimerInterval/, 'supersession does not clear context before countdown');
+check('profile-ritual-gateway: run-owned token via ritualMode metadata', () => {
+  const ritualSrc = fs.readFileSync(path.join(root, 'ritualMode.js'), 'utf8');
+  assertMatch(ritualSrc, /runMeta: meta && typeof meta === 'object'/, 'ritualMode does not store run metadata');
+  assertMatch(ritualSrc, /Object\.freeze\(\{ \.\.\.meta \}\)/, 'ritualMode does not freeze run metadata');
+  assertMatch(ritualSrc, /onStepCallback\(current, getState\(\), ritualState\.runMeta\)/, 'onStep does not pass runMeta');
+  assertMatch(ritualSrc, /onCompleteCallback\(getState\(\), ritualState\.runMeta\)/, 'onComplete does not pass runMeta');
 });
 
-check('profile-ritual-gateway: token threaded through ritual run', () => {
-  assertMatch(mainSrc, /activeRitualRunToken = profileRitualContext\.createContext\(/, 'gateway does not store run token');
-  assertMatch(mainSrc, /profileRitualContext\.consume\(activeRitualRunToken\)/, 'timer step does not use stored run token');
+check('profile-ritual-gateway: error cancels ritual and uses token-safe cleanup', () => {
+  assertMatch(mainSrc, /catch \(err\)[\s\S]{0,150}profileRitualContext\.clearIfOwned\(runToken\)/, 'step error does not use token-safe clearIfOwned');
+  assertMatch(mainSrc, /catch \(err\)[\s\S]{0,200}ritualMode\.cancelRitual\(\)/, 'step error does not cancel the ritual run');
 });
 
-check('profile-ritual-gateway: error and shutdown cleanup', () => {
-  assertMatch(mainSrc, /catch \(err\)[\s\S]{0,120}profileRitualContext\.clear\(\)/, 'step error does not clear context');
+check('profile-ritual-gateway: shutdown cleanup', () => {
   assertMatch(mainSrc, /before-quit[\s\S]{0,200}profileRitualContext\.clear\(\)/, 'app shutdown does not clear context');
+});
+
+check('profile-ritual-gateway: no activeRitualRunToken global', () => {
+  assert(!mainSrc.includes('activeRitualRunToken'), 'mutable global activeRitualRunToken still exists in main.js');
+});
+
+check('profile-ritual-gateway: consumeAny completely removed', () => {
+  const ctxSrc = fs.readFileSync(path.join(root, 'profileRitualContext.js'), 'utf8');
+  assert(!ctxSrc.includes('consumeAny'), 'consumeAny still exists in profileRitualContext.js');
+  assert(!ctxSrc.includes('_consumeAny'), '_consumeAny still exists in profileRitualContext.js');
+  assert(!mainSrc.includes('consumeAny'), 'consumeAny still referenced in main.js');
 });
 
 // 17. Stats Dashboard.

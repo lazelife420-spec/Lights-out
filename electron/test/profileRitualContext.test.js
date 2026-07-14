@@ -78,8 +78,39 @@ test('consume with undefined token returns null', () => {
   ctx.clear();
 });
 
-test('consumeAny is not exported (token-verified consume only)', () => {
+test('consumeAny does not exist anywhere in the module', () => {
   assert.equal(typeof ctx.consumeAny, 'undefined');
+  assert.equal(typeof ctx._consumeAny, 'undefined');
+  // Verify the source file has no consumeAny at all
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'profileRitualContext.js'), 'utf8');
+  assert.ok(!src.includes('consumeAny'), 'consumeAny text found in source');
+});
+
+test('clearIfOwned clears only when token matches', () => {
+  ctx.clear();
+  const token = ctx.createContext(VALID_CONTEXT);
+  assert.equal(ctx.clearIfOwned('wrong-token'), false);
+  assert.ok(ctx.hasPending()); // still there
+  assert.equal(ctx.clearIfOwned(token), true);
+  assert.ok(!ctx.hasPending()); // now cleared
+});
+
+test('clearIfOwned returns false when nothing pending', () => {
+  ctx.clear();
+  assert.equal(ctx.clearIfOwned('any-token'), false);
+});
+
+test('old run clearIfOwned cannot clear newer run context', () => {
+  ctx.clear();
+  const oldToken = ctx.createContext(VALID_CONTEXT);
+  // Simulate new run overwriting context
+  const newToken = ctx.createContext({ ...VALID_CONTEXT, durationSeconds: 7200 });
+  // Old token should not clear the new context
+  assert.equal(ctx.clearIfOwned(oldToken), false);
+  assert.ok(ctx.hasPending());
+  // New token should clear it
+  assert.equal(ctx.clearIfOwned(newToken), true);
+  assert.ok(!ctx.hasPending());
 });
 
 test('clear removes pending context', () => {

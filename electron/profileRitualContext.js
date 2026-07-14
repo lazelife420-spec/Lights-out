@@ -38,17 +38,20 @@ function consume(token) {
   return ctx;
 }
 
-// consumeAny is intentionally not exported. The timer step must use
-// token-verified consume(token) to prove ownership of the active run.
-function _consumeAny() {
-  if (!pendingContext) return null;
-  const ctx = { ...pendingContext };
-  pendingContext = null;
-  return ctx;
-}
-
+// Unconditional clear: use only for manual Begin Ritual, direct supersession,
+// and app shutdown. Run-owned callbacks should prefer clearIfOwned(token).
 function clear() {
   pendingContext = null;
+}
+
+// Token-safe clear: clears pending context only if it belongs to the given
+// token. An old run's callback cannot clear a newer run's context.
+function clearIfOwned(token) {
+  if (pendingContext && pendingContext.token === token) {
+    pendingContext = null;
+    return true;
+  }
+  return false;
 }
 
 function hasPending() {
@@ -68,6 +71,7 @@ module.exports = {
   createContext,
   consume,
   clear,
+  clearIfOwned,
   hasPending,
   getPendingToken,
   isEligibleOrigin

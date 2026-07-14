@@ -20,7 +20,8 @@ let ritualState = {
   steps: [],
   startedAt: null,
   completedSteps: [],
-  skippedSteps: []
+  skippedSteps: [],
+  runMeta: null  // immutable per-run metadata (e.g. { profileRitualToken })
 };
 
 let onStepCallback = null;
@@ -38,7 +39,7 @@ function getConfig() {
   };
 }
 
-function startRitual(customSteps) {
+function startRitual(customSteps, meta) {
   const config = getConfig();
   if (!config.enabled) return { active: false, reason: 'disabled' };
 
@@ -49,7 +50,8 @@ function startRitual(customSteps) {
     steps: steps.map(s => ({ ...s })),
     startedAt: new Date().toISOString(),
     completedSteps: [],
-    skippedSteps: []
+    skippedSteps: [],
+    runMeta: meta && typeof meta === 'object' ? Object.freeze({ ...meta }) : null
   };
 
   emitStep();
@@ -72,7 +74,7 @@ function advanceStep(skipped = false) {
   if (ritualState.currentStep >= ritualState.steps.length) {
     // Ritual complete.
     ritualState.active = false;
-    if (onCompleteCallback) onCompleteCallback(getState());
+    if (onCompleteCallback) onCompleteCallback(getState(), ritualState.runMeta);
     return getState();
   }
 
@@ -88,6 +90,10 @@ function cancelRitual() {
   if (stepTimer) { clearTimeout(stepTimer); stepTimer = null; }
   ritualState.active = false;
   return getState();
+}
+
+function getRunMeta() {
+  return ritualState.runMeta;
 }
 
 function getState() {
@@ -110,7 +116,7 @@ function emitStep() {
   const current = ritualState.steps[ritualState.currentStep];
   if (!current) return;
 
-  if (onStepCallback) onStepCallback(current, getState());
+  if (onStepCallback) onStepCallback(current, getState(), ritualState.runMeta);
 
   // Auto-advance timed steps.
   if (current.auto && current.durationSeconds > 0) {
@@ -137,6 +143,7 @@ module.exports = {
   skipStep,
   cancelRitual,
   getState,
+  getRunMeta,
   onStep,
   onComplete,
   updateConfig
