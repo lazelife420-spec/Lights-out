@@ -1435,6 +1435,38 @@ body.phase-lastlight .cockpit {
   box-shadow: 0 16px 48px rgba(0,0,0,0.5);
 }
 
+#options-modal {
+  padding: 16px;
+}
+
+.options-modal-content {
+  width: min(94vw, 560px);
+  max-width: 560px;
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.options-modal-content .modal-header,
+.options-modal-content .modal-footer {
+  flex: 0 0 auto;
+}
+
+.options-modal-content .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  padding: 18px 20px;
+  scrollbar-gutter: stable;
+}
+
+.options-modal-content .modal-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-card);
+}
+
 .modal-header {
   display: flex;
   justify-content: space-between;
@@ -2061,6 +2093,28 @@ body.mini-mode .action-btn {
 
   .status-section {
     flex-direction: column;
+  }
+
+  #options-modal {
+    padding: 8px;
+  }
+
+  .options-modal-content {
+    width: 100%;
+    max-height: calc(100vh - 16px);
+  }
+
+  .options-modal-content .modal-header {
+    padding: 12px 14px;
+  }
+
+  .options-modal-content .modal-body {
+    padding: 14px;
+    gap: 14px;
+  }
+
+  .options-modal-content .modal-footer {
+    padding: 10px 14px;
   }
 }
 

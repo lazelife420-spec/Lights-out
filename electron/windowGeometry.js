@@ -1,4 +1,4 @@
-const NORMAL_MINIMUM = Object.freeze({ width: 480, height: 600 });
+const NORMAL_MINIMUM = Object.freeze({ width: 900, height: 640 });
 const MINI_GEOMETRY = Object.freeze({ width: 260, height: 320 });
 
 function validBounds(bounds) {

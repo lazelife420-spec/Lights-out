@@ -40,6 +40,11 @@ function getReceiptProfileLabel(receipt) {
   return name ? `Profile: ${name}` : '';
 }
 
+function getReceiptNightModeLabel(receipt) {
+  const title = typeof receipt?.nightModeTitle === 'string' ? receipt.nightModeTitle.trim() : '';
+  return title ? `Mode: ${title}` : '';
+}
+
 async function loadMorningProof() {
   try {
     const receipt = await api.getLatestReceipt?.();
@@ -156,6 +161,7 @@ function renderReceiptsModal(receipts, stats) {
     // Only show meta chips that carry real information -- a "0 pauses,
     // 0 snoozes" chip on every row is noise, not proof.
     const chips = [
+      getReceiptNightModeLabel(r) ? escapeHtml(getReceiptNightModeLabel(r)) : null,
       getReceiptProfileLabel(r) ? escapeHtml(getReceiptProfileLabel(r)) : null,
       `${escapeHtml((r.action || '').charAt(0).toUpperCase() + (r.action || '').slice(1))}`,
       `${dur}m`,

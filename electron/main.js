@@ -36,6 +36,7 @@ const statsDashboard = require('./statsDashboard');
 const smartSuggestions = require('./smartSuggestions');
 const windowGeometry = require('./windowGeometry');
 const nightModes = require('./nightModes');
+const startDecision = require('./startDecision');
 
 const APP_ICON = path.join(__dirname, 'assets', 'icon.ico');
 const TRAY_ICON = path.join(__dirname, 'assets', 'tray-32.png');
@@ -614,41 +615,32 @@ const resolveNightModeStart = nightModes.resolveNightModeStart;
 function startTimer(input, legacyAction) {
   const options = normalizeTimerOptions(input, legacyAction);
   const identity = resolveTimerProfileIdentity(options.profileId, options.source);
+  const profile = profiles.getById(identity.profileId);
+  const nmIdentity = resolveNightModeStart(options);
+  const decision = startDecision.resolveStartDecision({ options, identity, profile, nmIdentity });
 
-  // Profile Ritual Gateway: if an eligible start origin targets a profile with
-  // ritualId 'standard', start the standard ritual and hold validated timer
-  // context for consumption by the ritual's timer step.
-  if (profileRitualContext.isEligibleOrigin(options.startOrigin) && identity.profileId) {
-    const profile = profiles.getById(identity.profileId);
-    if (profile && profile.ritualId === 'standard' && options.source !== 'remote') {
-      // Clear any stale pending context before creating a new one.
-      profileRitualContext.clear();
-      // Resolve Night Mode identity before storing in ritual context so the
-      // eventual countdown and receipt carry canonical mode identity.
-      // Canonical ritual enforcement: if the mode's ritualId is not 'standard',
-      // the profile's standard ritual changes the execution path — clear identity.
-      let nmIdentity = resolveNightModeStart(options);
-      if (nmIdentity.nightModeId && nmIdentity.ritualId !== 'standard') {
-        nmIdentity = { nightModeId: null, nightModeTitle: null, nightModeVersion: null };
-      }
-      const runToken = profileRitualContext.createContext({
-        durationSeconds: options.durationSeconds,
-        action: options.action,
-        dryRun: options.dryRun,
-        forceShutdown: options.forceShutdown,
-        muteSystem: options.muteSystem,
-        gracePeriod: options.gracePeriod,
-        profileId: identity.profileId,
-        profileName: identity.profileName,
-        nightModeId: nmIdentity.nightModeId,
-        nightModeTitle: nmIdentity.nightModeTitle,
-        nightModeVersion: nmIdentity.nightModeVersion
-      });
-      // Start the standard ritual with run metadata binding the token to this
-      // exact run. The ritual's onStep/onComplete callbacks receive the meta.
-      ritualMode.startRitual(null, { profileRitualToken: runToken });
-      return { success: true, ritualStarted: true };
-    }
+  // Standard Ritual Gateway: the canonical Night Mode (or profile fallback)
+  // decides the execution path. The selected mode controls 'what happens';
+  // the profile only supplies 'who' when no mode is armed.
+  if (decision.useRitualGateway) {
+    profileRitualContext.clear();
+    const runToken = profileRitualContext.createContext({
+      durationSeconds: options.durationSeconds,
+      action: options.action,
+      dryRun: options.dryRun,
+      forceShutdown: options.forceShutdown,
+      muteSystem: options.muteSystem,
+      gracePeriod: options.gracePeriod,
+      profileId: identity.profileId,
+      profileName: identity.profileName,
+      nightModeId: nmIdentity.nightModeId,
+      nightModeTitle: nmIdentity.nightModeTitle,
+      nightModeVersion: nmIdentity.nightModeVersion
+    });
+    // Start the standard ritual with run metadata binding the token to this
+    // exact run. The ritual's onStep/onComplete callbacks receive the meta.
+    ritualMode.startRitual(null, { profileRitualToken: runToken });
+    return { success: true, ritualStarted: true };
   }
 
   // Direct timer supersession: if a profile ritual is in progress, a genuine
@@ -662,13 +654,7 @@ function startTimer(input, legacyAction) {
     profileRitualContext.clear();
   }
 
-  // Resolve Night Mode identity at START time (main is authoritative).
-  // Canonical ritual enforcement: if the mode's ritualId is 'standard' but
-  // we reached the direct path (no profile ritual gateway), clear identity.
-  let nmIdentity = resolveNightModeStart(options);
-  if (nmIdentity.nightModeId && nmIdentity.ritualId === 'standard') {
-    nmIdentity = { nightModeId: null, nightModeTitle: null, nightModeVersion: null };
-  }
+  // Direct countdown: canonical Night Mode (ritualId: none) or no mode at all.
   return beginValidatedCountdown(options, identity, nmIdentity);
 }
 
