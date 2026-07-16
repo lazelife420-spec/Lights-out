@@ -46,7 +46,7 @@ View release proof
 Microcopy:
 
 ```text
-Latest: v10.3.0. Installer, portable build, and SHA256 checksums available.
+Latest: v11.1.0. Installer, portable build, and SHA256 checksums available.
 ```
 
 ## Problem Section
@@ -125,7 +125,7 @@ Lights Out is built around runtime proof: smoke tests, build checks, release ass
 Proof bullets:
 
 ```text
-- v10.3.0 smoke tests: 72/72 passing.
+- v11.1.0 smoke tests: 239/239 passing, plus 8/8 real Electron Night Modes checks.
 - Installer and portable builds published.
 - SHA256SUMS.txt included with releases.
 - Streaks tab restored and verified with seeded data.

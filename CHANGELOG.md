@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v11.1.0 — Night Modes Library (2026-07-16)
+
 ### Added
 - **Night Modes Library.** A new Modes panel offers six declarative bedtime
   presets. Four modes are ready to arm; Quiet House and School Night remain
@@ -19,10 +21,11 @@
 
 ### Verification
 - ESLint, entry-point syntax checks, 214 unit tests, 239 smoke checks, the
-  20-check Night Modes proof, static-preview interaction checks, and the full
-  portable/NSIS production build pass. Preview interaction confirmed that a
-  ready mode arms without starting, while selecting an unavailable mode clears
-  the prior selection and leaves its action disabled.
+  20-check Night Modes source proof, an 8-check real Electron runtime proof,
+  static-preview interaction checks, and the full portable/NSIS production
+  build pass. Real Electron interaction confirmed all four ready modes across
+  DOM/preload/IPC/main, canonical receipt attribution, ritual handoff and
+  cancellation, an accelerated Dry Run completion, and zero real power actions.
 
 ## v11.0.1 — Windows Production Readiness (2026-07-13)
 

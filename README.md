@@ -7,7 +7,7 @@ Set a time. Press START. Lights Out PC walks you through a calm wind-down, then 
 cinematic Last Light final countdown before your PC shuts off. Emergency cancel
 is always available. No surprise force-quits. No cloud account. No drama.
 
-[![Download v11.0.0](https://img.shields.io/badge/Download-v11.0.0-blue?style=for-the-badge)](https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.0.0)
+[![Download v11.1.0](https://img.shields.io/badge/Download-v11.1.0-blue?style=for-the-badge)](https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.1.0)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?style=for-the-badge)](https://github.com/lazelife420-spec/Lights-out/releases/latest)
 
@@ -15,9 +15,9 @@ is always available. No surprise force-quits. No cloud account. No drama.
 
 ## Download
 
-**[→ Lights Out v11.0.0 — installer, portable EXE, SHA256 checksums](https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.0.0)**
+**[→ Lights Out v11.1.0 — installer, portable EXE, SHA256 checksums](https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.1.0)**
 
-- `Lights.Out.Setup.11.0.0.exe` — NSIS installer, standard Windows install
+- `Lights Out Setup 11.1.0.exe` — NSIS installer, standard Windows install
 - `LightsOut.exe` — portable, runs from any folder, no install needed
 - `SHA256SUMS.txt` — checksums for both artifacts
 
@@ -52,8 +52,8 @@ Every release ships an installer, a portable build, and SHA256 checksums, built
 and published by CI. No hand-edited binaries. No mystery downloads.
 
 - Latest release: https://github.com/lazelife420-spec/Lights-out/releases/latest
-- v11.0.0 release: https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.0.0
-- Smoke suite: 171 passing
+- v11.1.0 release: https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.1.0
+- Smoke suite: 239 passing
 
 ## Surface
 
@@ -67,6 +67,8 @@ contributor handoff.
 
 - Countdown to shutdown, restart, sleep, hibernate, or log out.
 - Start, pause, resume, snooze, cancel, mini mode, tray, and taskbar progress.
+- **Night Modes Library** — arm Quick Sleep, Lights Down, Movie Wind-Down, or
+  Full Shutdown from declarative cards; selecting a mode never auto-starts.
 - **Nightly tray utility** - sit in the tray and show the current time while idle
   (Clock Mode), start common timers (28 min / 1 hour) and pause / resume / snooze /
   cancel straight from the tray, with the live countdown kept in the tray tooltip.

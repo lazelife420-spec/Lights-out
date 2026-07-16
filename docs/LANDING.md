@@ -46,8 +46,10 @@ verify exactly what you downloaded. Builds are produced and published by CI, and
 each release is gated on `node --check`, a smoke suite, and a successful package
 step.
 
-**Latest: v10.3.0** - adds Ritual Mode and smarter wind-down intelligence on top of the northstar visual UI (cinematic Last Light overlay, Lobby shell, Morning Proof hero with real session stats). Builds on the Override Tax and Autopilot Bedtime work from v10.2.0. Smoke suite at 72 assertions.
-Release notes: https://github.com/lazelife420-spec/Lights-out/releases/tag/v10.3.0
+**Latest: v11.1.0** - adds the Night Modes Library with four ready,
+main-resolved bedtime presets, safe lobby arming, canonical receipt identity,
+and real Electron Dry Run proof. Smoke suite at 239 assertions.
+Release notes: https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.1.0
 
 Previously, v10.0.9 restored the Streaks tab panel and fixed a cancel-timer error where guided breathing cleanup could show a red error toast.
 
