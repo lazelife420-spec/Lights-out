@@ -48,8 +48,10 @@ calendar, and Wi-Fi features only reach out when you configure them.
 
 ### Proof-backed releases
 
-Every release ships an installer, a portable build, and SHA256 checksums, built
-and published by CI. No hand-edited binaries. No mystery downloads.
+Every release ships an installer, a portable build, and SHA256 checksums from a
+verified build. GitHub Actions normally publishes them; v11.1.0 uses the exact
+locally gated artifacts because Actions was disabled at the account level. No
+hand-edited binaries. No mystery downloads.
 
 - Latest release: https://github.com/lazelife420-spec/Lights-out/releases/latest
 - v11.1.0 release: https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.1.0

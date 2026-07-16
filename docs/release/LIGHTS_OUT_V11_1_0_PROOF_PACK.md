@@ -59,17 +59,19 @@ real power actions**.
 
 ## Local release-candidate artifacts
 
-These hashes identify the locally verified Windows artifacts. The GitHub tag
-workflow rebuilds from the tagged commit and publishes its own authoritative
-`SHA256SUMS.txt`; its hashes may differ because the CI build is a separate,
-reproducibility-unclaimed build.
+These hashes identify the locally verified Windows artifacts and the exact
+files uploaded to the GitHub release. GitHub Actions was disabled at the
+account level (`HTTP 422: Actions has been disabled for this user`), so the tag
+workflow could not perform its normal rebuild/publish path. Manual publication
+is limited to these already gated, hash-matched artifacts; the binaries were
+not edited after `electron-builder` produced them.
 
 | Artifact | Bytes | SHA-256 |
 |---|---:|---|
 | `LightsOut.exe` | 96,361,574 | `12deb2b8a99b72e4b3d913d453ab3cf3a915e10a133e1af6edfbb7dfcccabfc5` |
 | `Lights Out Setup 11.1.0.exe` | 96,622,192 | `4cf143fdb892cb793f4976f3f81c92170b500ae3d8497d7a7aa434a0c9c5a9bb` |
 
-The matching local file is `dist/SHA256SUMS.txt`.
+The matching local and published file is `dist/SHA256SUMS.txt`.
 
 ## Safety boundaries retained
 
