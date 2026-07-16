@@ -69,9 +69,11 @@ not edited after `electron-builder` produced them.
 | Artifact | Bytes | SHA-256 |
 |---|---:|---|
 | `LightsOut.exe` | 96,361,574 | `12deb2b8a99b72e4b3d913d453ab3cf3a915e10a133e1af6edfbb7dfcccabfc5` |
-| `Lights Out Setup 11.1.0.exe` | 96,622,192 | `4cf143fdb892cb793f4976f3f81c92170b500ae3d8497d7a7aa434a0c9c5a9bb` |
+| `Lights.Out.Setup.11.1.0.exe` | 96,622,192 | `4cf143fdb892cb793f4976f3f81c92170b500ae3d8497d7a7aa434a0c9c5a9bb` |
 
-The matching local and published file is `dist/SHA256SUMS.txt`.
+`electron-builder` produced the local file as `Lights Out Setup 11.1.0.exe`;
+GitHub normalized the published asset name to `Lights.Out.Setup.11.1.0.exe`
+without changing its bytes or digest. `SHA256SUMS.txt` uses the published name.
 
 ## Safety boundaries retained
 

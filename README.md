@@ -17,7 +17,7 @@ is always available. No surprise force-quits. No cloud account. No drama.
 
 **[→ Lights Out v11.1.0 — installer, portable EXE, SHA256 checksums](https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.1.0)**
 
-- `Lights Out Setup 11.1.0.exe` — NSIS installer, standard Windows install
+- `Lights.Out.Setup.11.1.0.exe` — NSIS installer, standard Windows install
 - `LightsOut.exe` — portable, runs from any folder, no install needed
 - `SHA256SUMS.txt` — checksums for both artifacts
 
