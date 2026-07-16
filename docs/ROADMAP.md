@@ -4,15 +4,15 @@
 
 ## Current Truth
 
-Lights Out PC™ ("Bedtime Mode for Windows") is live at **v11.0.0** — the
+Lights Out PC™ ("Bedtime Mode for Windows") is live at **v11.1.0** — the
 latest tagged/published release. Proof-first software forged for builders.
 
-v11.0.0 fixed a critical, previously-undiscovered bug where the phone
-companion never actually connected for anyone (dead DOM references
-crashing `companion.html` on load — see [PR #20](https://github.com/lazelife420-spec/Lights-out/pull/20)
-for the full root-cause writeup), shipped Trusted LAN mode's explicit
-warning gate, Weekly Reports, and full-screen clock mode, and removed the
-dead `companion-mobile` duplicate. Full detail lives in `CHANGELOG.md`.
+v11.1.0 ships the Night Modes Library: four ready, main-resolved bedtime
+presets plus two honestly unavailable future modes. "Use Tonight" arms the
+lobby without auto-starting, receipts preserve canonical mode identity, and a
+real isolated Electron proof covers DOM/preload/IPC/main handoff, ritual modes,
+cancellation, and Dry Run completion with zero real power actions. Full detail
+lives in `CHANGELOG.md`.
 
 Current strongest product promise:
 
@@ -177,17 +177,12 @@ originally planned for that slot.
   working on this repo has access to. Not deleted — just not claimed done.
   Parked until either real hardware is available, or there's an explicit
   product call to ship it labeled experimental.
-
-### In development — Night Modes Library
-
-Night Modes is implemented on `feat/night-modes-library`, but is not tagged or
-published yet. The library contains six declarative presets: Quick Sleep,
-Lights Down, Movie Wind-Down, and Full Shutdown are ready; Quiet House and
-School Night remain visibly unavailable because their multi-device/router
-requirements are not built. "Use Tonight" arms a canonical mode in the lobby
-without auto-starting, main owns execution resolution, and receipts preserve
-the canonical mode identity. Source, smoke, preview-interaction, and packaging
-gates pass; merging and release assignment remain open.
+- **v11.0.1 — Windows Production Readiness:** window movement/geometry,
+  companion recovery diagnostics, family identity attribution, profile
+  accents, media-volume correction, and clean lint/runtime proof.
+- **v11.1.0 — Night Modes Library:** six declarative cards, four ready modes,
+  canonical main-process resolution, safe lobby arming, receipt attribution,
+  static-preview support, and real Electron runtime proof.
 
 ### v12.0.0 — Candidates (not yet prioritized)
 
@@ -199,17 +194,9 @@ existing nightly workflow's reliability only just got affirmatively
 verified (see Pillar 1) rather than assumed — these are genuine
 scope-expansion decisions, not a continuation of already-declared work.
 
-**Shipped 2026-07-09: Weekly reports.** A plain-text narrative summary (`streaks.js`'s
-`buildWeeklyNarrative`, fed by the existing `getWeeklyReport()` data — no new
-persistence layer) shown under a "This Week" section on the Streaks tab, with
-a one-click "Copy Report" to clipboard. Every sentence is a direct readout of
-an already-computed field (nights logged, streak, consistency, snooze rate,
-action breakdown, achievement count) — no scoring or diagnosis layered on
-top, consistent with the Streaks pillar's no-fake-scores guardrail.
-
 | Candidate | Why it's not started |
 |---|---|
-| Family profiles | Vague as written ("Family profiles.") — could mean syncing saved profiles across paired Family Mode peers, or something else entirely. Needs product intent before scoping. |
+| Family Profiles v1 | Scoped as a local-only household member directory, profile assignment/filtering, and canonical receipt attribution. LAN sync, authentication, and remote profile mutation are explicitly out of scope. See `docs/FAMILY_PROFILES_V1_SCOPE.md`. |
 | Focus scoring | Would need a new persistence layer (Focus Sessions currently has no historical event log, unlike Streaks). Also carries messaging risk against the "no guaranteed productivity" brand promise — needs the same care Sleep Score got to avoid gamification/fake-score framing. |
 | Screen-time limits | `screenTime.js` today is read-only/advisory (a "reality check" message), not enforcement. Actual *limits* imply a new blocking mechanism — real system-modification risk, same category as content-blocker schedules but with a different (unbuilt) trigger. |
 

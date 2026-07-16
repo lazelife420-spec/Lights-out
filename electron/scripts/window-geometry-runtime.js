@@ -69,7 +69,11 @@ app.whenReady().then(() => {
     assertDeepEqual(win.getSize(), expectedMiniOuterSize, 'Mini Mode platform-adjusted outer size');
 
     exitMiniMode(win, screen);
-    assertDeepEqual(win.getMinimumSize(), [480, 600], 'restored normal minimum');
+    assertDeepEqual(
+      win.getMinimumSize(),
+      [NORMAL_MINIMUM.width, NORMAL_MINIMUM.height],
+      'restored normal minimum'
+    );
     assertBoundsNear(win.getBounds(), savedNormalBounds, 'restored normal bounds', 0);
 
     const clamped = clampNormalBounds({
@@ -89,7 +93,11 @@ app.whenReady().then(() => {
     // transient Mini Mode size, so a relaunch cannot trap the app at 260x320.
     relaunched = createTestWindow({ width: 520, height: 800 });
     applyNormalBounds(relaunched, savedNormalBounds, screen);
-    assertDeepEqual(relaunched.getMinimumSize(), [480, 600], 'relaunch normal minimum');
+    assertDeepEqual(
+      relaunched.getMinimumSize(),
+      [NORMAL_MINIMUM.width, NORMAL_MINIMUM.height],
+      'relaunch normal minimum'
+    );
     assertBoundsNear(relaunched.getBounds(), savedNormalBounds, 'relaunch restored bounds', 0);
     const relaunchedSize = relaunched.getSize();
     assert(relaunchedSize[0] === savedNormalBounds.width, 'relaunch width restores exactly');
@@ -98,7 +106,7 @@ app.whenReady().then(() => {
     console.log(JSON.stringify({
       requestedMiniSize: [MINI_GEOMETRY.width, MINI_GEOMETRY.height],
       observedMiniOuterSize: expectedMiniOuterSize,
-      normalMinimum: [480, 600],
+      normalMinimum: [NORMAL_MINIMUM.width, NORMAL_MINIMUM.height],
       restoredBounds: savedNormalBounds,
       displayClamping: 'pass',
       relaunch: 'pass',

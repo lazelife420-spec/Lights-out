@@ -1,6 +1,6 @@
 {
   "name": "lights-out-electron",
-  "version": "11.0.1",
+  "version": "11.1.0",
   "description": "Lights Out - Sleep Timer (Electron Edition)",
   "main": "main.js",
   "scripts": {
@@ -13,6 +13,7 @@
     "smoke:companion": "node scripts/companion-smoke.js",
     "smoke:packaged": "node scripts/packaged-smoke.js",
     "test:geometry": "electron scripts/window-geometry-runtime.js",
+    "test:night-modes-runtime": "node scripts/night-modes-electron-proof.js",
     "test": "node --test"
   },
   "author": "Lights Out",

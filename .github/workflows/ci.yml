@@ -68,6 +68,9 @@ jobs:
       - name: Window geometry runtime test
         run: npm run test:geometry
 
+      - name: Night Modes Electron runtime proof
+        run: npm run test:night-modes-runtime
+
       - name: Build portable + installer
         run: npm run build
 
