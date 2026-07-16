@@ -12,6 +12,14 @@ const fallbackApi = (() => {
     dryRun: true,
     endsAt: null
   };
+  const previewNightModes = [
+    { id: 'quick-sleep', version: 1, title: 'Quick Sleep', subtitle: 'A short countdown, then sleep this PC.', artworkId: 'quick-sleep', status: 'ready', availability: { supported: true, reason: null }, timer: { durationSeconds: 900, action: 'sleep', ritualId: 'none' } },
+    { id: 'lights-down', version: 1, title: 'Lights Down', subtitle: 'Wind down with a guided ritual before sleep.', artworkId: 'lights-down', status: 'ready', availability: { supported: true, reason: null }, timer: { durationSeconds: 2700, action: 'sleep', ritualId: 'standard' } },
+    { id: 'movie-wind-down', version: 1, title: 'Movie Wind-Down', subtitle: 'Finish watching, then let this PC sleep.', artworkId: 'movie-wind-down', status: 'ready', availability: { supported: true, reason: null }, timer: { durationSeconds: 5400, action: 'sleep', ritualId: 'standard' } },
+    { id: 'full-shutdown', version: 1, title: 'Full Shutdown', subtitle: 'A firm end to the night with a guided ritual.', artworkId: 'full-shutdown', status: 'ready', availability: { supported: true, reason: null }, timer: { durationSeconds: 3600, action: 'shutdown', ritualId: 'standard' } },
+    { id: 'quiet-house', version: 1, title: 'Quiet House', subtitle: 'Silence networked devices and settle the house.', artworkId: 'quiet-house', status: 'coming_soon', availability: { supported: false, reason: 'Multi-device control is not yet supported.' }, timer: { durationSeconds: 1800, action: 'sleep', ritualId: 'none' } },
+    { id: 'school-night', version: 1, title: 'School Night', subtitle: 'Enforce bedtime with scheduled shutdown and content blocking.', artworkId: 'school-night', status: 'needs_router_setup', availability: { supported: false, reason: 'Requires router-level Wi-Fi control which is not yet supported.' }, timer: { durationSeconds: 1800, action: 'shutdown', ritualId: 'standard' } }
+  ];
 
   function emit(type, extra = {}) {
     const payload = {
@@ -89,6 +97,25 @@ const fallbackApi = (() => {
       return { success: true };
     },
     getSystemInfo: async () => ({ battery: 'N/A', powerPlan: 'Preview' }),
+    getSmartLightConfig: async () => ({ enabled: false, provider: 'none', mode: 'gradual_dim', dimMinutes: 10 }),
+    saveSmartLightConfig: async () => ({ success: true }),
+    getNightModesCatalogue: async () => previewNightModes.map(mode => ({
+      ...mode,
+      availability: { ...mode.availability },
+      timer: { ...mode.timer }
+    })),
+    useNightModeTonight: async id => {
+      const mode = previewNightModes.find(item => item.id === id);
+      if (!mode || mode.status !== 'ready') return { success: false, error: 'Night mode is not available in preview.' };
+      return {
+        success: true,
+        nightModeId: mode.id,
+        nightModeTitle: mode.title,
+        durationSeconds: mode.timer.durationSeconds,
+        action: mode.timer.action,
+        ritualId: mode.timer.ritualId
+      };
+    },
     getAppSettings: async () => {
       let stored = {};
       try { stored = JSON.parse(localStorage.getItem('lightsout-settings') || '{}'); } catch { stored = {}; }
@@ -585,8 +612,9 @@ const els = {
   receiptsList: document.getElementById('receipts-list'),
   btnClearReceipts: document.getElementById('btn-clear-receipts'),
   btnExportReceipts: document.getElementById('btn-export-receipts'),
-  // Northstar sidebar destinations (LIB/SCH/STATS)
+  // Northstar sidebar destinations (LIB/SCH/MODES/STATS)
   panelLib: document.getElementById('ns-panel-lib'),
+  panelModes: document.getElementById('ns-panel-modes'),
   panelSch: document.getElementById('ns-panel-sch'),
   panelStats: document.getElementById('ns-panel-stats'),
   statsCompanionMode: document.getElementById('stats-companion-mode'),
@@ -727,7 +755,11 @@ const state = {
   calendarSource: null,
   // Transient outcome of the last session, shown briefly on the idle face:
   // 'completed' | 'dryrun' | 'cancelled' | null.
-  lastOutcome: null
+  lastOutcome: null,
+  // Armed Night Mode: set by Use Tonight, cleared on any lobby edit or non-PLAY start.
+  // Contains { nightModeId, nightModeTitle, durationSeconds, action } or null.
+  // This is untrusted presentation state; main is authoritative at START time.
+  armedNightMode: null
 };
 
 if (previewMode) {
@@ -1026,6 +1058,7 @@ function setAction(action) {
   document.querySelectorAll('[data-action]').forEach(item => {
     item.classList.toggle('selected', item.dataset.action === action);
   });
+  checkArmedModeMatch();
   render();
 }
 
@@ -1164,6 +1197,7 @@ function openHelpPanel() {
 // working independently underneath — this only toggles the panel-level wrapper.
 function applyMainPanelVisibility(panel) {
   if (els.panelLib) els.panelLib.style.display = panel === 'lib' ? '' : 'none';
+  if (els.panelModes) els.panelModes.style.display = panel === 'modes' ? '' : 'none';
   if (els.panelSch) els.panelSch.style.display = panel === 'sch' ? '' : 'none';
   if (els.panelStats) els.panelStats.style.display = panel === 'stats' ? '' : 'none';
   if (panel === 'sch') activateTopTab('schedule');
@@ -1209,6 +1243,10 @@ async function handleSidebarNavigation(tab, { persist = true } = {}) {
 
   if (tab === 'lib') {
     applyMainPanelVisibility('lib');
+    handled = true;
+  }
+  if (tab === 'modes') {
+    applyMainPanelVisibility('modes');
     handled = true;
   }
   if (tab === 'sch') {
@@ -1531,11 +1569,67 @@ function updateAnalogHands(now) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Armed Night Mode: explicit presentation state for the selected Night Mode.
+// Main is authoritative — this is cleared on any lobby edit so stale identity
+// cannot leak into unrelated starts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function clearArmedNightMode() {
+  state.armedNightMode = null;
+  renderArmedModeBanner();
+}
+
+function armNightMode(mode) { // eslint-disable-line no-unused-vars -- called from renderer-night-modes.js
+  state.armedNightMode = {
+    nightModeId: mode.nightModeId,
+    nightModeTitle: mode.nightModeTitle,
+    durationSeconds: mode.durationSeconds,
+    action: mode.action,
+    ritualId: mode.ritualId || 'none'
+  };
+  renderArmedModeBanner();
+}
+
+function renderArmedModeBanner() {
+  const banner = document.getElementById('armed-mode-banner');
+  if (!banner) return;
+  if (!state.armedNightMode) {
+    banner.style.display = 'none';
+    return;
+  }
+  const m = state.armedNightMode;
+  const durMin = Math.round(m.durationSeconds / 60);
+  const actionLabel = { shutdown: 'Shutdown', sleep: 'Sleep', restart: 'Restart', hibernate: 'Hibernate', lock: 'Lock', logout: 'Log out' }[m.action] || m.action;
+  banner.style.display = '';
+  const titleEl = document.getElementById('armed-mode-title');
+  const metaEl = document.getElementById('armed-mode-meta');
+  if (titleEl) titleEl.textContent = m.nightModeTitle;
+  const ritualLabel = m.ritualId === 'standard' ? 'Standard ritual' : 'Direct';
+  if (metaEl) metaEl.textContent = `${durMin} min \u00B7 ${actionLabel} \u00B7 ${ritualLabel}`;
+}
+
+// Check whether the current lobby values still match the armed mode's canonical values.
+// If not, the user has edited the execution → clear the armed mode.
+function checkArmedModeMatch() {
+  if (!state.armedNightMode) return;
+  const armed = state.armedNightMode;
+  const currentSeconds = inputSeconds();
+  if (currentSeconds !== armed.durationSeconds || state.action !== armed.action) {
+    clearArmedNightMode();
+  }
+}
+
 async function startTimer(seconds = inputSeconds(), origin = null) {
   const durationSeconds = Math.max(1, Math.round(seconds));
 
   try {
     SoundSystem.playStart();
+    // Only genuine PLAY origins may carry the armed Night Mode ID.
+    // All other callers (chips, presets, quick-minute) clear the armed mode
+    // before reaching here, so armedNightMode is already null for those paths.
+    const isPlayOrigin = origin === 'play';
+    const nightModeId = (isPlayOrigin && state.armedNightMode) ? state.armedNightMode.nightModeId : undefined;
     const result = await api.startTimer({
       durationSeconds,
       action: state.action,
@@ -1544,8 +1638,10 @@ async function startTimer(seconds = inputSeconds(), origin = null) {
       muteSystem: state.muteSystem,
       gracePeriod: state.graceMinutes,
       profileId: state.currentProfileId,
-      startOrigin: origin
+      startOrigin: origin,
+      nightModeId
     });
+    clearArmedNightMode();
 
     if (result?.success === false) {
       notify(result.error || 'Timer could not start', 'error');
@@ -2531,17 +2627,20 @@ if (els.btnClearReceipts) {
   els.btnPlus.addEventListener('click', () => {
     els.timerInput.value = inputValue() + 1;
     setInputFromSeconds(inputSeconds());
+    checkArmedModeMatch();
   });
 
   els.btnMinus.addEventListener('click', () => {
     els.timerInput.value = Math.max(1, inputValue() - 1);
     setInputFromSeconds(inputSeconds());
+    checkArmedModeMatch();
   });
 
   els.timerInput.addEventListener('input', () => {
     if (!state.running && !state.paused) {
       state.remainingSeconds = inputSeconds();
       state.totalSeconds = state.remainingSeconds;
+      checkArmedModeMatch();
       render();
     }
   });
@@ -2568,6 +2667,7 @@ if (els.btnClearReceipts) {
       if (item.dataset.minutes) {
         state.unit = 'min';
         setInputFromSeconds(Number(item.dataset.minutes) * 60);
+        clearArmedNightMode();
         startTimer(Number(item.dataset.minutes) * 60);
         return;
       }
@@ -2613,6 +2713,7 @@ if (els.btnClearReceipts) {
       const minutes = Number(chip.dataset.min);
       state.unit = 'min';
       setInputFromSeconds(minutes * 60);
+      clearArmedNightMode();
       startTimer(minutes * 60);
     });
   });
@@ -2633,6 +2734,9 @@ if (els.btnClearReceipts) {
 
   // Northstar hero card PLAY button starts the timer.
   document.getElementById('ns-play-btn')?.addEventListener('click', () => startTimer(inputSeconds(), 'play'));
+
+  // Armed Night Mode clear button.
+  document.getElementById('armed-mode-clear')?.addEventListener('click', clearArmedNightMode);
 
   // Home streak callout jumps to the Streaks tab for the full breakdown.
   els.streakCallout?.addEventListener('click', () => {
@@ -2972,6 +3076,7 @@ if (els.btnClearReceipts) {
     if (presets[event.key] && !state.running && !state.paused) {
       state.unit = 'min';
       setInputFromSeconds(presets[event.key] * 60);
+      clearArmedNightMode();
       startTimer(presets[event.key] * 60);
       return;
     }
@@ -3325,6 +3430,7 @@ async function loadInitialData() {
       await restoreSelectedProfile(appSettings.app?.lastSelectedProfileId);
     } catch (e) { console.error('loadProfiles failed:', e); }
     try { loadStreaks(); } catch (e) { console.error('loadStreaks failed:', e); }
+    try { if (typeof initNightModes === 'function') await initNightModes(); } catch (e) { console.error('initNightModes failed:', e); }
 
     // Offer recovery of an interrupted timer
     if (appSettings.recoverableTimer) {

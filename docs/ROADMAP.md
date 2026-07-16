@@ -178,6 +178,17 @@ originally planned for that slot.
   Parked until either real hardware is available, or there's an explicit
   product call to ship it labeled experimental.
 
+### In development — Night Modes Library
+
+Night Modes is implemented on `feat/night-modes-library`, but is not tagged or
+published yet. The library contains six declarative presets: Quick Sleep,
+Lights Down, Movie Wind-Down, and Full Shutdown are ready; Quiet House and
+School Night remain visibly unavailable because their multi-device/router
+requirements are not built. "Use Tonight" arms a canonical mode in the lobby
+without auto-starting, main owns execution resolution, and receipts preserve
+the canonical mode identity. Source, smoke, preview-interaction, and packaging
+gates pass; merging and release assignment remain open.
+
 ### v12.0.0 — Candidates (not yet prioritized)
 
 The Backlog Parking Lot — good ideas, not yet scoped. **Not ordered** — this

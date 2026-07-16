@@ -26,6 +26,9 @@ function createContext(validated) {
     gracePeriod: validated.gracePeriod,
     profileId: validated.profileId,
     profileName: validated.profileName,
+    nightModeId: validated.nightModeId || null,
+    nightModeTitle: validated.nightModeTitle || null,
+    nightModeVersion: validated.nightModeVersion || null,
     createdAt: Date.now()
   };
   return pendingContext.token;

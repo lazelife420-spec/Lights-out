@@ -35,6 +35,8 @@ const profileRitualContext = require('./profileRitualContext');
 const statsDashboard = require('./statsDashboard');
 const smartSuggestions = require('./smartSuggestions');
 const windowGeometry = require('./windowGeometry');
+const nightModes = require('./nightModes');
+const startDecision = require('./startDecision');
 
 const APP_ICON = path.join(__dirname, 'assets', 'icon.ico');
 const TRAY_ICON = path.join(__dirname, 'assets', 'tray-32.png');
@@ -174,7 +176,10 @@ const timerState = {
   endsAt: null,
   phase: 'idle',       // idle | focus | dim | lastlight
   profileId: null,
-  profileName: null
+  profileName: null,
+  nightModeId: null,
+  nightModeTitle: null,
+  nightModeVersion: null
 };
 
 // Whether a Content Blocker recurring schedule currently has sites blocked --
@@ -589,7 +594,8 @@ function normalizeTimerOptions(input, legacyAction) {
     gracePeriod: Number.isFinite(Number(options.gracePeriod)) ? Math.max(0, Number(options.gracePeriod)) : 2,
     profileId: typeof options.profileId === 'string' ? options.profileId : null,
     source: options.source === 'remote' ? 'remote' : 'local',
-    startOrigin: typeof options.startOrigin === 'string' ? options.startOrigin : null
+    startOrigin: typeof options.startOrigin === 'string' ? options.startOrigin : null,
+    nightModeId: typeof options.nightModeId === 'string' ? options.nightModeId : null
   };
 }
 
@@ -603,33 +609,38 @@ function resolveTimerProfileIdentity(profileId, source) {
   });
 }
 
+// Delegate to nightModes module (single source of truth for canonical resolution).
+const resolveNightModeStart = nightModes.resolveNightModeStart;
+
 function startTimer(input, legacyAction) {
   const options = normalizeTimerOptions(input, legacyAction);
   const identity = resolveTimerProfileIdentity(options.profileId, options.source);
+  const profile = profiles.getById(identity.profileId);
+  const nmIdentity = resolveNightModeStart(options);
+  const decision = startDecision.resolveStartDecision({ options, identity, profile, nmIdentity });
 
-  // Profile Ritual Gateway: if an eligible start origin targets a profile with
-  // ritualId 'standard', start the standard ritual and hold validated timer
-  // context for consumption by the ritual's timer step.
-  if (profileRitualContext.isEligibleOrigin(options.startOrigin) && identity.profileId) {
-    const profile = profiles.getById(identity.profileId);
-    if (profile && profile.ritualId === 'standard' && options.source !== 'remote') {
-      // Clear any stale pending context before creating a new one.
-      profileRitualContext.clear();
-      const runToken = profileRitualContext.createContext({
-        durationSeconds: options.durationSeconds,
-        action: options.action,
-        dryRun: options.dryRun,
-        forceShutdown: options.forceShutdown,
-        muteSystem: options.muteSystem,
-        gracePeriod: options.gracePeriod,
-        profileId: identity.profileId,
-        profileName: identity.profileName
-      });
-      // Start the standard ritual with run metadata binding the token to this
-      // exact run. The ritual's onStep/onComplete callbacks receive the meta.
-      ritualMode.startRitual(null, { profileRitualToken: runToken });
-      return { success: true, ritualStarted: true };
-    }
+  // Standard Ritual Gateway: the canonical Night Mode (or profile fallback)
+  // decides the execution path. The selected mode controls 'what happens';
+  // the profile only supplies 'who' when no mode is armed.
+  if (decision.useRitualGateway) {
+    profileRitualContext.clear();
+    const runToken = profileRitualContext.createContext({
+      durationSeconds: options.durationSeconds,
+      action: options.action,
+      dryRun: options.dryRun,
+      forceShutdown: options.forceShutdown,
+      muteSystem: options.muteSystem,
+      gracePeriod: options.gracePeriod,
+      profileId: identity.profileId,
+      profileName: identity.profileName,
+      nightModeId: nmIdentity.nightModeId,
+      nightModeTitle: nmIdentity.nightModeTitle,
+      nightModeVersion: nmIdentity.nightModeVersion
+    });
+    // Start the standard ritual with run metadata binding the token to this
+    // exact run. The ritual's onStep/onComplete callbacks receive the meta.
+    ritualMode.startRitual(null, { profileRitualToken: runToken });
+    return { success: true, ritualStarted: true };
   }
 
   // Direct timer supersession: if a profile ritual is in progress, a genuine
@@ -643,13 +654,15 @@ function startTimer(input, legacyAction) {
     profileRitualContext.clear();
   }
 
-  return beginValidatedCountdown(options, identity);
+  // Direct countdown: canonical Night Mode (ritualId: none) or no mode at all.
+  return beginValidatedCountdown(options, identity, nmIdentity);
 }
 
 // Internal canonical countdown entry. Used by both startTimer (after gateway
 // resolution and supersession) and the ritual timer step (directly, without
 // re-entering profile ritual gating or supersession logic).
-function beginValidatedCountdown(options, identity) {
+// nmIdentity: main-resolved { nightModeId, nightModeTitle, nightModeVersion }.
+function beginValidatedCountdown(options, identity, nmIdentity) {
   clearTimerInterval();
 
   // Override Tax: reset session snooze count for this new run.
@@ -673,6 +686,10 @@ function beginValidatedCountdown(options, identity) {
   timerState.gracePeriod = options.gracePeriod;
   timerState.profileId = identity.profileId;
   timerState.profileName = identity.profileName;
+  const nm = nmIdentity || { nightModeId: null, nightModeTitle: null, nightModeVersion: null };
+  timerState.nightModeId = nm.nightModeId || null;
+  timerState.nightModeTitle = nm.nightModeTitle || null;
+  timerState.nightModeVersion = nm.nightModeVersion || null;
   timerState.endsAt = new Date(Date.now() + options.durationSeconds * 1000).toISOString();
   timerState.phase = 'focus';
 
@@ -1939,6 +1956,34 @@ ipcMain.handle('clear-receipts', async () => {
 ipcMain.handle('get-receipt-stats', async () => {
   return runReceipts.getReceiptStats();
 });
+// Night Modes IPC.
+ipcMain.handle('get-night-modes-catalogue', async () => {
+  return nightModes.getCatalogue();
+});
+ipcMain.handle('get-night-mode', async (e, id) => {
+  return nightModes.getById(id);
+});
+ipcMain.handle('resolve-night-mode', async (e, nightModeId) => {
+  return nightModes.resolveForExecution(nightModeId);
+});
+// "Use Tonight" — resolves the mode and returns canonical timer options
+// without starting anything. The renderer loads these into the lobby.
+ipcMain.handle('use-night-mode-tonight', async (e, nightModeId) => {
+  const resolution = nightModes.resolveForExecution(nightModeId);
+  if (!resolution.success) return resolution;
+  // Return resolved options for the renderer to display in lobby.
+  // The timer is NOT started here — selection remains inert.
+  return {
+    success: true,
+    nightModeId: resolution.resolved.nightModeId,
+    nightModeTitle: resolution.resolved.nightModeTitle,
+    nightModeVersion: resolution.resolved.nightModeVersion,
+    durationSeconds: resolution.resolved.durationSeconds,
+    action: resolution.resolved.action,
+    ritualId: resolution.resolved.ritualId
+  };
+});
+
 // Override Tax IPC.
 ipcMain.handle('assess-snooze-cost', async () => {
   return overrideTax.assessSnoozeCost();
@@ -2584,13 +2629,15 @@ app.whenReady().then(async () => {
             { durationSeconds: ctx.durationSeconds, action: ctx.action, dryRun: ctx.dryRun,
               forceShutdown: ctx.forceShutdown, muteSystem: ctx.muteSystem, gracePeriod: ctx.gracePeriod,
               source: 'ritual' },
-            { profileId: ctx.profileId, profileName: ctx.profileName }
+            { profileId: ctx.profileId, profileName: ctx.profileName },
+            { nightModeId: ctx.nightModeId || null, nightModeTitle: ctx.nightModeTitle || null, nightModeVersion: ctx.nightModeVersion || null }
           );
         } else {
           const config = ritualMode.getConfig();
           beginValidatedCountdown(
             { durationSeconds: config.timerDuration, action: config.timerAction, source: 'ritual' },
-            { profileId: null, profileName: null }
+            { profileId: null, profileName: null },
+            null
           );
         }
       } else if (step.id === 'lights') {
