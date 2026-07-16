@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### Added
+- **Night Modes Library.** A new Modes panel offers six declarative bedtime
+  presets. Four modes are ready to arm; Quiet House and School Night remain
+  visibly unavailable with honest reasons. Selecting "Use Tonight" only loads
+  canonical duration/action/ritual values into the lobby—it never starts a
+  timer by itself. The Electron main process resolves mode identity, receipts
+  record the canonical mode ID/title/version, and Night Modes cannot introduce
+  arbitrary script or shell execution paths.
+
+### Fixed
+- **Static browser preview now initializes Night Modes.** The fallback API now
+  supplies the smart-light getter used during startup plus safe preview-only
+  Night Modes catalogue/arming methods. This prevents an unrelated missing
+  method from aborting initial data loading and leaving the Modes panel empty.
+
+### Verification
+- ESLint, entry-point syntax checks, 214 unit tests, 239 smoke checks, the
+  20-check Night Modes proof, static-preview interaction checks, and the full
+  portable/NSIS production build pass. Preview interaction confirmed that a
+  ready mode arms without starting, while selecting an unavailable mode clears
+  the prior selection and leaves its action disabled.
+
 ## v11.0.1 — Windows Production Readiness (2026-07-13)
 
 This release includes all desktop work merged after v11.0.0. Android companion

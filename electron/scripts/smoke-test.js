@@ -607,6 +607,9 @@ check('ux: focus-visible and accessibility', () => {
 check('renderer fallback: preview mode stays safe and idle by default', () => {
   assertMatch(rendererSrc, /runAtLogin: false,[\s\S]*startupBehavior: 'Starts minimized and idle'/s, 'fallback startup behavior changed');
   assertMatch(rendererSrc, /state\.dryRun = true;/, 'fallback should remain dry-run');
+  assertMatch(rendererSrc, /getSmartLightConfig: async \(\) => \(\{ enabled: false, provider: 'none'/, 'fallback must supply the smart-light getter used by loadInitialData');
+  assertMatch(rendererSrc, /getNightModesCatalogue: async \(\) => previewNightModes\.map/, 'fallback must supply Night Modes catalogue data for layout testing');
+  assertMatch(rendererSrc, /useNightModeTonight: async id =>/, 'fallback must support arming an available Night Mode');
 });
 
 check('renderer: visible sidebar navigation routes to a real tab or modal', () => {

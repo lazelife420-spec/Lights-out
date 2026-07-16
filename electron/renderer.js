@@ -12,6 +12,14 @@ const fallbackApi = (() => {
     dryRun: true,
     endsAt: null
   };
+  const previewNightModes = [
+    { id: 'quick-sleep', version: 1, title: 'Quick Sleep', subtitle: 'A short countdown, then sleep this PC.', artworkId: 'quick-sleep', status: 'ready', availability: { supported: true, reason: null }, timer: { durationSeconds: 900, action: 'sleep', ritualId: 'none' } },
+    { id: 'lights-down', version: 1, title: 'Lights Down', subtitle: 'Wind down with a guided ritual before sleep.', artworkId: 'lights-down', status: 'ready', availability: { supported: true, reason: null }, timer: { durationSeconds: 2700, action: 'sleep', ritualId: 'standard' } },
+    { id: 'movie-wind-down', version: 1, title: 'Movie Wind-Down', subtitle: 'Finish watching, then let this PC sleep.', artworkId: 'movie-wind-down', status: 'ready', availability: { supported: true, reason: null }, timer: { durationSeconds: 5400, action: 'sleep', ritualId: 'standard' } },
+    { id: 'full-shutdown', version: 1, title: 'Full Shutdown', subtitle: 'A firm end to the night with a guided ritual.', artworkId: 'full-shutdown', status: 'ready', availability: { supported: true, reason: null }, timer: { durationSeconds: 3600, action: 'shutdown', ritualId: 'standard' } },
+    { id: 'quiet-house', version: 1, title: 'Quiet House', subtitle: 'Silence networked devices and settle the house.', artworkId: 'quiet-house', status: 'coming_soon', availability: { supported: false, reason: 'Multi-device control is not yet supported.' }, timer: { durationSeconds: 1800, action: 'sleep', ritualId: 'none' } },
+    { id: 'school-night', version: 1, title: 'School Night', subtitle: 'Enforce bedtime with scheduled shutdown and content blocking.', artworkId: 'school-night', status: 'needs_router_setup', availability: { supported: false, reason: 'Requires router-level Wi-Fi control which is not yet supported.' }, timer: { durationSeconds: 1800, action: 'shutdown', ritualId: 'standard' } }
+  ];
 
   function emit(type, extra = {}) {
     const payload = {
@@ -89,6 +97,25 @@ const fallbackApi = (() => {
       return { success: true };
     },
     getSystemInfo: async () => ({ battery: 'N/A', powerPlan: 'Preview' }),
+    getSmartLightConfig: async () => ({ enabled: false, provider: 'none', mode: 'gradual_dim', dimMinutes: 10 }),
+    saveSmartLightConfig: async () => ({ success: true }),
+    getNightModesCatalogue: async () => previewNightModes.map(mode => ({
+      ...mode,
+      availability: { ...mode.availability },
+      timer: { ...mode.timer }
+    })),
+    useNightModeTonight: async id => {
+      const mode = previewNightModes.find(item => item.id === id);
+      if (!mode || mode.status !== 'ready') return { success: false, error: 'Night mode is not available in preview.' };
+      return {
+        success: true,
+        nightModeId: mode.id,
+        nightModeTitle: mode.title,
+        durationSeconds: mode.timer.durationSeconds,
+        action: mode.timer.action,
+        ritualId: mode.timer.ritualId
+      };
+    },
     getAppSettings: async () => {
       let stored = {};
       try { stored = JSON.parse(localStorage.getItem('lightsout-settings') || '{}'); } catch { stored = {}; }
