@@ -1,0 +1,17 @@
+{
+  "name": "Reality Gate Pipeline",
+  "steps": [
+    {
+      "name": "Build Step 1",
+      "command": "node -e \"console.log('step1_output_token'); require('fs').writeFileSync('artifact.txt', 'artifact_content_data_123')\""
+    },
+    {
+      "name": "Build Step 2",
+      "command": "node -e \"const fs = require('fs'); fs.mkdirSync('dist', { recursive: true }); fs.writeFileSync('dist/output.txt', 'dist_output_data_456'); console.log('step2_output_token')\""
+    }
+  ],
+  "artifacts": [
+    "dist/*.txt",
+    "artifact.txt"
+  ]
+}
