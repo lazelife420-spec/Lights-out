@@ -192,11 +192,12 @@
     .idle-safety { padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255,180,84,0.22); background: rgba(255,180,84,0.07); color: #d7b986; font-size: 12px; line-height: 1.45; text-align: left; }
     .stale-state .ring-wrap, .stale-state .safety-row, .stale-state #active-controls { opacity: 0.48; }
     .stale-state .timer-main { text-decoration: line-through; text-decoration-thickness: 1px; }
-    .confirm-backdrop { position: fixed; inset: 0; z-index: 900; display: none; align-items: flex-end; justify-content: center; padding: 18px; background: rgba(0,0,0,0.72); }
+    .confirm-backdrop { position: fixed; inset: 0; z-index: 900; display: none; align-items: flex-end; justify-content: center; overflow-y: auto; padding: 18px; background: rgba(0,0,0,0.72); }
     .confirm-backdrop.show { display: flex; }
-    .confirm-card { width: min(100%, 390px); padding: 20px; border-radius: 18px; border: 1px solid #384254; background: #12161d; text-align: left; box-shadow: 0 20px 80px rgba(0,0,0,0.6); }
+    .confirm-card { width: min(100%, 390px); max-height: calc(100dvh - 36px); overflow-y: auto; flex-shrink: 0; padding: 20px; border-radius: 18px; border: 1px solid #384254; background: #12161d; text-align: left; box-shadow: 0 20px 80px rgba(0,0,0,0.6); }
     .confirm-card h2 { font-size: 20px; margin-bottom: 8px; }
     .confirm-card p { color: var(--muted); font-size: 14px; line-height: 1.5; margin-bottom: 16px; }
+    .cancel-connection-status { margin: -4px 0 16px; padding: 10px 12px; border: 1px solid rgba(255,180,84,0.28); border-radius: 10px; background: rgba(255,180,84,0.08); color: #ffbf67; font-size: 12px; line-height: 1.45; }
     .confirm-actions { display: grid; gap: 10px; }
     .confirm-actions .btn { width: 100%; }
     @media (max-width: 340px) {
@@ -208,13 +209,23 @@
       .add-time-grid { grid-template-columns: 1fr; }
       .ring-wrap { width: 200px; height: 200px; }
     }
+    @media (max-width: 220px) {
+      .pwa { padding-inline: 6px; }
+      .ring-wrap { width: min(calc(100vw - 12px), 160px); height: min(calc(100vw - 12px), 160px); }
+      .timer-main { font-size: 32px; }
+      .timer-name, .timer-label, .target { max-width: 126px; font-size: 10px; }
+      .safety-row { flex-wrap: wrap; }
+    }
+    @media (max-height: 420px) {
+      .confirm-backdrop { align-items: flex-start; }
+    }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation: none !important; transition-duration: 0.01ms !important; }
     }
   </style>
 </head>
 <body>
-  <div class="pwa">
+  <div class="pwa" id="app-shell" tabindex="-1">
     <div class="brand">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5b8cff" d="M12,3a9,9 0 1 0 9,9c0,-0.46 -0.04,-0.92 -0.1,-1.36a5.389,5.389 0 0 1 -4.4,2.26a5.403,5.403 0 0 1 -3.14,-9.8c-0.44,-0.06 -0.9,-0.1 -1.36,-0.1z"/></svg>
       <span class="brand-text">Lights Out</span>
@@ -356,18 +367,20 @@
       </div>
     </details>
 
-    <div class="confirm-backdrop" id="cancel-confirm" role="dialog" aria-modal="true" aria-labelledby="cancel-title" aria-describedby="cancel-copy">
+    <div id="toast" class="feedback-toast"></div>
+  </div>
+
+    <div class="confirm-backdrop" id="cancel-confirm" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="cancel-title" aria-describedby="cancel-copy cancel-connection-status">
       <div class="confirm-card">
         <h2 id="cancel-title">Stop Tonight’s Run?</h2>
         <p id="cancel-copy"></p>
+        <div class="cancel-connection-status" id="cancel-connection-status" role="status" hidden>PC connection unavailable. Stop is disabled until current PC state returns.</div>
         <div class="confirm-actions">
           <button class="btn btn-secondary" id="cancel-keep">Keep Running</button>
           <button class="btn btn-danger timer-mutation" id="cancel-stop">Stop Tonight’s Run</button>
         </div>
       </div>
     </div>
-    <div id="toast" class="feedback-toast"></div>
-  </div>
 
   <script>
     const timerMain = document.getElementById('timer-main');
@@ -397,6 +410,8 @@
     const detailsPanel = document.getElementById('details-panel');
     const cancelConfirm = document.getElementById('cancel-confirm');
     const cancelCopy = document.getElementById('cancel-copy');
+    const cancelConnectionStatus = document.getElementById('cancel-connection-status');
+    const appShell = document.getElementById('app-shell');
 
     const RING_C = 2 * Math.PI * 54;
     const PHASE_COLORS = { focus: '#5b8cff', dim: '#d4a50a', lastlight: '#ff4d4d', idle: '#5b8cff' };
@@ -427,6 +442,10 @@
     let ws = null;
     let reconnectTimer = null;
     let connectionAttempt = 0;
+    let socketGeneration = 0;
+    let authoritativeGeneration = null;
+    let awaitingInitialState = true;
+    let cancelDialogOpener = null;
 
     const TOKEN_KEY = 'lightsout_pair_token';
     const HOST_KEY = 'lightsout_pair_host';
@@ -474,10 +493,25 @@
       pendingStatus.classList.toggle('error', Boolean(isError));
     }
 
+    function stateIsAuthoritative() {
+      const socketIsOpen = Boolean(ws && ws.readyState === WebSocket.OPEN);
+      const age = lastStateReceivedAt > 0 ? Date.now() - lastStateReceivedAt : Infinity;
+      return connectionState === 'connected'
+        && socketIsOpen
+        && !awaitingInitialState
+        && authoritativeGeneration === socketGeneration
+        && age <= 7000;
+    }
+
+    function invalidateAuthoritativeState() {
+      authoritativeGeneration = null;
+      awaitingInitialState = true;
+      lastStateReceivedAt = 0;
+      document.body.classList.add('stale-state');
+    }
+
     function syncMutationControls() {
-      const connected = connectionState === 'connected';
-      const stateFresh = lastStateReceivedAt > 0 && Date.now() - lastStateReceivedAt <= 7000;
-      const available = connected && stateFresh && !pendingOperation;
+      const available = stateIsAuthoritative() && !pendingOperation;
       document.querySelectorAll('.timer-mutation').forEach(btn => { btn.disabled = !available; });
       document.querySelectorAll('#idle-controls .btn, #idle-controls .seg-btn').forEach(btn => { btn.disabled = !available; });
     }
@@ -503,7 +537,7 @@
     }
 
     function beginPending(operation) {
-      if (pendingOperation || connectionState !== 'connected') return false;
+      if (pendingOperation || !stateIsAuthoritative()) return false;
       if (pendingErrorTimeout) clearTimeout(pendingErrorTimeout);
       pendingErrorTimeout = null;
       pendingOperation = operation;
@@ -520,14 +554,25 @@
     }
 
     function updateFreshness() {
-      if (!lastStateReceivedAt) {
-        freshnessEl.textContent = connectionState === 'connected' ? 'Waiting for current PC state…' : '';
-        freshnessEl.classList.toggle('stale', connectionState !== 'connected');
+      if (connectionState === 'connected' && (awaitingInitialState || authoritativeGeneration !== socketGeneration || !lastStateReceivedAt)) {
+        freshnessEl.textContent = 'Waiting for current PC state…';
+        freshnessEl.classList.add('stale');
+        document.body.classList.add('stale-state');
+        syncMutationControls();
         return;
       }
       if (connectionState !== 'connected') {
         freshnessEl.textContent = 'State may be stale · PC unavailable';
         freshnessEl.classList.add('stale');
+        document.body.classList.add('stale-state');
+        syncMutationControls();
+        return;
+      }
+      if (!lastStateReceivedAt) {
+        freshnessEl.textContent = '';
+        freshnessEl.classList.add('stale');
+        document.body.classList.add('stale-state');
+        syncMutationControls();
         return;
       }
       const ageSeconds = Math.max(0, Math.floor((Date.now() - lastStateReceivedAt) / 1000));
@@ -551,16 +596,21 @@
       statusPill.className = `status-pill ${state}`;
       statusText.textContent = msg || state;
       const pcEl = document.getElementById('pc-name');
-      if (pcEl) pcEl.style.display = (state === 'connected' && pcName) ? '' : 'none';
       if (state === 'connected') {
         pairCard.style.display = 'none';
-        document.body.classList.remove('stale-state');
+        document.body.classList.toggle('stale-state', awaitingInitialState);
       } else {
         discardPendingForConnectionLoss();
+        invalidateAuthoritativeState();
         document.body.classList.add('stale-state');
-        cancelConfirm.classList.remove('show');
+        if (cancelConfirm.classList.contains('show')) cancelConnectionStatus.hidden = false;
       }
+      if (pcEl) pcEl.style.display = (state === 'connected' && stateIsAuthoritative() && pcName) ? '' : 'none';
       syncMutationControls();
+      if (state !== 'connected' && cancelConfirm.classList.contains('show')
+          && document.activeElement === document.getElementById('cancel-stop')) {
+        document.getElementById('cancel-keep')?.focus();
+      }
       updateFreshness();
     }
 
@@ -607,6 +657,8 @@
     async function connect() {
       if (!pairToken) { showPairing(); return; }
       const attempt = ++connectionAttempt;
+      const generation = ++socketGeneration;
+      invalidateAuthoritativeState();
       const host = pairHost || location.host;
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
 
@@ -622,7 +674,7 @@
             cache: 'no-store',
             signal: AbortSignal.timeout(5000)
           });
-          if (attempt !== connectionAttempt) return;
+          if (attempt !== connectionAttempt || generation !== socketGeneration) return;
           if (response.status === 401 || response.status === 403) {
             localStorage.removeItem(TOKEN_KEY);
             pairToken = '';
@@ -632,7 +684,7 @@
           }
           if (!response.ok) throw new Error(`Pair check failed: ${response.status}`);
         } catch {
-          if (attempt !== connectionAttempt) return;
+          if (attempt !== connectionAttempt || generation !== socketGeneration) return;
           setConnectionState('offline', 'PC unavailable');
           scheduleReconnect();
           return;
@@ -647,20 +699,19 @@
       }
 
       socket.onopen = () => {
-        if (ws !== socket) return;
+        if (ws !== socket || generation !== socketGeneration) return;
         if (reconnectTimer) clearTimeout(reconnectTimer);
         reconnectTimer = null;
-        setConnectionState('connected', 'Connected');
-        showToast('Connected to PC');
+        setConnectionState('connected', 'Connected — waiting for current PC state…');
       };
 
       socket.onmessage = (e) => {
-        if (ws !== socket) return;
-        try { handleUpdate(JSON.parse(e.data)); } catch {}
+        if (ws !== socket || generation !== socketGeneration) return;
+        try { handleUpdate(JSON.parse(e.data), generation); } catch {}
       };
 
       socket.onclose = (e) => {
-        if (ws !== socket) return;
+        if (ws !== socket || generation !== socketGeneration) return;
         // 1008 = policy violation / bad token, 1011 = server error, 1006 = abnormal close.
         if (e.code === 1008) {
           localStorage.removeItem(TOKEN_KEY);
@@ -677,7 +728,7 @@
       };
 
       socket.onerror = () => {
-        if (ws !== socket) return;
+        if (ws !== socket || generation !== socketGeneration) return;
         setConnectionState('offline', 'PC unavailable');
         scheduleReconnect();
       };
@@ -694,6 +745,7 @@
     }
 
     function startTimer(seconds) {
+      if (!stateIsAuthoritative()) return;
       const s = Math.max(60, Math.min(24 * 60 * 60, Math.round(seconds)));
       const destination = pcName || 'this PC';
       if (!confirm(`REAL ACTION: Start a ${selectedAction} timer on ${destination} for ${Math.round(s / 60)} minutes? Dry Run is not available from the phone.`)) return;
@@ -705,12 +757,16 @@
       if (!send({ action: 'start', durationSeconds: s, timerAction: selectedAction })) clearPending({ timeout: true });
     }
 
-    function handleUpdate(data) {
+    function handleUpdate(data, generation = socketGeneration) {
+      if (generation !== socketGeneration) return;
       if (data.type === 'state') {
+        if (connectionState !== 'connected' || !ws || ws.readyState !== WebSocket.OPEN) return;
         const running = Boolean(data.running);
         const paused = Boolean(data.paused);
         const active = running || paused;
         const phase = data.phase || 'idle';
+        authoritativeGeneration = generation;
+        awaitingInitialState = false;
         latestState = { ...data, running, paused };
         lastStateReceivedAt = Date.now();
         document.body.classList.remove('stale-state');
@@ -720,7 +776,7 @@
         }
         const pcEl = document.getElementById('pc-name');
         pcEl.textContent = pcName ? `Target PC: ${pcName}` : 'Target PC connected';
-        pcEl.style.display = connectionState === 'connected' ? '' : 'none';
+        pcEl.style.display = stateIsAuthoritative() ? '' : 'none';
 
         timerName.textContent = active ? (data.nightModeTitle || 'Custom Timer') : (data.timerName || 'Last Call');
         timerMain.textContent = formatTime(data.remainingSeconds);
@@ -748,7 +804,10 @@
         detailsPanel.classList.toggle('visible', active);
         if (!active) {
           detailsPanel.open = false;
-          cancelConfirm.classList.remove('show');
+          if (cancelConfirm.classList.contains('show')) closeCancelConfirmation();
+        } else if (cancelConfirm.classList.contains('show')) {
+          updateCancelConfirmationCopy();
+          cancelConnectionStatus.hidden = true;
         }
 
         const btnPause = document.getElementById('btn-pause');
@@ -860,6 +919,7 @@
     // protocol acknowledgement or retry commands.
     document.querySelectorAll('[data-add-seconds]').forEach(btn => {
       btn.addEventListener('click', () => {
+        if (!stateIsAuthoritative()) return;
         const seconds = Number(btn.dataset.addSeconds);
         const baseline = Number(latestState?.remainingSeconds);
         if (!Number.isFinite(seconds) || !Number.isFinite(baseline)) return;
@@ -873,6 +933,7 @@
     });
 
     document.getElementById('btn-pause')?.addEventListener('click', () => {
+      if (!stateIsAuthoritative()) return;
       const wantsPause = !Boolean(latestState?.paused);
       if (!beginPending({
         kind: wantsPause ? 'pause' : 'resume',
@@ -882,17 +943,61 @@
       if (!send({ action: 'togglePause' })) clearPending({ timeout: true });
     });
 
-    function closeCancelConfirmation() {
-      cancelConfirm.classList.remove('show');
-      document.getElementById('btn-cancel')?.focus();
-    }
-
-    document.getElementById('btn-cancel')?.addEventListener('click', () => {
-      if (!latestState || pendingOperation) return;
+    function updateCancelConfirmationCopy() {
+      if (!latestState) return;
       const title = latestState.nightModeTitle || 'Custom Timer';
       const target = pcName || 'the connected PC';
       cancelCopy.textContent = `${title} has ${formatTime(latestState.remainingSeconds)} remaining on ${target}. This will stop the timer.`;
+    }
+
+    function handleCancelDialogKeydown(event) {
+      if (!cancelConfirm.classList.contains('show')) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeCancelConfirmation();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = [document.getElementById('cancel-keep'), document.getElementById('cancel-stop')]
+        .filter(button => !button.disabled);
+      if (!focusable.length) return;
+      event.preventDefault();
+      const current = focusable.indexOf(document.activeElement);
+      const direction = event.shiftKey ? -1 : 1;
+      const next = current < 0
+        ? (event.shiftKey ? focusable.length - 1 : 0)
+        : (current + direction + focusable.length) % focusable.length;
+      focusable[next].focus();
+    }
+
+    function closeCancelConfirmation() {
+      cancelConfirm.classList.remove('show');
+      cancelConfirm.setAttribute('aria-hidden', 'true');
+      document.removeEventListener('keydown', handleCancelDialogKeydown, true);
+      appShell.inert = false;
+      appShell.removeAttribute('aria-hidden');
+      cancelConnectionStatus.hidden = true;
+      const fallback = document.getElementById('btn-cancel');
+      const openerIsUsable = cancelDialogOpener && cancelDialogOpener.isConnected
+        && !cancelDialogOpener.disabled && cancelDialogOpener.getClientRects().length > 0;
+      const fallbackIsUsable = fallback && !fallback.disabled && fallback.getClientRects().length > 0;
+      const restoreTarget = openerIsUsable
+        ? cancelDialogOpener
+        : (fallbackIsUsable ? fallback : appShell);
+      cancelDialogOpener = null;
+      restoreTarget?.focus();
+    }
+
+    document.getElementById('btn-cancel')?.addEventListener('click', () => {
+      if (!latestState || pendingOperation || !stateIsAuthoritative()) return;
+      cancelDialogOpener = document.activeElement;
+      updateCancelConfirmationCopy();
+      cancelConnectionStatus.hidden = true;
       cancelConfirm.classList.add('show');
+      cancelConfirm.setAttribute('aria-hidden', 'false');
+      appShell.inert = true;
+      appShell.setAttribute('aria-hidden', 'true');
+      document.addEventListener('keydown', handleCancelDialogKeydown, true);
       document.getElementById('cancel-keep')?.focus();
     });
 
@@ -902,17 +1007,16 @@
         kind: 'cancel',
         success: 'Tonight’s run stopped',
         matches: state => !state.running && !state.paused
-      })) return;
-      cancelConfirm.classList.remove('show');
+      })) {
+        cancelConnectionStatus.hidden = false;
+        return;
+      }
+      closeCancelConfirmation();
       if (!send({ action: 'cancel' })) clearPending({ timeout: true });
     });
     cancelConfirm.addEventListener('click', event => {
       if (event.target === cancelConfirm) closeCancelConfirmation();
     });
-    document.addEventListener('keydown', event => {
-      if (event.key === 'Escape' && cancelConfirm.classList.contains('show')) closeCancelConfirmation();
-    });
-
     if (pairToken) connect();
     else showPairing();
   </script>

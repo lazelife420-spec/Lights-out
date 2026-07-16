@@ -774,7 +774,8 @@ check('companion: Off hides QR and manual LAN URL', () => {
 check('companion: phone page has explicit connection states', () => {
   const companionHtml = fs.readFileSync(path.join(root, 'companion.html'), 'utf8');
   assert(companionHtml.includes('Connecting…'), 'companion page missing Connecting state');
-  assert(companionHtml.includes("setConnectionState('connected', 'Connected')"), 'companion page missing Connected state');
+  assert(companionHtml.includes("setConnectionState('connected', 'Connected — waiting for current PC state…')"), 'companion page missing pre-authoritative Connected state');
+  assert(companionHtml.includes("statusText.textContent = 'Connected'"), 'companion page missing authoritative Connected state');
   assert(companionHtml.includes('Reconnecting'), 'companion page missing Reconnecting state');
   assert(companionHtml.includes('Pairing expired'), 'companion page missing Pairing expired state');
   assert(companionHtml.includes('PC unavailable'), 'companion page missing unavailable state');
@@ -783,8 +784,10 @@ check('companion: phone page has explicit connection states', () => {
 
 check('companion: reconnects cannot let stale sockets replace a healthy connection', () => {
   const companionHtml = fs.readFileSync(path.join(root, 'companion.html'), 'utf8');
-  assert(companionHtml.includes('if (ws !== socket) return;'), 'stale WebSocket callbacks must be ignored');
-  assertMatch(companionHtml, /socket\.onopen = \(\) => \{\s*if \(ws !== socket\) return;\s*if \(reconnectTimer\) clearTimeout\(reconnectTimer\);\s*reconnectTimer = null;/, 'a successful connection must cancel its pending reconnect timer');
+  assert(companionHtml.includes('if (ws !== socket || generation !== socketGeneration) return;'), 'stale WebSocket callbacks must be ignored by socket identity and generation');
+  assertMatch(companionHtml, /socket\.onopen = \(\) => \{\s*if \(ws !== socket \|\| generation !== socketGeneration\) return;\s*if \(reconnectTimer\) clearTimeout\(reconnectTimer\);\s*reconnectTimer = null;/, 'a successful current-generation connection must cancel its pending reconnect timer');
+  assert(companionHtml.includes('authoritativeGeneration === socketGeneration'), 'mutation availability must require current-generation authoritative state');
+  assert(companionHtml.includes('awaitingInitialState'), 'reconnect must wait for current PC state');
   assert(companionHtml.includes('reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, 3000);'), 'reconnect timer state must clear before a new connection attempt');
   assert(companionHtml.includes("fetch(`/pair-check?t=${encodeURIComponent(pairToken)}`"), 'companion should preflight pairing so an expired token is not reported as an offline PC');
   assert(companionHtml.includes("setConnectionState('connecting', reconnecting ? 'Reconnecting' : 'Connecting…');"), 'background retries must expose their reconnecting state');

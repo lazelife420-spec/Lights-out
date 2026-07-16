@@ -1,7 +1,7 @@
 # Lights Out Companion V2 Audit and PR Plan
 
-Date: 2026-07-16  
-Release baseline: `v11.1.0`, frozen  
+Date: 2026-07-16
+Release baseline: `v11.1.0`, frozen
 Repository baseline: clean `main` at `adbe2e16b15b7d298076c3b9e81f48ce1d2bd89b`
 
 ## Scope and proof boundary
@@ -14,25 +14,25 @@ An attached Samsung SM-S911W also ran the installed Android wrapper (`com.lights
 
 ## Current flow capture
 
-1. Pairing shell: clear title, host, pairing-code field, same-Wi-Fi note.  
+1. Pairing shell: clear title, host, pairing-code field, same-Wi-Fi note.
    ![Pairing shell](companion-v2/01-pairing.png)
-2. Connected idle: PC identity and timer-start controls appear after the token-authenticated WebSocket opens.  
+2. Connected idle: PC identity and timer-start controls appear after the token-authenticated WebSocket opens.
    ![Connected idle](companion-v2/02-connected-idle.png)
-3. Active authoritative timer: countdown and phase update from desktop broadcasts.  
+3. Active authoritative timer: countdown and phase update from desktop broadcasts.
    ![Active timer](companion-v2/03-active-timer.png)
-4. Pause: confirmation appears; the authoritative state changes to Paused.  
+4. Pause: confirmation appears; the authoritative state changes to Paused.
    ![Paused timer](companion-v2/04-paused.png)
-5. Add time: one confirmed `+5` changed `29:47` to `34:47` exactly once.  
+5. Add time: one confirmed `+5` changed `29:47` to `34:47` exactly once.
    ![Snoozed timer](companion-v2/05-snoozed-plus-5.png)
-6. Resume: the authoritative countdown resumed and continued decrementing.  
+6. Resume: the authoritative countdown resumed and continued decrementing.
    ![Resumed timer](companion-v2/06-resumed.png)
-7. Reconnect: after the original page was lost, a fresh page reused the stored token and restored the live desktop state (`34:32` before loss, `33:39` after reconnect).  
+7. Reconnect: after the original page was lost, a fresh page reused the stored token and restored the live desktop state (`34:32` before loss, `33:39` after reconnect).
    ![Reconnected timer](companion-v2/07-reconnected-active.png)
-8. Cancel: a confirmed cancel returned the authoritative timer to idle.  
+8. Cancel: a confirmed cancel returned the authoritative timer to idle.
    ![Cancelled timer](companion-v2/08-cancelled-idle.png)
-9. PC unavailable: the page changes to “Wrong network or PC offline,” disables start controls, and retries every three seconds.  
+9. PC unavailable: the page changes to “Wrong network or PC offline,” disables start controls, and retries every three seconds.
    ![Offline retry state](companion-v2/09-offline-retry.png)
-10. Native Android entry screen: QR is prominent and manual URL remains available.  
+10. Native Android entry screen: QR is prominent and manual URL remains available.
     ![Android setup screen](companion-v2/10-android-current.png)
 
 ## What is already reliable

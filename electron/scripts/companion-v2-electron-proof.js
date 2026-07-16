@@ -74,6 +74,7 @@ async function runElectronProof() {
   const childProcess = require('child_process');
   const nativeSpawn = childProcess.spawn;
   const { app, BrowserWindow } = require('electron');
+  const NodeWebSocket = globalThis.WebSocket;
 
   const port = Number(process.env.LIGHTSOUT_C1_PROOF_PORT);
   const userData = process.env.LIGHTSOUT_C1_PROOF_USERDATA;
@@ -119,7 +120,13 @@ async function runElectronProof() {
 
   const companion = require(path.join(electronRoot, 'companion.js'));
   const nativeCompanionStart = companion.start;
+  const nativeCompanionBroadcast = companion.broadcast;
+  let suppressStateBroadcast = false;
   companion.start = options => nativeCompanionStart({ ...options, port });
+  companion.broadcast = data => {
+    if (suppressStateBroadcast && data?.type === 'state') return;
+    nativeCompanionBroadcast(data);
+  };
 
   let mainWindow = null;
   const mainReady = new Promise(resolve => {
@@ -143,10 +150,14 @@ async function runElectronProof() {
   async function check(label, fn) {
     try {
       await fn();
-      results.push(`  PASS  ${label}`);
+      const result = `  PASS  ${label}`;
+      results.push(result);
+      console.log(result);
       passed++;
     } catch (error) {
-      results.push(`  FAIL  ${label} -> ${error.message || error}`);
+      const result = `  FAIL  ${label} -> ${error.message || error}`;
+      results.push(result);
+      console.log(result);
       failed++;
     }
   }
@@ -167,6 +178,29 @@ async function runElectronProof() {
     throw new Error(`${message}${lastError ? `: ${lastError.message}` : ''}`);
   }
   const desktopEval = code => desktop.webContents.executeJavaScript(code);
+
+  async function sendRealWebSocketFrame(message) {
+    assert(typeof NodeWebSocket === 'function', 'Node WebSocket client is unavailable');
+    return new Promise((resolve, reject) => {
+      const client = new NodeWebSocket(`ws://127.0.0.1:${port}/?t=${encodeURIComponent(token)}`);
+      const timeout = setTimeout(() => {
+        try { client.close(); } catch {}
+        reject(new Error('forged-frame WebSocket timed out'));
+      }, 5000);
+      client.addEventListener('open', () => {
+        client.send(JSON.stringify(message));
+        setTimeout(() => {
+          clearTimeout(timeout);
+          try { client.close(); } catch {}
+          resolve();
+        }, 150);
+      }, { once: true });
+      client.addEventListener('error', () => {
+        clearTimeout(timeout);
+        reject(new Error('forged-frame WebSocket failed'));
+      }, { once: true });
+    });
+  }
 
   await waitFor(() => companion.getStatus().running, 'ephemeral companion server did not start');
   const phone = new BrowserWindow({
@@ -214,6 +248,59 @@ async function runElectronProof() {
     assert(layout.pc.includes('Target PC:'), `${width}px target PC missing`);
     assert(layout.stop === 'Stop Tonight’s Run', `${width}px stop control missing`);
     await capture(name);
+  }
+
+  async function assertReachableLayout(label) {
+    const layout = await phoneEval(`(() => {
+      const ids = ['timer-main', 'safety-badge', 'pc-name', 'freshness', 'btn-pause', 'btn-cancel', 'details-panel'];
+      const elements = ids.map(id => document.getElementById(id));
+      const addButtons = [...document.querySelectorAll('[data-add-seconds]')];
+      const project = element => {
+        const box = element.getBoundingClientRect();
+        return { id: element.id || element.textContent.trim(), left: box.left, right: box.right,
+          top: box.top + scrollY, bottom: box.bottom + scrollY, height: box.height,
+          visible: getComputedStyle(element).display !== 'none' };
+      };
+      return {
+        innerWidth, innerHeight, scrollWidth: document.documentElement.scrollWidth,
+        scrollHeight: document.documentElement.scrollHeight,
+        items: [...elements, ...addButtons].map(project),
+        stopBottom: project(document.getElementById('btn-cancel')).bottom,
+        detailsTop: project(document.getElementById('details-panel')).top
+      };
+    })()`);
+    assert(layout.scrollWidth <= layout.innerWidth, `${label} has horizontal overflow ${layout.scrollWidth}/${layout.innerWidth}`);
+    assert(layout.items.every(item => item.visible && item.left >= 0 && item.right <= layout.innerWidth), `${label} clips a required item`);
+    assert(layout.items.filter(item => ['btn-pause', 'btn-cancel', '+5', '+15', '+30'].includes(item.id)).every(item => item.height >= 48), `${label} shrinks a control below 48px`);
+    assert(layout.items.every(item => item.bottom <= layout.scrollHeight + 1), `${label} has an unreachable item`);
+    assert(layout.detailsTop >= layout.stopBottom, `${label} Details displaced primary controls`);
+    assert(layout.scrollHeight >= layout.innerHeight, `${label} vertical layout is invalid`);
+  }
+
+  async function sendKey(keyCode, modifiers = []) {
+    phone.show();
+    phone.focus();
+    phone.webContents.focus();
+    if (!phone.webContents.debugger.isAttached()) phone.webContents.debugger.attach('1.3');
+    const keys = {
+      Enter: { key: 'Enter', code: 'Enter', vk: 13, text: '\r' },
+      Space: { key: ' ', code: 'Space', vk: 32, text: ' ' },
+      Tab: { key: 'Tab', code: 'Tab', vk: 9, text: '' },
+      Escape: { key: 'Escape', code: 'Escape', vk: 27, text: '' }
+    };
+    const key = keys[keyCode];
+    assert(key, `unsupported proof key ${keyCode}`);
+    const modifierMask = modifiers.includes('shift') ? 8 : 0;
+    const payload = { key: key.key, code: key.code, windowsVirtualKeyCode: key.vk,
+      nativeVirtualKeyCode: key.vk, modifiers: modifierMask };
+    await phone.webContents.debugger.sendCommand('Input.dispatchKeyEvent', { ...payload, type: 'rawKeyDown' });
+    if (key.text) {
+      await phone.webContents.debugger.sendCommand('Input.dispatchKeyEvent', {
+        ...payload, type: 'char', text: key.text, unmodifiedText: key.text
+      });
+    }
+    await phone.webContents.debugger.sendCommand('Input.dispatchKeyEvent', { ...payload, type: 'keyUp' });
+    await wait(25);
   }
 
   const idleState = await desktopEval('({ running: state.running, paused: state.paused })');
@@ -268,6 +355,38 @@ async function runElectronProof() {
   const tickThree = await desktopEval('state.remainingSeconds');
   await check('two authoritative countdown ticks decrement', () => assert(tickTwo < tickOne && tickThree < tickTwo, `${tickOne},${tickTwo},${tickThree}`));
 
+  await check('real masked WebSocket frames discard forged trusted fields', async () => {
+    const before = await desktopEval('({ remaining: state.remainingSeconds, dryRun: state.dryRun, nightModeId: state.armedNightMode?.nightModeId || null, profileId: state.profileId })');
+    const logBefore = commandLog.length;
+    await sendRealWebSocketFrame({
+      action: 'snooze', seconds: 300, dryRun: true,
+      nightModeId: 'forged-mode', nightModeTitle: 'Forged Mode', nightModeVersion: 999,
+      profileId: 'forged-profile', profileName: 'Forged Profile', forceShutdown: true,
+      logout: true, hibernate: true
+    });
+    await waitFor(() => commandLog.length === logBefore + 1, 'validated forged frame did not reach main');
+    const accepted = commandLog[logBefore];
+    assert(JSON.stringify(accepted) === JSON.stringify({ action: 'snooze', seconds: 300 }), JSON.stringify(accepted));
+    await waitFor(() => desktopEval(`state.remainingSeconds >= ${before.remaining + 298}`), 'allowed snooze did not execute');
+    const after = await desktopEval('({ dryRun: state.dryRun, nightModeId: state.armedNightMode?.nightModeId || null, profileId: state.profileId })');
+    assert(after.dryRun === before.dryRun && after.nightModeId === before.nightModeId && after.profileId === before.profileId, JSON.stringify(after));
+  });
+
+  await check('real WebSocket rejects unsupported remote power actions', async () => {
+    const before = commandLog.length;
+    for (const message of [
+      { action: 'logout' },
+      { action: 'hibernate' },
+      { action: 'forceShutdown' },
+      { action: 'force-shutdown' },
+      { action: 'start', timerAction: 'logout', durationSeconds: 900 },
+      { action: 'start', timerAction: 'hibernate', durationSeconds: 900 },
+      { action: 'start', timerAction: 'force-shutdown', durationSeconds: 900, forceShutdown: true }
+    ]) await sendRealWebSocketFrame(message);
+    await wait(250);
+    assert(commandLog.length === before, `unsupported frame crossed boundary: ${JSON.stringify(commandLog.slice(before))}`);
+  });
+
   const viewports = [[320,700],[360,800],[390,844],[412,915],[430,932]];
   for (const [width, height] of viewports) {
     await check(`${width}px active layout has no clipping`, () => layoutAt(width, height, `01-active-${width}x${height}`));
@@ -278,7 +397,7 @@ async function runElectronProof() {
   await capture('03-details-open');
   await phoneEval("(() => { document.getElementById('details-panel').open = false; window.scrollTo(0, 0); })()");
 
-  await phoneEval("document.getElementById('btn-pause').click()");
+  await phoneEval("(() => { const button = document.getElementById('btn-pause'); button.click(); button.click(); })()");
   await waitFor(() => desktopEval('state.paused === true'), 'desktop did not pause');
   await waitFor(() => phoneEval("document.getElementById('pending-status').classList.contains('show') === false"), 'pause pending state did not clear');
   await capture('04-paused');
@@ -288,6 +407,7 @@ async function runElectronProof() {
     assert(value.paused === true && value.pending === null, JSON.stringify(value));
   });
 
+  let lastAddCommandDelta = 0;
   async function proveAdd(seconds, doubleTap = false) {
     const before = await desktopEval('state.remainingSeconds');
     const beforeCommands = commandLog.filter(message => message.action === 'snooze' && message.seconds === seconds).length;
@@ -300,13 +420,37 @@ async function runElectronProof() {
     await waitFor(() => desktopEval(`state.remainingSeconds === ${before + seconds}`), `desktop did not add exactly ${seconds}s`);
     await waitFor(() => phoneEval('pendingOperation === null'), `pending add ${seconds}s did not clear`);
     const afterCommands = commandLog.filter(message => message.action === 'snooze' && message.seconds === seconds).length;
-    assert(afterCommands - beforeCommands === 1, `${seconds}s produced ${afterCommands - beforeCommands} messages`);
+    lastAddCommandDelta = afterCommands - beforeCommands;
+    assert(lastAddCommandDelta === 1, `${seconds}s produced ${lastAddCommandDelta} messages`);
   }
 
   await check('+5 sends once and adds exactly 300 seconds', () => proveAdd(300, true));
-  await check('rapid double-tap sends one add-time command', () => assert(commandLog.filter(message => message.action === 'snooze' && message.seconds === 300).length === 1, 'double tap duplicated +5'));
+  await check('rapid double-tap sends one add-time command', () => assert(lastAddCommandDelta === 1, 'double tap duplicated +5'));
   await check('+15 sends once and adds exactly 900 seconds', () => proveAdd(900));
   await check('+30 sends once and adds exactly 1800 seconds', () => proveAdd(1800));
+
+  phone.show();
+  phone.focus();
+  await check('Snooze tap followed by Enter sends exactly once', async () => {
+    const beforeRemaining = await desktopEval('state.remainingSeconds');
+    const beforeCommands = commandLog.filter(message => message.action === 'snooze' && message.seconds === 900).length;
+    await phoneEval("(() => { const button = document.querySelector('[data-add-seconds=\"900\"]'); button.focus(); button.click(); })()");
+    await sendKey('Enter');
+    await waitFor(() => desktopEval(`state.remainingSeconds === ${beforeRemaining + 900}`), 'Enter-race snooze did not apply once');
+    await waitFor(() => phoneEval('pendingOperation === null'), 'Enter-race pending did not clear');
+    const afterCommands = commandLog.filter(message => message.action === 'snooze' && message.seconds === 900).length;
+    assert(afterCommands - beforeCommands === 1, `Enter race sent ${afterCommands - beforeCommands}`);
+  });
+
+  await check('touch event plus synthetic click sends exactly one Snooze', async () => {
+    const beforeRemaining = await desktopEval('state.remainingSeconds');
+    const beforeCommands = commandLog.filter(message => message.action === 'snooze' && message.seconds === 300).length;
+    await phoneEval("(() => { const button = document.querySelector('[data-add-seconds=\"300\"]'); button.dispatchEvent(new Event('touchend', { bubbles: true })); button.click(); button.click(); })()");
+    await waitFor(() => desktopEval(`state.remainingSeconds === ${beforeRemaining + 300}`), 'touch/synthetic snooze did not apply once');
+    await waitFor(() => phoneEval('pendingOperation === null'), 'touch/synthetic pending did not clear');
+    const afterCommands = commandLog.filter(message => message.action === 'snooze' && message.seconds === 300).length;
+    assert(afterCommands - beforeCommands === 1, `touch/synthetic race sent ${afterCommands - beforeCommands}`);
+  });
 
   await check('command timeout does not resend', async () => {
     const before = commandLog.length;
@@ -317,10 +461,13 @@ async function runElectronProof() {
     assert(commandLog.length === before, 'timeout resent or invented a command');
   });
 
-  await phoneEval("document.getElementById('btn-pause').click()");
+  const resumeBefore = commandLog.filter(message => message.action === 'togglePause').length;
+  await phoneEval("(() => { const button = document.getElementById('btn-pause'); button.focus(); button.click(); })()");
+  await sendKey('Space');
+  await sendKey('Space');
   await waitFor(() => desktopEval('state.paused === false'), 'desktop did not resume');
   await waitFor(() => phoneEval('pendingOperation === null'), 'resume pending state did not clear');
-  await check('Resume sends one toggle', () => assert(commandLog.filter(message => message.action === 'togglePause').length === 2, 'resume toggle count changed'));
+  await check('Resume tap plus repeated Space sends one toggle', () => assert(commandLog.filter(message => message.action === 'togglePause').length - resumeBefore === 1, 'resume toggle count changed'));
   await check('Pending Resume clears only after authoritative resumed state', async () => {
     const value = await phoneEval("({ paused: latestState.paused, pending: pendingOperation })");
     assert(value.paused === false && value.pending === null, JSON.stringify(value));
@@ -342,11 +489,107 @@ async function runElectronProof() {
     assert(after.running && after.remaining <= beforeReloadIdentity.remaining, JSON.stringify(after));
   });
 
-  await phoneEval("setConnectionState('connecting', 'Reconnecting')");
+  const beforeGenerationState = await phoneEval("({ generation: socketGeneration, title: timerName.textContent, remaining: latestState.remainingSeconds })");
+  await phoneEval('window.__proofOldOnMessage = ws.onmessage; true');
+  suppressStateBroadcast = true;
+  await phoneEval('connect()');
+  await waitFor(() => phoneEval("statusText.textContent.includes('waiting for current PC state')"), 'replacement socket did not enter waiting state');
   await capture('06-reconnecting');
+  await check('socket open without state remains stale and disabled', async () => {
+    const value = await phoneEval("({ awaitingInitialState, authoritativeGeneration, lastStateReceivedAt, stale: document.body.classList.contains('stale-state'), disabled: [...document.querySelectorAll('.timer-mutation')].every(button => button.disabled), status: statusText.textContent, freshness: freshnessEl.textContent })");
+    assert(value.awaitingInitialState && value.authoritativeGeneration === null && value.lastStateReceivedAt === 0, JSON.stringify(value));
+    assert(value.stale && value.disabled && value.status.includes('waiting for current PC state') && value.freshness.includes('Waiting for current PC state'), JSON.stringify(value));
+  });
+  await check('replacement socket never inherits old freshness', async () => {
+    const value = await phoneEval("({ generation: socketGeneration, authoritativeGeneration, fresh: stateIsAuthoritative() })");
+    assert(value.generation > beforeGenerationState.generation && value.authoritativeGeneration === null && !value.fresh, JSON.stringify(value));
+  });
+  await check('obsolete socket message is ignored', async () => {
+    await phoneEval(`window.__proofOldOnMessage({ data: JSON.stringify({ type: 'state', running: true, paused: false,
+      remainingSeconds: 99999, totalSeconds: 99999, nightModeTitle: 'Obsolete Socket', dryRun: false, pcName: 'OLD-PC' }) })`);
+    const value = await phoneEval("({ title: timerName.textContent, remaining: latestState.remainingSeconds, stale: document.body.classList.contains('stale-state'), pending: pendingOperation, fresh: stateIsAuthoritative() })");
+    assert(value.title !== 'Obsolete Socket' && value.remaining === beforeGenerationState.remaining && value.stale && value.pending === null && !value.fresh, JSON.stringify(value));
+  });
+  suppressStateBroadcast = false;
+  await waitFor(() => phoneEval("statusText.textContent === 'Connected' && stateIsAuthoritative()"), 'first current-generation state did not restore trust', 10000);
+  await check('first current-generation state enables controls', async () => {
+    const value = await phoneEval("({ fresh: stateIsAuthoritative(), stale: document.body.classList.contains('stale-state'), enabled: [...document.querySelectorAll('.timer-mutation')].every(button => !button.disabled) })");
+    assert(value.fresh && !value.stale && value.enabled, JSON.stringify(value));
+  });
+
+  suppressStateBroadcast = true;
+  const pauseDisconnectBefore = commandLog.filter(message => message.action === 'togglePause').length;
+  await phoneEval("document.getElementById('toast').classList.remove('show'); document.getElementById('toast').textContent = ''; document.getElementById('btn-pause').click()");
+  await waitFor(() => desktopEval('state.paused === true'), 'pause-before-disconnect did not reach desktop');
   await companion.stop();
-  await waitFor(() => phoneEval("document.getElementById('status-text').textContent === 'PC unavailable'"), 'offline state missing');
-  await phoneEval("setConnectionState('offline', 'PC unavailable'); window.scrollTo(0, 0)");
+  await waitFor(() => phoneEval("statusText.textContent === 'PC unavailable'"), 'pause disconnect did not go offline');
+  await check('pending Pause disconnect never resends or claims success', async () => {
+    await wait(350);
+    const value = await phoneEval("({ pending: pendingOperation, toast: document.getElementById('toast').textContent, shown: document.getElementById('toast').classList.contains('show') })");
+    const count = commandLog.filter(message => message.action === 'togglePause').length - pauseDisconnectBefore;
+    assert(value.pending === null && !value.shown && value.toast !== 'Paused' && count === 1, JSON.stringify({ value, count }));
+  });
+  suppressStateBroadcast = false;
+  companion.start({ token, host: '127.0.0.1' });
+  await waitFor(() => phoneEval("stateIsAuthoritative() && latestState.paused === true"), 'reconnect did not show processed Pause', 10000);
+
+  suppressStateBroadcast = true;
+  const resumeDisconnectBefore = commandLog.filter(message => message.action === 'togglePause').length;
+  await phoneEval("document.getElementById('toast').classList.remove('show'); document.getElementById('toast').textContent = ''; document.getElementById('btn-pause').click()");
+  await waitFor(() => desktopEval('state.paused === false'), 'resume-before-disconnect did not reach desktop');
+  await companion.stop();
+  await waitFor(() => phoneEval("statusText.textContent === 'PC unavailable'"), 'resume disconnect did not go offline');
+  await check('pending Resume disconnect never resends or claims success', async () => {
+    await wait(350);
+    const value = await phoneEval("({ pending: pendingOperation, toast: document.getElementById('toast').textContent, shown: document.getElementById('toast').classList.contains('show') })");
+    const count = commandLog.filter(message => message.action === 'togglePause').length - resumeDisconnectBefore;
+    assert(value.pending === null && !value.shown && value.toast !== 'Resumed' && count === 1, JSON.stringify({ value, count }));
+  });
+  suppressStateBroadcast = false;
+  companion.start({ token, host: '127.0.0.1' });
+  await waitFor(() => phoneEval("stateIsAuthoritative() && latestState.paused === false"), 'reconnect did not show processed Resume', 10000);
+
+  const staleRemainingBeforeDesktopChange = await phoneEval('latestState.remainingSeconds');
+  await companion.stop();
+  await waitFor(() => phoneEval("statusText.textContent === 'PC unavailable'"), 'desktop-change proof did not go offline');
+  await desktopEval(`window.electronAPI.startTimer(${JSON.stringify({ durationSeconds: 1200, action: 'sleep', dryRun: true, profileId: profile.id, nightModeId: 'quick-sleep' })})`);
+  companion.start({ token, host: '127.0.0.1' });
+  await waitFor(() => phoneEval("stateIsAuthoritative() && latestState.running && latestState.remainingSeconds <= 1200"), 'desktop-changed timer did not replace stale phone state', 10000);
+  await check('desktop timer change while disconnected replaces old phone state', async () => {
+    const value = await phoneEval("({ remaining: latestState.remainingSeconds, title: timerName.textContent, stale: document.body.classList.contains('stale-state') })");
+    assert(value.remaining < staleRemainingBeforeDesktopChange && value.remaining <= 1200 && !value.stale, JSON.stringify(value));
+  });
+
+  await companion.stop();
+  await waitFor(() => phoneEval("statusText.textContent === 'PC unavailable'"), 'completion proof did not go offline');
+  await desktopEval('window.electronAPI.cancelTimer()');
+  companion.start({ token, host: '127.0.0.1' });
+  await waitFor(() => phoneEval("stateIsAuthoritative() && !latestState.running && !latestState.paused"), 'completed timer did not restore idle', 10000);
+  await check('timer completion while disconnected restores honest idle', async () => {
+    const value = await phoneEval("({ idle: timerLabel.textContent === 'Idle', activeHidden: activeControls.style.display === 'none', stale: document.body.classList.contains('stale-state') })");
+    assert(value.idle && value.activeHidden && !value.stale, JSON.stringify(value));
+  });
+
+  await desktopEval(`window.electronAPI.startTimer(${JSON.stringify({ durationSeconds: 900, action: 'sleep', dryRun: true, profileId: profile.id, nightModeId: 'quick-sleep' })})`);
+  await waitFor(() => phoneEval("stateIsAuthoritative() && latestState.running"), 'late-transition timer did not start');
+  suppressStateBroadcast = true;
+  const lateBefore = commandLog.filter(message => message.action === 'togglePause').length;
+  await phoneEval("document.getElementById('toast').classList.remove('show'); document.getElementById('toast').textContent = ''; document.getElementById('btn-pause').click()");
+  await waitFor(() => desktopEval('state.paused === true'), 'late transition did not reach desktop');
+  await wait(5200);
+  await check('timeout sends nothing further and remains uncertain', async () => {
+    const value = await phoneEval("({ pending: pendingOperation, text: pendingStatus.textContent, shown: document.getElementById('toast').classList.contains('show') })");
+    const count = commandLog.filter(message => message.action === 'togglePause').length - lateBefore;
+    assert(value.pending === null && value.text === 'PC did not confirm the change' && !value.shown && count === 1, JSON.stringify({ value, count }));
+  });
+  suppressStateBroadcast = false;
+  await waitFor(() => phoneEval("stateIsAuthoritative() && latestState.paused === true"), 'late authoritative transition did not render', 10000);
+  await check('late authoritative transition renders without retrospective success', async () => {
+    const value = await phoneEval("({ paused: latestState.paused, toast: document.getElementById('toast').textContent, shown: document.getElementById('toast').classList.contains('show') })");
+    assert(value.paused && !value.shown && value.toast !== 'Paused', JSON.stringify(value));
+  });
+
+  await phoneEval("setConnectionState('connecting', 'Reconnecting')");
   await capture('07-offline-stale');
   await check('offline state disables timer mutation controls', async () => {
     const disabled = await phoneEval("[...document.querySelectorAll('.timer-mutation')].every(button => button.disabled)");
@@ -356,44 +599,103 @@ async function runElectronProof() {
     const value = await phoneEval("({ stale: document.body.classList.contains('stale-state'), text: freshnessEl.textContent })");
     assert(value.stale && value.text.includes('State may be stale'), JSON.stringify(value));
   });
-
-  companion.start({ token, host: '127.0.0.1' });
-  await waitFor(() => phoneEval("document.getElementById('status-text').textContent === 'Connected'"), 'phone did not recover', 10000);
-  await waitFor(() => phoneEval("!document.body.classList.contains('stale-state')"), 'fresh state did not clear stale marker');
-  await check('fresh state clears stale indication', async () => {
-    const text = await phoneEval('freshnessEl.textContent');
-    assert(text.includes('Updated'), `freshness was ${text}`);
-  });
+  await phoneEval('connect()');
+  await waitFor(() => phoneEval("stateIsAuthoritative()"), 'phone did not recover after explicit reconnect', 10000);
 
   phone.setContentSize(320, 700);
-  await phone.webContents.setZoomFactor(1.2);
+  await phone.webContents.setZoomFactor(2);
+  await wait(150);
   await phoneEval('window.scrollTo(0, 0)');
+  await check('200% layout keeps every primary element reachable', () => assertReachableLayout('200% 320x700'));
   await capture('08-large-font-narrow-fallback');
   await phone.webContents.setZoomFactor(1);
+
+  for (const [width, height] of [[844, 390], [700, 320]]) {
+    phone.setContentSize(width, height);
+    await wait(100);
+    await phoneEval('window.scrollTo(0, 0)');
+    await check(`${width}x${height} landscape keeps controls reachable`, () => assertReachableLayout(`${width}x${height}`));
+    await phoneEval("document.getElementById('btn-cancel').click()");
+    await waitFor(() => phoneEval("cancelConfirm.classList.contains('show')"), `${width}x${height} cancel dialog did not open`);
+    await check(`${width}x${height} cancel dialog fits or scrolls safely`, async () => {
+      const value = await phoneEval(`(() => {
+        const card = document.querySelector('.confirm-card');
+        const box = card.getBoundingClientRect();
+        const stop = document.getElementById('cancel-stop').getBoundingClientRect();
+        return { top: box.top, bottom: box.bottom, innerHeight, scrollable: card.scrollHeight >= card.clientHeight,
+          stopLeft: stop.left, stopRight: stop.right, innerWidth };
+      })()`);
+      assert(value.top >= 0 && value.bottom <= value.innerHeight && value.stopLeft >= 0 && value.stopRight <= value.innerWidth && value.scrollable, JSON.stringify(value));
+    });
+    await capture(`10-landscape-${width}x${height}`);
+    await phoneEval("document.getElementById('cancel-keep').click()");
+  }
+
   phone.setContentSize(390, 844);
   await wait(2100);
 
   await phoneEval('window.scrollTo(0, 0)');
-  await phoneEval("document.getElementById('btn-cancel').click()");
-  await waitFor(() => phoneEval("document.getElementById('cancel-confirm').classList.contains('show')"), 'cancel confirmation did not open');
-  await wait(150);
-  await phoneEval(`new Promise(resolve => {
-    if (!document.getElementById('cancel-confirm').classList.contains('show')) {
-      document.getElementById('btn-cancel').click();
-    }
-    requestAnimationFrame(() => requestAnimationFrame(resolve));
-  })`);
-  await waitFor(() => phoneEval("document.getElementById('cancel-confirm').classList.contains('show')"), 'cancel confirmation did not remain open for capture');
+  const cancelBeforeKeyboardDismiss = commandLog.filter(message => message.action === 'cancel').length;
+  await phoneEval("document.getElementById('btn-cancel').focus()");
+  await sendKey('Enter');
+  await waitFor(() => phoneEval("cancelConfirm.classList.contains('show')"), 'keyboard did not open cancel confirmation');
+  await check('cancel modal starts inside dialog and makes background inert', async () => {
+    const value = await phoneEval("({ focus: document.activeElement.id, inert: appShell.inert, hidden: appShell.getAttribute('aria-hidden'), dialogHidden: cancelConfirm.getAttribute('aria-hidden') })");
+    assert(value.focus === 'cancel-keep' && value.inert && value.hidden === 'true' && value.dialogHidden === 'false', JSON.stringify(value));
+  });
+  await sendKey('Tab');
+  await waitFor(() => phoneEval("document.activeElement.id === 'cancel-stop'"), 'Tab did not move to Stop');
+  await sendKey('Tab');
+  await waitFor(() => phoneEval("document.activeElement.id === 'cancel-keep'"), 'Tab escaped dialog');
+  await sendKey('Tab', ['shift']);
+  await waitFor(() => phoneEval("document.activeElement.id === 'cancel-stop'"), 'Shift+Tab did not reverse within dialog');
+  await check('Tab and Shift+Tab remain inside the two modal actions', async () => {
+    const value = await phoneEval("({ focus: document.activeElement.id, backgroundFocused: document.activeElement.closest('#app-shell') !== null })");
+    assert(value.focus === 'cancel-stop' && !value.backgroundFocused, JSON.stringify(value));
+  });
+  await sendKey('Escape');
+  await waitFor(() => phoneEval("!cancelConfirm.classList.contains('show')"), 'Escape did not close dialog');
+  await check('Escape sends nothing and restores focus to opener', async () => {
+    const focus = await phoneEval('document.activeElement.id');
+    const count = commandLog.filter(message => message.action === 'cancel').length - cancelBeforeKeyboardDismiss;
+    assert(focus === 'btn-cancel' && count === 0, JSON.stringify({ focus, count }));
+  });
+
+  await phoneEval("document.getElementById('btn-cancel').focus()");
+  await sendKey('Enter');
+  await waitFor(() => phoneEval("cancelConfirm.classList.contains('show')"), 'connection-loss dialog did not open');
+  await companion.stop();
+  await waitFor(() => phoneEval("statusText.textContent === 'PC unavailable'"), 'dialog connection-loss state missing');
+  await check('connection loss keeps modal contained and disables Stop', async () => {
+    const value = await phoneEval("({ open: cancelConfirm.classList.contains('show'), inert: appShell.inert, disabled: document.getElementById('cancel-stop').disabled, unavailable: !cancelConnectionStatus.hidden, focus: document.activeElement.id })");
+    assert(value.open && value.inert && value.disabled && value.unavailable && value.focus === 'cancel-keep', JSON.stringify(value));
+  });
+  companion.start({ token, host: '127.0.0.1' });
+  await waitFor(() => phoneEval("stateIsAuthoritative() && !document.getElementById('cancel-stop').disabled"), 'dialog did not recover after current state', 10000);
+  await check('current state re-enables modal Stop without leaving dialog', async () => {
+    const value = await phoneEval("({ open: cancelConfirm.classList.contains('show'), inert: appShell.inert, unavailable: !cancelConnectionStatus.hidden })");
+    assert(value.open && value.inert && !value.unavailable, JSON.stringify(value));
+  });
+  await phoneEval("document.getElementById('cancel-keep').click()");
+  await waitFor(() => phoneEval("document.activeElement.id === 'btn-cancel'"), 'Keep Running did not restore opener focus');
+
+  await phoneEval("document.getElementById('btn-cancel').focus()");
+  await sendKey('Enter');
+  await waitFor(() => phoneEval("cancelConfirm.classList.contains('show') && document.activeElement.id === 'cancel-keep'"), 'final keyboard dialog did not open');
   await capture('09-cancel-confirmation');
   await check('cancel confirmation names run, PC, remaining time, and consequence', async () => {
     const copy = await phoneEval('cancelCopy.textContent');
     assert(copy.includes('Quick Sleep') && copy.includes(os.hostname()) && copy.includes('remaining') && copy.includes('stop the timer'), copy);
   });
   const cancelBefore = commandLog.filter(message => message.action === 'cancel').length;
-  await phoneEval("(() => { const button = document.getElementById('cancel-stop'); button.click(); button.click(); })()");
+  await sendKey('Tab');
+  await waitFor(() => phoneEval("document.activeElement.id === 'cancel-stop'"), 'keyboard did not reach final Stop');
+  await sendKey('Enter');
+  await sendKey('Enter');
+  await sendKey('Space');
   await waitFor(() => desktopEval('state.running === false && state.paused === false'), 'desktop did not cancel');
   await waitFor(() => phoneEval('pendingOperation === null'), 'cancel pending state did not clear');
-  await check('Cancel sends once after in-page confirmation', () => assert(commandLog.filter(message => message.action === 'cancel').length - cancelBefore === 1, 'cancel duplicated'));
+  await check('keyboard and repeated activation send one Cancel', () => assert(commandLog.filter(message => message.action === 'cancel').length - cancelBefore === 1, 'cancel duplicated'));
   await check('Cancel success appears only after authoritative idle', async () => {
     const value = await phoneEval("({ idle: !latestState.running && !latestState.paused, toast: document.getElementById('toast').textContent })");
     assert(value.idle && value.toast === 'Tonight’s run stopped', JSON.stringify(value));
@@ -421,7 +723,6 @@ async function runElectronProof() {
   await check('remote logout remains impossible', () => assert(!commandLog.some(message => message.timerAction === 'logout'), 'logout accepted'));
   await check('remote hibernate remains impossible', () => assert(!commandLog.some(message => message.timerAction === 'hibernate'), 'hibernate accepted'));
 
-  results.forEach(result => console.log(result));
   console.log(`\nCompanion V2 Electron proof: ${passed} passed, ${failed} failed`);
   console.log(`Commands observed: ${commandLog.length}`);
   console.log('Real power actions: 0');
