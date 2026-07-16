@@ -113,6 +113,40 @@ test('validateCompanionMessage validates a start and blocks bad actions', () => 
   assert.equal(rc.validateCompanionMessage({ action: 'start', timerAction: 'logout', durationSeconds: 600 }).ok, false);
 });
 
+test('validateCompanionMessage strips desktop-owned identity and safety fields', () => {
+  const result = rc.validateCompanionMessage({
+    action: 'start',
+    timerAction: 'shutdown',
+    durationSeconds: 900,
+    nightModeId: 'full-shutdown',
+    nightModeTitle: 'Forged title',
+    nightModeVersion: 99,
+    profileId: 'forged-profile',
+    profileName: 'Forged profile',
+    dryRun: true,
+    forceShutdown: true
+  });
+  assert.deepEqual(result.message, {
+    action: 'start',
+    timerAction: 'shutdown',
+    durationSeconds: 900
+  });
+});
+
+test('validateCompanionMessage keeps force shutdown, logout, and hibernate impossible', () => {
+  for (const timerAction of ['logout', 'hibernate']) {
+    assert.equal(rc.validateCompanionMessage({ action: 'start', timerAction, durationSeconds: 900 }).ok, false);
+  }
+  const shutdown = rc.validateCompanionMessage({
+    action: 'start',
+    timerAction: 'shutdown',
+    durationSeconds: 900,
+    forceShutdown: true
+  });
+  assert.equal(shutdown.ok, true);
+  assert.equal('forceShutdown' in shutdown.message, false);
+});
+
 test('validateCompanionMessage clamps snooze and passes through togglePause', () => {
   assert.equal(rc.validateCompanionMessage({ action: 'snooze', seconds: rc.SNOOZE_MAX + 1 }).ok, false);
   assert.deepEqual(rc.validateCompanionMessage({ action: 'togglePause', x: 1 }).message, { action: 'togglePause' });

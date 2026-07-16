@@ -14,6 +14,7 @@
     "smoke:packaged": "node scripts/packaged-smoke.js",
     "test:geometry": "electron scripts/window-geometry-runtime.js",
     "test:night-modes-runtime": "node scripts/night-modes-electron-proof.js",
+    "test:companion-v2-runtime": "node scripts/companion-v2-electron-proof.js",
     "test": "node --test"
   },
   "author": "Lights Out",

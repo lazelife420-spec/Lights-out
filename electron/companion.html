@@ -79,6 +79,7 @@
     .status-pill.dim .status-dot { background: #d4a50a; animation: pulse 2.2s ease infinite; }
     .status-pill.lastlight { background: rgba(255,77,77,0.10); border-color: rgba(255,77,77,0.3); color: #ff6b6b; }
     .status-pill.lastlight .status-dot { background: #ff4d4d; animation: pulse 0.85s ease infinite; }
+    .status-dot { animation: none !important; }
     @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.8); } }
     .pc-name { font-size: 11px; color: var(--muted); margin-top: -16px; margin-bottom: 18px; }
 
@@ -100,7 +101,7 @@
     .btn-secondary:active { background: #20262f; }
     .btn-danger { background: rgba(255,77,77,0.12); color: #ff6b6b; border: 1px solid rgba(255,77,77,0.22); }
     .btn-amber { background: rgba(212,165,10,0.12); color: #e2b53a; border: 1px solid rgba(212,165,10,0.24); }
-    .feedback-toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 14px; z-index: 1000; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+    .feedback-toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 14px; z-index: 800; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
     .feedback-toast.show { opacity: 1; }
     .timer-actions { display: flex; gap: 10px; }
     .timer-actions .btn { flex: 1; }
@@ -149,6 +150,67 @@
     .comp-metric--warn { color: #ff9800; }
     .comp-metric--good { color: #4caf50; }
     .comp-metric--danger { color: #ff6b6b; }
+
+    /* Companion V2 C1: restrained bedside controller. */
+    body { justify-content: flex-start; background: #080a0e; }
+    .pwa { min-width: 0; padding: 18px clamp(14px, 5vw, 22px) 32px; }
+    .brand { margin-bottom: 12px; }
+    .ring-wrap { width: min(68vw, 256px); height: min(68vw, 256px); }
+    .ring-progress { filter: drop-shadow(0 0 3px color-mix(in srgb, var(--ring) 55%, transparent)); transition: stroke-dashoffset 0.9s linear, stroke 0.3s ease; }
+    .timer-main { font-size: clamp(52px, 15vw, 68px); text-shadow: 0 0 12px rgba(118,201,255,0.15); }
+    .timer-name { max-width: 210px; font-size: 13px; }
+    .timer-label, .target { font-size: 13px; }
+    .status-pill { max-width: 100%; min-width: 0; margin: 10px 0 8px; }
+    .status-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pc-name { margin: 0 0 12px; font-size: 12px; }
+    .controls, .timer-actions, .custom-row, .action-seg { min-width: 0; }
+    .btn, .seg-btn { min-width: 0; min-height: 48px; }
+    button:focus-visible, input:focus-visible, summary:focus-visible {
+      outline: 3px solid #9bb8ff;
+      outline-offset: 3px;
+    }
+    .safety-row { display: none; align-items: center; justify-content: center; gap: 8px; margin: 2px 0 8px; }
+    .safety-badge { display: inline-flex; align-items: center; gap: 7px; min-height: 30px; padding: 5px 11px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: 1px; }
+    .safety-badge::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .safety-badge.dry { color: #82c7ff; background: rgba(91,140,255,0.13); border: 1px solid rgba(130,199,255,0.3); }
+    .safety-badge.real { color: #ffb454; background: rgba(255,180,84,0.1); border: 1px solid rgba(255,180,84,0.3); }
+    .profile-name { color: var(--muted); font-size: 12px; min-height: 16px; }
+    .freshness { color: var(--muted); font-size: 12px; min-height: 18px; margin-bottom: 8px; }
+    .freshness.stale { color: #ffb454; font-weight: 700; }
+    .pending-status { display: none; min-height: 42px; align-items: center; justify-content: center; padding: 10px 12px; border: 1px solid rgba(91,140,255,0.28); border-radius: 12px; color: #b9cbff; background: rgba(91,140,255,0.08); font-size: 13px; font-weight: 700; }
+    .pending-status.show { display: flex; }
+    .pending-status.error { color: #ffb454; border-color: rgba(255,180,84,0.28); background: rgba(255,180,84,0.08); }
+    .add-time-label { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-align: left; text-transform: uppercase; }
+    .add-time-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; min-width: 0; }
+    .add-time-grid .btn { padding-inline: 6px; }
+    .primary-control { width: 100%; }
+    .details { display: none; margin-top: 12px; text-align: left; border: 1px solid var(--card-border); border-radius: 14px; background: rgba(20,24,31,0.72); }
+    .details.visible { display: block; }
+    .details > summary { min-height: 48px; padding: 14px 16px; cursor: pointer; color: #c2cad8; font-size: 13px; font-weight: 700; }
+    .details-body { padding: 0 10px 10px; }
+    .details .streak, .details .comp-stats, .details #companion-system { margin-top: 8px; }
+    .idle-safety { padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255,180,84,0.22); background: rgba(255,180,84,0.07); color: #d7b986; font-size: 12px; line-height: 1.45; text-align: left; }
+    .stale-state .ring-wrap, .stale-state .safety-row, .stale-state #active-controls { opacity: 0.48; }
+    .stale-state .timer-main { text-decoration: line-through; text-decoration-thickness: 1px; }
+    .confirm-backdrop { position: fixed; inset: 0; z-index: 900; display: none; align-items: flex-end; justify-content: center; padding: 18px; background: rgba(0,0,0,0.72); }
+    .confirm-backdrop.show { display: flex; }
+    .confirm-card { width: min(100%, 390px); padding: 20px; border-radius: 18px; border: 1px solid #384254; background: #12161d; text-align: left; box-shadow: 0 20px 80px rgba(0,0,0,0.6); }
+    .confirm-card h2 { font-size: 20px; margin-bottom: 8px; }
+    .confirm-card p { color: var(--muted); font-size: 14px; line-height: 1.5; margin-bottom: 16px; }
+    .confirm-actions { display: grid; gap: 10px; }
+    .confirm-actions .btn { width: 100%; }
+    @media (max-width: 340px) {
+      .pwa { padding-inline: 12px; }
+      .ring-wrap { width: 218px; height: 218px; }
+      .timer-main { font-size: 50px; }
+    }
+    @media (max-width: 300px) {
+      .add-time-grid { grid-template-columns: 1fr; }
+      .ring-wrap { width: 200px; height: 200px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition-duration: 0.01ms !important; }
+    }
   </style>
 </head>
 <body>
@@ -172,11 +234,16 @@
       </div>
     </div>
 
+    <div class="safety-row" id="safety-row">
+      <span class="safety-badge dry" id="safety-badge">DRY RUN</span>
+      <span class="profile-name" id="profile-name"></span>
+    </div>
     <div class="status-pill connecting" id="status-pill">
       <span class="status-dot" id="status-dot"></span>
       <span class="status-text" id="status-text">Connecting…</span>
     </div>
     <div class="pc-name" id="pc-name" style="display:none"></div>
+    <div class="freshness" id="freshness" aria-live="polite"></div>
 
     <!-- Pairing (shown when no token is stored yet) -->
     <div class="pair-card" id="pair-card" style="display:none">
@@ -195,8 +262,11 @@
       </div>
     </div>
 
+    <div class="pending-status" id="pending-status" role="status" aria-live="polite">Waiting for PC…</div>
+
     <!-- Start controls (shown when idle) -->
     <div class="controls" id="idle-controls">
+      <div class="idle-safety"><strong>REAL ACTION</strong> — timers started from this phone can perform the selected PC action. Dry Run is not available from the phone.</div>
       <div class="section-label">When the timer ends</div>
       <div class="action-seg" id="action-seg">
         <button class="seg-btn" data-action="sleep" type="button">
@@ -232,49 +302,69 @@
 
     <!-- Timer actions (shown when running) -->
     <div class="controls" id="active-controls" style="display:none">
-      <div class="timer-actions">
-        <button class="btn btn-secondary" id="btn-pause">Pause</button>
-        <button class="btn btn-amber" id="btn-snooze">Snooze +5</button>
+      <div class="add-time-label">Add time</div>
+      <div class="add-time-grid">
+        <button class="btn btn-amber timer-mutation" data-add-seconds="300">+5</button>
+        <button class="btn btn-amber timer-mutation" data-add-seconds="900">+15</button>
+        <button class="btn btn-amber timer-mutation" data-add-seconds="1800">+30</button>
       </div>
-      <div class="snooze-tax-indicator" id="snooze-tax-indicator" style="display:none;text-align:center;padding:8px;margin-top:6px;border-radius:10px;background:rgba(255,77,77,0.08);border:1px solid rgba(255,77,77,0.18)">
-        <span id="snooze-tax-msg" style="font-size:11px;color:#ff6b6b"></span>
-      </div>
-      <button class="btn btn-danger" id="btn-cancel">Cancel Timer</button>
+      <button class="btn btn-secondary primary-control timer-mutation" id="btn-pause">Pause</button>
+      <button class="btn btn-danger primary-control timer-mutation" id="btn-cancel">Stop Tonight’s Run</button>
     </div>
 
-    <div class="streak" id="streak-section" style="display:none">
-      <span class="streak-flame">&#x1F525;</span>
-      <div class="streak-meta">
-        <div class="streak-label">Night Streak</div>
-        <div class="streak-number" id="streak-count">0</div>
-      </div>
-    </div>
-
-    <!-- Stats Summary (phone view) -->
-    <div class="comp-stats" id="companion-stats" style="display:none">
-      <div class="comp-stats-header">
-        <span class="comp-stats-label">Tonight</span>
-        <span class="comp-autopilot-badge" id="comp-autopilot-badge">Autopilot ON</span>
-      </div>
-      <div class="comp-stats-body">
-        <div class="comp-score-col">
-          <div class="comp-score" id="comp-score">--</div>
-          <div class="comp-score-label" id="comp-score-label">Sleep Score</div>
+    <details class="details" id="details-panel">
+      <summary>Details</summary>
+      <div class="details-body">
+        <div class="snooze-tax-indicator" id="snooze-tax-indicator" style="display:none;text-align:center;padding:8px;margin-top:6px;border-radius:10px;background:rgba(255,77,77,0.08);border:1px solid rgba(255,77,77,0.18)">
+          <span id="snooze-tax-msg" style="font-size:11px;color:#ff6b6b"></span>
         </div>
-        <div class="comp-metrics">
-          <div class="comp-metric"><span class="comp-metric-label">Debt</span><span class="comp-metric-value comp-metric--warn" id="comp-debt">--</span></div>
-          <div class="comp-metric"><span class="comp-metric-label">Streak</span><span class="comp-metric-value comp-metric--good" id="comp-streak">--</span></div>
-          <div class="comp-metric"><span class="comp-metric-label">Tax debt</span><span class="comp-metric-value comp-metric--danger" id="comp-tax-debt">--</span></div>
+        <div class="streak" id="streak-section" style="display:none">
+          <span class="streak-flame">&#x1F525;</span>
+          <div class="streak-meta">
+            <div class="streak-label">Night Streak</div>
+            <div class="streak-number" id="streak-count">0</div>
+          </div>
+        </div>
+
+        <!-- Stats Summary (phone view) -->
+        <div class="comp-stats" id="companion-stats" style="display:none">
+          <div class="comp-stats-header">
+            <span class="comp-stats-label">Tonight</span>
+            <span class="comp-autopilot-badge" id="comp-autopilot-badge">Autopilot ON</span>
+          </div>
+          <div class="comp-stats-body">
+            <div class="comp-score-col">
+              <div class="comp-score" id="comp-score">--</div>
+              <div class="comp-score-label" id="comp-score-label">Sleep Score</div>
+            </div>
+            <div class="comp-metrics">
+              <div class="comp-metric"><span class="comp-metric-label">Debt</span><span class="comp-metric-value comp-metric--warn" id="comp-debt">--</span></div>
+              <div class="comp-metric"><span class="comp-metric-label">Streak</span><span class="comp-metric-value comp-metric--good" id="comp-streak">--</span></div>
+              <div class="comp-metric"><span class="comp-metric-label">Tax debt</span><span class="comp-metric-value comp-metric--danger" id="comp-tax-debt">--</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PC System Info (phone view) -->
+        <div id="companion-system" style="display:none;padding:12px 16px;margin-top:8px;border-radius:12px;background:var(--card,rgba(255,255,255,0.04));border:1px solid var(--card-border)">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between;align-items:center">
+            <span style="font-size:11px;color:var(--muted,#999);font-weight:600">PC STATUS</span>
+            <span id="comp-battery" style="font-size:10px;color:var(--accent);font-weight:600">Battery: --</span>
+            <span id="comp-power-plan" style="font-size:10px;color:var(--accent);font-weight:600">Plan: --</span>
+          </div>
         </div>
       </div>
-    </div>
+    </details>
 
-    <!-- PC System Info (phone view) -->
-    <div id="companion-system" style="display:none;padding:12px 16px;margin-top:8px;border-radius:12px;background:var(--card,rgba(255,255,255,0.04));border:1px solid var(--card-border)">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <span style="font-size:11px;color:var(--muted,#999);font-weight:600">PC STATUS</span>
-        <span id="comp-battery" style="font-size:10px;color:var(--accent);font-weight:600">Battery: --</span>
-        <span id="comp-power-plan" style="font-size:10px;color:var(--accent);font-weight:600">Plan: --</span>
+    <div class="confirm-backdrop" id="cancel-confirm" role="dialog" aria-modal="true" aria-labelledby="cancel-title" aria-describedby="cancel-copy">
+      <div class="confirm-card">
+        <h2 id="cancel-title">Stop Tonight’s Run?</h2>
+        <p id="cancel-copy"></p>
+        <div class="confirm-actions">
+          <button class="btn btn-secondary" id="cancel-keep">Keep Running</button>
+          <button class="btn btn-danger timer-mutation" id="cancel-stop">Stop Tonight’s Run</button>
+        </div>
+      </div>
     </div>
     <div id="toast" class="feedback-toast"></div>
   </div>
@@ -299,12 +389,26 @@
     const pairSubmit = document.getElementById('pair-submit');
     const pairError = document.getElementById('pair-error');
     const pairStatus = document.getElementById('pair-status');
+    const safetyRow = document.getElementById('safety-row');
+    const safetyBadge = document.getElementById('safety-badge');
+    const profileNameEl = document.getElementById('profile-name');
+    const freshnessEl = document.getElementById('freshness');
+    const pendingStatus = document.getElementById('pending-status');
+    const detailsPanel = document.getElementById('details-panel');
+    const cancelConfirm = document.getElementById('cancel-confirm');
+    const cancelCopy = document.getElementById('cancel-copy');
 
     const RING_C = 2 * Math.PI * 54;
     const PHASE_COLORS = { focus: '#5b8cff', dim: '#d4a50a', lastlight: '#ff4d4d', idle: '#5b8cff' };
+    const COMMAND_TIMEOUT_MS = 5000;
     let selectedAction = 'shutdown';
     let pcName = '';
     let connectionState = 'connecting'; // connecting | connected | disconnected | expired | offline
+    let latestState = null;
+    let lastStateReceivedAt = 0;
+    let pendingOperation = null;
+    let pendingTimeout = null;
+    let pendingErrorTimeout = null;
 
     function setRing(fraction, phase) {
       const f = Math.max(0, Math.min(1, fraction || 0));
@@ -364,6 +468,84 @@
     let pairHost = resolveHost();
     let pairToken = resolveToken();
 
+    function setPendingMessage(message, isError = false) {
+      pendingStatus.textContent = message;
+      pendingStatus.classList.toggle('show', Boolean(message));
+      pendingStatus.classList.toggle('error', Boolean(isError));
+    }
+
+    function syncMutationControls() {
+      const connected = connectionState === 'connected';
+      const stateFresh = lastStateReceivedAt > 0 && Date.now() - lastStateReceivedAt <= 7000;
+      const available = connected && stateFresh && !pendingOperation;
+      document.querySelectorAll('.timer-mutation').forEach(btn => { btn.disabled = !available; });
+      document.querySelectorAll('#idle-controls .btn, #idle-controls .seg-btn').forEach(btn => { btn.disabled = !available; });
+    }
+
+    function clearPending({ success = '', timeout = false } = {}) {
+      if (pendingTimeout) clearTimeout(pendingTimeout);
+      pendingTimeout = null;
+      pendingOperation = null;
+      syncMutationControls();
+      if (timeout) {
+        setPendingMessage('PC did not confirm the change', true);
+        if (pendingErrorTimeout) clearTimeout(pendingErrorTimeout);
+        pendingErrorTimeout = setTimeout(() => setPendingMessage(''), 3500);
+      } else {
+        setPendingMessage('');
+        if (success) showToast(success);
+      }
+    }
+
+    function discardPendingForConnectionLoss() {
+      if (!pendingOperation) return;
+      clearPending();
+    }
+
+    function beginPending(operation) {
+      if (pendingOperation || connectionState !== 'connected') return false;
+      if (pendingErrorTimeout) clearTimeout(pendingErrorTimeout);
+      pendingErrorTimeout = null;
+      pendingOperation = operation;
+      setPendingMessage('Waiting for PC…');
+      syncMutationControls();
+      pendingTimeout = setTimeout(() => clearPending({ timeout: true }), COMMAND_TIMEOUT_MS);
+      return true;
+    }
+
+    function confirmPendingFromState(state) {
+      if (!pendingOperation || !pendingOperation.matches(state)) return;
+      const success = pendingOperation.success;
+      clearPending({ success });
+    }
+
+    function updateFreshness() {
+      if (!lastStateReceivedAt) {
+        freshnessEl.textContent = connectionState === 'connected' ? 'Waiting for current PC state…' : '';
+        freshnessEl.classList.toggle('stale', connectionState !== 'connected');
+        return;
+      }
+      if (connectionState !== 'connected') {
+        freshnessEl.textContent = 'State may be stale · PC unavailable';
+        freshnessEl.classList.add('stale');
+        return;
+      }
+      const ageSeconds = Math.max(0, Math.floor((Date.now() - lastStateReceivedAt) / 1000));
+      if (ageSeconds > 6) {
+        freshnessEl.textContent = 'State may be stale';
+        freshnessEl.classList.add('stale');
+        document.body.classList.add('stale-state');
+      } else {
+        const age = ageSeconds < 5 ? 'Updated just now' : `Updated ${ageSeconds}s ago`;
+        freshnessEl.textContent = age;
+        freshnessEl.classList.remove('stale');
+        document.body.classList.remove('stale-state');
+      }
+      syncMutationControls();
+    }
+
+    setInterval(updateFreshness, 1000);
+
     function setConnectionState(state, msg) {
       connectionState = state;
       statusPill.className = `status-pill ${state}`;
@@ -372,10 +554,14 @@
       if (pcEl) pcEl.style.display = (state === 'connected' && pcName) ? '' : 'none';
       if (state === 'connected') {
         pairCard.style.display = 'none';
-        enableControls(true);
+        document.body.classList.remove('stale-state');
       } else {
-        enableControls(false);
+        discardPendingForConnectionLoss();
+        document.body.classList.add('stale-state');
+        cancelConfirm.classList.remove('show');
       }
+      syncMutationControls();
+      updateFreshness();
     }
 
     function showPairing(message = '') {
@@ -383,6 +569,9 @@
       statusPill.style.display = 'none';
       idleControls.style.display = 'none';
       activeControls.style.display = 'none';
+      safetyRow.style.display = 'none';
+      detailsPanel.classList.remove('visible');
+      setPendingMessage('');
       document.getElementById('pc-name').style.display = 'none';
       pairStatus.textContent = message;
       pairStatus.style.display = message ? '' : 'none';
@@ -421,10 +610,8 @@
       const host = pairHost || location.host;
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
 
-      // Keep the actionable offline explanation visible during background
-      // retries. Only the initial attempt should replace the status with a
-      // generic "Connecting…" message.
-      if (connectionState !== 'offline') setConnectionState('connecting', 'Connecting…');
+      const reconnecting = connectionState === 'offline' || connectionState === 'disconnected';
+      setConnectionState('connecting', reconnecting ? 'Reconnecting' : 'Connecting…');
       // A browser reports an HTTP 401/403 WebSocket upgrade rejection only as
       // generic close code 1006. Ask the same-origin server first so a stale
       // token can produce an actionable "Pairing expired" state instead of
@@ -446,7 +633,7 @@
           if (!response.ok) throw new Error(`Pair check failed: ${response.status}`);
         } catch {
           if (attempt !== connectionAttempt) return;
-          setConnectionState('offline', 'Wrong network or PC offline');
+          setConnectionState('offline', 'PC unavailable');
           scheduleReconnect();
           return;
         }
@@ -463,7 +650,7 @@
         if (ws !== socket) return;
         if (reconnectTimer) clearTimeout(reconnectTimer);
         reconnectTimer = null;
-        setConnectionState('connected', pcName ? `Connected to ${pcName}` : 'Connected');
+        setConnectionState('connected', 'Connected');
         showToast('Connected to PC');
       };
 
@@ -482,70 +669,87 @@
           showPairing('Pairing expired. Enter the current pairing code from the desktop app.');
           return;
         } else if (e.code === 1006) {
-          setConnectionState('offline', 'Wrong network or PC offline');
+          setConnectionState('offline', 'PC unavailable');
         } else {
-          setConnectionState('disconnected', 'Disconnected');
+          setConnectionState('disconnected', 'Reconnecting');
         }
         scheduleReconnect();
       };
 
       socket.onerror = () => {
         if (ws !== socket) return;
-        setConnectionState('offline', 'Wrong network or PC offline');
+        setConnectionState('offline', 'PC unavailable');
         scheduleReconnect();
       };
     }
 
-    function enableControls(enabled) {
-      document.querySelectorAll('.btn').forEach(btn => {
-        if (btn.id !== 'pair-submit') {
-          btn.disabled = !enabled;
-        }
-      });
-    }
     function scheduleReconnect() {
       if (reconnectTimer) clearTimeout(reconnectTimer);
       reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, 3000);
     }
-    function send(data) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); }
+    function send(data) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+      ws.send(JSON.stringify(data));
+      return true;
+    }
 
     function startTimer(seconds) {
-      if (!confirm(`Start ${selectedAction} timer for ${Math.round(seconds/60)} minutes?`)) return;
       const s = Math.max(60, Math.min(24 * 60 * 60, Math.round(seconds)));
-      send({ action: 'start', durationSeconds: s, timerAction: selectedAction });
-      showToast('Timer started');
+      const destination = pcName || 'this PC';
+      if (!confirm(`REAL ACTION: Start a ${selectedAction} timer on ${destination} for ${Math.round(s / 60)} minutes? Dry Run is not available from the phone.`)) return;
+      if (!beginPending({
+        kind: 'start',
+        success: 'Timer started — REAL ACTION',
+        matches: state => Boolean(state.running || state.paused)
+      })) return;
+      if (!send({ action: 'start', durationSeconds: s, timerAction: selectedAction })) clearPending({ timeout: true });
     }
 
     function handleUpdate(data) {
       if (data.type === 'state') {
-        const running = data.running;
-        const paused = data.paused;
+        const running = Boolean(data.running);
+        const paused = Boolean(data.paused);
+        const active = running || paused;
         const phase = data.phase || 'idle';
+        latestState = { ...data, running, paused };
+        lastStateReceivedAt = Date.now();
+        document.body.classList.remove('stale-state');
 
         if (data.pcName) {
           pcName = data.pcName;
-          if (connectionState === 'connected') {
-            document.getElementById('pc-name').textContent = `Connected to ${pcName}`;
-          }
         }
-        timerName.textContent = data.timerName || 'Last Call';
+        const pcEl = document.getElementById('pc-name');
+        pcEl.textContent = pcName ? `Target PC: ${pcName}` : 'Target PC connected';
+        pcEl.style.display = connectionState === 'connected' ? '' : 'none';
+
+        timerName.textContent = active ? (data.nightModeTitle || 'Custom Timer') : (data.timerName || 'Last Call');
         timerMain.textContent = formatTime(data.remainingSeconds);
         timerLabel.textContent = running ? (paused ? 'Paused' : `until ${data.action || 'shutdown'}`) : 'Idle';
         targetEl.textContent = (running && !paused && data.remainingSeconds > 0)
           ? `lights out ≈ ${clockAt(data.remainingSeconds)}` : '';
 
+        safetyRow.style.display = active ? 'flex' : 'none';
+        safetyBadge.textContent = data.dryRun === true ? 'DRY RUN' : 'REAL ACTION';
+        safetyBadge.className = `safety-badge ${data.dryRun === true ? 'dry' : 'real'}`;
+        profileNameEl.textContent = data.profileName ? `Profile: ${data.profileName}` : '';
+
         const total = Number(data.totalSeconds) || 0;
         const remaining = Number(data.remainingSeconds) || 0;
         setRing(running && total > 0 ? remaining / total : 0, running ? phase : 'idle');
 
-        // Only override the connection pill when actually connected; otherwise leave the connection state visible.
         if (connectionState === 'connected') {
           statusPill.className = 'status-pill connected';
-          statusText.textContent = pcName ? `Connected to ${pcName}` : 'Connected';
+          statusText.textContent = 'Connected';
         }
+        updateFreshness();
 
-        idleControls.style.display = (running || paused) ? 'none' : '';
-        activeControls.style.display = (running || paused) ? '' : 'none';
+        idleControls.style.display = active ? 'none' : '';
+        activeControls.style.display = active ? '' : 'none';
+        detailsPanel.classList.toggle('visible', active);
+        if (!active) {
+          detailsPanel.open = false;
+          cancelConfirm.classList.remove('show');
+        }
 
         const btnPause = document.getElementById('btn-pause');
         if (btnPause) btnPause.textContent = paused ? 'Resume' : 'Pause';
@@ -567,6 +771,9 @@
             taxInd.style.display = 'none';
           }
         }
+
+        confirmPendingFromState(latestState);
+        syncMutationControls();
       }
 
       if (data.type === 'streaks') {
@@ -648,26 +855,62 @@
     });
     customMin.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('custom-start').click(); });
 
-    // Running controls
+    // Running controls. Each command is sent once, then the UI waits for a
+    // matching authoritative desktop state. C1 intentionally does not add a
+    // protocol acknowledgement or retry commands.
+    document.querySelectorAll('[data-add-seconds]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const seconds = Number(btn.dataset.addSeconds);
+        const baseline = Number(latestState?.remainingSeconds);
+        if (!Number.isFinite(seconds) || !Number.isFinite(baseline)) return;
+        if (!beginPending({
+          kind: 'snooze',
+          success: `Added ${Math.round(seconds / 60)} minutes`,
+          matches: state => Number(state.remainingSeconds) >= baseline + seconds - 2
+        })) return;
+        if (!send({ action: 'snooze', seconds })) clearPending({ timeout: true });
+      });
+    });
+
     document.getElementById('btn-pause')?.addEventListener('click', () => {
-      const btn = document.getElementById('btn-pause');
-      const action = btn?.textContent === 'Resume' ? 'Resume' : 'Pause';
-      if (confirm(`${action} the timer?`)) {
-        send({ action: 'togglePause' });
-        showToast(`${action}d`);
-      }
+      const wantsPause = !Boolean(latestState?.paused);
+      if (!beginPending({
+        kind: wantsPause ? 'pause' : 'resume',
+        success: wantsPause ? 'Paused' : 'Resumed',
+        matches: state => Boolean(state.paused) === wantsPause
+      })) return;
+      if (!send({ action: 'togglePause' })) clearPending({ timeout: true });
     });
-    document.getElementById('btn-snooze')?.addEventListener('click', () => {
-      if (confirm('Snooze +5 minutes?')) {
-        send({ action: 'snooze', seconds: 300 });
-        showToast('Snoozed +5 min');
-      }
-    });
+
+    function closeCancelConfirmation() {
+      cancelConfirm.classList.remove('show');
+      document.getElementById('btn-cancel')?.focus();
+    }
+
     document.getElementById('btn-cancel')?.addEventListener('click', () => {
-      if (confirm('Emergency cancel the timer?')) {
-        send({ action: 'cancel' });
-        showToast('Timer cancelled');
-      }
+      if (!latestState || pendingOperation) return;
+      const title = latestState.nightModeTitle || 'Custom Timer';
+      const target = pcName || 'the connected PC';
+      cancelCopy.textContent = `${title} has ${formatTime(latestState.remainingSeconds)} remaining on ${target}. This will stop the timer.`;
+      cancelConfirm.classList.add('show');
+      document.getElementById('cancel-keep')?.focus();
+    });
+
+    document.getElementById('cancel-keep')?.addEventListener('click', closeCancelConfirmation);
+    document.getElementById('cancel-stop')?.addEventListener('click', () => {
+      if (!beginPending({
+        kind: 'cancel',
+        success: 'Tonight’s run stopped',
+        matches: state => !state.running && !state.paused
+      })) return;
+      cancelConfirm.classList.remove('show');
+      if (!send({ action: 'cancel' })) clearPending({ timeout: true });
+    });
+    cancelConfirm.addEventListener('click', event => {
+      if (event.target === cancelConfirm) closeCancelConfirmation();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && cancelConfirm.classList.contains('show')) closeCancelConfirmation();
     });
 
     if (pairToken) connect();
