@@ -5141,6 +5141,7 @@ body.fullscreen-clock-mode .fullscreen-clock-exit {
 .celebration-streak-number {
   background: linear-gradient(180deg, #fff 30%, #f5a623 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 

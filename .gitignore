@@ -22,3 +22,6 @@ visual_smoke/
 # OS / editor cruft
 Thumbs.db
 .DS_Store
+
+# IDE / tool snapshots
+.snapshots/

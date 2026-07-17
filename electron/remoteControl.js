@@ -63,7 +63,7 @@ function validateCommand(cmd) {
 // Companion (phone PWA) uses a slightly different action vocabulary than the
 // family LAN protocol. Validate + sanitize it against the same safety bounds.
 // Returns { ok: true, message } with a sanitized message, or { ok: false, error }.
-const COMPANION_ACTIONS = ['start', 'togglePause', 'snooze', 'cancel'];
+const COMPANION_ACTIONS = ['start', 'startNightMode', 'getNightModes', 'togglePause', 'snooze', 'cancel'];
 
 function validateCompanionMessage(msg) {
   if (!msg || typeof msg !== 'object') return { ok: false, error: 'malformed message' };
@@ -78,6 +78,20 @@ function validateCompanionMessage(msg) {
       return { ok: false, error: 'duration out of bounds' };
     }
     return { ok: true, message: { action, timerAction, durationSeconds: duration } };
+  }
+
+  if (action === 'startNightMode') {
+    const nightModeId = msg.nightModeId;
+    if (typeof nightModeId !== 'string' || nightModeId.length === 0) {
+      return { ok: false, error: 'missing or invalid nightModeId' };
+    }
+    // Canonical resolution happens on the desktop. The phone may not smuggle
+    // timer options, Dry Run, force flags, or a ritual origin.
+    return { ok: true, message: { action, nightModeId } };
+  }
+
+  if (action === 'getNightModes') {
+    return { ok: true, message: { action } };
   }
 
   if (action === 'snooze') {

@@ -29,7 +29,7 @@ async function runParent() {
     : path.join(isolatedDir, 'captures');
   fs.mkdirSync(captureDir, { recursive: true });
 
-  console.log('\nReal Electron Runtime Proof — Companion V2 C1');
+  console.log('\nReal Electron Runtime Proof — Companion V2 (C1 + C2)');
   console.log(`Isolated userData: ${isolatedDir}`);
   console.log(`Ephemeral companion port: ${port}`);
   console.log('Dry Run: ENABLED');
@@ -100,7 +100,8 @@ async function runElectronProof() {
       bedtimeReminderEnabled: false
     },
     remoteControl: { enabled: true, mode: 'local', token },
-    lastLight: { enabled: false }
+    lastLight: { enabled: false },
+    ritual: { enabled: true }
   }, null, 2));
 
   // Proof-process-only PowerShell isolation: the production main process still
@@ -142,7 +143,11 @@ async function runElectronProof() {
   const profiles = require(path.join(electronRoot, 'profiles.js'));
   const receipts = require(path.join(electronRoot, 'runReceipts.js'));
   const commandLog = [];
-  companion.onMessage(message => commandLog.push({ ...message }));
+  companion.onMessage(message => {
+    // Catalogue fetches are not user actions; only log commands that mutate timer state.
+    if (message.action === 'getNightModes') return;
+    commandLog.push({ ...message });
+  });
 
   let passed = 0;
   let failed = 0;
@@ -455,9 +460,9 @@ async function runElectronProof() {
   await check('command timeout does not resend', async () => {
     const before = commandLog.length;
     await phoneEval("beginPending({ kind: 'proof-timeout', success: '', matches: () => false })");
-    await wait(5200);
-    const value = await phoneEval("({ text: pendingStatus.textContent, pending: pendingOperation })");
-    assert(value.text === 'PC did not confirm the change' && value.pending === null, JSON.stringify(value));
+    await wait(6000);
+    const value = await phoneEval("({ text: pendingStatus.textContent, pendingKind: pendingOperation && pendingOperation.kind })");
+    assert(value.text === 'PC did not confirm the change' && value.pendingKind === null, JSON.stringify(value));
     assert(commandLog.length === before, 'timeout resent or invented a command');
   });
 
@@ -576,11 +581,11 @@ async function runElectronProof() {
   const lateBefore = commandLog.filter(message => message.action === 'togglePause').length;
   await phoneEval("document.getElementById('toast').classList.remove('show'); document.getElementById('toast').textContent = ''; document.getElementById('btn-pause').click()");
   await waitFor(() => desktopEval('state.paused === true'), 'late transition did not reach desktop');
-  await wait(5200);
+  await wait(6000);
   await check('timeout sends nothing further and remains uncertain', async () => {
-    const value = await phoneEval("({ pending: pendingOperation, text: pendingStatus.textContent, shown: document.getElementById('toast').classList.contains('show') })");
+    const value = await phoneEval("({ pendingKind: pendingOperation && pendingOperation.kind, text: pendingStatus.textContent, shown: document.getElementById('toast').classList.contains('show') })");
     const count = commandLog.filter(message => message.action === 'togglePause').length - lateBefore;
-    assert(value.pending === null && value.text === 'PC did not confirm the change' && !value.shown && count === 1, JSON.stringify({ value, count }));
+    assert(value.pendingKind === null && value.text === 'PC did not confirm the change' && !value.shown && count === 1, JSON.stringify({ value, count }));
   });
   suppressStateBroadcast = false;
   await waitFor(() => phoneEval("stateIsAuthoritative() && latestState.paused === true"), 'late authoritative transition did not render', 10000);
@@ -722,6 +727,329 @@ async function runElectronProof() {
   await check('remote force shutdown remains impossible', () => assert(!commandLog.some(message => message.forceShutdown === true), 'force flag accepted'));
   await check('remote logout remains impossible', () => assert(!commandLog.some(message => message.timerAction === 'logout'), 'logout accepted'));
   await check('remote hibernate remains impossible', () => assert(!commandLog.some(message => message.timerAction === 'hibernate'), 'hibernate accepted'));
+
+  // ── C2: Canonical Night Mode start from phone ──
+  await phoneEval("document.getElementById('night-mode-toggle').click()");
+  await waitFor(() => phoneEval("document.getElementById('night-mode-grid').classList.contains('visible')"), 'Night Mode grid did not open');
+  await check('C2: Night Mode picker expands from idle controls', async () => {
+    const value = await phoneEval("({ visible: document.getElementById('night-mode-grid').classList.contains('visible'), cards: document.querySelectorAll('.night-mode-card').length })");
+    assert(value.visible && value.cards >= 4, JSON.stringify(value));
+  });
+
+  await check('C2: catalogue request yields canonical modes from main', async () => {
+    const value = await phoneEval("({ count: nmCatalogue.length, hasQuickSleep: nmCatalogue.some(m => m.id === 'quick-sleep'), hasFullShutdown: nmCatalogue.some(m => m.id === 'full-shutdown'), disabled: nmCatalogue.filter(m => m.status !== 'ready').length })");
+    assert(value.count >= 4 && value.hasQuickSleep && value.hasFullShutdown && value.disabled >= 2, JSON.stringify(value));
+  });
+
+  await check('C2: disabled mode card is non-interactive', async () => {
+    const value = await phoneEval("(() => { const card = [...document.querySelectorAll('.night-mode-card')].find(c => c.querySelector('.night-mode-name').textContent.includes('Quiet House') || c.querySelector('.night-mode-name').textContent.includes('School Night')); return { exists: !!card, disabled: card && card.classList.contains('disabled'), tabindex: card && card.getAttribute('tabindex') }; })()");
+    assert(value.exists && value.disabled && value.tabindex === '-1', JSON.stringify(value));
+  });
+
+  // Responsive catalogue captures.
+  for (const [label, width, height] of [['320', 320, 700], ['360', 360, 800], ['390', 390, 844], ['412', 412, 915], ['430', 430, 932]]) {
+    await phone.setContentSize(width, height);
+    await phoneEval('window.scrollTo(0,0)');
+    await capture(`c2-catalogue-${label}`);
+  }
+
+  await phoneEval("(() => { const card = [...document.querySelectorAll('.night-mode-card')].find(c => c.querySelector('.night-mode-name').textContent === 'Quick Sleep'); card.click(); })()");
+  await waitFor(() => phoneEval("document.getElementById('night-mode-backdrop').classList.contains('show')"), 'Night Mode detail did not open');
+  await check('C2: detail shows canonical duration, action, and ritual from desktop', async () => {
+    const value = await phoneEval("({ title: nmDetailTitle.textContent, duration: nmDetailMeta.textContent, action: nmDetailMeta.textContent, ritual: nmDetailMeta.textContent, runType: nmDetailRunType.textContent })");
+    assert(value.title === 'Quick Sleep' && value.duration.includes('15 min') && value.action.includes('Sleep') && value.ritual.includes('Direct start') && value.runType.includes('REAL ACTION'), JSON.stringify(value));
+  });
+  await phone.setContentSize(390, 844);
+  await phoneEval('window.scrollTo(0,0)');
+  await capture('c2-quick-sleep-detail');
+
+  const nmStartBefore = commandLog.length;
+  await phoneEval("nmDetailStart.click()");
+  await waitFor(() => commandLog.length === nmStartBefore + 1 && commandLog[nmStartBefore]?.action === 'startNightMode', 'startNightMode command did not reach main');
+  await check('C2: phone sends only nightModeId', async () => {
+    const command = commandLog[nmStartBefore];
+    assert(JSON.stringify(command) === JSON.stringify({ action: 'startNightMode', nightModeId: 'quick-sleep' }), JSON.stringify(command));
+  });
+  await waitFor(() => desktopEval("state.running === true && state.action === 'sleep' && state.remainingSeconds <= 900"), 'desktop did not start Quick Sleep from phone');
+  await check('C2: desktop resolves canonical mode and records Night Mode identity', async () => {
+    const receipt = receipts.getLatestReceipt();
+    const value = await desktopEval("({ running: state.running, action: state.action, remaining: state.remainingSeconds, dryRun: state.dryRun })");
+    assert(receipt && receipt.nightModeId === 'quick-sleep' && receipt.nightModeTitle === 'Quick Sleep' && receipt.nightModeVersion === 1 && value.running && value.action === 'sleep' && value.remaining <= 900 && value.dryRun === false, JSON.stringify({ receipt, value }));
+  });
+  await waitFor(async () => {
+    const value = await phoneEval("({ title: timerName.textContent, id: latestState.nightModeId, badge: safetyBadge.textContent, active: activeControls.style.display !== 'none' })");
+    return value.title === 'Quick Sleep' && value.id === 'quick-sleep' && value.badge === 'REAL ACTION' && value.active;
+  }, 'phone active UI did not reflect canonical Night Mode identity');
+  await phone.setContentSize(390, 844);
+  await phoneEval('window.scrollTo(0,0)');
+  await capture('c2-quick-sleep-active');
+
+  await desktopEval('window.electronAPI.cancelTimer()');
+  await waitFor(() => phoneEval("!latestState.running && !latestState.paused"), 'desktop did not cancel Night Mode start');
+  await phoneEval("document.getElementById('nm-detail-close')?.click()");
+  await wait(300);
+
+  // Ritual-mode proof: Full Shutdown should enter the standard wind-down ritual.
+  await phoneEval("(() => { const card = [...document.querySelectorAll('.night-mode-card')].find(c => c.querySelector('.night-mode-name').textContent === 'Full Shutdown'); if (card) card.click(); })()");
+  await wait(200);
+  await waitFor(() => phoneEval("document.getElementById('night-mode-backdrop').classList.contains('show')"), 'Full Shutdown detail did not open');
+  await check('C2: Full Shutdown detail shows standard ritual', async () => {
+    const ritual = await phoneEval("nmDetailMeta.textContent");
+    assert(ritual.includes('Standard wind-down'), ritual);
+  });
+  await phone.setContentSize(390, 844);
+  await phoneEval('window.scrollTo(0,0)');
+  await capture('c2-full-shutdown-detail');
+  await waitFor(() => phoneEval("stateIsAuthoritative() && !nmDetailStart.disabled"), 'Full Shutdown Start button not enabled');
+  const ritualStartBefore = commandLog.length;
+  await phoneEval("nmDetailStart.click()");
+  await waitFor(() => commandLog.length === ritualStartBefore + 1 && commandLog[ritualStartBefore]?.action === 'startNightMode', 'Full Shutdown command did not reach main');
+  await waitFor(async () => {
+    const ritual = await desktopEval("(async () => window.electronAPI.ritualState())()");
+    return ritual && ritual.active === true;
+  }, 'Full Shutdown from phone did not enter standard wind-down ritual');
+  await phone.setContentSize(390, 844);
+  await phoneEval('window.scrollTo(0,0)');
+  await capture('c2-full-shutdown-ritual-active');
+  await desktopEval("window.electronAPI.ritualCancel && window.electronAPI.ritualCancel()");
+  await waitFor(async () => {
+    const ritual = await desktopEval("(async () => window.electronAPI.ritualState())()");
+    return ritual && ritual.active === false;
+  }, 'ritual did not cancel');
+
+  // Unknown / disabled mode rejection.
+  await check('C2: main rejects forged startNightMode with unknown ID', async () => {
+    const before = await desktopEval("({ running: state.running, paused: state.paused })");
+    await sendRealWebSocketFrame({ action: 'startNightMode', nightModeId: 'forged-unknown-mode' });
+    await wait(500);
+    const after = await desktopEval("({ running: state.running, paused: state.paused })");
+    assert(!before.running && !before.paused && !after.running && !after.paused, JSON.stringify({ before, after }));
+  });
+  await check('C2: main rejects forged startNightMode with disabled ID', async () => {
+    const before = await desktopEval("({ running: state.running, paused: state.paused })");
+    await sendRealWebSocketFrame({ action: 'startNightMode', nightModeId: 'quiet-house' });
+    await wait(500);
+    const after = await desktopEval("({ running: state.running, paused: state.paused })");
+    assert(!before.running && !before.paused && !after.running && !after.paused, JSON.stringify({ before, after }));
+  });
+  await check('C2: forged startNightMode cannot smuggle timer options or force flags', async () => {
+    const before = commandLog.length;
+    await sendRealWebSocketFrame({ action: 'startNightMode', nightModeId: 'quick-sleep', timerAction: 'logout', durationSeconds: 9999, dryRun: true, forceShutdown: true, startOrigin: 'companion-night-mode' });
+    await waitFor(() => commandLog.length === before + 1 && commandLog[before]?.action === 'startNightMode', 'forged startNightMode did not reach validation');
+    const accepted = commandLog[before];
+    assert(JSON.stringify(accepted) === JSON.stringify({ action: 'startNightMode', nightModeId: 'quick-sleep' }), JSON.stringify(accepted));
+  });
+
+  // Active-run guard: remote Night Mode start is allowed only while the desktop is fully idle.
+  async function ensureIdle() {
+    await desktopEval('window.electronAPI.cancelTimer && window.electronAPI.cancelTimer()');
+    await desktopEval('window.electronAPI.ritualCancel && window.electronAPI.ritualCancel()');
+    await waitFor(() => desktopEval('!state.running && !state.paused'), 'desktop did not return to idle');
+  }
+
+  await check('C2: startNightMode rejected while a countdown is active', async () => {
+    await ensureIdle();
+    await desktopEval(`window.electronAPI.startTimer(${JSON.stringify({ durationSeconds: 600, action: 'sleep', dryRun: true, source: 'local' })})`);
+    await waitFor(() => desktopEval('state.running === true && !state.paused'), 'desktop countdown did not start');
+    const receiptsBefore = receipts.listReceipts().length;
+    await sendRealWebSocketFrame({ action: 'startNightMode', nightModeId: 'full-shutdown' });
+    await wait(500);
+    const value = await desktopEval("({ running: state.running, paused: state.paused, action: state.action, remaining: state.remainingSeconds })");
+    assert(value.running && !value.paused && value.action === 'sleep' && value.remaining <= 600, JSON.stringify(value));
+    assert(receipts.listReceipts().length === receiptsBefore, 'receipt count changed while active');
+    await ensureIdle();
+  });
+
+  await check('C2: startNightMode rejected while a countdown is paused', async () => {
+    await ensureIdle();
+    await desktopEval(`window.electronAPI.startTimer(${JSON.stringify({ durationSeconds: 600, action: 'sleep', dryRun: true, source: 'local' })})`);
+    await waitFor(() => desktopEval('state.running === true && !state.paused'), 'desktop countdown did not start');
+    await desktopEval('window.electronAPI.pauseTimer()');
+    await waitFor(() => desktopEval('state.paused === true'), 'desktop countdown did not pause');
+    const receiptsBefore = receipts.listReceipts().length;
+    await sendRealWebSocketFrame({ action: 'startNightMode', nightModeId: 'full-shutdown' });
+    await wait(500);
+    const value = await desktopEval("({ running: state.running, paused: state.paused, action: state.action })");
+    assert(value.paused && value.action === 'sleep', JSON.stringify(value));
+    assert(receipts.listReceipts().length === receiptsBefore, 'receipt count changed while paused');
+    await ensureIdle();
+  });
+
+  await check('C2: startNightMode rejected while a ritual is active', async () => {
+    await ensureIdle();
+    await desktopEval(`window.electronAPI.startTimer(${JSON.stringify({ durationSeconds: 3600, action: 'shutdown', nightModeId: 'full-shutdown', startOrigin: 'companion-night-mode', source: 'remote' })})`);
+    await waitFor(async () => {
+      const ritual = await desktopEval("(async () => window.electronAPI.ritualState())()");
+      return ritual && ritual.active === true;
+    }, 'desktop ritual did not start');
+    const receiptsBefore = receipts.listReceipts().length;
+    await sendRealWebSocketFrame({ action: 'startNightMode', nightModeId: 'quick-sleep' });
+    await wait(500);
+    const ritual = await desktopEval("(async () => window.electronAPI.ritualState())()");
+    const value = await desktopEval("({ running: state.running, paused: state.paused })");
+    assert(ritual && ritual.active === true && !value.running && !value.paused, JSON.stringify({ ritual, value }));
+    assert(receipts.listReceipts().length === receiptsBefore, 'receipt count changed while ritual active');
+    await ensureIdle();
+  });
+
+  await check('C2: two simultaneous authenticated clients create at most one run', async () => {
+    await ensureIdle();
+    const before = receipts.listReceipts().length;
+    await Promise.all([
+      sendRealWebSocketFrame({ action: 'startNightMode', nightModeId: 'quick-sleep' }),
+      sendRealWebSocketFrame({ action: 'startNightMode', nightModeId: 'quick-sleep' })
+    ]);
+    await waitFor(() => desktopEval("state.running === true && state.action === 'sleep' && state.remainingSeconds <= 900"), 'desktop did not start exactly one countdown');
+    const value = await desktopEval("({ running: state.running, paused: state.paused, action: state.action, remaining: state.remainingSeconds })");
+    const after = receipts.listReceipts().length;
+    assert(value.running && value.action === 'sleep' && value.remaining <= 900, JSON.stringify(value));
+    assert(after === before + 1, `expected exactly one new receipt, got ${after - before}`);
+    await ensureIdle();
+  });
+
+  // ── C2: per-generation catalogue refresh ──
+  await phoneEval("(() => { if (!document.getElementById('night-mode-grid').classList.contains('visible')) document.getElementById('night-mode-toggle').click(); })()");
+  await waitFor(() => phoneEval("document.getElementById('night-mode-grid').classList.contains('visible')"), 'grid did not open for refresh tests');
+
+  const getNmTestState = () => phoneEval('window.__nightModeTest.getState()');
+  const injectCatalogue = (modes, generation) => phoneEval(`window.__nightModeTest.injectCatalogueReply(${JSON.stringify(modes)}, ${generation})`);
+
+  await check('C2: first authenticated socket requests catalogue once', async () => {
+    const state = await getNmTestState();
+    assert(state.catalogueRequestedGeneration === state.socketGeneration, 'catalogue not requested for current generation');
+    assert(state.catalogueAcceptedGeneration === state.socketGeneration, 'catalogue not accepted for current generation');
+  });
+
+  await check('C2: repeated state frames on same socket do not request catalogue again', async () => {
+    const before = await getNmTestState();
+    companion.broadcast({ type: 'state', running: false, paused: false, remainingSeconds: 0, totalSeconds: 0, action: 'shutdown', timerName: 'Last Call', pcName: os.hostname(), dryRun: false });
+    await wait(500);
+    const after = await getNmTestState();
+    assert(after.catalogueRequestedGeneration === before.catalogueRequestedGeneration, 'catalogue requested again on state frame');
+  });
+
+  await check('C2: replacement socket requests fresh catalogue even when cache is non-empty', async () => {
+    const before = await getNmTestState();
+    assert(before.nmCatalogueLength >= 4, 'catalogue cache should be non-empty');
+    await companion.stop();
+    await wait(500);
+    await companion.start({ token, host: '127.0.0.1' });
+    await waitFor(async () => {
+      const state = await getNmTestState();
+      return state.socketGeneration > before.socketGeneration;
+    }, 'replacement socket did not open');
+    await waitFor(async () => {
+      const state = await getNmTestState();
+      return state.catalogueRequestedGeneration === state.socketGeneration && state.catalogueAcceptedGeneration === state.socketGeneration;
+    }, 'replacement socket did not request/accept catalogue');
+  });
+
+  await check('C2: reconnect does not duplicate catalogue cards', async () => {
+    const state = await getNmTestState();
+    const cards = await phoneEval("document.querySelectorAll('.night-mode-card').length");
+    assert(cards === state.nmCatalogueLength, `expected ${state.nmCatalogueLength} cards, got ${cards}`);
+  });
+
+  await check('C2: pending Night Mode start is not replayed on reconnect', async () => {
+    await ensureIdle();
+    const beforeCount = commandLog.filter(m => m.action === 'startNightMode').length;
+    await phoneEval("(() => { const card = [...document.querySelectorAll('.night-mode-card')].find(c => c.querySelector('.night-mode-name').textContent === 'Quick Sleep'); if (card) card.click(); })()");
+    await waitFor(() => phoneEval("document.getElementById('night-mode-backdrop').classList.contains('show')"), 'detail did not open for replay test');
+    await waitFor(() => phoneEval('stateIsAuthoritative() && !nmDetailStart.disabled'), 'phone not authoritative before start');
+    await phoneEval('nmDetailStart.click()');
+    await waitFor(() => commandLog.filter(m => m.action === 'startNightMode').length === beforeCount + 1, 'startNightMode command not observed');
+    await companion.stop();
+    await wait(500);
+    assert(commandLog.filter(m => m.action === 'startNightMode').length === beforeCount + 1, 'command count changed after disconnect');
+    await companion.start({ token, host: '127.0.0.1' });
+    await waitFor(() => phoneEval('stateIsAuthoritative()'), 'phone did not reconnect');
+    await wait(500);
+    assert(commandLog.filter(m => m.action === 'startNightMode').length === beforeCount + 1, 'startNightMode was replayed after reconnect');
+    await ensureIdle();
+    await phoneEval("document.getElementById('nm-detail-close')?.click()");
+  });
+
+  await check('C2: old-socket catalogue reply is ignored', async () => {
+    const state = await getNmTestState();
+    const oldGen = state.socketGeneration - 1;
+    const beforeLength = state.nmCatalogueLength;
+    await injectCatalogue([{ id: 'old-fake', version: 99, title: 'Old Fake', subtitle: '', artworkId: 'quick-sleep', status: 'ready', availability: { supported: true, reason: null }, durationSeconds: 60, action: 'sleep', ritualId: 'none', tags: [] }], oldGen);
+    await wait(200);
+    const after = await getNmTestState();
+    assert(after.catalogueAcceptedGeneration === state.catalogueAcceptedGeneration, 'accepted old generation reply');
+    assert(after.nmCatalogueLength === beforeLength, `catalogue length changed from ${beforeLength} to ${after.nmCatalogueLength}`);
+  });
+
+  await check('C2: current-socket catalogue reply replaces old list atomically', async () => {
+    const state = await getNmTestState();
+    const gen = state.socketGeneration;
+    const fake = [{ id: 'current-fake', version: 1, title: 'Current Fake', subtitle: '', artworkId: 'quick-sleep', status: 'ready', availability: { supported: true, reason: null }, durationSeconds: 60, action: 'sleep', ritualId: 'none', tags: [] }];
+    await injectCatalogue(fake, gen);
+    await wait(200);
+    const after = await getNmTestState();
+    assert(after.catalogueAcceptedGeneration === gen, 'accepted generation not updated');
+    assert(after.nmCatalogueLength === 1, `expected single mode, got ${after.nmCatalogueLength}`);
+    const cards = await phoneEval("document.querySelectorAll('.night-mode-card').length");
+    assert(cards === 1, `expected 1 card, got ${cards}`);
+    // Restore real catalogue.
+    await companion.stop();
+    await wait(500);
+    await companion.start({ token, host: '127.0.0.1' });
+    await waitFor(async () => (await getNmTestState()).nmCatalogueLength >= 4, 'real catalogue not restored');
+  });
+
+  await check('C2: removed mode clears open selection', async () => {
+    await phoneEval("(() => { const card = [...document.querySelectorAll('.night-mode-card')].find(c => c.querySelector('.night-mode-name').textContent === 'Quick Sleep'); if (card) card.click(); })()");
+    await waitFor(() => phoneEval("document.getElementById('night-mode-backdrop').classList.contains('show')"), 'Quick Sleep detail did not open');
+    const state = await getNmTestState();
+    const gen = state.socketGeneration;
+    const withoutQuickSleep = state.nmCatalogue.filter(m => m.id !== 'quick-sleep');
+    await injectCatalogue(withoutQuickSleep, gen);
+    await wait(200);
+    const after = await getNmTestState();
+    assert(after.nmSelectedId === null, 'selected mode not cleared after removal');
+    const closed = await phoneEval("!document.getElementById('night-mode-backdrop').classList.contains('show')");
+    assert(closed, 'detail not closed after mode removal');
+    // Restore real catalogue for the next test.
+    await companion.stop();
+    await wait(500);
+    await companion.start({ token, host: '127.0.0.1' });
+    await waitFor(async () => (await getNmTestState()).nmCatalogueLength >= 4, 'real catalogue not restored after removal test');
+  });
+
+  await check('C2: newly disabled mode clears actionable confirmation', async () => {
+    await waitFor(() => phoneEval("[...document.querySelectorAll('.night-mode-card')].some(c => c.querySelector('.night-mode-name').textContent === 'Quick Sleep')"), 'Quick Sleep card not present for disabled test');
+    const state = await getNmTestState();
+    const gen = state.socketGeneration;
+    const disabledQuickSleep = state.nmCatalogue.map(m => m.id === 'quick-sleep' ? { ...m, status: 'coming_soon', availability: { supported: false, reason: 'Test disabled' } } : m);
+    await phoneEval("(() => { const card = [...document.querySelectorAll('.night-mode-card')].find(c => c.querySelector('.night-mode-name').textContent === 'Quick Sleep'); if (card) card.click(); })()");
+    await waitFor(() => phoneEval("document.getElementById('night-mode-backdrop').classList.contains('show')"), 'Quick Sleep detail did not open for disabled test');
+    await injectCatalogue(disabledQuickSleep, gen);
+    await wait(200);
+    const after = await getNmTestState();
+    assert(after.nmSelectedId === null, 'selected mode not cleared after disable');
+    const closed = await phoneEval("!document.getElementById('night-mode-backdrop').classList.contains('show')");
+    assert(closed, 'detail not closed after mode disabled');
+  });
+
+  await check('C2: catalogue refresh does not alter active desktop timer state', async () => {
+    await ensureIdle();
+    await desktopEval(`window.electronAPI.startTimer(${JSON.stringify({ durationSeconds: 600, action: 'sleep', dryRun: true, source: 'local' })})`);
+    await waitFor(() => desktopEval('state.running === true && !state.paused && state.action === "sleep"'), 'desktop countdown did not start');
+    const before = await desktopEval('({ running: state.running, paused: state.paused, action: state.action, remaining: state.remainingSeconds })');
+    await companion.stop();
+    await wait(500);
+    await companion.start({ token, host: '127.0.0.1' });
+    await waitFor(() => phoneEval('stateIsAuthoritative()'), 'phone did not reconnect for active-timer refresh test');
+    await wait(500);
+    const after = await desktopEval('({ running: state.running, paused: state.paused, action: state.action, remaining: state.remainingSeconds })');
+    assert(after.running && !after.paused && after.action === 'sleep', JSON.stringify(after));
+    assert(after.remaining <= before.remaining, 'timer regressed after refresh');
+    await ensureIdle();
+  });
+
+  await phoneEval("document.getElementById('nm-detail-close')?.click()");
+  await phoneEval("document.getElementById('night-mode-toggle').click()");
 
   console.log(`\nCompanion V2 Electron proof: ${passed} passed, ${failed} failed`);
   console.log(`Commands observed: ${commandLog.length}`);
