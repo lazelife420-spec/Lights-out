@@ -1287,6 +1287,11 @@ function broadcastCompanionState() {
     timerName: appSettings.timerName || 'Last Call',
     pcName: require('os').hostname(),
     dryRun: timerState.dryRun,
+    nightModeId: timerState.nightModeId,
+    nightModeTitle: timerState.nightModeTitle,
+    nightModeVersion: timerState.nightModeVersion,
+    profileId: timerState.profileId,
+    profileName: timerState.profileName,
     systemInfo: {
       battery: systemInfoCache ? systemInfoCache.battery : 'N/A',
       powerPlan: systemInfoCache ? systemInfoCache.powerPlan : 'Unknown'
