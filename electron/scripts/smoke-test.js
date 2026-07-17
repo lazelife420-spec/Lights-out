@@ -679,6 +679,29 @@ check('companion: PWA pairing card and stats sections use classes', () => {
   assertMatch(companionSrc, /class="comp-metrics"/, 'comp-metrics class missing in companion.html');
 });
 
+check('companion C2: Night Mode picker and detail overlay exist in PWA', () => {
+  const companionSrc = fs.readFileSync(path.join(root, 'companion.html'), 'utf8');
+  assertMatch(companionSrc, /id="night-mode-section"/, 'night-mode-section missing in companion.html');
+  assertMatch(companionSrc, /id="night-mode-grid"/, 'night-mode-grid missing in companion.html');
+  assertMatch(companionSrc, /id="night-mode-backdrop"/, 'night-mode-backdrop missing in companion.html');
+  assertMatch(companionSrc, /id="nm-detail-start"/, 'nm-detail-start missing in companion.html');
+  assertMatch(companionSrc, /id="nm-detail-close"/, 'nm-detail-close missing in companion.html');
+  assertMatch(companionSrc, /id="nm-detail-run-type"/, 'nm-detail-run-type missing in companion.html');
+});
+
+check('companion C2: main handles startNightMode and getNightModes', () => {
+  assertMatch(mainSrc, /case 'startNightMode':/, 'handleCompanionMessage missing startNightMode case');
+  assertMatch(mainSrc, /case 'getNightModes':/, 'handleCompanionMessage missing getNightModes case');
+  assertMatch(mainSrc, /companion\.sendToClient\(client, \{ type: 'nightModes', modes: nmCatalogue \}\)/, 'getNightModes does not send catalogue via sendToClient');
+});
+
+check('companion C2: protocol validates startNightMode and getNightModes', () => {
+  const remoteControlSrc = fs.readFileSync(path.join(root, 'remoteControl.js'), 'utf8');
+  assertMatch(remoteControlSrc, /['"]startNightMode['"]/, 'startNightMode missing from COMPANION_ACTIONS');
+  assertMatch(remoteControlSrc, /['"]getNightModes['"]/, 'getNightModes missing from COMPANION_ACTIONS');
+  assertMatch(remoteControlSrc, /if \(typeof nightModeId !== 'string' \|\| nightModeId\.length === 0\)/, 'startNightMode does not validate nightModeId');
+});
+
 check('companion: mode buttons have explanatory tooltips, and a live description reflects the selected mode', () => {
   // "This PC only" reads like it enables remote control from your phone --
   // it actually means the opposite (loopback-only). Tooltips + a dynamic
@@ -1264,6 +1287,11 @@ check('profile-ritual-gateway: renderer sends startOrigin without ritual branchi
 check('profile-ritual-gateway: remote source cannot trigger profile ritual', () => {
   const startDecisionSrc = fs.readFileSync(path.join(root, 'startDecision.js'), 'utf8');
   assertMatch(startDecisionSrc, /normalizedOptions\.source !== 'remote'/, 'startDecision does not block remote ritual gateway');
+});
+
+check('profile-ritual-gateway: companion Night Mode origin is eligible for ritual gateway', () => {
+  const profileRitualContextSrc = fs.readFileSync(path.join(root, 'profileRitualContext.js'), 'utf8');
+  assertMatch(profileRitualContextSrc, /['"]companion-night-mode['"]/, 'companion-night-mode is not in ELIGIBLE_ORIGINS');
 });
 
 check('profile-ritual-gateway: normalizeTimerOptions accepts startOrigin field', () => {

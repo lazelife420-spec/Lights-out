@@ -266,6 +266,18 @@ function broadcast(data) {
   }
 }
 
+function sendToClient(client, data) {
+  if (!client || !client.alive || !client.socket) return false;
+  try {
+    client.socket.write(encodeWS(JSON.stringify(data)));
+    return true;
+  } catch {
+    client.alive = false;
+    clients.delete(client);
+    return false;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // HTTP server for the PWA page
 // ─────────────────────────────────────────────────────────────────────────────
@@ -429,6 +441,7 @@ module.exports = {
   start,
   stop,
   broadcast,
+  sendToClient,
   getStatus,
   onMessage,
   offMessage,

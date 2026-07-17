@@ -151,3 +151,46 @@ test('validateCompanionMessage clamps snooze and passes through togglePause', ()
   assert.equal(rc.validateCompanionMessage({ action: 'snooze', seconds: rc.SNOOZE_MAX + 1 }).ok, false);
   assert.deepEqual(rc.validateCompanionMessage({ action: 'togglePause', x: 1 }).message, { action: 'togglePause' });
 });
+
+test('validateCompanionMessage accepts startNightMode with a valid nightModeId', () => {
+  const result = rc.validateCompanionMessage({ action: 'startNightMode', nightModeId: 'quick-sleep' });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.message, { action: 'startNightMode', nightModeId: 'quick-sleep' });
+});
+
+test('validateCompanionMessage rejects startNightMode with missing or invalid id', () => {
+  assert.equal(rc.validateCompanionMessage({ action: 'startNightMode' }).ok, false);
+  assert.equal(rc.validateCompanionMessage({ action: 'startNightMode', nightModeId: '' }).ok, false);
+  assert.equal(rc.validateCompanionMessage({ action: 'startNightMode', nightModeId: 123 }).ok, false);
+});
+
+test('validateCompanionMessage strips smuggled fields from startNightMode', () => {
+  const result = rc.validateCompanionMessage({
+    action: 'startNightMode',
+    nightModeId: 'quick-sleep',
+    timerAction: 'shutdown',
+    actionName: 'logout',
+    durationSeconds: 9999,
+    ritualId: 'standard',
+    startOrigin: 'companion-night-mode',
+    source: 'remote',
+    dryRun: true,
+    nightModeTitle: 'Forged',
+    nightModeVersion: 99,
+    profileId: 'kid',
+    profileName: 'Kid',
+    forceShutdown: true,
+    force: true,
+    logout: true,
+    hibernate: true,
+    command: 'start',
+    steps: ['shutdown'],
+    actions: ['hibernate']
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.message, { action: 'startNightMode', nightModeId: 'quick-sleep' });
+});
+
+test('validateCompanionMessage passes through getNightModes', () => {
+  assert.deepEqual(rc.validateCompanionMessage({ action: 'getNightModes' }).message, { action: 'getNightModes' });
+});

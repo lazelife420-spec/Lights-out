@@ -143,3 +143,41 @@ test('Companion integration: Host binding (Local vs LAN)', async (t) => {
 
   await companion.stop();
 });
+
+test('Companion integration: sendToClient encodes a text frame for a client', () => {
+  const writes = [];
+  const mockClient = { alive: true, socket: { write: (buf) => { writes.push(buf); return true; } } };
+
+  const result = companion.sendToClient(mockClient, { type: 'nightModes', modes: [{ id: 'quick-sleep' }] });
+  assert.equal(result, true, 'sendToClient should return true on success');
+  assert.equal(writes.length, 1, 'sendToClient should write one WebSocket frame');
+
+  const frame = writes[0];
+  assert.ok(Buffer.isBuffer(frame), 'frame should be a Buffer');
+  // FIN=1, opcode=1 (text)
+  assert.equal((frame[0] & 0x80) !== 0, true, 'FIN must be set');
+  assert.equal((frame[0] & 0x0f), 0x01, 'opcode must be text');
+  // Mask bit must be 0 for server->client frames.
+  assert.equal((frame[1] & 0x80), 0, 'server frames must be unmasked');
+  const len = frame[1] & 0x7f;
+  let offset = 2;
+  let payloadLen = len;
+  if (len === 126) {
+    payloadLen = frame.readUInt16BE(2);
+    offset = 4;
+  } else if (len === 127) {
+    payloadLen = Number(frame.readBigUInt64BE(2));
+    offset = 10;
+  }
+  const payload = frame.slice(offset, offset + payloadLen).toString('utf8');
+  const parsed = JSON.parse(payload);
+  assert.equal(parsed.type, 'nightModes');
+  assert.deepEqual(parsed.modes, [{ id: 'quick-sleep' }]);
+});
+
+test('Companion integration: sendToClient marks client dead on socket write error', () => {
+  const mockClient = { alive: true, socket: { write: () => { throw new Error('boom'); } } };
+  const result = companion.sendToClient(mockClient, { type: 'nightModes', modes: [] });
+  assert.equal(result, false, 'sendToClient should return false on error');
+  assert.equal(mockClient.alive, false, 'client should be marked dead after write error');
+});

@@ -1241,6 +1241,25 @@ function handleCompanionMessage(msg, client) {
         source: 'remote'
       });
       break;
+    case 'startNightMode': {
+      // Remote Night Mode start is allowed only while the desktop is fully idle.
+      if (timerState.running || timerState.paused || ritualMode.getState().active) break;
+      const resolution = nightModes.resolveForExecution(msg.nightModeId);
+      if (!resolution.success) break;
+      startTimer({
+        ...resolution.resolved,
+        source: 'remote',
+        startOrigin: 'companion-night-mode',
+        dryRun: false
+      });
+      break;
+    }
+    case 'getNightModes':
+      if (client) {
+        const nmCatalogue = nightModes.getCatalogue();
+        companion.sendToClient(client, { type: 'nightModes', modes: nmCatalogue });
+      }
+      break;
     case 'togglePause':
       if (timerState.paused) resumeTimer();
       else if (timerState.running) pauseTimer();
@@ -2520,8 +2539,8 @@ app.whenReady().then(async () => {
 
   // Companion + family remote control. Listeners are registered once; the
   // servers only bind when the user explicitly enables remote control.
-  companion.onMessage((msg) => {
-    handleCompanionMessage(msg);
+  companion.onMessage((msg, client) => {
+    handleCompanionMessage(msg, client);
   });
   companion.onConnect(() => {
     // Send initial state + streaks on connect.

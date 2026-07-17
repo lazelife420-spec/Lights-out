@@ -315,8 +315,8 @@ test('resolveForExecution returns canonical options without starting anything', 
   assert.strictEqual(runReceipts.getLatestReceipt(), null);
 });
 
-// Extra: remote source never uses ritual gateway even with standard mode.
-test('Remote source blocks ritual gateway regardless of mode', () => {
+// Extra: generic remote source never uses ritual gateway even with standard mode.
+test('Generic remote source blocks ritual gateway regardless of mode', () => {
   const options = makeOptions({
     durationSeconds: 3600,
     action: 'shutdown',
@@ -326,6 +326,20 @@ test('Remote source blocks ritual gateway regardless of mode', () => {
   const d = resolveFor(options, null);
   assert.strictEqual(d.effectiveRitualId, 'standard');
   assert.strictEqual(d.useRitualGateway, false);
+});
+
+// Extra: trusted companion Night Mode origin can use ritual gateway even with source:remote.
+test('Companion Night Mode origin allows ritual gateway with remote source', () => {
+  const options = makeOptions({
+    durationSeconds: 3600,
+    action: 'shutdown',
+    nightModeId: 'full-shutdown',
+    source: 'remote',
+    startOrigin: 'companion-night-mode'
+  });
+  const d = resolveFor(options, null);
+  assert.strictEqual(d.effectiveRitualId, 'standard');
+  assert.strictEqual(d.useRitualGateway, true);
 });
 
 // Extra: non-eligible start origin does not use gateway even with standard mode.
