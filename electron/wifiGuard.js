@@ -161,39 +161,12 @@ async function webhookUnblock(url, deviceMacs, headers) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Windows Firewall fallback: block outbound traffic for device IPs.
-// Creates a "Lights Out WiFi Guard" rule group.
+// Cleanup for rules created by the retired Windows Firewall provider. That
+// provider could affect only this PC and could not enforce access for another
+// LAN device, so new block/unblock attempts reject it below.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const FW_RULE_PREFIX = 'LightsOut_WiFiGuard';
-
-async function firewallBlock(deviceIps) {
-  const ips = validIps(deviceIps);
-  if (!ips.length) return { success: false, error: 'No valid IPs specified' };
-  const cmds = ips.map(ip =>
-    `New-NetFirewallRule -DisplayName '${FW_RULE_PREFIX}_${ip}' -Direction Outbound -Action Block -RemoteAddress '0.0.0.0/0' -LocalAddress '${ip}' -Profile Any -Enabled True -ErrorAction SilentlyContinue`
-  );
-  try {
-    await executePS(cmds.join('; '));
-    return { success: true, provider: 'firewall' };
-  } catch (e) {
-    return { success: false, provider: 'firewall', error: e.message };
-  }
-}
-
-async function firewallUnblock(deviceIps) {
-  const ips = validIps(deviceIps);
-  if (!ips.length) return { success: false, error: 'No valid IPs specified' };
-  const cmds = ips.map(ip =>
-    `Remove-NetFirewallRule -DisplayName '${FW_RULE_PREFIX}_${ip}' -ErrorAction SilentlyContinue`
-  );
-  try {
-    await executePS(cmds.join('; '));
-    return { success: true, provider: 'firewall' };
-  } catch (e) {
-    return { success: false, provider: 'firewall', error: e.message };
-  }
-}
 
 // Remove ALL Lights Out firewall rules (cleanup).
 async function firewallCleanup() {
@@ -237,7 +210,7 @@ async function enableWiFiAdapter() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function blockInternet(config) {
-  const { provider, routerIp, routerUser, routerPass, deviceMacs, deviceIps, webhookUrl, webhookHeaders } = config;
+  const { provider, routerIp, routerUser, routerPass, deviceMacs, webhookUrl, webhookHeaders } = config;
   switch (provider) {
     case 'tplink':
       return tplinkBlock(routerIp, routerUser, routerPass, deviceMacs || []);
@@ -248,7 +221,7 @@ async function blockInternet(config) {
     case 'webhook':
       return webhookBlock(webhookUrl, deviceMacs || [], webhookHeaders || {});
     case 'firewall':
-      return firewallBlock(deviceIps || []);
+      return { success: false, provider: 'firewall', error: 'Windows Firewall on this PC cannot enforce access for another LAN device. Choose a router or webhook provider.' };
     case 'adapter':
       return disableWiFiAdapter();
     default:
@@ -257,7 +230,7 @@ async function blockInternet(config) {
 }
 
 async function unblockInternet(config) {
-  const { provider, routerIp, routerUser, routerPass, deviceMacs, deviceIps, webhookUrl, webhookHeaders } = config;
+  const { provider, routerIp, routerUser, routerPass, deviceMacs, webhookUrl, webhookHeaders } = config;
   switch (provider) {
     case 'tplink':
       return tplinkUnblock(routerIp, routerUser, routerPass, deviceMacs || []);
@@ -268,7 +241,7 @@ async function unblockInternet(config) {
     case 'webhook':
       return webhookUnblock(webhookUrl, deviceMacs || [], webhookHeaders || {});
     case 'firewall':
-      return firewallUnblock(deviceIps || []);
+      return { success: false, provider: 'firewall', error: 'Windows Firewall LAN-device mode is unsupported; no remote-device rule was changed.' };
     case 'adapter':
       return enableWiFiAdapter();
     default:
@@ -322,7 +295,10 @@ function httpPost(url, body, extraHeaders = {}, { allowSelfSigned = false } = {}
     const req = mod.request(options, (res) => {
       let result = '';
       res.on('data', chunk => result += chunk);
-      res.on('end', () => resolve(result));
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) resolve(result);
+        else reject(new Error(`HTTP ${res.statusCode || 'error'}`));
+      });
     });
     req.on('error', reject);
     req.setTimeout(8000, () => { req.destroy(); reject(new Error('Timeout')); });

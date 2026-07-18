@@ -142,7 +142,7 @@ const fallbackApi = (() => {
     closeWindow: () => {},
     quitApp: () => {},
     toggleMiniMode: () => {},
-    toggleWidget: () => {},
+    toggleWidget: async () => ({ success: false, visible: false }),
     setWindowOpacity: () => {},
     showNotification: () => {},
     playSound: () => {},
@@ -165,6 +165,8 @@ const fallbackApi = (() => {
     getCompanionStatus: async () => ({ running: false, port: 0, clients: 0, url: '' }),
     getRemoteControl: async () => ({ enabled: false, mode: 'off', token: '', port: 0, lanIp: '', url: '', pcName: 'Preview PC', clients: 0, connected: false, failed: false, statusLabel: 'Off' }),
     setRemoteControlMode: async () => ({ enabled: false, mode: 'off', token: '', url: '', statusLabel: 'Off' }),
+    setRemoteControlPort: async () => ({ enabled: false, mode: 'off', token: '', url: '', statusLabel: 'Off' }),
+    retryRemoteControl: async () => ({ enabled: false, mode: 'off', token: '', url: '', statusLabel: 'Off' }),
     regenerateRemoteToken: async () => ({ enabled: false, mode: 'off', token: '', url: '', statusLabel: 'Off' }),
     generateQr: async () => '',
     onRemoteControlStatus: () => {},
@@ -476,6 +478,14 @@ const els = {
   btnCopyUrl: document.getElementById('btn-copy-url'),
   companionStatusPill: document.getElementById('companion-status-pill'),
   companionConnectedBadge: document.getElementById('companion-connected-badge'),
+  companionPairingDetails: document.getElementById('companion-pairing-details'),
+  remoteStartupError: document.getElementById('remote-startup-error'),
+  remoteStartupErrorText: document.getElementById('remote-startup-error-text'),
+  remoteFirewallWarning: document.getElementById('remote-firewall-warning'),
+  remoteFirewallWarningText: document.getElementById('remote-firewall-warning-text'),
+  remotePort: document.getElementById('remote-port'),
+  btnSaveCompanionPort: document.getElementById('btn-save-companion-port'),
+  btnRetryCompanion: document.getElementById('btn-retry-companion'),
   remoteFailedAttempts: document.getElementById('remote-failed-attempts'),
   remoteFailedAttemptsText: document.getElementById('remote-failed-attempts-text'),
   remoteShortCode: document.getElementById('remote-short-code'),
@@ -702,7 +712,8 @@ const state = {
     hueGroupId: '',
     httpUrl: '',
     httpMethod: 'POST',
-    httpBodyTemplate: '{"brightness": {{BRIGHTNESS}}, "color_temp": {{COLOR_TEMP}}, "on": {{ON}}}'
+    httpBodyTemplate: '{"brightness": {{BRIGHTNESS}}, "color_temp": {{COLOR_TEMP}}, "on": {{ON}}}',
+    verifiedConfigKey: ''
   },
   // Customization state
   customization: {
@@ -1078,24 +1089,45 @@ function showToast(message, type = 'info', duration = 3000) {
     document.body.appendChild(container);
   }
 
+  const toastKey = `${type}:${message}`;
+  const duplicate = [...container.querySelectorAll('.toast')].find(item => item.dataset.toastKey === toastKey);
+  if (duplicate) {
+    clearTimeout(duplicate._dismissTimer);
+    clearTimeout(duplicate._removeTimer);
+    duplicate.classList.add('visible');
+    duplicate._dismissTimer = setTimeout(() => {
+      duplicate.classList.remove('visible');
+      duplicate._removeTimer = setTimeout(() => duplicate.remove(), 220);
+    }, duration);
+    return;
+  }
+
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
+  toast.dataset.toastKey = toastKey;
   toast.textContent = message;
   container.appendChild(toast);
 
   requestAnimationFrame(() => toast.classList.add('visible'));
-  setTimeout(() => {
+  toast._dismissTimer = setTimeout(() => {
     toast.classList.remove('visible');
-    setTimeout(() => toast.remove(), 220);
+    toast._removeTimer = setTimeout(() => toast.remove(), 220);
   }, duration);
 }
 
 const notificationFeed = [];
 const MAX_NOTIFICATIONS = 50;
 
-function notify(message, type = 'info') {
-  showToast(message, type);
-  notificationFeed.unshift({ message, type, time: new Date().toISOString() });
+function notify(message, type = 'info', duration = 3000) {
+  showToast(message, type, duration);
+  const now = Date.now();
+  const latest = notificationFeed[0];
+  if (latest && latest.message === message && latest.type === type && now - new Date(latest.time).getTime() < 2000) {
+    latest.time = new Date(now).toISOString();
+    latest.read = false;
+  } else {
+    notificationFeed.unshift({ message, type, time: new Date(now).toISOString(), read: false });
+  }
   if (notificationFeed.length > MAX_NOTIFICATIONS) notificationFeed.length = MAX_NOTIFICATIONS;
   renderNotificationBadge();
 }
@@ -1139,12 +1171,18 @@ const notifDrawer = document.getElementById('notif-drawer');
 const notifDrawerClose = document.getElementById('notif-drawer-close');
 if (btnNotif && notifDrawer) {
   btnNotif.addEventListener('click', () => {
-    notifDrawer.style.display = notifDrawer.style.display === 'none' ? '' : 'none';
-    if (notifDrawer.style.display !== 'none') renderNotificationFeed();
+    const opening = !notifDrawer.classList.contains('active');
+    notifDrawer.classList.toggle('active', opening);
+    notifDrawer.style.display = '';
+    btnNotif.setAttribute('aria-expanded', String(opening));
+    if (opening) renderNotificationFeed();
   });
 }
 if (notifDrawerClose && notifDrawer) {
-  notifDrawerClose.addEventListener('click', () => { notifDrawer.style.display = 'none'; });
+  notifDrawerClose.addEventListener('click', () => {
+    notifDrawer.classList.remove('active');
+    btnNotif?.setAttribute('aria-expanded', 'false');
+  });
 }
 
 function setSidebarSelection(tab) {
@@ -1179,11 +1217,22 @@ async function openReceiptsLedger() {
   }
 }
 
+let settingsReturnTab = 'lib';
+
 function openSettingsPanel() {
+  const activeTab = document.querySelector('.ns-nav-item.active')?.dataset?.nsTab;
+  if (activeTab && !['set', 'help'].includes(activeTab)) settingsReturnTab = activeTab;
   syncCustomizeUI();
   updateLastLightUIFromState();
   loadRemoteControlState();
+  setSidebarSelection('set');
   els.optionsModal?.classList.add('active');
+}
+
+function closeSettingsPanel() {
+  els.optionsModal?.classList.remove('active');
+  setSidebarSelection(settingsReturnTab || 'lib');
+  render();
 }
 
 function openHelpPanel() {
@@ -1273,7 +1322,7 @@ async function handleSidebarNavigation(tab, { persist = true } = {}) {
   }
 
   setSidebarSelection(tab);
-  if (persist) {
+  if (persist && ['lib', 'modes', 'sch', 'stats'].includes(tab)) {
     try { api.saveAppSettings({ app: { nsActiveTab: tab } }); } catch (_) {}
   }
   return true;
@@ -1929,7 +1978,7 @@ function renderTrend(trend) {
       <div class="trend-row">
         <span class="trend-row-label">${escapeHtml(t.label)}</span>
         <div class="trend-row-track"><div class="trend-row-fill" style="width:${pct}%"></div></div>
-        <span class="trend-row-val">${t.nights}/${t.periodLength}n · ${t.avgBedTime} · ${t.onTimePercent}% on-time</span>
+        <span class="trend-row-val">${t.nights}/${t.periodLength} runs · ${t.avgBedTime} · ${t.onTimePercent}% before 11 PM</span>
       </div>
     `;
   }).join('');
@@ -1973,16 +2022,16 @@ function showStreakCelebration(count) {
 function renderStreaks(summary, catalog, report, sleepScore, history, trend) {
   if (!summary) return;
 
-  // Sleep Score.
+  // App-use routine score. This is deliberately not presented as measured sleep.
   if (sleepScore && sleepScore.score !== null) {
     if (els.scoreValue) els.scoreValue.textContent = sleepScore.score;
-    if (els.scoreLabel) els.scoreLabel.textContent = sleepScore.label || 'Sleep Score';
+    if (els.scoreLabel) els.scoreLabel.textContent = `Routine consistency · ${sleepScore.label || 'scored'}`;
     // Animate the ring fill (circumference = 2 * PI * 52 = ~327).
     const pct = sleepScore.score / 100;
     const offset = 327 - (327 * pct);
     if (els.scoreRingFill) {
       els.scoreRingFill.style.strokeDashoffset = offset;
-      const colors = { 'Legendary': '#4caf50', 'Excellent': '#76c9ff', 'Good': '#d4a50a', 'Fair': '#ff9800', 'Needs Work': '#ff4d4d' };
+      const colors = { 'Very consistent': '#4caf50', 'Consistent': '#76c9ff', 'Developing': '#d4a50a', 'Variable': '#ff9800', 'Sparse': '#ff4d4d' };
       els.scoreRingFill.style.stroke = colors[sleepScore.label] || '#5b8cff';
     }
     // Breakdown bars.
@@ -1990,14 +2039,14 @@ function renderStreaks(summary, catalog, report, sleepScore, history, trend) {
       const bd = sleepScore.breakdown || {};
       els.scoreBreakdown.innerHTML = [
         bd.consistency ? `<div class="score-bar"><span class="score-bar-label">Consistency</span><div class="score-bar-track"><div class="score-bar-fill" style="width:${Math.round(bd.consistency.score/bd.consistency.max*100)}%"></div></div><span class="score-bar-val">${bd.consistency.score}/${bd.consistency.max}</span></div>` : '',
-        bd.onTime ? `<div class="score-bar"><span class="score-bar-label">On-time</span><div class="score-bar-track"><div class="score-bar-fill" style="width:${Math.round(bd.onTime.score/bd.onTime.max*100)}%"></div></div><span class="score-bar-val">${bd.onTime.score}/${bd.onTime.max}</span></div>` : '',
+        bd.onTime ? `<div class="score-bar"><span class="score-bar-label">Earlier timing</span><div class="score-bar-track"><div class="score-bar-fill" style="width:${Math.round(bd.onTime.score/bd.onTime.max*100)}%"></div></div><span class="score-bar-val">${bd.onTime.score}/${bd.onTime.max}</span></div>` : '',
         bd.noSnooze ? `<div class="score-bar"><span class="score-bar-label">No Snooze</span><div class="score-bar-track"><div class="score-bar-fill" style="width:${Math.round(bd.noSnooze.score/bd.noSnooze.max*100)}%"></div></div><span class="score-bar-val">${bd.noSnooze.score}/${bd.noSnooze.max}</span></div>` : '',
         bd.ritual ? `<div class="score-bar"><span class="score-bar-label">Ritual</span><div class="score-bar-track"><div class="score-bar-fill" style="width:${Math.round(bd.ritual.score/bd.ritual.max*100)}%"></div></div><span class="score-bar-val">${bd.ritual.score}/${bd.ritual.max}</span></div>` : ''
       ].join('');
     }
   } else if (els.scoreValue) {
     els.scoreValue.textContent = '--';
-    if (els.scoreLabel) els.scoreLabel.textContent = 'Sleep Score (need 3+ nights)';
+    if (els.scoreLabel) els.scoreLabel.textContent = 'Routine consistency (need 3+ completed runs)';
   }
 
   updateStreakCallout(summary);
@@ -2007,11 +2056,6 @@ function renderStreaks(summary, catalog, report, sleepScore, history, trend) {
   if (els.streakTotal) els.streakTotal.textContent = summary.totalNights || 0;
   if (els.streakWeekAvg) els.streakWeekAvg.textContent = summary.weekAvg || '--:--';
   if (els.streakOnTime) els.streakOnTime.textContent = `${summary.weekOnTime || 0}%`;
-
-  // Week consistency + snooze from report.
-  if (report) {
-    if (els.streakOnTime) els.streakOnTime.textContent = `${100 - (report.snoozeRate || 0)}% on-time`;
-  }
 
   if (els.weeklyReportText) {
     els.weeklyReportText.textContent = report?.narrative || 'No nights logged this week yet. Start a timer tonight to begin this week\'s report.';
@@ -2147,20 +2191,28 @@ function wireEvents() {
   els.btnFullscreenClock?.addEventListener('click', enterFullscreenClock);
   els.btnFullscreenClockExit?.addEventListener('click', exitFullscreenClock);
   api.onFullScreenChanged?.(applyFullscreenClockState);
-  els.btnWidget?.addEventListener('click', () => {
-    api.toggleWidget?.();
-    notify('Desktop widget toggled', 'info');
+  document.getElementById('menu-settings')?.addEventListener('click', event => {
+    if (event.target.closest('.submenu-item')) return;
+    openSettingsPanel();
+  });
+  els.btnWidget?.addEventListener('click', async () => {
+    try {
+      const result = await api.toggleWidget?.();
+      if (!result?.success) throw new Error('Widget did not confirm its state');
+      notify(result?.visible ? 'Desktop widget shown' : 'Desktop widget hidden', 'info');
+    } catch (error) {
+      notify(`Desktop widget failed: ${error.message || error}`, 'error');
+    }
   });
   els.btnCompanion?.addEventListener('click', async () => {
     try {
       const rc = await api.getRemoteControl?.();
-      if (rc?.enabled && rc.url) {
+      if (rc?.ready && rc.url) {
         await api.openExternal?.(rc.url);
-        notify(`Companion at ${rc.url}`, 'info');
+        notify('Companion pairing page opened', 'info');
       } else {
         openSettingsPanel();
-        setSidebarSelection('set');
-        notify('Enable Remote Control in settings before opening the Companion PWA', 'info');
+        notify(rc?.failed ? 'Companion is unavailable; review the connection error in Settings' : 'Enable and verify Phone Companion in Settings first', rc?.failed ? 'error' : 'info');
       }
     } catch {
       notify('Companion setup is unavailable right now', 'warning');
@@ -2185,7 +2237,18 @@ function wireEvents() {
 
 if (els.chkWifiGuard) {
   els.chkWifiGuard.addEventListener('change', () => {
-    els.wifiGuardConfig.style.display = els.chkWifiGuard.checked ? '' : 'none';
+    const requested = els.chkWifiGuard.checked;
+    const config = collectWifiGuardSettings();
+    const hasSetup = config.provider === 'adapter' || (config.provider === 'webhook'
+      ? /^https?:\/\//i.test(config.webhookUrl)
+      : Boolean(config.routerIp && (config.deviceMacs.length || config.deviceIps.length)));
+    if (requested && !hasSetup) {
+      els.chkWifiGuard.checked = false;
+      els.wifiGuardConfig.style.display = '';
+      if (els.wifiTestResult) els.wifiTestResult.textContent = 'Complete provider setup before enabling WiFi Guard.';
+      return;
+    }
+    els.wifiGuardConfig.style.display = requested ? '' : 'none';
   });
 }
 
@@ -2214,6 +2277,11 @@ if (els.btnWifiBlockTest) {
   els.btnWifiBlockTest.addEventListener('click', async () => {
     els.wifiTestResult.textContent = 'Blocking...';
     try {
+      const saved = await api.saveWifiGuardSettings?.(collectWifiGuardSettings());
+      if (!saved?.settings?.enabled) {
+        applyWifiGuardSettings(saved?.settings);
+        return;
+      }
       const result = await api.wifiGuardBlock?.();
       els.wifiTestResult.textContent = result.success ? 'Blocked!' : `Failed: ${result.error}`;
       els.wifiTestResult.style.color = result.success ? '#4caf50' : '#ff4d4d';
@@ -2273,7 +2341,15 @@ api.onMorningBriefing?.(data => {
 
 if (els.chkContentBlocker) {
   els.chkContentBlocker.addEventListener('change', () => {
-    els.contentBlockerConfig.style.display = els.chkContentBlocker.checked ? '' : 'none';
+    const requested = els.chkContentBlocker.checked;
+    const config = collectContentBlockerSettings();
+    if (requested && !config.useDefault && !config.blocklist.length) {
+      els.chkContentBlocker.checked = false;
+      els.contentBlockerConfig.style.display = '';
+      if (els.contentTestResult) els.contentTestResult.textContent = 'Choose the default list or add at least one site before enabling.';
+      return;
+    }
+    els.contentBlockerConfig.style.display = requested ? '' : 'none';
   });
 }
 
@@ -2281,7 +2357,13 @@ if (els.btnContentBlockTest) {
   els.btnContentBlockTest.addEventListener('click', async () => {
     els.contentTestResult.textContent = 'Blocking...';
     try {
-      const result = await api.contentBlock?.();
+      const config = collectContentBlockerSettings();
+      const saved = await api.saveContentBlockerSettings?.(config);
+      if (!saved?.settings?.enabled) {
+        applyContentBlockerSettings(saved?.settings);
+        return;
+      }
+      const result = await api.contentBlock?.(config.useDefault ? undefined : config.blocklist);
       els.contentTestResult.textContent = result.success ? `Blocked ${result.sites} sites!` : `Failed: ${result.error}`;
       els.contentTestResult.style.color = result.success ? '#4caf50' : '#ff4d4d';
     } catch { els.contentTestResult.textContent = 'Error (may need admin)'; }
@@ -2309,7 +2391,15 @@ api.onContentBlocked?.(data => {
 
 if (els.chkAccountability) {
   els.chkAccountability.addEventListener('change', () => {
-    els.accountabilityConfig.style.display = els.chkAccountability.checked ? '' : 'none';
+    const requested = els.chkAccountability.checked;
+    const hasWebhook = /^https?:\/\//i.test(els.accWebhookUrl?.value?.trim() || '');
+    if (requested && !hasWebhook) {
+      els.chkAccountability.checked = false;
+      els.accountabilityConfig.style.display = '';
+      if (els.accTestResult) els.accTestResult.textContent = 'Enter and test a webhook before enabling notifications.';
+      return;
+    }
+    els.accountabilityConfig.style.display = requested ? '' : 'none';
   });
 }
 
@@ -2798,17 +2888,14 @@ if (els.btnClearReceipts) {
   });
 
   els.modalClose.addEventListener('click', () => {
-    els.optionsModal.classList.remove('active');
-    render();
+    closeSettingsPanel();
   });
   els.btnCancelOpt.addEventListener('click', () => {
-    els.optionsModal.classList.remove('active');
-    render();
+    closeSettingsPanel();
   });
   els.optionsModal.addEventListener('click', event => {
     if (event.target === els.optionsModal) {
-      els.optionsModal.classList.remove('active');
-      render();
+      closeSettingsPanel();
     }
   });
 
@@ -2840,7 +2927,8 @@ if (els.btnClearReceipts) {
       hueGroupId: els.hueGroupId?.value || '',
       httpUrl: els.httpUrl?.value || '',
       httpMethod: els.httpMethod?.value || 'POST',
-      httpBodyTemplate: els.httpTemplate?.value || '{"brightness": {{BRIGHTNESS}}, "color_temp": {{COLOR_TEMP}}, "on": {{ON}}}'
+      httpBodyTemplate: els.httpTemplate?.value || '{"brightness": {{BRIGHTNESS}}, "color_temp": {{COLOR_TEMP}}, "on": {{ON}}}',
+      verifiedConfigKey: state.smartLights.verifiedConfigKey || ''
     };
 
     state.lastLight = {
@@ -2860,18 +2948,27 @@ if (els.btnClearReceipts) {
         accountability: collectAccountabilitySettings()
       });
       if (typeof saved?.runAtLogin === 'boolean') state.runAtLogin = saved.runAtLogin;
+      applyWifiGuardSettings(saved?.wifiGuard);
+      applyContentBlockerSettings(saved?.contentBlocker);
+      applyAccountabilitySettings(saved?.accountability);
     } catch (error) {
       notify(`Login settings failed: ${error.message || error}`, 'warning', 4500);
     }
 
     try {
-      await api.saveSmartLightConfig(state.smartLights);
-      notify('Settings saved', 'success');
+      const requestedLights = state.smartLights.enabled;
+      state.smartLights = await api.saveSmartLightConfig(state.smartLights);
+      if (els.chkSmartLights) els.chkSmartLights.checked = Boolean(state.smartLights.enabled);
+      if (requestedLights && !state.smartLights.enabled) {
+        notify('Settings saved; Smart Lights remain off until this exact setup passes Test Connection', 'warning');
+      } else {
+        notify('Settings saved', 'success');
+      }
     } catch (error) {
       notify(`Smart lights save failed: ${error.message || error}`, 'error');
     }
 
-    els.optionsModal.classList.remove('active');
+    closeSettingsPanel();
     setAction(state.action);
     render();
   });
@@ -3045,15 +3142,16 @@ if (els.btnClearReceipts) {
       if (state.fullscreenClock) {
         exitFullscreenClock();
       } else if (els.optionsModal.classList.contains('active')) {
-        els.optionsModal.classList.remove('active');
+        closeSettingsPanel();
       } else if (els.profilesModal?.classList.contains('active')) {
         els.profilesModal.classList.remove('active');
       } else if (els.receiptsModal?.classList.contains('active')) {
         els.receiptsModal.classList.remove('active');
       } else if (els.aboutModal?.classList.contains('active')) {
         els.aboutModal.classList.remove('active');
-      } else if (document.getElementById('notif-drawer')?.style.display !== 'none') {
-        document.getElementById('notif-drawer').style.display = 'none';
+      } else if (document.getElementById('notif-drawer')?.classList.contains('active')) {
+        document.getElementById('notif-drawer').classList.remove('active');
+        document.getElementById('btn-notif')?.setAttribute('aria-expanded', 'false');
       } else if (document.getElementById('ritual-overlay')?.classList.contains('active')) {
         document.getElementById('ritual-overlay').classList.remove('active');
       } else if (document.getElementById('warning-modal')?.classList.contains('active')) {
@@ -3198,7 +3296,7 @@ if (els.btnClearReceipts) {
     els.btnTestLights.addEventListener('click', async () => {
       // Save current config first
       const testConfig = {
-        enabled: true,
+        enabled: false,
         provider: els.selLightProvider.value,
         mode: els.selLightMode.value,
         dimMinutes: Number(els.lightDimMinutes.value) || 10,
@@ -3207,12 +3305,23 @@ if (els.btnClearReceipts) {
         hueGroupId: els.hueGroupId.value,
         httpUrl: els.httpUrl.value,
         httpMethod: els.httpMethod.value,
-        httpBodyTemplate: els.httpTemplate.value
+        httpBodyTemplate: els.httpTemplate.value,
+        verifiedConfigKey: ''
       };
       
       try {
         await api.saveSmartLightConfig(testConfig);
         const result = await api.testSmartLightConnection();
+        if (result.success) {
+          state.smartLights = await api.saveSmartLightConfig({
+            ...testConfig,
+            enabled: Boolean(els.chkSmartLights?.checked),
+            verifiedConfigKey: result.verifiedConfigKey || ''
+          });
+        } else {
+          state.smartLights = await api.saveSmartLightConfig(testConfig);
+          if (els.chkSmartLights) els.chkSmartLights.checked = false;
+        }
         if (els.lightTestResult) {
           els.lightTestResult.textContent = result.message;
           els.lightTestResult.className = result.success ? 'success' : 'error';
@@ -3449,7 +3558,8 @@ async function loadInitialData() {
         hueGroupId: lightConfig.hueGroupId || '',
         httpUrl: lightConfig.httpUrl || '',
         httpMethod: lightConfig.httpMethod || 'POST',
-        httpBodyTemplate: lightConfig.httpBodyTemplate || '{"brightness": {{BRIGHTNESS}}, "color_temp": {{COLOR_TEMP}}, "on": {{ON}}}'
+        httpBodyTemplate: lightConfig.httpBodyTemplate || '{"brightness": {{BRIGHTNESS}}, "color_temp": {{COLOR_TEMP}}, "on": {{ON}}}',
+        verifiedConfigKey: lightConfig.verifiedConfigKey || ''
       };
       updateLightsUIFromState();
     }
@@ -3531,9 +3641,7 @@ api.onPlayLastLight(payload => {
   startGuidedBreathing();
 });
 api.onOpenSettings(() => {
-  syncCustomizeUI();
-  updateLastLightUIFromState();
-  if (els.optionsModal) els.optionsModal.classList.add('active');
+  openSettingsPanel();
 });
 api.onBrowserWarning?.(data => {
   if (data?.message) notify(data.message, 'warning', 8000);

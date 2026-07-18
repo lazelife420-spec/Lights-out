@@ -550,7 +550,7 @@
       <!-- SCH: Schedule panel (duration/clock mode, calendar controls) -->
       <section class="tabs-section ns-main-panel" id="ns-panel-sch" style="display:none">
         <div class="tabs-header">
-          <button class="tab-btn active" data-tab="library">Library</button>
+          <button class="tab-btn active" data-tab="library">Quick Setup</button>
           <button class="tab-btn" data-tab="schedule">Schedule</button>
           <button class="tab-btn" data-tab="clock">Clock</button>
           <button class="tab-btn" data-tab="focus">Focus</button>
@@ -560,21 +560,17 @@
         <div class="tabs-content">
           <div class="tab-panel active" id="tab-library">
             <div class="tonight-grid">
-              <div class="tonight-card" data-card="witchcraft" data-minutes="45" data-action="sleep" data-force="false">
-                <div class="card-title">WITCHCRAFT</div>
+              <div class="tonight-card" data-card="sleep-45" data-minutes="45" data-action="sleep" data-force="false">
+                <div class="card-title">45 MIN SLEEP</div>
                 <div class="card-sub">45 min sleep timer</div>
               </div>
-              <div class="tonight-card" data-card="money" data-minutes="30" data-action="sleep" data-force="false">
-                <div class="card-title">MONEY</div>
-                <div class="card-sub">Cinema & chill</div>
+              <div class="tonight-card" data-card="sleep-30" data-minutes="30" data-action="sleep" data-force="false">
+                <div class="card-title">30 MIN SLEEP</div>
+                <div class="card-sub">Short wind-down</div>
               </div>
-              <div class="tonight-card" data-card="hard-stop" data-minutes="15" data-action="shutdown" data-force="true">
-                <div class="card-title">HARD STOP</div>
-                <div class="card-sub">Force shutdown</div>
-              </div>
-              <div class="tonight-card" data-card="beastmode" data-minutes="120" data-action="shutdown" data-force="false">
-                <div class="card-title">BEASTMODE</div>
-                <div class="card-sub">2 hour limit</div>
+              <div class="tonight-card" data-card="shutdown-120" data-minutes="120" data-action="shutdown" data-force="false">
+                <div class="card-title">2 HOUR SHUTDOWN</div>
+                <div class="card-sub">Graceful shutdown after 2 hours</div>
               </div>
             </div>
           </div>
@@ -752,9 +748,10 @@
                   <button class="btn-secondary" id="btn-focus-stop" style="border-color:var(--accent-amber)">Stop</button>
                 </div>
               </div>
-              <!-- Sleep Debt -->
+              <!-- Bedtime deficit estimate -->
               <div class="sleep-debt-section" id="sleep-debt-section" style="margin-top:16px">
-                <h4 style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">&#x1F4B8; Sleep Debt</h4>
+                <h4 style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">&#x1F4B8; Estimated Bedtime Deficit</h4>
+                <p style="font-size:9px;color:var(--text-muted);margin:-4px 0 8px">Based on timer completion and the configured wake time; this is not measured sleep.</p>
                 <div class="debt-display" id="debt-display">
                   <span class="debt-amount" id="debt-amount">0.0h</span>
                   <span class="debt-label" id="debt-label">No debt</span>
@@ -774,7 +771,7 @@
         <!-- Streaks + Insights panel -->
         <div class="tab-panel" id="tab-streaks">
           <div class="streaks-panel">
-            <!-- Sleep Score -->
+            <!-- Routine consistency score -->
             <div class="sleep-score-hero" id="sleep-score-section">
               <div class="score-ring-wrap">
                 <svg class="score-ring" viewBox="0 0 120 120">
@@ -783,13 +780,13 @@
                 </svg>
                 <div class="score-value" id="score-value">--</div>
               </div>
-              <div class="score-label" id="score-label">Sleep Score</div>
+              <div class="score-label" id="score-label">Routine Consistency Score</div>
               <div class="score-breakdown" id="score-breakdown"></div>
             </div>
 
             <div class="streak-hero">
               <div class="streak-number" id="streak-count">0</div>
-              <div class="streak-label">Night Streak</div>
+              <div class="streak-label">Completion Streak</div>
             </div>
             <div class="streak-stats">
               <div class="streak-stat">
@@ -798,7 +795,7 @@
               </div>
               <div class="streak-stat">
                 <span class="stat-value" id="streak-total">0</span>
-                <span class="stat-label">Total Nights</span>
+                <span class="stat-label">Completed Runs</span>
               </div>
               <div class="streak-stat">
                 <span class="stat-value" id="streak-weekavg">--:--</span>
@@ -806,7 +803,7 @@
               </div>
               <div class="streak-stat">
                 <span class="stat-value" id="streak-ontime">0%</span>
-                <span class="stat-label">On-Time (7d)</span>
+                <span class="stat-label">Before 11 PM (7d)</span>
               </div>
             </div>
             <div class="streaks-section-header">
@@ -815,7 +812,7 @@
             </div>
             <p class="weekly-report-text" id="weekly-report-text" style="font-size:11px;color:var(--text-secondary);white-space:pre-line;line-height:1.6;margin:0 0 16px"></p>
             <div class="streaks-section-header">
-              <h4>Sleep History (Last 30 Days)</h4>
+              <h4>Completion History (Last 30 Days)</h4>
               <button class="btn btn-secondary" id="btn-export-streaks" style="padding: 4px 10px; font-size: 11px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px;">&#x1F4CB; Export Ledger</button>
             </div>
             <div class="sleep-history-grid" id="sleep-history-grid">
@@ -829,7 +826,7 @@
               </div>
             </div>
             <div class="trend-list" id="trend-list">
-              <!-- Populated by JS: aggregate nights/avg-bedtime/on-time% per week or month -->
+              <!-- Populated by JS: aggregate runs/average completion time/before-11% per week or month -->
             </div>
             <h4 class="achievements-heading">Achievements</h4>
             <div class="achievements-grid" id="achievements-grid">
@@ -984,12 +981,13 @@
 
         <!-- Smart Lights Section -->
         <div class="option-section lights-section">
-          <h3>&#x1F4A1; Smart Lights</h3>
+          <h3>&#x1F4A1; Smart Lights <span class="status-pill status-local" style="font-size:8px">REQUIRES SETUP</span></h3>
+          <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Nothing is controlled until you configure and successfully test the available Philips Hue or HTTP integration.</p>
           
           <div class="option-group">
             <label class="checkbox-label">
               <input type="checkbox" id="chk-smart-lights">
-              Enable smart light control
+              Configure smart lights (enabled only after a successful test)
             </label>
           </div>
 
@@ -1106,11 +1104,30 @@
           <div class="mode-selector" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
             <button type="button" class="btn-mode" data-mode="off" id="btn-mode-off" title="No listener running. Nothing is exposed on your network.">Off</button>
             <button type="button" class="btn-mode" data-mode="local" id="btn-mode-local" title="Companion server runs, but only accepts connections from this PC -- not reachable from your phone or any other device. Useful for local testing, not for actual phone control.">This PC only</button>
-            <button type="button" class="btn-mode btn-mode-primary" data-mode="wifi" id="btn-mode-wifi" title="Companion server is reachable from other devices on your Wi-Fi network. Every command requires your pairing token.">Connect Phone</button>
+            <button type="button" class="btn-mode btn-mode-primary" data-mode="wifi" id="btn-mode-wifi" title="Attempts to start the companion on your private Wi-Fi. A QR appears only after local HTTP and WebSocket checks pass.">Connect Phone</button>
           </div>
           <p id="remote-mode-description" style="font-size:10px;color:var(--text-muted);margin:0 0 12px"></p>
 
           <div id="remote-control-config" style="display:none;margin-top:8px">
+            <div id="remote-startup-error" role="alert" style="display:none;margin:8px 0;padding:10px;border:1px solid rgba(255,77,77,.45);border-radius:8px;background:rgba(255,77,77,.08)">
+              <strong style="display:block;font-size:11px;color:#ff7b7b">Companion is not reachable</strong>
+              <span id="remote-startup-error-text" style="display:block;font-size:10px;color:var(--text-secondary);margin:4px 0 8px"></span>
+              <button type="button" id="btn-retry-companion" class="btn-secondary" style="font-size:10px;padding:5px 10px">Retry connection</button>
+            </div>
+            <div id="remote-firewall-warning" role="status" style="display:none;margin:8px 0;padding:10px;border:1px solid rgba(255,190,77,.45);border-radius:8px;background:rgba(255,190,77,.08)">
+              <strong style="display:block;font-size:11px;color:#ffc66d">Desktop endpoint ready; Windows firewall access is not verified</strong>
+              <span id="remote-firewall-warning-text" style="display:block;font-size:10px;color:var(--text-secondary);margin-top:4px"></span>
+            </div>
+
+            <div class="option-group" style="margin:8px 0">
+              <label for="remote-port">Companion port</label>
+              <div style="display:flex;gap:6px;align-items:center">
+                <input type="number" id="remote-port" min="1024" max="65535" step="1" value="58732" style="max-width:120px">
+                <button type="button" id="btn-save-companion-port" class="btn-secondary" style="font-size:10px;padding:5px 10px">Apply &amp; retry</button>
+              </div>
+              <small style="display:block;font-size:9px;color:var(--text-muted);margin-top:3px">Change this if another app owns the port. The QR updates only after the new listener passes its checks.</small>
+            </div>
+
             <div id="remote-qr-wrap" class="pairing-qr-wrap" style="display:none">
               <div class="pairing-qr-card">
                 <img id="remote-qr" alt="Pairing QR code" width="180" height="180">
@@ -1118,7 +1135,7 @@
               <p class="pairing-qr-hint">&#x1F4F1; Scan with your phone camera to pair instantly</p>
             </div>
             
-            <div class="companion-details" style="background:var(--bg-card);padding:12px;border-radius:12px;border:1px solid var(--border-color);margin-top:10px">
+            <div id="companion-pairing-details" class="companion-details" style="display:none;background:var(--bg-card);padding:12px;border-radius:12px;border:1px solid var(--border-color);margin-top:10px">
               <div style="margin-bottom:12px">
                 <p class="pairing-label" style="margin-top:0">Manual URL fallback:</p>
                 <div style="display:flex;gap:6px">
@@ -1156,7 +1173,7 @@
         <!-- Family Mode Section -->
         <div class="option-section family-section">
           <h3>&#x1F468;&#x200D;&#x1F469;&#x200D;&#x1F467;&#x200D;&#x1F466; Family Mode</h3>
-          <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Control Lights Out on other PCs on your local network. Requires Remote Control enabled above.</p>
+          <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Controls another PC only when that PC is running Lights Out with Family LAN enabled and the same pairing token. Discovery alone does not configure a peer.</p>
           <div class="option-group">
             <button type="button" id="btn-family-scan" class="btn-secondary">Scan for Peers</button>
             <span id="family-status" style="margin-left:8px;font-size:11px;color:var(--text-muted)"></span>
@@ -1166,8 +1183,8 @@
 
         <!-- WiFi Guard Section -->
         <div class="option-section wifi-guard-section">
-          <h3>&#x1F6E1;&#xFE0F; WiFi Guard</h3>
-          <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Block internet for kids' devices at bedtime.</p>
+          <h3>&#x1F6E1;&#xFE0F; WiFi Guard <span class="status-pill status-local" style="font-size:8px">EXPERIMENTAL</span></h3>
+          <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Requires a compatible router or your own webhook. Windows Firewall on this PC cannot block a different phone or tablet on the LAN.</p>
 
           <div class="option-group">
             <label class="checkbox-label">
@@ -1180,7 +1197,7 @@
             <div class="option-group">
               <label>Provider</label>
               <select id="sel-wifi-provider">
-                <option value="firewall">Windows Firewall (IP-based)</option>
+                <option value="firewall" disabled>Windows Firewall — unavailable for other devices</option>
                 <option value="adapter">WiFi Adapter (disable entirely)</option>
                 <option value="tplink">TP-Link Router</option>
                 <option value="asus">ASUS Router</option>
@@ -1188,7 +1205,7 @@
                 <option value="webhook">Custom Webhook</option>
               </select>
               <small style="display:block;font-size:9px;color:var(--text-muted);margin-top:2px">
-                Firewall blocks by IP. Router blocks by MAC (works for phones/tablets too). Adapter disables your WiFi entirely.
+                Router integrations are model-dependent and experimental. Webhook is the most explicit integration. Adapter disables this PC's Wi-Fi entirely.
               </small>
             </div>
 
@@ -1221,7 +1238,7 @@
               <button type="button" id="btn-wifi-scan" class="btn-secondary" style="margin-bottom:6px">Scan Network</button>
               <div id="wifi-device-list" style="max-height:160px;overflow-y:auto"></div>
               <small style="display:block;font-size:9px;color:var(--text-muted);margin-top:4px">
-                Click devices to add them. Router mode uses MAC addresses; Firewall mode uses IPs.
+                Click devices to add them. Router and webhook modes receive the selected MAC/IP values.
               </small>
             </div>
 
@@ -1248,8 +1265,8 @@
 
         <!-- Content Blocker Section -->
         <div class="option-section content-blocker-section">
-          <h3>&#x1F6AB; Content Blocker</h3>
-          <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Block social media and doom-scrolling sites during wind-down.</p>
+          <h3>&#x1F6AB; Content Blocker <span class="status-pill status-local" style="font-size:8px">HOSTS FILE</span></h3>
+          <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Edits the Windows hosts file and may require administrator approval. Secure DNS, VPNs, and cached browser connections can bypass it.</p>
 
           <div class="option-group">
             <label class="checkbox-label">
@@ -1335,7 +1352,7 @@
         <!-- Accountability Partner Section -->
         <div class="option-section accountability-section">
           <h3>&#x1F91D; Accountability Partner</h3>
-          <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Notify your partner when you start, snooze, or cancel wind-down.</p>
+          <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Sends JSON to a webhook you configure and test below. No message is sent until a partner webhook exists.</p>
 
           <div class="option-group">
             <label class="checkbox-label">
@@ -1935,7 +1952,7 @@
       <h3 style="font-size:18px; color: var(--accent-amber); margin-bottom: 8px;">Ritual Complete!</h3>
       <p style="font-size:13px; color: var(--text-secondary); margin-bottom: 16px;">You kept your promise tonight. Rest well.</p>
       <div class="celebration-streak-number" id="celebration-streak-number" style="font-size: 64px; font-weight: 800; color: #fff; text-shadow: 0 0 20px rgba(245,166,35,0.5); line-height: 1;">0</div>
-      <div style="font-size:11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 24px;">Night Streak</div>
+      <div style="font-size:11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 24px;">Completion Streak</div>
       <button class="btn btn-primary" id="btn-celebration-dismiss" style="width: 100%;">Good Night</button>
     </div>
   </div>

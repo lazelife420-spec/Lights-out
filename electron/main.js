@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, globalShortcut, shell, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, globalShortcut, shell, screen, clipboard } = require('electron');
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
@@ -14,6 +14,9 @@ const alarm = require('./alarm');
 const updater = require('./updater');
 const calProviders = require('./calendarProviders');
 const companion = require('./companion');
+const companionNetwork = require('./companionNetwork');
+const companionFirewall = require('./companionFirewall');
+const capabilityTruth = require('./capabilityTruth');
 const media = require('./media');
 const unsavedGuard = require('./unsavedGuard');
 const family = require('./family');
@@ -160,6 +163,14 @@ let miniMode = false;
 let widgetMode = false;
 let timerInterval = null;
 let activeReceiptId = null;
+let companionFailureDetails = null;
+let companionFailureLookupKey = '';
+let companionNetworkFailure = null;
+let companionNetworkFingerprint = '';
+let companionNetworkMonitor = null;
+let companionNetworkPollActive = false;
+let remoteControlOperation = Promise.resolve();
+let companionFirewallState = { configured: false, error: '', guidance: '' };
 
 const launchOptions = parseLaunchOptions(process.argv);
 
@@ -282,6 +293,9 @@ function createWindow() {
     title: 'Lights Out',
     autoHideMenuBar: true,
     show: false,
+    // Match the first painted pixels to the night UI so Windows never exposes
+    // a bright native surface while Chromium/CSS is still loading.
+    backgroundColor: '#0d0e11',
     icon: APP_ICON,
     webPreferences: {
       nodeIntegration: false,
@@ -875,14 +889,14 @@ async function completeTimer() {
     });
   }
   sendAccountability('TIMER_COMPLETE');
-  // Record sleep debt for tonight.
+  // Record an app-timer estimate only; this is not measured sleep.
   try {
     const appSettings = settingsStore.getSection('app') || {};
     const bedTime = new Date().toTimeString().slice(0, 5);
     const estimated = sleepDebt.estimateSleepHours(bedTime, appSettings.wakeTime || '07:00');
     sleepDebt.recordNight(bedTime, appSettings.wakeTime || '07:00', estimated);
   } catch (e) {
-    console.error('Failed to record sleep debt:', e);
+    console.error('Failed to record estimated bedtime deficit:', e);
   }
 
   // Unsaved work guardian: check for unsaved work before power action.
@@ -1344,49 +1358,62 @@ function familyCommandHandler(cmd) {
 
 function getRemoteControlState() {
   const rc = settingsStore.getSection('remoteControl') || {};
-  const ips = family.getLocalIPs();
-  const lanIp = ips[0] || '127.0.0.1';
+  const network = companionNetwork.selectLanIp(family.getLocalIPs(), rc.lanIp);
+  const ips = network.candidates;
+  const lanIp = network.lanIp;
   const mode = rc.mode || (rc.enabled ? 'wifi' : 'off');
-  const pcName = require('os').hostname();
-
-  let url = '';
-  if (mode === 'wifi' && rc.token) {
-    // Include the desktop host as a separate parameter so packaged Android
-    // companions (which load the UI locally) know where to open the WebSocket.
-    url = `http://${lanIp}:${companion.PWA_PORT}/?t=${rc.token}&host=${encodeURIComponent(`${lanIp}:${companion.PWA_PORT}`)}`;
-  } else if (mode === 'local' && rc.token) {
-    url = `http://127.0.0.1:${companion.PWA_PORT}/?t=${rc.token}`;
-  }
-
+  const pcName = os.hostname();
+  const port = normalizeCompanionPort(rc.port);
   const status = companion.getStatus();
   const connected = status.connected && status.clients > 0;
-  const failed = status.failed;
+  const ready = Boolean(status.ready && status.running && !status.failed && !companionNetworkFailure);
+  const failed = Boolean(status.failed || companionNetworkFailure);
+
+  let url = '';
+  if (ready && mode === 'wifi' && rc.token) {
+    // Include the desktop host as a separate parameter so packaged Android
+    // companions (which load the UI locally) know where to open the WebSocket.
+    url = `http://${lanIp}:${port}/?t=${rc.token}&host=${encodeURIComponent(`${lanIp}:${port}`)}`;
+  } else if (ready && mode === 'local' && rc.token) {
+    url = `http://127.0.0.1:${port}/?t=${rc.token}`;
+  }
 
   return {
     enabled: mode !== 'off',
     mode,
-    token: rc.token || '',
-    shortCode: rc.token ? rc.token.slice(0, 6).toUpperCase() : '',
-    port: companion.PWA_PORT,
+    shortCode: ready && rc.token ? rc.token.slice(0, 6).toUpperCase() : '',
+    port,
     lanIp,
+    candidateIps: ips,
     url,
     pcName,
     clients: status.clients || 0,
     connected,
+    ready,
+    running: Boolean(status.running),
     failed,
-    statusLabel: getCompanionStatusLabel(mode, connected, failed, status.clients),
+    statusLabel: getCompanionStatusLabel(mode, status),
+    errorCode: companionNetworkFailure?.errorCode || status.errorCode || '',
+    errorMessage: companionNetworkFailure?.errorMessage || status.errorMessage || '',
+    failureDetails: failed ? companionFailureDetails : null,
+    firewall: { ...companionFirewallState },
     failedAttempts: status.failedAttempts || 0,
     lastFailedIp: status.lastFailedIp || ''
   };
 }
 
-function getCompanionStatusLabel(mode, connected, failed, clients) {
+function normalizeCompanionPort(value) {
+  const port = Number(value || companion.PWA_PORT);
+  return Number.isInteger(port) && port >= 1024 && port <= 65535 ? port : companion.PWA_PORT;
+}
+
+function getCompanionStatusLabel(mode, status) {
   if (mode === 'off') return 'Off';
-  if (mode === 'local') return 'This PC only';
-  if (failed) return 'Connection failed';
-  if (connected) return 'Phone connected';
-  if (clients > 0) return 'Phone connected';
-  return 'Waiting for phone';
+  if (status.failed || companionNetworkFailure) return 'Connection failed';
+  if (!status.ready || !status.running) return 'Starting companion';
+  if (status.connected || status.clients > 0) return 'Phone connected';
+  if (mode === 'local') return 'Ready on this PC only';
+  return 'Desktop endpoint ready — waiting for phone';
 }
 
 function broadcastRemoteControlState() {
@@ -1394,53 +1421,134 @@ function broadcastRemoteControlState() {
   mainWindow.webContents.send('remote-control-status', getRemoteControlState());
 }
 
-async function configureFirewallRules(open) {
+async function configureFirewallRules(open, port = companion.PWA_PORT) {
   try {
     if (open) {
-      await executePowerShell(
-        'New-NetFirewallRule -DisplayName "Lights Out Companion Port" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 58732 -Enabled True -Profile Private,Public -ErrorAction SilentlyContinue'
-      );
-      await executePowerShell(
-        'New-NetFirewallRule -DisplayName "Lights Out Companion Discovery" -Direction Inbound -Action Allow -Protocol UDP -LocalPort 58733 -Enabled True -Profile Private,Public -ErrorAction SilentlyContinue'
-      );
+      await executePowerShell(companionFirewall.configureOwnedRulesCommand(process.execPath, normalizeCompanionPort(port)));
     } else {
-      await executePowerShell(
-        'Remove-NetFirewallRule -DisplayName "Lights Out Companion Port" -ErrorAction SilentlyContinue'
-      );
-      await executePowerShell(
-        'Remove-NetFirewallRule -DisplayName "Lights Out Companion Discovery" -ErrorAction SilentlyContinue'
-      );
+      await executePowerShell(companionFirewall.removeOwnedRulesCommand());
     }
+    companionFirewallState = { configured: open, error: '', guidance: '' };
+    return { ...companionFirewallState };
   } catch (err) {
     console.warn('Windows Firewall configuration skipped or failed:', err.message);
+    companionFirewallState = {
+      configured: false,
+      error: err.message || 'Firewall configuration failed',
+      guidance: open
+        ? `Windows did not allow Lights Out to create its private-network rule for ${process.execPath}. Allow that exact app on Private networks, then retry. Lights Out did not request elevation.`
+        : 'Lights Out could not remove its app-owned firewall rules. Remove rules in the “Lights Out Companion” group from Windows Firewall if needed.'
+    };
+    return { ...companionFirewallState };
   }
 }
 
-function stopRemoteControl() {
-  try { companion.stop(); } catch {}
+async function stopRemoteControl() {
+  try { await companion.stop(); } catch {}
   try { family.stop(); } catch {}
-  configureFirewallRules(false);
+  await configureFirewallRules(false);
 }
 
-function startRemoteControl() {
+async function findCompanionPortOwner(port) {
+  const safePort = normalizeCompanionPort(port);
+  try {
+    const raw = await executePowerShell(
+      `$connection = Get-NetTCPConnection -LocalPort ${safePort} -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1; if ($connection) { $process = Get-Process -Id $connection.OwningProcess -ErrorAction SilentlyContinue; [pscustomobject]@{ pid = $connection.OwningProcess; name = $process.ProcessName; path = $process.Path } | ConvertTo-Json -Compress }`
+    );
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function enrichCompanionFailure(status) {
+  if (!status.failed || status.errorCode !== 'EADDRINUSE') return;
+  const key = `${status.errorCode}:${status.port}`;
+  if (companionFailureLookupKey === key) return;
+  companionFailureLookupKey = key;
+  companionFailureDetails = await findCompanionPortOwner(status.port);
+  broadcastRemoteControlState();
+}
+
+async function startRemoteControl() {
   // Always rebuild from a clean state so token changes take effect.
-  stopRemoteControl();
+  await stopRemoteControl();
+  companionFailureDetails = null;
+  companionFailureLookupKey = '';
+  companionNetworkFailure = null;
   const rc = settingsStore.getSection('remoteControl') || {};
   const mode = rc.mode || (rc.enabled ? 'wifi' : 'off');
+  const port = normalizeCompanionPort(rc.port);
+  const assignedIps = family.getLocalIPs();
+  const routedIp = await companionNetwork.getRoutedLanIp();
+  const usableIps = process.platform === 'win32' && !routedIp ? [] : assignedIps;
+  const network = companionNetwork.selectLanIp(usableIps, rc.lanIp, routedIp);
+  const lanIp = network.lanIp;
+  companionNetworkFingerprint = companionNetwork.networkFingerprint(assignedIps, routedIp);
   
-  if (mode === 'off' || !rc.token) return false;
+  if (mode === 'off' || !rc.token) return getRemoteControlState();
   
   if (mode === 'wifi') {
-    companion.start({ token: rc.token, host: '0.0.0.0' });
-    family.start({ enabled: true, token: rc.token, peerName: require('os').hostname() }, familyCommandHandler);
-    configureFirewallRules(true);
+    if (!network.hasLanIp) {
+      companionNetworkFailure = {
+        errorCode: 'NO_LAN_ADDRESS',
+        errorMessage: 'No usable LAN address is available. Reconnect Wi-Fi, then retry.'
+      };
+      broadcastRemoteControlState();
+      return getRemoteControlState();
+    }
+    if (rc.lanIp !== lanIp) settingsStore.updateSection('remoteControl', { lanIp });
+    const firewall = await configureFirewallRules(true, port);
+    const result = await companion.start({ token: rc.token, host: '0.0.0.0', port, probeHost: lanIp });
+    if (result.ready) {
+      family.start({ enabled: true, token: rc.token, peerName: os.hostname() }, familyCommandHandler);
+    }
+    if (!firewall.configured && result.ready) {
+      console.warn(`Companion is locally ready, but the firewall rule could not be verified: ${firewall.error}`);
+    }
   } else if (mode === 'local') {
-    companion.start({ token: rc.token, host: '127.0.0.1' });
+    await companion.start({ token: rc.token, host: '127.0.0.1', port });
     // Family mode (LAN discovery) is disabled in "This PC only" mode.
-    configureFirewallRules(false);
+    await configureFirewallRules(false);
   }
 
-  return true;
+  return getRemoteControlState();
+}
+
+function queueRemoteControlRestart() {
+  const operation = remoteControlOperation.then(() => startRemoteControl());
+  remoteControlOperation = operation.catch(() => {});
+  return operation;
+}
+
+function startCompanionNetworkMonitor() {
+  if (companionNetworkMonitor) return;
+  companionNetworkMonitor = setInterval(async () => {
+    if (companionNetworkPollActive) return;
+    companionNetworkPollActive = true;
+    try {
+      const rc = settingsStore.getSection('remoteControl') || {};
+      const mode = rc.mode || (rc.enabled ? 'wifi' : 'off');
+      const assignedIps = family.getLocalIPs();
+      const routedIp = await companionNetwork.getRoutedLanIp();
+      const nextFingerprint = companionNetwork.networkFingerprint(assignedIps, routedIp);
+      if (nextFingerprint === companionNetworkFingerprint) return;
+      companionNetworkFingerprint = nextFingerprint;
+      if (mode !== 'wifi') return;
+
+      // A changed route invalidates every previously rendered pairing URL.
+      // stop() immediately clears readiness and causes the renderer to hide the
+      // QR while the serialized restart re-selects and re-probes the endpoint.
+      companionNetworkFailure = null;
+      await companion.stop();
+      broadcastRemoteControlState();
+      await queueRemoteControlRestart();
+    } catch (err) {
+      console.warn('Companion network-change recovery failed:', err.message);
+    } finally {
+      companionNetworkPollActive = false;
+    }
+  }, 3000);
 }
 
 function formatTime(totalSeconds) {
@@ -1636,9 +1744,9 @@ ipcMain.handle('save-app-settings', async (event, settings = {}) => {
   if (settings.customization) settingsStore.updateSection('customization', settings.customization);
   if (settings.lastLight) settingsStore.updateSection('lastLight', settings.lastLight);
   if (settings.calendar) settingsStore.updateSection('calendar', settings.calendar);
-  if (settings.wifiGuard) settingsStore.updateSection('wifiGuard', settings.wifiGuard);
-  if (settings.contentBlocker) settingsStore.updateSection('contentBlocker', settings.contentBlocker);
-  if (settings.accountability) settingsStore.updateSection('accountability', settings.accountability);
+  if (settings.wifiGuard) settingsStore.updateSection('wifiGuard', capabilityTruth.sanitizeWifiGuard(settings.wifiGuard));
+  if (settings.contentBlocker) settingsStore.updateSection('contentBlocker', capabilityTruth.sanitizeContentBlocker(settings.contentBlocker));
+  if (settings.accountability) settingsStore.updateSection('accountability', capabilityTruth.sanitizeAccountability(settings.accountability));
   return {
     ...getLoginSettings(),
     app: settingsStore.getSection('app'),
@@ -1791,7 +1899,8 @@ ipcMain.handle('get-remote-control', async () => {
 // pair by camera instead of typing a long URL + token. Returns '' on failure
 // (the URL + code are still shown as text as a fallback).
 ipcMain.handle('generate-qr', async (e, text) => {
-  if (typeof text !== 'string' || !text) return '';
+  const state = getRemoteControlState();
+  if (!state.ready || typeof text !== 'string' || !text || text !== state.url) return '';
   try {
     const QRCode = require('qrcode');
     return await QRCode.toDataURL(text, {
@@ -1805,20 +1914,42 @@ ipcMain.handle('generate-qr', async (e, text) => {
   }
 });
 ipcMain.handle('set-remote-control-mode', async (e, mode) => {
+  if (!['off', 'local', 'wifi'].includes(mode)) throw new Error('Invalid companion mode');
   const rc = settingsStore.getSection('remoteControl') || {};
-  const patch = { mode };
+  const patch = { mode, enabled: mode !== 'off' };
   // Generate a pairing token the first time remote control is turned on.
   if (mode !== 'off' && !rc.token) patch.token = remoteControl.generateToken();
   settingsStore.updateSection('remoteControl', patch);
-  startRemoteControl();
-  const state = getRemoteControlState();
+  const state = await queueRemoteControlRestart();
   broadcastRemoteControlState();
   return state;
 });
 ipcMain.handle('regenerate-remote-token', async () => {
+  const previous = settingsStore.getSection('remoteControl') || {};
+  const previousToken = String(previous.token || '');
+  await companion.revokeClients();
   settingsStore.updateSection('remoteControl', { token: remoteControl.generateToken() });
-  startRemoteControl();
-  const state = getRemoteControlState();
+  if (previousToken) {
+    try {
+      if (clipboard.readText().includes(previousToken)) clipboard.clear();
+    } catch { /* clipboard access is best effort */ }
+  }
+  const state = await queueRemoteControlRestart();
+  broadcastRemoteControlState();
+  return state;
+});
+ipcMain.handle('set-remote-control-port', async (e, requestedPort) => {
+  const port = Number(requestedPort);
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+    throw new Error('Port must be a whole number from 1024 to 65535');
+  }
+  settingsStore.updateSection('remoteControl', { port });
+  const state = await queueRemoteControlRestart();
+  broadcastRemoteControlState();
+  return state;
+});
+ipcMain.handle('retry-remote-control', async () => {
+  const state = await queueRemoteControlRestart();
   broadcastRemoteControlState();
   return state;
 });
@@ -1857,8 +1988,9 @@ ipcMain.handle('wifi-guard-unblock', async () => {
   return wifiGuard.unblockInternet(config);
 });
 ipcMain.handle('save-wifi-guard-settings', async (e, wifiSettings) => {
-  settingsStore.updateSection('wifiGuard', wifiSettings);
-  return { saved: true };
+  const sanitized = capabilityTruth.sanitizeWifiGuard(wifiSettings);
+  settingsStore.updateSection('wifiGuard', sanitized);
+  return { saved: true, settings: sanitized };
 });
 ipcMain.handle('get-wifi-guard-settings', async () => {
   return settingsStore.getSection('wifiGuard');
@@ -1873,16 +2005,18 @@ ipcMain.handle('content-block-status', async () => {
   return { blocked: contentBlocker.isBlocked(), sites: contentBlocker.getActiveBlocklist() };
 });
 ipcMain.handle('save-content-blocker-settings', async (e, s) => {
-  settingsStore.updateSection('contentBlocker', s);
+  const sanitized = capabilityTruth.sanitizeContentBlocker(s);
+  settingsStore.updateSection('contentBlocker', sanitized);
   checkContentBlockerSchedules(); // re-evaluate immediately, don't wait up to 60s
-  return { saved: true };
+  return { saved: true, settings: sanitized };
 });
 ipcMain.handle('get-content-blocker-settings', async () => {
   return settingsStore.getSection('contentBlocker');
 });
 ipcMain.handle('save-accountability-settings', async (e, s) => {
-  settingsStore.updateSection('accountability', s);
-  return { saved: true };
+  const sanitized = capabilityTruth.sanitizeAccountability(s);
+  settingsStore.updateSection('accountability', sanitized);
+  return { saved: true, settings: sanitized };
 });
 ipcMain.handle('get-accountability-settings', async () => {
   return settingsStore.getSection('accountability');
@@ -1919,7 +2053,7 @@ ipcMain.handle('get-reality-check', async () => {
   } catch { return null; }
 });
 
-// Sleep Debt IPC.
+// Legacy IPC name retained for compatibility; payload is an estimated bedtime deficit.
 ipcMain.handle('get-sleep-debt', async () => {
   try { return sleepDebt.getDebtSummary(); } catch { return null; }
 });
@@ -2224,11 +2358,17 @@ ipcMain.on('toggle-mini-mode', () => {
 });
 
 // Desktop widget: tiny always-on-top "bed in N min" clock.
-function createWidgetWindow() {
+function persistWidgetVisibility(visible) {
+  settingsStore.updateSection('app', { widgetVisible: Boolean(visible) });
+}
+
+async function createWidgetWindow() {
   if (widgetWindow && !widgetWindow.isDestroyed()) {
     widgetWindow.show();
     updateWidget();
-    return;
+    const visible = widgetWindow.isVisible();
+    if (visible) persistWidgetVisibility(true);
+    return visible;
   }
   widgetWindow = new BrowserWindow({
     width: 180,
@@ -2239,6 +2379,7 @@ function createWidgetWindow() {
     resizable: false,
     skipTaskbar: true,
     hasShadow: false,
+    show: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -2247,18 +2388,33 @@ function createWidgetWindow() {
   });
   widgetWindow.setVisibleOnAllWorkspaces(true);
   widgetWindow.setPosition(20, 20); // top-left corner
-  widgetWindow.loadFile('widget.html');
-  widgetWindow.webContents.once('did-finish-load', () => {
-    updateWidget();
+  widgetWindow.on('closed', () => {
+    widgetWindow = null;
+    widgetMode = false;
+    if (!app.isQuitting) persistWidgetVisibility(false);
   });
-  widgetWindow.on('closed', () => { widgetWindow = null; widgetMode = false; });
-  widgetMode = true;
+  try {
+    await widgetWindow.loadFile('widget.html');
+    if (!widgetWindow || widgetWindow.isDestroyed()) return false;
+    widgetMode = true;
+    updateWidget();
+    widgetWindow.show();
+    const visible = widgetWindow.isVisible();
+    if (visible) persistWidgetVisibility(true);
+    return visible;
+  } catch (err) {
+    console.error('Desktop widget failed to load:', err.message);
+    closeWidgetWindow();
+    return false;
+  }
 }
 
 function closeWidgetWindow() {
   if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.close();
   widgetWindow = null;
   widgetMode = false;
+  if (!app.isQuitting) persistWidgetVisibility(false);
+  return false;
 }
 
 function updateWidget() {
@@ -2275,9 +2431,10 @@ function updateWidget() {
   });
 }
 
-ipcMain.on('toggle-widget', () => {
-  if (widgetMode) closeWidgetWindow();
-  else createWidgetWindow();
+ipcMain.handle('toggle-widget', async () => {
+  if (widgetMode) return { success: true, visible: closeWidgetWindow() };
+  const visible = await createWidgetWindow();
+  return { success: visible, visible };
 });
 
 ipcMain.on('close-widget', () => {
@@ -2503,6 +2660,10 @@ app.whenReady().then(async () => {
   setupJumpList();
   registerGlobalShortcuts();
 
+  if (settingsStore.getSection('app')?.widgetVisible) {
+    await createWidgetWindow();
+  }
+
   // If launched via --first-light, run the First Light sunrise sequence.
   if (launchOptions.firstLight) {
     playFirstLight();
@@ -2535,17 +2696,19 @@ app.whenReady().then(async () => {
       }
     }, 500);
   });
-  companion.onStatus(() => {
+  companion.onStatus((status) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('remote-control-status', getRemoteControlState());
     }
+    enrichCompanionFailure(status);
   });
 
   // Broadcast timer state to connected companion clients periodically.
   setInterval(broadcastCompanionState, 2000);
 
   // Start remote control only if enabled in settings (off by default).
-  startRemoteControl();
+  await queueRemoteControlRestart();
+  startCompanionNetworkMonitor();
 
   // Focus Sessions: forward ticks and phase changes to renderer.
   focusSessions.onTick((fs) => {
@@ -2695,6 +2858,10 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   app.isQuitting = true;
+  if (companionNetworkMonitor) {
+    clearInterval(companionNetworkMonitor);
+    companionNetworkMonitor = null;
+  }
   clearTimerInterval();
   profileRitualContext.clear();
   globalShortcut.unregisterAll();

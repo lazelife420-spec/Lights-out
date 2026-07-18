@@ -148,8 +148,7 @@ function encodeTextFrame(obj) {
       assert(status.clients === 0, 'no clients by default');
     });
 
-    companion.start({ token, host: '127.0.0.1' });
-    await wait(600);
+    await companion.start({ token, host: '127.0.0.1' });
 
     await check('companion: same-wifi starts and reports running', () => {
       const status = companion.getStatus();
@@ -280,8 +279,7 @@ function encodeTextFrame(obj) {
     const newToken = remoteControl.generateToken();
     await companion.stop();
     await wait(400);
-    companion.start({ token: newToken, host: '127.0.0.1' });
-    await wait(600);
+    await companion.start({ token: newToken, host: '127.0.0.1' });
 
     await check('companion: old token invalidated after rotation', async () => {
       const result = await wsUpgrade({

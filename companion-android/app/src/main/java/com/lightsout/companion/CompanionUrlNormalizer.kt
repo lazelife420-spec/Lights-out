@@ -70,6 +70,23 @@ internal object CompanionUrlNormalizer {
         }
     }
 
+    // Safe diagnostic form: retain only origin/path and never query or fragment,
+    // because the pairing token arrives as `?t=` before the page strips it.
+    fun redactForLog(url: String?): String {
+        if (url.isNullOrBlank()) return "(unknown)"
+        return try {
+            val parsed = URI(url)
+            val scheme = parsed.scheme ?: return "(redacted URL)"
+            val host = parsed.host ?: return "(redacted URL)"
+            val renderedHost = if (host.contains(':') && !host.startsWith("[")) "[$host]" else host
+            val renderedPort = if (parsed.port != -1) ":${parsed.port}" else ""
+            val path = if (parsed.rawPath.isNullOrBlank()) "/" else parsed.rawPath
+            "$scheme://$renderedHost$renderedPort$path [query redacted]"
+        } catch (_: Exception) {
+            "(redacted URL)"
+        }
+    }
+
     // Rebuilds a companion URL for a newly-discovered host, reusing a
     // previously-captured token (see extractToken). Always targets the
     // default port -- a rediscovered PC is identified by IP alone, not by a

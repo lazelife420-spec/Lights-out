@@ -72,4 +72,13 @@ class CompanionUrlNormalizerTest {
             CompanionUrlNormalizer.buildUrl("192.168.0.16", "abc123")
         )
     }
+
+    @Test
+    fun `redactForLog never returns pairing credentials`() {
+        assertEquals(
+            "http://192.168.0.16:58732/ [query redacted]",
+            CompanionUrlNormalizer.redactForLog("http://192.168.0.16:58732/?t=abc123&host=192.168.0.16%3A58732")
+        )
+        assertEquals("(redacted URL)", CompanionUrlNormalizer.redactForLog("not a url?t=abc123"))
+    }
 }

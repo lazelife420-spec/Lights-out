@@ -117,6 +117,7 @@ const DEFAULTS = {
     // Northstar UI state
     nsActiveTab: 'lib',            // last active sidebar tab
     nsSelectedMode: '',            // last selected lobby mode card
+    widgetVisible: false,          // restore only after a confirmed widget show
     // Identity only: restoring this selection never applies or starts a timer.
     lastSelectedProfileId: null
   },
@@ -172,7 +173,7 @@ const DEFAULTS = {
   },
   wifiGuard: {
     enabled: false,
-    provider: 'firewall',
+    provider: 'webhook',
     routerIp: '',
     routerUser: 'admin',
     routerPass: '',
@@ -208,6 +209,8 @@ const DEFAULTS = {
   remoteControl: {
     enabled: false,
     mode: 'off',
+    port: 58732,
+    lanIp: '',
     token: ''
   },
   // Persisted running-timer snapshot for crash/quit recovery. null when idle.

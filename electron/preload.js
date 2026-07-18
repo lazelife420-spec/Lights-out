@@ -136,7 +136,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeCustomSequence: (id) => ipcRenderer.invoke('remove-custom-sequence', id),
 
   // Desktop widget
-  toggleWidget: () => ipcRenderer.send('toggle-widget'),
+  toggleWidget: () => ipcRenderer.invoke('toggle-widget'),
   onWidgetUpdate: (callback) => {
     ipcRenderer.on('widget-update', (event, data) => callback(data));
   },
@@ -186,6 +186,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Remote control gating (companion + family). Off by default.
   getRemoteControl: () => ipcRenderer.invoke('get-remote-control'),
   setRemoteControlMode: (mode) => ipcRenderer.invoke('set-remote-control-mode', mode),
+  setRemoteControlPort: (port) => ipcRenderer.invoke('set-remote-control-port', port),
+  retryRemoteControl: () => ipcRenderer.invoke('retry-remote-control'),
   regenerateRemoteToken: () => ipcRenderer.invoke('regenerate-remote-token'),
   generateQr: (text) => ipcRenderer.invoke('generate-qr', text),
   onRemoteControlStatus: (callback) => {

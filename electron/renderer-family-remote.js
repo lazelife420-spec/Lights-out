@@ -42,8 +42,21 @@ const wifiSelectedDevices = { macs: [], ips: [] };
 const REMOTE_MODE_DESCRIPTIONS = {
   off: 'No listener running. Nothing is exposed on your network.',
   local: 'Loopback only -- the companion server runs but only accepts connections from this PC. Not reachable from your phone or any other device.',
-  wifi: 'Reachable from other devices on your Wi-Fi network. Every command requires your pairing token.'
+  wifi: 'Starts a token-protected listener on your private Wi-Fi. A pairing QR appears only after HTTP and WebSocket readiness checks pass.'
 };
+let remoteQrGeneration = 0;
+
+function companionFailureMessage(rc) {
+  if (!rc?.failed) return '';
+  const owner = rc.failureDetails;
+  if (rc.errorCode === 'EADDRINUSE') {
+    const processText = owner?.pid
+      ? ` Process ${owner.name || 'unknown'} (PID ${owner.pid})${owner.path ? ` at ${owner.path}` : ''} owns it.`
+      : ' Another process owns it, but its identity could not be read.';
+    return `Port ${rc.port} is already in use.${processText} Choose another port or close that app yourself, then retry.`;
+  }
+  return rc.errorMessage || 'The companion listener or its readiness check failed. Retry or choose another port.';
+}
 
 function renderRemoteControl(rc) {
   if (!rc) return;
@@ -52,16 +65,27 @@ function renderRemoteControl(rc) {
     btn.classList.toggle('active', btn.dataset.mode === mode);
   });
   if (els.remoteModeDescription) {
-    els.remoteModeDescription.textContent = REMOTE_MODE_DESCRIPTIONS[mode] || '';
+    els.remoteModeDescription.textContent = rc.failed
+      ? companionFailureMessage(rc)
+      : rc.ready && mode === 'wifi'
+        ? `Desktop endpoint ready at ${rc.lanIp}:${rc.port}. Phone reachability is confirmed only after an authenticated phone connects.`
+        : REMOTE_MODE_DESCRIPTIONS[mode] || '';
   }
   if (els.companionStatusPill) {
-    const statusClass = rc.failed ? 'status-failed' : rc.connected ? 'status-connected' : `status-${mode}`;
+    const statusClass = rc.failed ? 'status-failed' : rc.connected ? 'status-connected' : rc.ready ? `status-${mode}` : 'status-starting';
     els.companionStatusPill.className = `status-pill ${statusClass}`;
     els.companionStatusPill.textContent = rc.statusLabel || (mode === 'off' ? 'Off' : (mode === 'local' ? 'This PC only' : 'Same Wi-Fi'));
   }
   if (els.remoteControlConfig) els.remoteControlConfig.style.display = mode === 'off' ? 'none' : '';
-  if (els.remoteUrl) els.remoteUrl.textContent = rc.url || '';
-  if (els.remoteShortCode) els.remoteShortCode.textContent = rc.shortCode || '';
+  if (els.remotePort && document.activeElement !== els.remotePort) els.remotePort.value = String(rc.port || 58732);
+  if (els.remoteUrl) els.remoteUrl.textContent = rc.ready ? (rc.url || '') : '';
+  if (els.remoteShortCode) els.remoteShortCode.textContent = rc.ready && mode === 'wifi' ? (rc.shortCode || '') : '';
+  if (els.companionPairingDetails) els.companionPairingDetails.style.display = rc.ready && mode === 'wifi' ? '' : 'none';
+  if (els.remoteStartupError) els.remoteStartupError.style.display = rc.failed ? '' : 'none';
+  if (els.remoteStartupErrorText) els.remoteStartupErrorText.textContent = companionFailureMessage(rc);
+  const firewallWarning = mode === 'wifi' && rc.ready && rc.firewall && !rc.firewall.configured;
+  if (els.remoteFirewallWarning) els.remoteFirewallWarning.style.display = firewallWarning ? '' : 'none';
+  if (els.remoteFirewallWarningText) els.remoteFirewallWarningText.textContent = firewallWarning ? (rc.firewall.guidance || rc.firewall.error || '') : '';
   if (els.companionConnectedBadge) {
     els.companionConnectedBadge.style.display = rc.connected ? '' : 'none';
     els.companionConnectedBadge.textContent = rc.connected ? `${rc.clients} phone${rc.clients === 1 ? '' : 's'} connected` : '';
@@ -77,16 +101,18 @@ function renderRemoteControl(rc) {
       els.remoteFailedAttemptsText.textContent = `${count} failed pairing attempt${count === 1 ? '' : 's'}${ipSuffix}`;
     }
   }
-  updateRemoteQr(mode === 'wifi' ? rc.url : '');
+  updateRemoteQr(rc.ready && mode === 'wifi' ? rc.url : '');
 }
 
 // Generate (or clear) the pairing QR for the current companion URL so the phone
 // can pair by camera. Hidden whenever there is no URL or QR support.
 async function updateRemoteQr(url) {
+  const generation = ++remoteQrGeneration;
   if (!els.remoteQrWrap || !els.remoteQr) return;
   if (!url || !api.generateQr) { els.remoteQrWrap.style.display = 'none'; return; }
   try {
     const dataUrl = await api.generateQr(url);
+    if (generation !== remoteQrGeneration || els.remoteUrl?.textContent !== url) return;
     if (dataUrl) {
       els.remoteQr.src = dataUrl;
       els.remoteQrWrap.style.display = '';
@@ -157,13 +183,36 @@ function setupRemoteControlHandlers() {
   });
   els.btnCopyUrl?.addEventListener('click', () => {
     const url = els.remoteUrl?.textContent;
-    if (url) { navigator.clipboard.writeText(url); notify('URL copied to clipboard', 'success'); }
+    if (url) {
+      navigator.clipboard.writeText(url)
+        .then(() => notify('URL copied to clipboard', 'success'))
+        .catch(() => notify('Could not copy the companion URL', 'error'));
+    }
   });
   els.btnRegenToken?.addEventListener('click', async () => {
     try {
-      renderRemoteControl(await api.regenerateRemoteToken?.());
-      notify('New pairing code generated', 'success');
+      const rc = await api.regenerateRemoteToken?.();
+      renderRemoteControl(rc);
+      notify(rc?.ready ? 'New pairing code generated and verified' : 'Pairing code changed; companion is still unavailable', rc?.ready ? 'success' : 'warning');
     } catch { notify('Failed to regenerate code', 'error'); }
+  });
+  els.btnRetryCompanion?.addEventListener('click', async () => {
+    try {
+      const rc = await api.retryRemoteControl?.();
+      renderRemoteControl(rc);
+      notify(rc?.ready ? 'Companion connection verified' : 'Companion is still unavailable', rc?.ready ? 'success' : 'error');
+    } catch (error) {
+      notify(`Companion retry failed: ${error.message || error}`, 'error');
+    }
+  });
+  els.btnSaveCompanionPort?.addEventListener('click', async () => {
+    try {
+      const rc = await api.setRemoteControlPort?.(Number(els.remotePort?.value));
+      renderRemoteControl(rc);
+      notify(rc?.ready ? `Companion verified on port ${rc.port}` : `Port ${rc?.port || els.remotePort?.value} is not ready`, rc?.ready ? 'success' : 'error');
+    } catch (error) {
+      notify(error.message || 'Invalid companion port', 'error');
+    }
   });
   api.onRemoteControlStatus?.(renderRemoteControl);
   loadRemoteControlState();

@@ -34,7 +34,7 @@ function assertMatch(src, pattern, msg) {
 }
 
 // 1. Syntax-check every first-party JS file.
-const jsFiles = ['main.js', 'preload.js', 'renderer-utils.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'renderer.js', 'settings.js', 'smartLights.js', 'profiles.js', 'profileIdentity.js', 'profileRitualContext.js', 'startDecision.js', 'windowGeometry.js', 'calendar.js', 'lastLight.js'];
+const jsFiles = ['main.js', 'preload.js', 'renderer-utils.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'renderer.js', 'settings.js', 'smartLights.js', 'profiles.js', 'profileIdentity.js', 'profileRitualContext.js', 'startDecision.js', 'windowGeometry.js', 'calendar.js', 'lastLight.js', 'companionNetwork.js', 'companionFirewall.js', 'capabilityTruth.js'];
 for (const file of jsFiles) {
   check(`syntax: ${file}`, () => {
     execFileSync(process.execPath, ['--check', path.join(root, file)], { stdio: 'pipe' });
@@ -104,7 +104,9 @@ check('settings: active-timer round-trip', () => {
 // 4. smartLights config round-trip.
 check('smartLights: loadConfig/getConfig round-trip', () => {
   const smartLights = require(path.join(root, 'smartLights.js'));
-  smartLights.loadConfig({ enabled: true, provider: 'hue', dimMinutes: 7 });
+  const requested = { enabled: true, provider: 'hue', hueBridgeIp: '192.168.0.2', hueUsername: 'verified-user', dimMinutes: 7 };
+  requested.verifiedConfigKey = smartLights.configurationKey(requested);
+  smartLights.loadConfig(requested);
   const cfg = smartLights.getConfig();
   assert(cfg.enabled === true && cfg.provider === 'hue' && cfg.dimMinutes === 7, 'config not applied');
 });
@@ -484,9 +486,9 @@ check('bedtime-reminder: runtime honors disabled state and avoids duplicate rend
 });
 
 check('settings: save-app-settings persists the auxiliary protection sections', () => {
-  assertMatch(mainSrc, /if \(settings\.wifiGuard\) settingsStore\.updateSection\('wifiGuard', settings\.wifiGuard\);/, 'wifiGuard save missing');
-  assertMatch(mainSrc, /if \(settings\.contentBlocker\) settingsStore\.updateSection\('contentBlocker', settings\.contentBlocker\);/, 'contentBlocker save missing');
-  assertMatch(mainSrc, /if \(settings\.accountability\) settingsStore\.updateSection\('accountability', settings\.accountability\);/, 'accountability save missing');
+  assertMatch(mainSrc, /if \(settings\.wifiGuard\) settingsStore\.updateSection\('wifiGuard', capabilityTruth\.sanitizeWifiGuard\(settings\.wifiGuard\)\);/, 'wifiGuard truth-gated save missing');
+  assertMatch(mainSrc, /if \(settings\.contentBlocker\) settingsStore\.updateSection\('contentBlocker', capabilityTruth\.sanitizeContentBlocker\(settings\.contentBlocker\)\);/, 'contentBlocker truth-gated save missing');
+  assertMatch(mainSrc, /if \(settings\.accountability\) settingsStore\.updateSection\('accountability', capabilityTruth\.sanitizeAccountability\(settings\.accountability\)\);/, 'accountability truth-gated save missing');
 });
 
 check('backup: export/import all-data uses the live profile API and restores streaks', () => {
@@ -504,7 +506,10 @@ check('mini-mode: toggling keeps the auto-fit guard in sync', () => {
 check('widget: updates on lifecycle changes, not just timer ticks', () => {
   assertMatch(mainSrc, /function emitTimerUpdate\(type, data = \{\}\) \{[\s\S]*updateWidget\(\);[\s\S]*updateTrayText\(\);/s, 'widget not refreshed during state broadcasts');
   assertMatch(mainSrc, /if \(widgetWindow && !widgetWindow\.isDestroyed\(\)\) \{[\s\S]*widgetWindow\.show\(\);[\s\S]*updateWidget\(\);/s, 'widget reopen refresh missing');
-  assertMatch(mainSrc, /widgetWindow\.webContents\.once\('did-finish-load', \(\) => \{[\s\S]*updateWidget\(\);[\s\S]*\}\);/s, 'widget initial refresh missing');
+  assertMatch(mainSrc, /await widgetWindow\.loadFile\('widget\.html'\);[\s\S]*updateWidget\(\);[\s\S]*widgetWindow\.show\(\);/s, 'widget must confirm load before showing and reporting success');
+  assertMatch(mainSrc, /persistWidgetVisibility\(true\)/, 'confirmed widget visibility must be persisted');
+  assertMatch(mainSrc, /getSection\('app'\)\?\.widgetVisible[\s\S]*await createWidgetWindow\(\)/s, 'persisted widget visibility must restore on startup');
+  assertMatch(mainSrc, /if \(!app\.isQuitting\) persistWidgetVisibility\(false\)/, 'explicit widget close must persist hidden without overwriting state during app quit');
 });
 
 // 7. Core UI controls exist (start/pause/resume/snooze/cancel/mini + customize).
@@ -640,9 +645,10 @@ check('renderer: STATS panel shows only real companion/session data, honest empt
 });
 
 check('renderer: footer and ledger controls provide real feedback', () => {
-  assertMatch(rendererSrc, /els\.btnWidget\?\.addEventListener\('click', \(\) => \{[\s\S]*api\.toggleWidget\?\.\(\);[\s\S]*notify\('Desktop widget toggled', 'info'\);/s, 'widget button feedback missing');
-  assertMatch(rendererSrc, /els\.btnCompanion\?\.addEventListener\('click', async \(\) => \{[\s\S]*notify\(`Companion at \$\{rc\.url\}`, 'info'\);[\s\S]*openSettingsPanel\(\);[\s\S]*notify\('Enable Remote Control in settings before opening the Companion PWA', 'info'\);[\s\S]*notify\('Companion setup is unavailable right now', 'warning'\);/s, 'companion button behavior missing');
-  assertMatch(rendererSrc, /const btnNotif = document\.getElementById\('btn-notif'\);[\s\S]*notifDrawer\.style\.display = notifDrawer\.style\.display === 'none' \? '' : 'none';/s, 'notifications button handler missing');
+  assertMatch(rendererSrc, /els\.btnWidget\?\.addEventListener\('click', async \(\) => \{[\s\S]*const result = await api\.toggleWidget\?\.\(\);[\s\S]*Desktop widget shown[\s\S]*Desktop widget hidden/s, 'widget feedback must follow an acknowledged main-process state');
+  assert(!rendererSrc.includes('Desktop widget toggled'), 'fire-and-forget widget success copy must not return');
+  assertMatch(rendererSrc, /els\.btnCompanion\?\.addEventListener\('click', async \(\) => \{[\s\S]*if \(rc\?\.ready && rc\.url\)[\s\S]*Companion pairing page opened[\s\S]*openSettingsPanel\(\)/s, 'companion button must require verified readiness and avoid exposing the tokenized URL in feedback');
+  assertMatch(rendererSrc, /const btnNotif = document\.getElementById\('btn-notif'\);[\s\S]*notifDrawer\.classList\.toggle\('active', opening\)/s, 'notifications button must activate the modal, not only clear an inline display value');
   assertMatch(rendererSrc, /if \(els\.btnWarningLedger\) \{[\s\S]*openReceiptsLedger\(\)/s, 'warning ledger button wiring missing');
   assertMatch(rendererSrc, /if \(els\.btnProofDetails\) \{[\s\S]*openReceiptsLedger\(\)/s, 'proof ledger button wiring missing');
 });
@@ -684,10 +690,10 @@ check('companion: mode buttons have explanatory tooltips, and a live description
   // it actually means the opposite (loopback-only). Tooltips + a dynamic
   // description line are the fix; regression-guard both.
   assertMatch(htmlSrc, /id="btn-mode-local"[^>]*title="[^"]*not reachable from your phone/, 'This PC only button needs a tooltip clarifying it is loopback-only, not phone-reachable');
-  assertMatch(htmlSrc, /id="btn-mode-wifi"[^>]*title="[^"]*reachable from other devices/, 'Connect Phone button needs a tooltip clarifying LAN exposure');
+  assertMatch(htmlSrc, /id="btn-mode-wifi"[^>]*title="[^"]*Attempts to start/, 'Connect Phone tooltip must describe an attempted, verified start rather than claim reachability');
   assert(htmlSrc.includes('id="remote-mode-description"'), 'remote-mode-description element missing from HTML');
   assertMatch(rendererSrc, /REMOTE_MODE_DESCRIPTIONS = \{[\s\S]*?off:[\s\S]*?local:[\s\S]*?wifi:/, 'REMOTE_MODE_DESCRIPTIONS map missing an off/local/wifi entry');
-  assertMatch(rendererSrc, /els\.remoteModeDescription\.textContent = REMOTE_MODE_DESCRIPTIONS\[mode\]/, 'renderRemoteControl must update the mode description text');
+  assertMatch(rendererSrc, /els\.remoteModeDescription\.textContent = rc\.failed[\s\S]*companionFailureMessage\(rc\)[\s\S]*rc\.ready/, 'renderRemoteControl must derive its description from failed/ready truth');
 });
 
 check('content-blocker: recurring schedules -- settings default, IPC wiring, HTML, and renderer wiring', () => {
@@ -746,7 +752,7 @@ check('companion: settings panel loads remote control state on open', () => {
 });
 
 check('companion: QR only shown for same-wifi mode', () => {
-  assertMatch(rendererSrc, /updateRemoteQr\(mode === 'wifi' \? rc\.url : ''\)/, 'QR should only render for wifi mode');
+  assertMatch(rendererSrc, /updateRemoteQr\(rc\.ready && mode === 'wifi' \? rc\.url : ''\)/, 'QR should require verified readiness and wifi mode');
 });
 
 check('companion: copy, regenerate, and off buttons wired', () => {
@@ -762,13 +768,13 @@ check('companion: status pill is visible near the heading and listens to pushed 
   assertMatch(rendererSrc, /els\.companionStatusPill\.textContent = rc\.statusLabel \|\| \(mode === 'off' \? 'Off' : \(mode === 'local' \? 'This PC only' : 'Same Wi-Fi'\)\)/, 'status pill text must use Off / This PC only / Same Wi-Fi labels');
 });
 
-check('companion: status pill class updates by mode and connection state', () => {
-  assertMatch(rendererSrc, /const statusClass = rc\.failed \? 'status-failed' : rc\.connected \? 'status-connected' : `status-\${mode}`/, 'status pill class must reflect failed/connected/mode');
+check('companion: status pill class updates by readiness and connection state', () => {
+  assertMatch(rendererSrc, /const statusClass = rc\.failed \? 'status-failed' : rc\.connected \? 'status-connected' : rc\.ready \? `status-\${mode}` : 'status-starting'/, 'status pill class must distinguish failed, connected, ready, and starting');
 });
 
 check('companion: Off hides QR and manual LAN URL', () => {
   assertMatch(rendererSrc, /if \(els\.remoteControlConfig\) els\.remoteControlConfig\.style\.display = mode === 'off' \? 'none' : '';/, 'Off mode should hide the remote control config');
-  assertMatch(rendererSrc, /updateRemoteQr\(mode === 'wifi' \? rc\.url : ''\)/, 'QR should only render for wifi mode');
+  assertMatch(rendererSrc, /updateRemoteQr\(rc\.ready && mode === 'wifi' \? rc\.url : ''\)/, 'QR should require readiness and wifi mode');
 });
 
 check('companion: phone page has explicit connection states', () => {
@@ -871,9 +877,47 @@ check('companion: default settings are off with no token', () => {
 });
 
 check('companion: main mode contract maps to correct host binding', () => {
-  assertMatch(mainSrc, /if \(mode === 'wifi'\) \{[\s\S]*companion\.start\(\{ token: rc\.token, host: '0\.0\.0\.0' \}\)/s, 'wifi mode should bind 0.0.0.0');
-  assertMatch(mainSrc, /\} else if \(mode === 'local'\) \{[\s\S]*companion\.start\(\{ token: rc\.token, host: '127\.0\.0\.1' \}\)/s, 'local mode should bind 127.0.0.1');
-  assertMatch(mainSrc, /if \(mode === 'off' \|\| !rc\.token\) return false;/, 'off mode should not start listener');
+  assertMatch(mainSrc, /if \(mode === 'wifi'\) \{[\s\S]*await companion\.start\(\{ token: rc\.token, host: '0\.0\.0\.0', port, probeHost: lanIp \}\)/s, 'wifi mode should bind 0.0.0.0 and probe the selected LAN address');
+  assertMatch(mainSrc, /\} else if \(mode === 'local'\) \{[\s\S]*await companion\.start\(\{ token: rc\.token, host: '127\.0\.0\.1', port \}\)/s, 'local mode should bind 127.0.0.1');
+  assertMatch(mainSrc, /if \(mode === 'off' \|\| !rc\.token\) return getRemoteControlState\(\);/, 'off mode should not start listener');
+});
+
+check('production truth: companion publishes pairing data only after readiness', () => {
+  assertMatch(mainSrc, /if \(ready && mode === 'wifi' && rc\.token\)/, 'wifi URL must be gated by verified readiness');
+  assertMatch(mainSrc, /if \(!state\.ready \|\| typeof text !== 'string' \|\| !text \|\| text !== state\.url\) return '';/, 'QR generation must reject stale or unverified URLs');
+  assertMatch(mainSrc, /const ready = Boolean\(status\.ready && status\.running && !status\.failed && !companionNetworkFailure\);/, 'renderer state needs an explicit readiness field');
+  assertMatch(mainSrc, /ipcMain\.handle\('set-remote-control-port'/, 'configurable-port recovery IPC missing');
+  assertMatch(mainSrc, /ipcMain\.handle\('retry-remote-control'/, 'companion retry IPC missing');
+  assertMatch(mainSrc, /Get-NetTCPConnection -LocalPort \$\{safePort\}[\s\S]*Get-Process -Id \$connection\.OwningProcess/, 'occupied-port diagnostics must identify the listener owner when Windows allows it');
+  assert(htmlSrc.includes('id="remote-startup-error"'), 'bind/readiness failure region missing');
+  assert(htmlSrc.includes('id="remote-port"'), 'configurable companion port input missing');
+  assertMatch(mainSrc, /await companionNetwork\.getRoutedLanIp\(\)/, 'same-wifi host selection must use the current routed source address');
+  assertMatch(mainSrc, /startCompanionNetworkMonitor\(\)/, 'network changes must trigger stale-pairing recovery');
+  assertMatch(rendererSrc, /generation !== remoteQrGeneration \|\| els\.remoteUrl\?\.textContent !== url/, 'stale async QR results must be discarded');
+  assertMatch(mainSrc, /shortCode: ready && rc\.token/, 'short code must remain hidden before readiness');
+  assert(!/\n\s*token: rc\.token \|\| ''/.test(mainSrc), 'raw token must not be returned as a separate renderer field');
+});
+
+check('production truth: UI feedback follows observable state', () => {
+  assertMatch(preloadSrc, /toggleWidget: \(\) => ipcRenderer\.invoke\('toggle-widget'\)/, 'widget must use acknowledged IPC');
+  assertMatch(rendererSrc, /duplicate = \[\.\.\.container\.querySelectorAll\('\.toast'\)\][\s\S]*duplicate\._dismissTimer/, 'duplicate toasts must be coalesced');
+  assertMatch(rendererSrc, /document\.getElementById\('menu-settings'\)\?\.addEventListener\('click'/, 'top Settings label needs a direct canonical action');
+  assertMatch(rendererSrc, /notifDrawer\.classList\.toggle\('active', opening\)/, 'notification drawer must use the modal active state');
+  assertMatch(mainSrc, /backgroundColor: '#0d0e11'/, 'main window needs a dark native background to prevent startup flash');
+});
+
+check('production truth: legacy labels and unsupported claims are removed', () => {
+  const companionHtml = fs.readFileSync(path.join(root, 'companion.html'), 'utf8');
+  const focusRenderer = fs.readFileSync(path.join(root, 'renderer-ritual-focus.js'), 'utf8');
+  for (const legacy of ['WITCHCRAFT', 'MONEY', 'HARD STOP', 'BEASTMODE']) {
+    assert(!htmlSrc.includes(legacy), `legacy quick-start label still exposed: ${legacy}`);
+  }
+  assertMatch(htmlSrc, /Estimated Bedtime Deficit/, 'estimated bedtime metric must not claim measured sleep debt');
+  assertMatch(htmlSrc, /Routine Consistency Score/, 'app-use score must not claim to be a sleep score');
+  assert(!/Sleep Score|Sleep Rich|Critical Debt|Deep Debt/.test(`${companionHtml}\n${focusRenderer}`), 'companion/focus surfaces must not infer sleep quality from timer receipts');
+  assert(!/100 - \(report\.snoozeRate \|\| 0\).*on-time/.test(rendererSrc), 'no-snooze percentage must not be relabeled as on-time');
+  assertMatch(htmlSrc, /Windows Firewall[^<]*unavailable for other devices/, 'unsupported LAN-device firewall provider must be visibly unavailable');
+  assertMatch(fs.readFileSync(path.join(root, 'wifiGuard.js'), 'utf8'), /Windows Firewall on this PC cannot enforce access for another LAN device/, 'unsupported firewall executor must fail honestly');
 });
 
 check('companion: dead setRemoteControlEnabled IPC surface removed', () => {
@@ -892,31 +936,40 @@ check('ipc: execute-action power-action channel removed (unvalidated, unused ren
 check('companion: same-wifi URL includes token and host for Android APK', () => {
   // The URL must carry the token and a host parameter so packaged Android
   // companions (which load the UI locally) know where to connect.
-  const wifiUrlMatch = mainSrc.match(/url = `http:\/\/\$\{lanIp\}:\$\{companion\.PWA_PORT\}\/\?t=\$\{rc\.token\}&host=\$\{encodeURIComponent\(`\$\{lanIp\}:\$\{companion\.PWA_PORT\}`\)\}`;/);
+  const wifiUrlMatch = mainSrc.match(/url = `http:\/\/\$\{lanIp\}:\$\{port\}\/\?t=\$\{rc\.token\}&host=\$\{encodeURIComponent\(`\$\{lanIp\}:\$\{port\}`\)\}`;/);
   assert(wifiUrlMatch, 'wifi URL construction not found or malformed');
   const wifiUrl = wifiUrlMatch[0];
   assert(wifiUrl.includes('t=${rc.token}'), 'wifi URL missing token');
   assert(wifiUrl.includes('host='), 'wifi URL missing host parameter');
   assert(wifiUrl.includes('encodeURIComponent'), 'wifi URL must encode the host parameter');
-  assert(wifiUrl.includes('${lanIp}:${companion.PWA_PORT}'), 'wifi URL host must include the selected LAN IP and port');
+  assert(wifiUrl.includes('${lanIp}:${port}'), 'wifi URL host must include the selected LAN IP and configured port');
 });
 
 check('companion: QR URL has no host in off or local mode', () => {
   // Off and local modes intentionally omit the LAN host parameter.
-  const localUrlMatch = mainSrc.match(/url = `http:\/\/127\.0\.0\.1:\$\{companion\.PWA_PORT\}\/\?t=\$\{rc\.token\}`;/);
+  const localUrlMatch = mainSrc.match(/url = `http:\/\/127\.0\.0\.1:\$\{port\}\/\?t=\$\{rc\.token\}`;/);
   assert(localUrlMatch, 'local URL construction not found');
   assert(!localUrlMatch[0].includes('host='), 'local URL should not include a host parameter');
 });
 
-check('companion: same-wifi status shows Waiting for phone before client connects', () => {
-  // getCompanionStatusLabel must return 'Waiting for phone' when wifi mode is
-  // enabled but no client has connected yet.
+check('companion: same-wifi status distinguishes desktop readiness from phone reachability', () => {
   assertMatch(mainSrc, /if \(mode === 'off'\) return 'Off';/, 'Off label missing');
-  assertMatch(mainSrc, /if \(mode === 'local'\) return 'This PC only';/, 'local label missing');
-  assertMatch(mainSrc, /if \(failed\) return 'Connection failed';/, 'failed label missing');
-  assertMatch(mainSrc, /if \(connected\) return 'Phone connected';/, 'connected label missing');
-  assertMatch(mainSrc, /if \(clients > 0\) return 'Phone connected';/, 'clients label missing');
-  assertMatch(mainSrc, /return 'Waiting for phone';/, 'Waiting for phone fallback missing');
+  assertMatch(mainSrc, /if \(status\.failed \|\| companionNetworkFailure\) return 'Connection failed';/, 'failed label missing');
+  assertMatch(mainSrc, /if \(!status\.ready \|\| !status\.running\) return 'Starting companion';/, 'starting label must cover unverified listeners');
+  assertMatch(mainSrc, /if \(status\.connected \|\| status\.clients > 0\) return 'Phone connected';/, 'connected label missing');
+  assertMatch(mainSrc, /if \(mode === 'local'\) return 'Ready on this PC only';/, 'verified local label missing');
+  assertMatch(mainSrc, /return 'Desktop endpoint ready — waiting for phone';/, 'desktop-only readiness wording missing');
+  assertMatch(rendererSrc, /Phone reachability is confirmed only after an authenticated phone connects/, 'renderer must not claim phone reachability from a desktop self-probe');
+});
+
+check('companion: firewall changes are narrowly owned and failure is honest', () => {
+  const firewallSrc = fs.readFileSync(path.join(root, 'companionFirewall.js'), 'utf8');
+  assertMatch(firewallSrc, /RULE_GROUP = 'Lights Out Companion'/, 'app-owned firewall group missing');
+  assertMatch(firewallSrc, /-Profile Private/, 'firewall rules must be private-only');
+  assertMatch(firewallSrc, /-Program \$\{program\}/, 'firewall rules must be scoped to the exact executable');
+  assert(!/Public|Profile Any|-Program Any/i.test(firewallSrc), 'firewall helper contains a public or unscoped rule');
+  assertMatch(mainSrc, /Lights Out did not request elevation/, 'denied firewall setup needs honest non-elevation guidance');
+  assert(htmlSrc.includes('id="remote-firewall-warning"'), 'firewall verification warning missing');
 });
 
 check('companion: failed pairing attempts are surfaced to the desktop UI, calmly', () => {
@@ -1348,7 +1401,7 @@ check('ux: Escape closes all modals (profiles, receipts, about, notif-drawer)', 
   assertMatch(rendererSrc, /els\.profilesModal\?\.classList\.contains\('active'\)/, 'Escape does not check profilesModal');
   assertMatch(rendererSrc, /els\.receiptsModal\?\.classList\.contains\('active'\)/, 'Escape does not check receiptsModal');
   assertMatch(rendererSrc, /els\.aboutModal\?\.classList\.contains\('active'\)/, 'Escape does not check aboutModal');
-  assertMatch(rendererSrc, /getElementById\('notif-drawer'\)\?\.style\.display !== 'none'/, 'Escape does not check notif-drawer');
+  assertMatch(rendererSrc, /getElementById\('notif-drawer'\)\?\.classList\.contains\('active'\)/, 'Escape does not check the active notification drawer');
 });
 
 check('ux: sidebar sets aria-current on active item', () => {

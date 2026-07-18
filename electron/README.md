@@ -94,6 +94,12 @@ Run PowerShell as Administrator and try again, or check your internet connection
 ### Window won't show
 Check the console for errors. Press `Ctrl+Shift+I` in the window to open DevTools.
 
+### Companion and Windows Firewall
+
+Same Wi-Fi mode attempts to create two inbound rules in the **Lights Out Companion** rule group. They are restricted to the current executable, the Private profile, TCP on the configured companion port, and UDP discovery on port 58733. Lights Out never requests elevation; if Windows denies the change, the app reports that firewall access is unverified and tells the user which executable must be allowed.
+
+Changing the companion port replaces only rules in that app-owned group. Turning the companion off removes only that group. An uninstall cannot reliably run application cleanup, so rules may remain after uninstall; remove the **Lights Out Companion** group manually in Windows Defender Firewall if the app is no longer installed. Portable builds may extract to a different executable path after an update and therefore may require a newly approved private-network rule.
+
 ## Development
 
 Edit these files to customize:

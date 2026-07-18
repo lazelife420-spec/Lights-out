@@ -4,6 +4,9 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 
 // contentBlocker requires no Electron APIs at module load, so it imports cleanly
 // under plain node for testing.
@@ -66,6 +69,25 @@ test('buildWriteHostsCommand never embeds a raw single-quote from content (base6
   assert.ok(match, 'command should embed a base64 payload');
   assert.doesNotMatch(match[1], /['`\n]/, 'base64 payload must contain no quotes, backticks, or newlines');
   assert.equal(Buffer.from(match[1], 'base64').toString('utf8'), content);
+});
+
+test('permission denial reports failure and leaves an isolated prior hosts file intact', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-hosts-denied-'));
+  const target = path.join(dir, 'hosts');
+  const original = '127.0.0.1 localhost\n# existing content\n';
+  fs.writeFileSync(target, original, 'utf8');
+  try {
+    const denied = Object.assign(new Error('access denied'), { code: 'EACCES' });
+    const success = await cb.__writeHosts('replacement content', {
+      hostsPath: target,
+      runCommand: async () => { throw denied; },
+      fileSystem: { writeFileSync: () => { throw denied; } }
+    });
+    assert.equal(success, false);
+    assert.equal(fs.readFileSync(target, 'utf8'), original);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 // isScheduleActive/isAnyScheduleActive: recurring blocking windows,

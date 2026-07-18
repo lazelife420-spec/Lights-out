@@ -1197,13 +1197,22 @@ input:disabled {
   color: var(--text-secondary);
 }
 
-.schedule-controls input[type="time"] {
+.schedule-controls input[type="time"],
+.schedule-controls input[type="date"],
+.schedule-controls input[type="datetime-local"] {
   padding: 8px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 4px;
   color: var(--text-primary);
   font-family: var(--font-mono);
+  color-scheme: dark;
+}
+
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"] {
+  color-scheme: dark;
 }
 
 /* Clock/Countdown Buttons */
@@ -4797,6 +4806,7 @@ body.mini-mode .ns-proof-section { display: none !important; }
   letter-spacing: 0.5px;
 }
 .status-off { background: rgba(107, 118, 133, 0.15); color: var(--text-muted); }
+.status-starting { background: rgba(118, 201, 255, 0.12); color: #8bd5ff; }
 .status-local { background: rgba(74, 158, 255, 0.15); color: var(--accent-blue); }
 .status-wifi { background: rgba(212, 165, 10, 0.15); color: var(--accent-amber); }
 .status-connected { background: rgba(76, 175, 80, 0.15); color: var(--accent-green); }
