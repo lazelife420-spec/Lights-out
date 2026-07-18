@@ -13,9 +13,12 @@ const PWA_PORT = 58732;
 const MAX_CLIENTS = 8;              // companion is a personal LAN tool; cap connections
 const MAX_MESSAGE = 64 * 1024;      // reject any single frame larger than this
 const MAX_BUFFER = 256 * 1024;      // reject a client that buffers without completing a frame
+const HEARTBEAT_MS = 5000;           // remove network-disconnected phones from truthful client state
 let server = null;
 let clients = new Set();
+let heartbeatTimer = null;
 const emitter = new EventEmitter();
+let startGeneration = 0;
 
 // Pairing token required from every client. Empty = no listener may bind.
 let expectedToken = '';
@@ -28,7 +31,10 @@ let status = {
   host: '127.0.0.1',
   clients: 0,
   connected: false,
+  ready: false,
   failed: false,
+  errorCode: '',
+  errorMessage: '',
   failedAttempts: 0,
   lastFailedIp: ''
 };
@@ -71,7 +77,6 @@ function pairCheckStatus(provided, expected) {
 function computeStatus(patch = {}) {
   return {
     ...status,
-    running: !!server,
     clients: clients.size,
     connected: clients.size > 0,
     ...patch
@@ -131,6 +136,18 @@ function upgradeHandler(req, socket, head) {
 
   const accept = computeAccept(key);
 
+  // Startup readiness probes exercise the real HTTP upgrade path without
+  // briefly appearing as a connected phone in the desktop UI.
+  if (req.headers['x-lights-out-health-probe'] === '1') {
+    socket.end(
+      'HTTP/1.1 101 Switching Protocols\r\n' +
+      'Upgrade: websocket\r\n' +
+      'Connection: Upgrade\r\n' +
+      `Sec-WebSocket-Accept: ${accept}\r\n\r\n`
+    );
+    return;
+  }
+
   // Cap concurrent clients so a misbehaving LAN device can't exhaust sockets.
   if (clients.size >= MAX_CLIENTS) {
     writeHttpResponse(socket, '503 Service Unavailable', {}, 'Service Unavailable');
@@ -144,11 +161,12 @@ function upgradeHandler(req, socket, head) {
     `Sec-WebSocket-Accept: ${accept}\r\n\r\n`
   );
 
-  const client = { socket, alive: true, buf: Buffer.alloc(0) };
+  const client = { socket, alive: true, awaitingPong: false, buf: Buffer.alloc(0) };
   clients.add(client);
 
   socket.on('data', (chunk) => {
     if (!client.alive) return;
+    client.awaitingPong = false;
     client.buf = client.buf.length ? Buffer.concat([client.buf, chunk]) : chunk;
     if (client.buf.length > MAX_BUFFER) { closeClient(client, 1009); return; }
     consumeFrames(client);
@@ -230,6 +248,28 @@ function closeClient(client, code) {
   client.alive = false;
   clients.delete(client);
   try { client.socket.end(); } catch {}
+  updateStatus();
+}
+
+function startHeartbeat() {
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  heartbeatTimer = setInterval(() => {
+    for (const client of clients) {
+      if (!client.alive || client.awaitingPong) {
+        closeClient(client, 1001);
+        continue;
+      }
+      client.awaitingPong = true;
+      try { client.socket.write(encodeFrame(0x9, Buffer.alloc(0))); }
+      catch { closeClient(client, 1001); }
+    }
+  }, HEARTBEAT_MS);
+  heartbeatTimer.unref?.();
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  heartbeatTimer = null;
 }
 
 // Build a server→client frame (unmasked, single, FIN set).
@@ -266,13 +306,36 @@ function broadcast(data) {
   }
 }
 
+async function revokeClients() {
+  const targets = [...clients].filter(client => client.alive);
+  const notice = encodeWS(JSON.stringify({ type: 'pairing-revoked' }));
+  await Promise.all(targets.map(client => new Promise(resolve => {
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      closeClient(client, 1008);
+      resolve();
+    };
+    try {
+      client.socket.write(notice, done);
+      setTimeout(done, 250).unref?.();
+    } catch {
+      done();
+    }
+  })));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // HTTP server for the PWA page
 // ─────────────────────────────────────────────────────────────────────────────
 
 function requestHandler(req, res) {
   const pathOnly = String(req.url || '').split('?')[0];
-  if (pathOnly === '/pair-check') {
+  if (pathOnly === '/health') {
+    res.writeHead(204, { 'Cache-Control': 'no-store' });
+    res.end();
+  } else if (pathOnly === '/pair-check') {
     // Browsers intentionally hide the HTTP status of a failed WebSocket
     // upgrade and surface it only as close code 1006. This same-origin
     // preflight lets the phone distinguish an expired pairing code from an
@@ -355,54 +418,174 @@ function requestHandler(req, res) {
 // Public API
 // ─────────────────────────────────────────────────────────────────────────────
 
+function readinessError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function probeHttpStatus(host, port, pathName, expectedStatus, errorCode, label) {
+  return new Promise((resolve, reject) => {
+    const req = http.get({ host, port, path: pathName, timeout: 3000, agent: false }, res => {
+      res.resume();
+      res.on('end', () => {
+        if (res.statusCode === expectedStatus) resolve();
+        else reject(readinessError(errorCode, `${label} for ${host} returned HTTP ${res.statusCode}`));
+      });
+    });
+    req.on('timeout', () => req.destroy(readinessError(errorCode, `${label} for ${host} timed out`)));
+    req.on('error', err => reject(readinessError(errorCode, `${label} for ${host} failed: ${err.message}`)));
+  });
+}
+
+function probeWebSocket(host, port, token) {
+  return new Promise((resolve, reject) => {
+    const key = Buffer.from(require('crypto').randomBytes(16)).toString('base64');
+    const req = http.request({
+      host,
+      port,
+      path: `/?t=${encodeURIComponent(token)}`,
+      timeout: 3000,
+      agent: false,
+      headers: {
+        Connection: 'Upgrade',
+        Upgrade: 'websocket',
+        'Sec-WebSocket-Key': key,
+        'Sec-WebSocket-Version': '13',
+        'X-Lights-Out-Health-Probe': '1'
+      }
+    });
+    req.on('upgrade', (res, socket) => {
+      socket.destroy();
+      if (res.statusCode === 101) resolve();
+      else reject(readinessError('WEBSOCKET_UPGRADE_FAILED', `WebSocket probe for ${host} returned HTTP ${res.statusCode}`));
+    });
+    req.on('response', res => {
+      res.resume();
+      reject(readinessError('WEBSOCKET_UPGRADE_FAILED', `WebSocket probe for ${host} returned HTTP ${res.statusCode}`));
+    });
+    req.on('timeout', () => req.destroy(readinessError('WEBSOCKET_UPGRADE_FAILED', `WebSocket probe for ${host} timed out`)));
+    req.on('error', err => reject(readinessError('WEBSOCKET_UPGRADE_FAILED', `WebSocket probe for ${host} failed: ${err.message}`)));
+    req.end();
+  });
+}
+
+async function probeHostReadiness(host, port, token) {
+  await probeHttpStatus(host, port, '/health', 204, 'HTTP_HEALTH_FAILED', 'Health probe');
+  await probeHttpStatus(host, port, `/pair-check?t=${encodeURIComponent(token)}`, 204, 'PAIR_CHECK_FAILED', 'Pairing preflight');
+  await probeWebSocket(host, port, token);
+}
+
+function probeReadiness(port, token, probeHost) {
+  const hosts = ['127.0.0.1'];
+  if (probeHost && probeHost !== '127.0.0.1') hosts.push(probeHost);
+  return Promise.all(hosts.map(host => probeHostReadiness(host, port, token)));
+}
+
 function start(opts = {}) {
-  if (server) return;
+  if (server) return Promise.resolve(getStatus());
+  const generation = ++startGeneration;
   expectedToken = String(opts.token || '');
   bindHost = opts.host || '127.0.0.1';
   const port = opts.port || PWA_PORT;
+  const probeHost = opts.probeHost || '';
+  const readinessProbe = typeof opts.readinessProbe === 'function' ? opts.readinessProbe : probeReadiness;
   // Fresh start (including a regenerated token) clears the failed-attempt
   // count -- see recordFailedAttempt's comment for why this isn't a lockout.
   failedAttempts = 0;
   lastFailedIp = '';
   // Never expose a listener without a pairing token.
-  if (!expectedToken) return;
-  server = http.createServer(requestHandler);
-  server.on('upgrade', upgradeHandler);
+  if (!expectedToken) return Promise.resolve(getStatus());
+  const instance = http.createServer(requestHandler);
+  server = instance;
+  instance.on('upgrade', upgradeHandler);
+  updateStatus({
+    running: false,
+    ready: false,
+    failed: false,
+    host: bindHost,
+    port,
+    errorCode: '',
+    errorMessage: '',
+    failedAttempts,
+    lastFailedIp
+  });
 
   // Degrade gracefully if the port is already taken (most commonly another
   // Lights Out instance, or a leftover dev build). Without this handler the
   // server emits an unhandled 'error' that crashes the whole main process.
-  server.on('error', (err) => {
-    server = null;
-    updateStatus({ failed: true, running: false });
-    if (err && err.code === 'EADDRINUSE') {
-      console.warn(`Companion PWA port ${PWA_PORT} is already in use - companion features disabled for this instance.`);
-    } else {
-      console.warn(`Companion PWA server error: ${err && (err.message || err.code)}`);
-    }
-  });
+  return new Promise(resolve => {
+    instance.once('error', (err) => {
+      if (server === instance) server = null;
+      stopHeartbeat();
+      if (generation !== startGeneration) return resolve(getStatus());
+      const errorCode = String(err && err.code || 'SERVER_ERROR');
+      const errorMessage = String(err && (err.message || err.code) || 'Companion server failed to start');
+      updateStatus({ failed: true, running: false, ready: false, errorCode, errorMessage, host: bindHost, port });
+      if (err && err.code === 'EADDRINUSE') {
+        console.warn(`Companion PWA port ${port} is already in use - companion features disabled for this instance.`);
+      } else {
+        console.warn(`Companion PWA server error: ${errorMessage}`);
+      }
+      resolve(getStatus());
+    });
 
-  server.listen(port, bindHost, () => {
-    console.log(`Companion PWA running on ${bindHost}:${port}`);
-    updateStatus({ running: true, host: bindHost, port, failed: false, connected: clients.size > 0, failedAttempts, lastFailedIp });
+    instance.listen(port, bindHost, async () => {
+      if (generation !== startGeneration || server !== instance) return resolve(getStatus());
+      console.log(`Companion PWA bound on ${bindHost}:${port}; verifying HTTP and WebSocket readiness.`);
+      updateStatus({ running: true, ready: false, host: bindHost, port, failed: false, errorCode: '', errorMessage: '' });
+      startHeartbeat();
+      try {
+        await readinessProbe(port, expectedToken, probeHost);
+        if (generation !== startGeneration || server !== instance) return resolve(getStatus());
+        console.log(`Companion PWA ready on ${bindHost}:${port}`);
+        updateStatus({ running: true, ready: true, host: bindHost, port, failed: false, connected: clients.size > 0, failedAttempts, lastFailedIp });
+      } catch (err) {
+        if (server === instance) {
+          server = null;
+          stopHeartbeat();
+          await new Promise(resolveClose => {
+            try {
+              instance.close(resolveClose);
+              if (typeof instance.closeAllConnections === 'function') instance.closeAllConnections();
+            } catch {
+              resolveClose();
+            }
+          });
+        }
+        const errorMessage = `Readiness check failed: ${err.message}`;
+        updateStatus({ running: false, ready: false, failed: true, errorCode: err.code || 'READINESS_FAILED', errorMessage, host: bindHost, port });
+        console.warn(`Companion PWA ${errorMessage}`);
+      }
+      resolve(getStatus());
+    });
   });
 }
 
 function stop() {
-  if (server) {
-    // Close the server without waiting for the callback; we destroy all clients
-    // below so the port is released quickly. Waiting for the native callback can
-    // hang if a client socket is stuck in a half-closed state.
-    try { server.close(); } catch {}
-    server = null;
-  }
+  startGeneration++;
+  const instance = server;
+  server = null;
   expectedToken = '';
+  stopHeartbeat();
   for (const client of clients) {
     try { client.socket.destroy(); } catch {}
   }
   clients.clear();
-  updateStatus({ running: false, clients: 0, connected: false, failed: false });
-  return Promise.resolve();
+  updateStatus({ running: false, ready: false, clients: 0, connected: false, failed: false, errorCode: '', errorMessage: '' });
+  if (!instance) return Promise.resolve();
+
+  // A completed stop must mean the OS has released the listener. Token
+  // rotation and Retry both restart immediately; resolving before the close
+  // callback creates a race where the app can collide with its own old server.
+  return new Promise(resolve => {
+    try {
+      instance.close(resolve);
+      if (typeof instance.closeAllConnections === 'function') instance.closeAllConnections();
+    } catch {
+      resolve();
+    }
+  });
 }
 
 function getStatus() {
@@ -429,6 +612,7 @@ module.exports = {
   start,
   stop,
   broadcast,
+  revokeClients,
   getStatus,
   onMessage,
   offMessage,

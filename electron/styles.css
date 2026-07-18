@@ -4797,6 +4797,7 @@ body.mini-mode .ns-proof-section { display: none !important; }
   letter-spacing: 0.5px;
 }
 .status-off { background: rgba(107, 118, 133, 0.15); color: var(--text-muted); }
+.status-starting { background: rgba(118, 201, 255, 0.12); color: #8bd5ff; }
 .status-local { background: rgba(74, 158, 255, 0.15); color: var(--accent-blue); }
 .status-wifi { background: rgba(212, 165, 10, 0.15); color: var(--accent-amber); }
 .status-connected { background: rgba(76, 175, 80, 0.15); color: var(--accent-green); }

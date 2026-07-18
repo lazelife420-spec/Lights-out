@@ -346,10 +346,10 @@
           <div class="comp-stats-body">
             <div class="comp-score-col">
               <div class="comp-score" id="comp-score">--</div>
-              <div class="comp-score-label" id="comp-score-label">Sleep Score</div>
+              <div class="comp-score-label" id="comp-score-label">Routine Score</div>
             </div>
             <div class="comp-metrics">
-              <div class="comp-metric"><span class="comp-metric-label">Debt</span><span class="comp-metric-value comp-metric--warn" id="comp-debt">--</span></div>
+              <div class="comp-metric"><span class="comp-metric-label">Est. deficit</span><span class="comp-metric-value comp-metric--warn" id="comp-debt">--</span></div>
               <div class="comp-metric"><span class="comp-metric-label">Streak</span><span class="comp-metric-value comp-metric--good" id="comp-streak">--</span></div>
               <div class="comp-metric"><span class="comp-metric-label">Tax debt</span><span class="comp-metric-value comp-metric--danger" id="comp-tax-debt">--</span></div>
             </div>
@@ -759,6 +759,13 @@
 
     function handleUpdate(data, generation = socketGeneration) {
       if (generation !== socketGeneration) return;
+      if (data.type === 'pairing-revoked') {
+        try { localStorage.removeItem(TOKEN_KEY); } catch {}
+        pairToken = '';
+        setConnectionState('expired', 'Pairing expired');
+        showPairing('Pairing changed on the desktop. Scan the new QR or enter the current code.');
+        return;
+      }
       if (data.type === 'state') {
         if (connectionState !== 'connected' || !ws || ws.readyState !== WebSocket.OPEN) return;
         const running = Boolean(data.running);
@@ -848,7 +855,7 @@
           const el = document.getElementById('comp-score');
           const lbl = document.getElementById('comp-score-label');
           if (el) el.textContent = score.score;
-          if (lbl) lbl.textContent = score.label || 'Sleep Score';
+          if (lbl) lbl.textContent = score.label || 'Routine Score';
         }
         if (data.stats.sleepDebt) {
           const el = document.getElementById('comp-debt');

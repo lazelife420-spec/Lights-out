@@ -208,6 +208,8 @@ const DEFAULTS = {
   remoteControl: {
     enabled: false,
     mode: 'off',
+    port: 58732,
+    lanIp: '',
     token: ''
   },
   // Persisted running-timer snapshot for crash/quit recovery. null when idle.

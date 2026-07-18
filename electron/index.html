@@ -1106,11 +1106,30 @@
           <div class="mode-selector" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
             <button type="button" class="btn-mode" data-mode="off" id="btn-mode-off" title="No listener running. Nothing is exposed on your network.">Off</button>
             <button type="button" class="btn-mode" data-mode="local" id="btn-mode-local" title="Companion server runs, but only accepts connections from this PC -- not reachable from your phone or any other device. Useful for local testing, not for actual phone control.">This PC only</button>
-            <button type="button" class="btn-mode btn-mode-primary" data-mode="wifi" id="btn-mode-wifi" title="Companion server is reachable from other devices on your Wi-Fi network. Every command requires your pairing token.">Connect Phone</button>
+            <button type="button" class="btn-mode btn-mode-primary" data-mode="wifi" id="btn-mode-wifi" title="Attempts to start the companion on your private Wi-Fi. A QR appears only after local HTTP and WebSocket checks pass.">Connect Phone</button>
           </div>
           <p id="remote-mode-description" style="font-size:10px;color:var(--text-muted);margin:0 0 12px"></p>
 
           <div id="remote-control-config" style="display:none;margin-top:8px">
+            <div id="remote-startup-error" role="alert" style="display:none;margin:8px 0;padding:10px;border:1px solid rgba(255,77,77,.45);border-radius:8px;background:rgba(255,77,77,.08)">
+              <strong style="display:block;font-size:11px;color:#ff7b7b">Companion is not reachable</strong>
+              <span id="remote-startup-error-text" style="display:block;font-size:10px;color:var(--text-secondary);margin:4px 0 8px"></span>
+              <button type="button" id="btn-retry-companion" class="btn-secondary" style="font-size:10px;padding:5px 10px">Retry connection</button>
+            </div>
+            <div id="remote-firewall-warning" role="status" style="display:none;margin:8px 0;padding:10px;border:1px solid rgba(255,190,77,.45);border-radius:8px;background:rgba(255,190,77,.08)">
+              <strong style="display:block;font-size:11px;color:#ffc66d">Desktop endpoint ready; Windows firewall access is not verified</strong>
+              <span id="remote-firewall-warning-text" style="display:block;font-size:10px;color:var(--text-secondary);margin-top:4px"></span>
+            </div>
+
+            <div class="option-group" style="margin:8px 0">
+              <label for="remote-port">Companion port</label>
+              <div style="display:flex;gap:6px;align-items:center">
+                <input type="number" id="remote-port" min="1024" max="65535" step="1" value="58732" style="max-width:120px">
+                <button type="button" id="btn-save-companion-port" class="btn-secondary" style="font-size:10px;padding:5px 10px">Apply &amp; retry</button>
+              </div>
+              <small style="display:block;font-size:9px;color:var(--text-muted);margin-top:3px">Change this if another app owns the port. The QR updates only after the new listener passes its checks.</small>
+            </div>
+
             <div id="remote-qr-wrap" class="pairing-qr-wrap" style="display:none">
               <div class="pairing-qr-card">
                 <img id="remote-qr" alt="Pairing QR code" width="180" height="180">
@@ -1118,7 +1137,7 @@
               <p class="pairing-qr-hint">&#x1F4F1; Scan with your phone camera to pair instantly</p>
             </div>
             
-            <div class="companion-details" style="background:var(--bg-card);padding:12px;border-radius:12px;border:1px solid var(--border-color);margin-top:10px">
+            <div id="companion-pairing-details" class="companion-details" style="display:none;background:var(--bg-card);padding:12px;border-radius:12px;border:1px solid var(--border-color);margin-top:10px">
               <div style="margin-bottom:12px">
                 <p class="pairing-label" style="margin-top:0">Manual URL fallback:</p>
                 <div style="display:flex;gap:6px">

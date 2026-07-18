@@ -5,6 +5,24 @@ const http = require('node:http');
 const net = require('node:net');
 const companion = require('../companion');
 
+// These integration cases exercise one process-wide companion singleton.
+// Node may schedule top-level tests concurrently, so explicitly serialize
+// ownership of that listener instead of allowing tests to stop each other.
+let integrationQueue = Promise.resolve();
+function serialTest(name, run) {
+  test(name, async (t) => {
+    const previous = integrationQueue;
+    let release;
+    integrationQueue = new Promise(resolve => { release = resolve; });
+    await previous;
+    try {
+      return await run(t);
+    } finally {
+      release();
+    }
+  });
+}
+
 // Pick a free ephemeral port so the suite is portable across hosts where the
 // app's production port (58732) may be reserved by the OS (e.g. Windows
 // Hyper-V/WinNAT exclusions).
@@ -29,23 +47,24 @@ function getResponse(url) {
   });
 }
 
-test('Companion integration: Off mode (no listener)', async (t) => {
+serialTest('Companion integration: Off mode (no listener)', async (t) => {
   await companion.stop();
-  companion.start({ token: '', host: '127.0.0.1' });
+  await companion.start({ token: '', host: '127.0.0.1' });
 
   const status = companion.getStatus();
   assert.equal(status.running, false, 'Should not be running without a token');
   await companion.stop();
 });
 
-test('Companion integration: Token authentication', async (t) => {
+serialTest('Companion integration: Token authentication', async (t) => {
   const token = 'test-token-123';
   await companion.stop();
   const port = await freePort();
-  companion.start({ token, host: '127.0.0.1', port });
+  await companion.start({ token, host: '127.0.0.1', port });
 
   const status = companion.getStatus();
   assert.equal(status.running, true, 'Should be running with a token');
+  assert.equal(status.ready, true, 'HTTP and WebSocket readiness probes should pass before start resolves');
 
   // 1. Valid token request (HTTP part)
   await new Promise((resolve, reject) => {
@@ -93,13 +112,35 @@ test('Companion integration: Token authentication', async (t) => {
   await companion.stop();
 });
 
-test('Companion integration: Pair-check reports stale and rotated tokens', async () => {
+serialTest('Companion integration: occupied port reports a truthful bind failure', async () => {
+  await companion.stop();
+  const blocker = http.createServer((req, res) => res.end('occupied'));
+  await new Promise((resolve, reject) => {
+    blocker.once('error', reject);
+    blocker.listen(0, '127.0.0.1', resolve);
+  });
+  const port = blocker.address().port;
+
+  try {
+    const status = await companion.start({ token: 'bind-failure-token', host: '127.0.0.1', port });
+    assert.equal(status.failed, true);
+    assert.equal(status.ready, false);
+    assert.equal(status.running, false);
+    assert.equal(status.errorCode, 'EADDRINUSE');
+    assert.match(status.errorMessage, /EADDRINUSE|address already in use/i);
+  } finally {
+    await companion.stop();
+    await new Promise(resolve => blocker.close(resolve));
+  }
+});
+
+serialTest('Companion integration: Pair-check reports stale and rotated tokens', async () => {
   const originalToken = 'original-token';
   const rotatedToken = 'rotated-token';
   const port = await freePort();
 
   await companion.stop();
-  companion.start({ token: originalToken, host: '127.0.0.1', port });
+  await companion.start({ token: originalToken, host: '127.0.0.1', port });
 
   const valid = await getResponse(`http://127.0.0.1:${port}/pair-check?t=${originalToken}`);
   assert.equal(valid.statusCode, 204, 'Current pairing token should pass preflight');
@@ -112,7 +153,7 @@ test('Companion integration: Pair-check reports stale and rotated tokens', async
   assert.equal(stale.statusCode, 403, 'Stale token should be reported as expired');
 
   await companion.stop();
-  companion.start({ token: rotatedToken, host: '127.0.0.1', port });
+  await companion.start({ token: rotatedToken, host: '127.0.0.1', port });
 
   const revoked = await getResponse(`http://127.0.0.1:${port}/pair-check?t=${originalToken}`);
   assert.equal(revoked.statusCode, 403, 'Rotating the token should revoke the previous token');
@@ -123,7 +164,7 @@ test('Companion integration: Pair-check reports stale and rotated tokens', async
   await companion.stop();
 });
 
-test('Companion integration: Host binding (Local vs LAN)', async (t) => {
+serialTest('Companion integration: Host binding (Local vs LAN)', async (t) => {
   // This test only verifies the configuration in companion.js
   const token = 'test-token';
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -131,15 +172,47 @@ test('Companion integration: Host binding (Local vs LAN)', async (t) => {
 
   // Local mode
   await companion.stop();
-  companion.start({ token, host: '127.0.0.1', port });
+  await companion.start({ token, host: '127.0.0.1', port });
   await wait(100);
   assert.equal(companion.getStatus().host, '127.0.0.1');
 
   // LAN mode
   await companion.stop();
-  companion.start({ token, host: '0.0.0.0', port });
+  await companion.start({ token, host: '0.0.0.0', port, probeHost: '127.0.0.1' });
   await wait(100);
   assert.equal(companion.getStatus().host, '0.0.0.0');
 
+  await companion.stop();
+});
+
+for (const errorCode of ['HTTP_HEALTH_FAILED', 'PAIR_CHECK_FAILED', 'WEBSOCKET_UPGRADE_FAILED']) {
+  serialTest(`Companion integration: ${errorCode} blocks readiness`, async () => {
+    const port = await freePort();
+    const status = await companion.start({
+      token: 'readiness-failure-token',
+      host: '127.0.0.1',
+      port,
+      readinessProbe: async () => {
+        const error = new Error(`controlled ${errorCode}`);
+        error.code = errorCode;
+        throw error;
+      }
+    });
+    assert.equal(status.running, false);
+    assert.equal(status.ready, false);
+    assert.equal(status.failed, true);
+    assert.equal(status.errorCode, errorCode);
+    await companion.stop();
+  });
+}
+
+serialTest('Companion integration: repeated token-rotation restarts release the same port', async () => {
+  const port = await freePort();
+  for (let i = 0; i < 5; i++) {
+    await companion.stop();
+    const status = await companion.start({ token: `rotation-${i}`, host: '127.0.0.1', port });
+    assert.equal(status.ready, true);
+    assert.notEqual(status.errorCode, 'EADDRINUSE');
+  }
   await companion.stop();
 });
