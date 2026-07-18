@@ -221,8 +221,20 @@ async function useTonight() {
 
 async function initNightModes() {
   try {
-    nmCatalogue = await api.getNightModesCatalogue();
-    if (!Array.isArray(nmCatalogue)) nmCatalogue = [];
+    const raw = await api.getNightModesCatalogue();
+    nmCatalogue = (Array.isArray(raw) ? raw : []).map(mode => {
+      if (!mode.timer) {
+        return {
+          ...mode,
+          timer: {
+            durationSeconds: mode.durationSeconds,
+            action: mode.action,
+            ritualId: mode.ritualId
+          }
+        };
+      }
+      return mode;
+    });
   } catch (err) {
     console.error('[NightModes] Failed to load catalogue:', err);
     nmCatalogue = [];

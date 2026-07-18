@@ -200,6 +200,7 @@
     .night-mode-toggle { font-size: 12px; font-weight: 600; color: var(--accent); background: transparent; border: none; cursor: pointer; padding: 4px; }
     .night-mode-grid { display: none; grid-template-columns: 1fr 1fr; gap: 10px; }
     .night-mode-grid.visible { display: grid; }
+    .night-mode-grid.refreshing { opacity: 0.65; pointer-events: none; }
     .night-mode-card { text-align: left; background: var(--card); border: 1px solid var(--card-border); border-radius: 14px; padding: 14px; cursor: pointer; min-height: 120px; display: flex; flex-direction: column; gap: 6px; }
     .night-mode-card.disabled { opacity: 0.45; cursor: not-allowed; }
     .night-mode-card:not(.disabled):active { transform: scale(0.98); }
@@ -498,7 +499,9 @@
     let pendingTimeout = null;
     let pendingErrorTimeout = null;
     let nmCatalogue = [];
+    let nmCatalogueRefreshing = false;
     let nmSelectedId = null;
+    let nmSelectedVersion = null;
     let nmGridVisible = false;
     let catalogueRequestedGeneration = null;
     let catalogueAcceptedGeneration = null;
@@ -542,6 +545,11 @@
 
     function renderNightModeGrid() {
       nightModeGrid.innerHTML = '';
+      if (nmCatalogueRefreshing) {
+        nightModeGrid.classList.add('refreshing');
+      } else {
+        nightModeGrid.classList.remove('refreshing');
+      }
       if (!nmCatalogue.length) {
         const empty = document.createElement('div');
         empty.textContent = 'Loading bedtime modes…';
@@ -585,6 +593,7 @@
       const mode = nmCatalogue.find(m => m.id === id);
       if (!mode || mode.status !== 'ready') return;
       nmSelectedId = id;
+      nmSelectedVersion = mode.version;
       nmDetailArt.textContent = NM_ARTWORK[mode.artworkId] || '\u{1F319}';
       nmDetailTitle.textContent = mode.title;
       nmDetailSubtitle.textContent = mode.subtitle;
@@ -609,12 +618,13 @@
       nightModeBackdrop.classList.remove('show');
       nightModeBackdrop.setAttribute('aria-hidden', 'true');
       nmSelectedId = null;
+      nmSelectedVersion = null;
     }
 
     function validateNightModeSelection() {
       if (!nmSelectedId) return;
       const mode = nmCatalogue.find(m => m.id === nmSelectedId);
-      if (!mode || mode.status !== 'ready') {
+      if (!mode || mode.status !== 'ready' || mode.version !== nmSelectedVersion) {
         closeNightModeDetail();
         return;
       }
@@ -910,6 +920,8 @@
         if (reconnectTimer) clearTimeout(reconnectTimer);
         reconnectTimer = null;
         setConnectionState('connected', 'Connected — waiting for current PC state…');
+        nmCatalogueRefreshing = true;
+        if (nmGridVisible) renderNightModeGrid();
         // Request the canonical Night Mode catalogue once for this socket generation.
         if (catalogueRequestedGeneration !== generation) {
           catalogueRequestedGeneration = generation;
@@ -1053,6 +1065,7 @@
         // Accept catalogue only from the current socket generation.
         if (generation !== socketGeneration) return;
         catalogueAcceptedGeneration = generation;
+        nmCatalogueRefreshing = false;
         nmCatalogue = Array.isArray(data.modes) ? data.modes : [];
         if (nmGridVisible) renderNightModeGrid();
         validateNightModeSelection();
@@ -1266,7 +1279,9 @@
         nmCatalogue: nmCatalogue.slice(),
         nmCatalogueLength: nmCatalogue.length,
         nmSelectedId,
-        nmGridVisible
+        nmSelectedVersion,
+        nmGridVisible,
+        nmCatalogueRefreshing
       }),
       injectCatalogueReply: (modes, generation) => handleUpdate({ type: 'nightModes', modes }, generation)
     };
