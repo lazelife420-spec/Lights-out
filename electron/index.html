@@ -550,7 +550,7 @@
       <!-- SCH: Schedule panel (duration/clock mode, calendar controls) -->
       <section class="tabs-section ns-main-panel" id="ns-panel-sch" style="display:none">
         <div class="tabs-header">
-          <button class="tab-btn active" data-tab="library">Library</button>
+          <button class="tab-btn active" data-tab="library">Quick Setup</button>
           <button class="tab-btn" data-tab="schedule">Schedule</button>
           <button class="tab-btn" data-tab="clock">Clock</button>
           <button class="tab-btn" data-tab="focus">Focus</button>
@@ -560,21 +560,17 @@
         <div class="tabs-content">
           <div class="tab-panel active" id="tab-library">
             <div class="tonight-grid">
-              <div class="tonight-card" data-card="witchcraft" data-minutes="45" data-action="sleep" data-force="false">
-                <div class="card-title">WITCHCRAFT</div>
+              <div class="tonight-card" data-card="sleep-45" data-minutes="45" data-action="sleep" data-force="false">
+                <div class="card-title">45 MIN SLEEP</div>
                 <div class="card-sub">45 min sleep timer</div>
               </div>
-              <div class="tonight-card" data-card="money" data-minutes="30" data-action="sleep" data-force="false">
-                <div class="card-title">MONEY</div>
-                <div class="card-sub">Cinema & chill</div>
+              <div class="tonight-card" data-card="sleep-30" data-minutes="30" data-action="sleep" data-force="false">
+                <div class="card-title">30 MIN SLEEP</div>
+                <div class="card-sub">Short wind-down</div>
               </div>
-              <div class="tonight-card" data-card="hard-stop" data-minutes="15" data-action="shutdown" data-force="true">
-                <div class="card-title">HARD STOP</div>
-                <div class="card-sub">Force shutdown</div>
-              </div>
-              <div class="tonight-card" data-card="beastmode" data-minutes="120" data-action="shutdown" data-force="false">
-                <div class="card-title">BEASTMODE</div>
-                <div class="card-sub">2 hour limit</div>
+              <div class="tonight-card" data-card="shutdown-120" data-minutes="120" data-action="shutdown" data-force="false">
+                <div class="card-title">2 HOUR SHUTDOWN</div>
+                <div class="card-sub">Graceful shutdown after 2 hours</div>
               </div>
             </div>
           </div>

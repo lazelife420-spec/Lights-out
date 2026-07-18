@@ -292,6 +292,9 @@ function createWindow() {
     title: 'Lights Out',
     autoHideMenuBar: true,
     show: false,
+    // Match the first painted pixels to the night UI so Windows never exposes
+    // a bright native surface while Chromium/CSS is still loading.
+    backgroundColor: '#0d0e11',
     icon: APP_ICON,
     webPreferences: {
       nodeIntegration: false,
@@ -2351,11 +2354,17 @@ ipcMain.on('toggle-mini-mode', () => {
 });
 
 // Desktop widget: tiny always-on-top "bed in N min" clock.
-function createWidgetWindow() {
+function persistWidgetVisibility(visible) {
+  settingsStore.updateSection('app', { widgetVisible: Boolean(visible) });
+}
+
+async function createWidgetWindow() {
   if (widgetWindow && !widgetWindow.isDestroyed()) {
     widgetWindow.show();
     updateWidget();
-    return;
+    const visible = widgetWindow.isVisible();
+    if (visible) persistWidgetVisibility(true);
+    return visible;
   }
   widgetWindow = new BrowserWindow({
     width: 180,
@@ -2366,6 +2375,7 @@ function createWidgetWindow() {
     resizable: false,
     skipTaskbar: true,
     hasShadow: false,
+    show: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -2374,18 +2384,33 @@ function createWidgetWindow() {
   });
   widgetWindow.setVisibleOnAllWorkspaces(true);
   widgetWindow.setPosition(20, 20); // top-left corner
-  widgetWindow.loadFile('widget.html');
-  widgetWindow.webContents.once('did-finish-load', () => {
-    updateWidget();
+  widgetWindow.on('closed', () => {
+    widgetWindow = null;
+    widgetMode = false;
+    if (!app.isQuitting) persistWidgetVisibility(false);
   });
-  widgetWindow.on('closed', () => { widgetWindow = null; widgetMode = false; });
-  widgetMode = true;
+  try {
+    await widgetWindow.loadFile('widget.html');
+    if (!widgetWindow || widgetWindow.isDestroyed()) return false;
+    widgetMode = true;
+    updateWidget();
+    widgetWindow.show();
+    const visible = widgetWindow.isVisible();
+    if (visible) persistWidgetVisibility(true);
+    return visible;
+  } catch (err) {
+    console.error('Desktop widget failed to load:', err.message);
+    closeWidgetWindow();
+    return false;
+  }
 }
 
 function closeWidgetWindow() {
   if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.close();
   widgetWindow = null;
   widgetMode = false;
+  if (!app.isQuitting) persistWidgetVisibility(false);
+  return false;
 }
 
 function updateWidget() {
@@ -2402,9 +2427,10 @@ function updateWidget() {
   });
 }
 
-ipcMain.on('toggle-widget', () => {
-  if (widgetMode) closeWidgetWindow();
-  else createWidgetWindow();
+ipcMain.handle('toggle-widget', async () => {
+  if (widgetMode) return { success: true, visible: closeWidgetWindow() };
+  const visible = await createWidgetWindow();
+  return { success: visible, visible };
 });
 
 ipcMain.on('close-widget', () => {
@@ -2629,6 +2655,10 @@ app.whenReady().then(async () => {
   await createTray();
   setupJumpList();
   registerGlobalShortcuts();
+
+  if (settingsStore.getSection('app')?.widgetVisible) {
+    await createWidgetWindow();
+  }
 
   // If launched via --first-light, run the First Light sunrise sequence.
   if (launchOptions.firstLight) {

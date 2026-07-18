@@ -1197,13 +1197,22 @@ input:disabled {
   color: var(--text-secondary);
 }
 
-.schedule-controls input[type="time"] {
+.schedule-controls input[type="time"],
+.schedule-controls input[type="date"],
+.schedule-controls input[type="datetime-local"] {
   padding: 8px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 4px;
   color: var(--text-primary);
   font-family: var(--font-mono);
+  color-scheme: dark;
+}
+
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"] {
+  color-scheme: dark;
 }
 
 /* Clock/Countdown Buttons */

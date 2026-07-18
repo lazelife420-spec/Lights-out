@@ -142,7 +142,7 @@ const fallbackApi = (() => {
     closeWindow: () => {},
     quitApp: () => {},
     toggleMiniMode: () => {},
-    toggleWidget: () => {},
+    toggleWidget: async () => ({ success: false, visible: false }),
     setWindowOpacity: () => {},
     showNotification: () => {},
     playSound: () => {},
@@ -1088,24 +1088,45 @@ function showToast(message, type = 'info', duration = 3000) {
     document.body.appendChild(container);
   }
 
+  const toastKey = `${type}:${message}`;
+  const duplicate = [...container.querySelectorAll('.toast')].find(item => item.dataset.toastKey === toastKey);
+  if (duplicate) {
+    clearTimeout(duplicate._dismissTimer);
+    clearTimeout(duplicate._removeTimer);
+    duplicate.classList.add('visible');
+    duplicate._dismissTimer = setTimeout(() => {
+      duplicate.classList.remove('visible');
+      duplicate._removeTimer = setTimeout(() => duplicate.remove(), 220);
+    }, duration);
+    return;
+  }
+
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
+  toast.dataset.toastKey = toastKey;
   toast.textContent = message;
   container.appendChild(toast);
 
   requestAnimationFrame(() => toast.classList.add('visible'));
-  setTimeout(() => {
+  toast._dismissTimer = setTimeout(() => {
     toast.classList.remove('visible');
-    setTimeout(() => toast.remove(), 220);
+    toast._removeTimer = setTimeout(() => toast.remove(), 220);
   }, duration);
 }
 
 const notificationFeed = [];
 const MAX_NOTIFICATIONS = 50;
 
-function notify(message, type = 'info') {
-  showToast(message, type);
-  notificationFeed.unshift({ message, type, time: new Date().toISOString() });
+function notify(message, type = 'info', duration = 3000) {
+  showToast(message, type, duration);
+  const now = Date.now();
+  const latest = notificationFeed[0];
+  if (latest && latest.message === message && latest.type === type && now - new Date(latest.time).getTime() < 2000) {
+    latest.time = new Date(now).toISOString();
+    latest.read = false;
+  } else {
+    notificationFeed.unshift({ message, type, time: new Date(now).toISOString(), read: false });
+  }
   if (notificationFeed.length > MAX_NOTIFICATIONS) notificationFeed.length = MAX_NOTIFICATIONS;
   renderNotificationBadge();
 }
@@ -1149,12 +1170,18 @@ const notifDrawer = document.getElementById('notif-drawer');
 const notifDrawerClose = document.getElementById('notif-drawer-close');
 if (btnNotif && notifDrawer) {
   btnNotif.addEventListener('click', () => {
-    notifDrawer.style.display = notifDrawer.style.display === 'none' ? '' : 'none';
-    if (notifDrawer.style.display !== 'none') renderNotificationFeed();
+    const opening = !notifDrawer.classList.contains('active');
+    notifDrawer.classList.toggle('active', opening);
+    notifDrawer.style.display = '';
+    btnNotif.setAttribute('aria-expanded', String(opening));
+    if (opening) renderNotificationFeed();
   });
 }
 if (notifDrawerClose && notifDrawer) {
-  notifDrawerClose.addEventListener('click', () => { notifDrawer.style.display = 'none'; });
+  notifDrawerClose.addEventListener('click', () => {
+    notifDrawer.classList.remove('active');
+    btnNotif?.setAttribute('aria-expanded', 'false');
+  });
 }
 
 function setSidebarSelection(tab) {
@@ -1189,11 +1216,22 @@ async function openReceiptsLedger() {
   }
 }
 
+let settingsReturnTab = 'lib';
+
 function openSettingsPanel() {
+  const activeTab = document.querySelector('.ns-nav-item.active')?.dataset?.nsTab;
+  if (activeTab && !['set', 'help'].includes(activeTab)) settingsReturnTab = activeTab;
   syncCustomizeUI();
   updateLastLightUIFromState();
   loadRemoteControlState();
+  setSidebarSelection('set');
   els.optionsModal?.classList.add('active');
+}
+
+function closeSettingsPanel() {
+  els.optionsModal?.classList.remove('active');
+  setSidebarSelection(settingsReturnTab || 'lib');
+  render();
 }
 
 function openHelpPanel() {
@@ -1283,7 +1321,7 @@ async function handleSidebarNavigation(tab, { persist = true } = {}) {
   }
 
   setSidebarSelection(tab);
-  if (persist) {
+  if (persist && ['lib', 'modes', 'sch', 'stats'].includes(tab)) {
     try { api.saveAppSettings({ app: { nsActiveTab: tab } }); } catch (_) {}
   }
   return true;
@@ -2157,20 +2195,28 @@ function wireEvents() {
   els.btnFullscreenClock?.addEventListener('click', enterFullscreenClock);
   els.btnFullscreenClockExit?.addEventListener('click', exitFullscreenClock);
   api.onFullScreenChanged?.(applyFullscreenClockState);
-  els.btnWidget?.addEventListener('click', () => {
-    api.toggleWidget?.();
-    notify('Desktop widget toggled', 'info');
+  document.getElementById('menu-settings')?.addEventListener('click', event => {
+    if (event.target.closest('.submenu-item')) return;
+    openSettingsPanel();
+  });
+  els.btnWidget?.addEventListener('click', async () => {
+    try {
+      const result = await api.toggleWidget?.();
+      if (!result?.success) throw new Error('Widget did not confirm its state');
+      notify(result?.visible ? 'Desktop widget shown' : 'Desktop widget hidden', 'info');
+    } catch (error) {
+      notify(`Desktop widget failed: ${error.message || error}`, 'error');
+    }
   });
   els.btnCompanion?.addEventListener('click', async () => {
     try {
       const rc = await api.getRemoteControl?.();
-      if (rc?.enabled && rc.url) {
+      if (rc?.ready && rc.url) {
         await api.openExternal?.(rc.url);
-        notify(`Companion at ${rc.url}`, 'info');
+        notify('Companion pairing page opened', 'info');
       } else {
         openSettingsPanel();
-        setSidebarSelection('set');
-        notify('Enable Remote Control in settings before opening the Companion PWA', 'info');
+        notify(rc?.failed ? 'Companion is unavailable; review the connection error in Settings' : 'Enable and verify Phone Companion in Settings first', rc?.failed ? 'error' : 'info');
       }
     } catch {
       notify('Companion setup is unavailable right now', 'warning');
@@ -2808,17 +2854,14 @@ if (els.btnClearReceipts) {
   });
 
   els.modalClose.addEventListener('click', () => {
-    els.optionsModal.classList.remove('active');
-    render();
+    closeSettingsPanel();
   });
   els.btnCancelOpt.addEventListener('click', () => {
-    els.optionsModal.classList.remove('active');
-    render();
+    closeSettingsPanel();
   });
   els.optionsModal.addEventListener('click', event => {
     if (event.target === els.optionsModal) {
-      els.optionsModal.classList.remove('active');
-      render();
+      closeSettingsPanel();
     }
   });
 
@@ -2881,7 +2924,7 @@ if (els.btnClearReceipts) {
       notify(`Smart lights save failed: ${error.message || error}`, 'error');
     }
 
-    els.optionsModal.classList.remove('active');
+    closeSettingsPanel();
     setAction(state.action);
     render();
   });
@@ -3055,15 +3098,16 @@ if (els.btnClearReceipts) {
       if (state.fullscreenClock) {
         exitFullscreenClock();
       } else if (els.optionsModal.classList.contains('active')) {
-        els.optionsModal.classList.remove('active');
+        closeSettingsPanel();
       } else if (els.profilesModal?.classList.contains('active')) {
         els.profilesModal.classList.remove('active');
       } else if (els.receiptsModal?.classList.contains('active')) {
         els.receiptsModal.classList.remove('active');
       } else if (els.aboutModal?.classList.contains('active')) {
         els.aboutModal.classList.remove('active');
-      } else if (document.getElementById('notif-drawer')?.style.display !== 'none') {
-        document.getElementById('notif-drawer').style.display = 'none';
+      } else if (document.getElementById('notif-drawer')?.classList.contains('active')) {
+        document.getElementById('notif-drawer').classList.remove('active');
+        document.getElementById('btn-notif')?.setAttribute('aria-expanded', 'false');
       } else if (document.getElementById('ritual-overlay')?.classList.contains('active')) {
         document.getElementById('ritual-overlay').classList.remove('active');
       } else if (document.getElementById('warning-modal')?.classList.contains('active')) {
@@ -3541,9 +3585,7 @@ api.onPlayLastLight(payload => {
   startGuidedBreathing();
 });
 api.onOpenSettings(() => {
-  syncCustomizeUI();
-  updateLastLightUIFromState();
-  if (els.optionsModal) els.optionsModal.classList.add('active');
+  openSettingsPanel();
 });
 api.onBrowserWarning?.(data => {
   if (data?.message) notify(data.message, 'warning', 8000);

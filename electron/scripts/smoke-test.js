@@ -504,7 +504,10 @@ check('mini-mode: toggling keeps the auto-fit guard in sync', () => {
 check('widget: updates on lifecycle changes, not just timer ticks', () => {
   assertMatch(mainSrc, /function emitTimerUpdate\(type, data = \{\}\) \{[\s\S]*updateWidget\(\);[\s\S]*updateTrayText\(\);/s, 'widget not refreshed during state broadcasts');
   assertMatch(mainSrc, /if \(widgetWindow && !widgetWindow\.isDestroyed\(\)\) \{[\s\S]*widgetWindow\.show\(\);[\s\S]*updateWidget\(\);/s, 'widget reopen refresh missing');
-  assertMatch(mainSrc, /widgetWindow\.webContents\.once\('did-finish-load', \(\) => \{[\s\S]*updateWidget\(\);[\s\S]*\}\);/s, 'widget initial refresh missing');
+  assertMatch(mainSrc, /await widgetWindow\.loadFile\('widget\.html'\);[\s\S]*updateWidget\(\);[\s\S]*widgetWindow\.show\(\);/s, 'widget must confirm load before showing and reporting success');
+  assertMatch(mainSrc, /persistWidgetVisibility\(true\)/, 'confirmed widget visibility must be persisted');
+  assertMatch(mainSrc, /getSection\('app'\)\?\.widgetVisible[\s\S]*await createWidgetWindow\(\)/s, 'persisted widget visibility must restore on startup');
+  assertMatch(mainSrc, /if \(!app\.isQuitting\) persistWidgetVisibility\(false\)/, 'explicit widget close must persist hidden without overwriting state during app quit');
 });
 
 // 7. Core UI controls exist (start/pause/resume/snooze/cancel/mini + customize).
@@ -640,9 +643,10 @@ check('renderer: STATS panel shows only real companion/session data, honest empt
 });
 
 check('renderer: footer and ledger controls provide real feedback', () => {
-  assertMatch(rendererSrc, /els\.btnWidget\?\.addEventListener\('click', \(\) => \{[\s\S]*api\.toggleWidget\?\.\(\);[\s\S]*notify\('Desktop widget toggled', 'info'\);/s, 'widget button feedback missing');
-  assertMatch(rendererSrc, /els\.btnCompanion\?\.addEventListener\('click', async \(\) => \{[\s\S]*notify\(`Companion at \$\{rc\.url\}`, 'info'\);[\s\S]*openSettingsPanel\(\);[\s\S]*notify\('Enable Remote Control in settings before opening the Companion PWA', 'info'\);[\s\S]*notify\('Companion setup is unavailable right now', 'warning'\);/s, 'companion button behavior missing');
-  assertMatch(rendererSrc, /const btnNotif = document\.getElementById\('btn-notif'\);[\s\S]*notifDrawer\.style\.display = notifDrawer\.style\.display === 'none' \? '' : 'none';/s, 'notifications button handler missing');
+  assertMatch(rendererSrc, /els\.btnWidget\?\.addEventListener\('click', async \(\) => \{[\s\S]*const result = await api\.toggleWidget\?\.\(\);[\s\S]*Desktop widget shown[\s\S]*Desktop widget hidden/s, 'widget feedback must follow an acknowledged main-process state');
+  assert(!rendererSrc.includes('Desktop widget toggled'), 'fire-and-forget widget success copy must not return');
+  assertMatch(rendererSrc, /els\.btnCompanion\?\.addEventListener\('click', async \(\) => \{[\s\S]*if \(rc\?\.ready && rc\.url\)[\s\S]*Companion pairing page opened[\s\S]*openSettingsPanel\(\)/s, 'companion button must require verified readiness and avoid exposing the tokenized URL in feedback');
+  assertMatch(rendererSrc, /const btnNotif = document\.getElementById\('btn-notif'\);[\s\S]*notifDrawer\.classList\.toggle\('active', opening\)/s, 'notifications button must activate the modal, not only clear an inline display value');
   assertMatch(rendererSrc, /if \(els\.btnWarningLedger\) \{[\s\S]*openReceiptsLedger\(\)/s, 'warning ledger button wiring missing');
   assertMatch(rendererSrc, /if \(els\.btnProofDetails\) \{[\s\S]*openReceiptsLedger\(\)/s, 'proof ledger button wiring missing');
 });
@@ -1348,7 +1352,7 @@ check('ux: Escape closes all modals (profiles, receipts, about, notif-drawer)', 
   assertMatch(rendererSrc, /els\.profilesModal\?\.classList\.contains\('active'\)/, 'Escape does not check profilesModal');
   assertMatch(rendererSrc, /els\.receiptsModal\?\.classList\.contains\('active'\)/, 'Escape does not check receiptsModal');
   assertMatch(rendererSrc, /els\.aboutModal\?\.classList\.contains\('active'\)/, 'Escape does not check aboutModal');
-  assertMatch(rendererSrc, /getElementById\('notif-drawer'\)\?\.style\.display !== 'none'/, 'Escape does not check notif-drawer');
+  assertMatch(rendererSrc, /getElementById\('notif-drawer'\)\?\.classList\.contains\('active'\)/, 'Escape does not check the active notification drawer');
 });
 
 check('ux: sidebar sets aria-current on active item', () => {

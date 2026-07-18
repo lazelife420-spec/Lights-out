@@ -136,7 +136,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeCustomSequence: (id) => ipcRenderer.invoke('remove-custom-sequence', id),
 
   // Desktop widget
-  toggleWidget: () => ipcRenderer.send('toggle-widget'),
+  toggleWidget: () => ipcRenderer.invoke('toggle-widget'),
   onWidgetUpdate: (callback) => {
     ipcRenderer.on('widget-update', (event, data) => callback(data));
   },
