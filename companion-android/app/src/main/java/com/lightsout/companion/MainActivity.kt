@@ -297,7 +297,7 @@ class MainActivity : AppCompatActivity() {
         if (mainFrameLoadFailed) return
         mainFrameLoadFailed = true
         mainHandler.removeCallbacks(loadTimeout)
-        Log.w("LightsOutApp", "Failed to load companion URL ${url ?: "(unknown)"}: ${detail ?: "unknown error"}")
+        Log.w("LightsOutApp", "Failed to load companion URL ${CompanionUrlNormalizer.redactForLog(url)}: ${detail ?: "unknown error"}")
 
         // Failsafe: add IP to failed connection registry to trigger cool-down
         val uri = try { url?.let { java.net.URI(it) } } catch (_: Exception) { null }
