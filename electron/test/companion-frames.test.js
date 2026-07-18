@@ -97,6 +97,8 @@ test('encodeFrame: >65535 payload uses 64-bit extended length', () => {
   assert.strictEqual(f.length, 10 + 70000);
 });
 
+
+
 test('consumeFrames: a valid masked text frame yields a validated message', () => {
   const { client } = makeClient();
   const start = JSON.stringify({ action: 'start', timerAction: 'shutdown', durationSeconds: 1800 });
@@ -185,3 +187,5 @@ test('consumeFrames: two back-to-back frames in one chunk both dispatch', () => 
   const messages = feed(client, Buffer.concat([a, b]));
   assert.deepStrictEqual(messages, [{ action: 'togglePause' }, { action: 'cancel' }]);
 });
+
+
