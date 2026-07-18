@@ -3,7 +3,7 @@
 // Bounds size at 500 entries. Unexpired entries (in_progress or terminal) are NEVER evicted.
 
 const crypto = require('crypto');
-const { createCommandAck, REJECTION_REASONS } = require('./remoteControl');
+const { createCommandAck, canonicalStringify, REJECTION_REASONS, ACK_STATUSES } = require('./remoteControl');
 
 const DEFAULT_MAX_ENTRIES = 500;
 const DEFAULT_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -12,9 +12,14 @@ class IdempotencyRegistry {
   constructor(options = {}) {
     this.maxEntries = options.maxEntries || DEFAULT_MAX_ENTRIES;
     this.ttlMs = options.ttlMs || DEFAULT_TTL_MS;
+    this.clock = typeof options.clock === 'function' ? options.clock : () => Date.now();
     // Map<string, IdempotencyRecord>
     // Key: `${tokenHash}:${requestId}`
     this.records = new Map();
+  }
+
+  now() {
+    return this.clock();
   }
 
   hashToken(token) {
@@ -22,12 +27,10 @@ class IdempotencyRegistry {
     return crypto.createHash('sha256').update(token).digest('hex').slice(0, 16);
   }
 
-  hashPayload(payload) {
-    if (!payload || typeof payload !== 'object') return '';
-    const norm = { ...payload };
-    delete norm.requestId;
-    delete norm.protocolVersion;
-    return crypto.createHash('sha256').update(JSON.stringify(norm)).digest('hex');
+  hashPayload(canonicalPayload) {
+    if (!canonicalPayload || typeof canonicalPayload !== 'object') return '';
+    const json = canonicalStringify(canonicalPayload);
+    return crypto.createHash('sha256').update(json).digest('hex');
   }
 
   makeKey(token, requestId) {
@@ -35,17 +38,17 @@ class IdempotencyRegistry {
   }
 
   // Returns { state: 'new' | 'in_progress_duplicate' | 'completed_duplicate' | 'conflict' | 'capacity_exceeded' | 'invalid', ack?, record? }
-  register(token, requestId, action, payload = {}) {
+  register(token, requestId, action, canonicalPayload = {}) {
     if (!requestId || typeof requestId !== 'string') {
       return {
         state: 'invalid',
-        ack: createCommandAck({ requestId, action, status: 'rejected', reason: REJECTION_REASONS.INVALID_REQUEST_ID })
+        ack: null
       };
     }
 
     const key = this.makeKey(token, requestId);
     const existing = this.records.get(key);
-    const payloadHash = this.hashPayload(payload);
+    const payloadHash = this.hashPayload(canonicalPayload);
 
     if (existing) {
       // Check for conflict (same ID, different action or payload hash)
@@ -55,7 +58,7 @@ class IdempotencyRegistry {
           ack: createCommandAck({
             requestId,
             action,
-            status: 'rejected',
+            status: ACK_STATUSES.REJECTED,
             duplicate: true,
             reason: REJECTION_REASONS.REQUEST_ID_CONFLICT,
             stateRevision: existing.terminalAck ? existing.terminalAck.stateRevision : null
@@ -68,7 +71,7 @@ class IdempotencyRegistry {
         const immediateAck = createCommandAck({
           requestId,
           action,
-          status: 'accepted',
+          status: ACK_STATUSES.ACCEPTED,
           duplicate: true
         });
         return {
@@ -78,7 +81,7 @@ class IdempotencyRegistry {
         };
       }
 
-      // Terminal duplicate (applied or rejected)
+      // Terminal duplicate (completed or rejected)
       return {
         state: 'completed_duplicate',
         record: existing,
@@ -99,7 +102,7 @@ class IdempotencyRegistry {
         ack: createCommandAck({
           requestId,
           action,
-          status: 'rejected',
+          status: ACK_STATUSES.REJECTED,
           reason: REJECTION_REASONS.IDEMPOTENCY_CAPACITY
         })
       };
@@ -111,14 +114,17 @@ class IdempotencyRegistry {
       resolvePromise = resolve;
     });
 
+    // Handle unhandled rejection avoidance on execution failure
+    promise.catch(() => {});
+
     const record = {
       key,
       requestId,
       action,
       payloadHash,
       status: 'in_progress',
-      createdAt: Date.now(),
-      expiresAt: Date.now() + this.ttlMs,
+      createdAt: this.now(),
+      expiresAt: this.now() + this.ttlMs,
       promise,
       resolvePromise,
       waiters: new Set(),
@@ -130,7 +136,7 @@ class IdempotencyRegistry {
     const initialAck = createCommandAck({
       requestId,
       action,
-      status: 'accepted',
+      status: ACK_STATUSES.ACCEPTED,
       duplicate: false
     });
 
@@ -153,7 +159,7 @@ class IdempotencyRegistry {
     };
   }
 
-  // Resolve an in-progress record with its terminal result (applied or rejected).
+  // Resolve an in-progress record with its terminal result (completed or rejected).
   resolve(token, requestId, terminalAck) {
     const key = this.makeKey(token, requestId);
     const record = this.records.get(key);
@@ -192,10 +198,10 @@ class IdempotencyRegistry {
   }
 
   sweep() {
-    const now = Date.now();
+    const currentTime = this.now();
     for (const [key, record] of this.records.entries()) {
       // Never sweep in_progress or unexpired records
-      if (record.status !== 'in_progress' && now > record.expiresAt) {
+      if (record.status !== 'in_progress' && currentTime > record.expiresAt) {
         this.records.delete(key);
       }
     }
@@ -206,12 +212,12 @@ class IdempotencyRegistry {
   }
 
   getStats() {
-    const now = Date.now();
+    const currentTime = this.now();
     let inProgress = 0;
     let expired = 0;
     for (const record of this.records.values()) {
       if (record.status === 'in_progress') inProgress++;
-      if (now > record.expiresAt) expired++;
+      if (currentTime > record.expiresAt) expired++;
     }
     return {
       size: this.records.size,

@@ -97,15 +97,14 @@ test('encodeFrame: >65535 payload uses 64-bit extended length', () => {
   assert.strictEqual(f.length, 10 + 70000);
 });
 
-const testReqId1 = 'req-1234567890123456';
-const testReqId2 = 'req-6543210987654321';
+
 
 test('consumeFrames: a valid masked text frame yields a validated message', () => {
   const { client } = makeClient();
-  const start = JSON.stringify({ protocolVersion: 3, requestId: testReqId1, action: 'start', timerAction: 'shutdown', durationSeconds: 1800 });
+  const start = JSON.stringify({ action: 'start', timerAction: 'shutdown', durationSeconds: 1800 });
   const messages = feed(client, maskedFrame(0x1, start));
   assert.strictEqual(messages.length, 1);
-  assert.deepStrictEqual(messages[0], { protocolVersion: 3, requestId: testReqId1, action: 'start', timerAction: 'shutdown', durationSeconds: 1800 });
+  assert.deepStrictEqual(messages[0], { action: 'start', timerAction: 'shutdown', durationSeconds: 1800 });
   assert.strictEqual(client.alive, true);
 });
 
@@ -119,7 +118,7 @@ test('consumeFrames: malformed JSON is ignored, not crashed on', () => {
 test('consumeFrames: a message failing validation is dropped', () => {
   const { client } = makeClient();
   // Valid JSON, unknown action => validateCompanionMessage rejects it.
-  const messages = feed(client, maskedFrame(0x1, JSON.stringify({ protocolVersion: 3, requestId: testReqId1, action: 'nuke' })));
+  const messages = feed(client, maskedFrame(0x1, JSON.stringify({ action: 'nuke' })));
   assert.strictEqual(messages.length, 0);
 });
 
@@ -168,7 +167,7 @@ test('consumeFrames: a close frame from the client tears the connection down', (
 
 test('consumeFrames: a frame split across two chunks is reassembled', () => {
   const { client } = makeClient();
-  const start = JSON.stringify({ protocolVersion: 3, requestId: testReqId1, action: 'cancel' });
+  const start = JSON.stringify({ action: 'cancel' });
   const full = maskedFrame(0x1, start);
   const cut = Math.floor(full.length / 2);
 
@@ -178,14 +177,15 @@ test('consumeFrames: a frame split across two chunks is reassembled', () => {
 
   // Second half completes the frame.
   messages = feed(client, full.slice(cut));
-  assert.deepStrictEqual(messages, [{ protocolVersion: 3, requestId: testReqId1, action: 'cancel' }]);
+  assert.deepStrictEqual(messages, [{ action: 'cancel' }]);
 });
 
 test('consumeFrames: two back-to-back frames in one chunk both dispatch', () => {
   const { client } = makeClient();
-  const a = maskedFrame(0x1, JSON.stringify({ protocolVersion: 3, requestId: testReqId1, action: 'togglePause' }));
-  const b = maskedFrame(0x1, JSON.stringify({ protocolVersion: 3, requestId: testReqId2, action: 'cancel' }));
+  const a = maskedFrame(0x1, JSON.stringify({ action: 'togglePause' }));
+  const b = maskedFrame(0x1, JSON.stringify({ action: 'cancel' }));
   const messages = feed(client, Buffer.concat([a, b]));
-  assert.deepStrictEqual(messages, [{ protocolVersion: 3, requestId: testReqId1, action: 'togglePause' }, { protocolVersion: 3, requestId: testReqId2, action: 'cancel' }]);
+  assert.deepStrictEqual(messages, [{ action: 'togglePause' }, { action: 'cancel' }]);
 });
+
 

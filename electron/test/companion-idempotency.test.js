@@ -8,32 +8,44 @@ const rc = require('../remoteControl');
 const IdempotencyRegistry = require('../idempotencyRegistry');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// C3-A Primitive Helpers (createRequestId, createCommandAck, REJECTION_REASONS)
+// C3-A Request ID Generator Tests
 // ─────────────────────────────────────────────────────────────────────────────
 
-test('createRequestId returns a valid 36-char UUID string', () => {
+test('createRequestId returns a valid 36-char lowercase UUID string', () => {
   const id1 = rc.createRequestId();
   const id2 = rc.createRequestId();
-  assert.match(id1, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+  assert.match(id1, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   assert.notEqual(id1, id2);
 });
 
-test('createRequestId secure fallback works when crypto.randomUUID is absent', () => {
-  const originalRandomUUID = globalThis.crypto ? globalThis.crypto.randomUUID : null;
-  if (globalThis.crypto) globalThis.crypto.randomUUID = undefined;
-  try {
-    const id = rc.createRequestId();
-    assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
-  } finally {
-    if (globalThis.crypto) globalThis.crypto.randomUUID = originalRandomUUID;
-  }
+test('createRequestId supports injectable cryptoSource and fallback paths', () => {
+  // Test getRandomValues fallback path
+  const fakeCrypto = {
+    getRandomValues(arr) {
+      for (let i = 0; i < arr.length; i++) arr[i] = i * 17;
+      return arr;
+    }
+  };
+  const id = rc.createRequestId(fakeCrypto);
+  assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 });
 
+test('createRequestId throws explicit error when no secure crypto source exists', () => {
+  assert.throws(() => {
+    rc.createRequestId({});
+  }, /No secure crypto source available/);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACK DTO Schema & Validation Tests
+// ─────────────────────────────────────────────────────────────────────────────
+
 test('createCommandAck constructs a valid targeted commandAck DTO', () => {
+  const reqId = rc.createRequestId();
   const ack = rc.createCommandAck({
-    requestId: 'req-1234567890123456',
+    requestId: reqId,
     action: 'snooze',
-    status: 'applied',
+    status: rc.ACK_STATUSES.ACCEPTED,
     duplicate: false,
     reason: null,
     stateRevision: 42
@@ -42,202 +54,194 @@ test('createCommandAck constructs a valid targeted commandAck DTO', () => {
   assert.deepEqual(ack, {
     type: 'commandAck',
     protocolVersion: 3,
-    requestId: 'req-1234567890123456',
+    requestId: reqId,
     action: 'snooze',
-    status: 'applied',
+    status: 'accepted',
     duplicate: false,
     reason: null,
     stateRevision: 42
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// validateCompanionMessage Protocol V3 Rules
-// ─────────────────────────────────────────────────────────────────────────────
-
-test('validateCompanionMessage requires protocolVersion: 3 on mutating commands', () => {
-  const result = rc.validateCompanionMessage({
-    action: 'snooze',
-    requestId: 'req-1234567890123456',
-    seconds: 300
-  });
-  assert.equal(result.ok, false);
-  assert.equal(result.reason, rc.REJECTION_REASONS.UPGRADE_REQUIRED);
-});
-
-test('validateCompanionMessage requires a valid requestId on mutating commands', () => {
-  const missingReq = rc.validateCompanionMessage({
-    protocolVersion: 3,
-    action: 'snooze',
-    seconds: 300
-  });
-  assert.equal(missingReq.ok, false);
-  assert.equal(missingReq.reason, rc.REJECTION_REASONS.INVALID_REQUEST_ID);
-
-  const badFormatReq = rc.validateCompanionMessage({
-    protocolVersion: 3,
-    action: 'snooze',
-    requestId: 'short', // under 16 chars
-    seconds: 300
-  });
-  assert.equal(badFormatReq.ok, false);
-  assert.equal(badFormatReq.reason, rc.REJECTION_REASONS.INVALID_REQUEST_ID);
-});
-
-test('validateCompanionMessage accepts explicit pause and resume', () => {
+test('createCommandAck throws on invalid inputs', () => {
   const reqId = rc.createRequestId();
-  const pause = rc.validateCompanionMessage({ protocolVersion: 3, requestId: reqId, action: 'pause' });
-  const resume = rc.validateCompanionMessage({ protocolVersion: 3, requestId: reqId, action: 'resume' });
-  assert.equal(pause.ok, true);
-  assert.equal(pause.message.action, 'pause');
-  assert.equal(resume.ok, true);
-  assert.equal(resume.message.action, 'resume');
-});
 
-test('validateCompanionMessage accepts getNightModes with optional correlationId', () => {
-  const readQuery = rc.validateCompanionMessage({ action: 'getNightModes', correlationId: 'q-9876543210123456' });
-  assert.equal(readQuery.ok, true);
-  assert.equal(readQuery.message.action, 'getNightModes');
-  assert.equal(readQuery.message.correlationId, 'q-9876543210123456');
+  // Invalid requestId
+  assert.throws(() => rc.createCommandAck({ requestId: 'short', action: 'cancel', status: 'accepted' }), TypeError);
+
+  // Invalid action
+  assert.throws(() => rc.createCommandAck({ requestId: reqId, action: 'nuke', status: 'accepted' }), TypeError);
+
+  // Invalid status
+  assert.throws(() => rc.createCommandAck({ requestId: reqId, action: 'cancel', status: 'pending' }), TypeError);
+
+  // Rejected status missing valid reason
+  assert.throws(() => rc.createCommandAck({ requestId: reqId, action: 'cancel', status: 'rejected', reason: null }), TypeError);
+
+  // Accepted status carrying arbitrary non-null reason
+  assert.throws(() => rc.createCommandAck({ requestId: reqId, action: 'cancel', status: 'accepted', reason: 'some error' }), TypeError);
+
+  // Negative stateRevision
+  assert.throws(() => rc.createCommandAck({ requestId: reqId, action: 'cancel', status: 'accepted', stateRevision: -1 }), TypeError);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// IdempotencyRegistry Core Unit Tests
+// Canonicalization & Payload Hash Tests
 // ─────────────────────────────────────────────────────────────────────────────
 
-test('1. Original request gets non-terminal accepted before terminal result', () => {
-  const reg = new IdempotencyRegistry();
-  const token = 'user-token-123';
-  const requestId = rc.createRequestId();
+test('canonicalization handles key order equivalence', () => {
+  const p1 = { action: 'snooze', seconds: 300 };
+  const p2 = { seconds: 300, action: 'snooze' };
 
-  const regResult = reg.register(token, requestId, 'snooze', { seconds: 900 });
-  assert.equal(regResult.state, 'new');
-  assert.equal(regResult.ack.status, 'accepted');
-  assert.equal(regResult.ack.duplicate, false);
-
-  const appliedAck = rc.createCommandAck({ requestId, action: 'snooze', status: 'applied', stateRevision: 5 });
-  reg.resolve(token, requestId, appliedAck);
-
-  const stats = reg.getStats();
-  assert.equal(stats.inProgress, 0);
-  assert.equal(stats.size, 1);
+  assert.equal(rc.canonicalStringify(p1), rc.canonicalStringify(p2));
 });
 
-test('2. In-progress duplicate gets immediate duplicate accepted', () => {
-  const reg = new IdempotencyRegistry();
-  const token = 'user-token-123';
-  const requestId = rc.createRequestId();
+test('forged extra fields sanitize to identical canonical operation', () => {
+  const raw1 = { protocolVersion: 3, requestId: rc.createRequestId(), action: 'snooze', seconds: 300 };
+  const raw2 = { protocolVersion: 3, requestId: rc.createRequestId(), action: 'snooze', seconds: 300, forceShutdown: true, profileId: 'forged' };
 
-  const first = reg.register(token, requestId, 'snooze', { seconds: 900 });
-  assert.equal(first.state, 'new');
+  const v1 = rc.validateCompanionV3Message(raw1);
+  const v2 = rc.validateCompanionV3Message(raw2);
 
-  const second = reg.register(token, requestId, 'snooze', { seconds: 900 });
-  assert.equal(second.state, 'in_progress_duplicate');
-  assert.equal(second.ack.status, 'accepted');
-  assert.equal(second.ack.duplicate, true);
+  assert.deepEqual(v1.canonicalPayload, v2.canonicalPayload);
+  assert.equal(rc.canonicalStringify(v1.canonicalPayload), rc.canonicalStringify(v2.canonicalPayload));
 });
 
-test('3. All connected waiters receive single terminal result upon completion', async () => {
-  const reg = new IdempotencyRegistry();
-  const token = 'user-token-123';
-  const requestId = rc.createRequestId();
+// ─────────────────────────────────────────────────────────────────────────────
+// IdempotencyRegistry Concurrency, Lifecycle & Capacity Tests
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const first = reg.register(token, requestId, 'snooze', { seconds: 900 });
-  const second = reg.register(token, requestId, 'snooze', { seconds: 900 });
+test('1. Existing identical duplicate resolves from record even when capacity is full', () => {
+  const reg = new IdempotencyRegistry({ maxEntries: 2 });
+  const token = 'token-1';
+  const req1 = rc.createRequestId();
+  const req2 = rc.createRequestId();
 
-  let waiter1Ack = null;
-  let waiter2Ack = null;
+  reg.register(token, req1, 'pause', { action: 'pause' });
+  reg.register(token, req2, 'pause', { action: 'pause' });
+  assert.equal(reg.getStats().size, 2);
 
-  reg.addWaiter(first.record, ack => { waiter1Ack = ack; });
-  reg.addWaiter(second.record, ack => { waiter2Ack = ack; });
-
-  const terminalAck = rc.createCommandAck({ requestId, action: 'snooze', status: 'applied', stateRevision: 10 });
-  reg.resolve(token, requestId, terminalAck);
-
-  assert.notEqual(waiter1Ack, null);
-  assert.notEqual(waiter2Ack, null);
-  assert.equal(waiter1Ack.status, 'applied');
-  assert.equal(waiter1Ack.duplicate, true);
-  assert.equal(waiter2Ack.status, 'applied');
-  assert.equal(waiter2Ack.duplicate, true);
+  // Duplicate for req1 while at capacity
+  const dup = reg.register(token, req1, 'pause', { action: 'pause' });
+  assert.equal(dup.state, 'in_progress_duplicate');
 });
 
-test('4. Disconnected waiter is safely removed without throwing', () => {
-  const reg = new IdempotencyRegistry();
-  const token = 'user-token-123';
-  const requestId = rc.createRequestId();
+test('2. Existing conflicting duplicate returns request_id_conflict at capacity', () => {
+  const reg = new IdempotencyRegistry({ maxEntries: 2 });
+  const token = 'token-1';
+  const req1 = rc.createRequestId();
+  const req2 = rc.createRequestId();
 
-  const first = reg.register(token, requestId, 'snooze', { seconds: 900 });
-  
-  let called = false;
-  const unregister = reg.addWaiter(first.record, () => { called = true; });
+  reg.register(token, req1, 'snooze', { action: 'snooze', seconds: 300 });
+  reg.register(token, req2, 'pause', { action: 'pause' });
 
-  // Simulate socket disconnect before resolution
-  unregister();
-
-  const terminalAck = rc.createCommandAck({ requestId, action: 'snooze', status: 'applied' });
-  reg.resolve(token, requestId, terminalAck);
-
-  assert.equal(called, false);
-});
-
-test('5. Terminal delivery failure to a waiter does not crash', () => {
-  const reg = new IdempotencyRegistry();
-  const token = 'user-token-123';
-  const requestId = rc.createRequestId();
-
-  const first = reg.register(token, requestId, 'snooze', { seconds: 900 });
-  
-  reg.addWaiter(first.record, () => {
-    throw new Error('Socket closed forcibly');
-  });
-
-  const terminalAck = rc.createCommandAck({ requestId, action: 'snooze', status: 'applied' });
-  assert.doesNotThrow(() => {
-    reg.resolve(token, requestId, terminalAck);
-  });
-});
-
-test('6. Legacy / unsupported clients receive stable upgrade_required', () => {
-  const legacyMsg = { action: 'startNightMode', nightModeId: 'quick-sleep' };
-  const res = rc.validateCompanionMessage(legacyMsg);
-  assert.equal(res.ok, false);
-  assert.equal(res.reason, rc.REJECTION_REASONS.UPGRADE_REQUIRED);
-});
-
-test('7. Same ID with conflicting payload returns request_id_conflict', () => {
-  const reg = new IdempotencyRegistry();
-  const token = 'user-token-123';
-  const requestId = rc.createRequestId();
-
-  reg.register(token, requestId, 'snooze', { seconds: 900 });
-
-  const conflict = reg.register(token, requestId, 'snooze', { seconds: 1800 });
+  // Conflicting payload for req1 at capacity
+  const conflict = reg.register(token, req1, 'snooze', { action: 'snooze', seconds: 900 });
   assert.equal(conflict.state, 'conflict');
   assert.equal(conflict.ack.reason, rc.REJECTION_REASONS.REQUEST_ID_CONFLICT);
 });
 
-test('8. Capacity limit enforcement returns idempotency_capacity and preserves unexpired records', () => {
-  const reg = new IdempotencyRegistry({ maxEntries: 3 });
-  const token = 'user-token-123';
+test('3. Only a genuinely new request receives idempotency_capacity', () => {
+  const reg = new IdempotencyRegistry({ maxEntries: 1 });
+  const token = 'token-1';
+  const req1 = rc.createRequestId();
+  const req2 = rc.createRequestId();
 
-  for (let i = 0; i < 3; i++) {
-    const id = rc.createRequestId();
-    const res = reg.register(token, id, 'pause', {});
-    reg.resolve(token, id, rc.createCommandAck({ requestId: id, action: 'pause', status: 'applied' }));
-    assert.equal(res.state, 'new');
-  }
+  reg.register(token, req1, 'pause', { action: 'pause' });
 
-  // Attempting 4th entry when 3 unexpired entries exist
-  const overflowId = rc.createRequestId();
-  const overflowRes = reg.register(token, overflowId, 'pause', {});
-  assert.equal(overflowRes.state, 'capacity_exceeded');
-  assert.equal(overflowRes.ack.reason, rc.REJECTION_REASONS.IDEMPOTENCY_CAPACITY);
-  assert.equal(reg.getStats().size, 3);
+  const overflow = reg.register(token, req2, 'pause', { action: 'pause' });
+  assert.equal(overflow.state, 'capacity_exceeded');
+  assert.equal(overflow.ack.reason, rc.REJECTION_REASONS.IDEMPOTENCY_CAPACITY);
 });
 
-test('9. Protocol field is consistently protocolVersion = 3', () => {
-  const ack = rc.createCommandAck({ requestId: rc.createRequestId(), action: 'pause', status: 'applied' });
-  assert.equal(ack.protocolVersion, 3);
-  assert.equal('v' in ack, false);
+test('4. Expired entries are removed using an injected clock', () => {
+  let mockNow = 1000;
+  const reg = new IdempotencyRegistry({ ttlMs: 500, clock: () => mockNow });
+  const token = 'token-1';
+  const req1 = rc.createRequestId();
+
+  reg.register(token, req1, 'pause', { action: 'pause' });
+  reg.resolve(token, req1, rc.createCommandAck({ requestId: req1, action: 'pause', status: rc.ACK_STATUSES.COMPLETED }));
+
+  assert.equal(reg.getStats().size, 1);
+
+  // Advance time past TTL
+  mockNow = 2000;
+  reg.sweep();
+  assert.equal(reg.getStats().size, 0);
+});
+
+test('5. In-progress entries never expire while execution is unresolved', () => {
+  let mockNow = 1000;
+  const reg = new IdempotencyRegistry({ ttlMs: 500, clock: () => mockNow });
+  const token = 'token-1';
+  const req1 = rc.createRequestId();
+
+  reg.register(token, req1, 'pause', { action: 'pause' });
+  
+  // Advance time past TTL while in_progress
+  mockNow = 2000;
+  reg.sweep();
+  assert.equal(reg.getStats().size, 1);
+  assert.equal(reg.getStats().inProgress, 1);
+});
+
+test('6. Terminal execution rejection is stored and replayed consistently', () => {
+  const reg = new IdempotencyRegistry();
+  const token = 'token-1';
+  const req1 = rc.createRequestId();
+
+  reg.register(token, req1, 'snooze', { action: 'snooze', seconds: 300 });
+
+  const rejectedAck = rc.createCommandAck({
+    requestId: req1,
+    action: 'snooze',
+    status: rc.ACK_STATUSES.REJECTED,
+    reason: rc.REJECTION_REASONS.NOT_IDLE
+  });
+
+  reg.resolve(token, req1, rejectedAck);
+
+  const dup = reg.register(token, req1, 'snooze', { action: 'snooze', seconds: 300 });
+  assert.equal(dup.state, 'completed_duplicate');
+  assert.equal(dup.ack.status, 'rejected');
+  assert.equal(dup.ack.reason, rc.REJECTION_REASONS.NOT_IDLE);
+  assert.equal(dup.ack.duplicate, true);
+});
+
+test('7. Waiter cleanup does not delete the underlying execution record', () => {
+  const reg = new IdempotencyRegistry();
+  const token = 'token-1';
+  const req1 = rc.createRequestId();
+
+  const first = reg.register(token, req1, 'pause', { action: 'pause' });
+  const unregister = reg.addWaiter(first.record, () => {});
+
+  unregister();
+
+  assert.equal(reg.getStats().size, 1);
+  assert.equal(first.record.waiters.size, 0);
+});
+
+test('8. Socket write failure on one waiter callback does not block remaining waiters', () => {
+  const reg = new IdempotencyRegistry();
+  const token = 'token-1';
+  const req1 = rc.createRequestId();
+
+  const first = reg.register(token, req1, 'pause', { action: 'pause' });
+
+  let waiter2Received = false;
+
+  reg.addWaiter(first.record, () => {
+    throw new Error('Socket write failed');
+  });
+
+  reg.addWaiter(first.record, () => {
+    waiter2Received = true;
+  });
+
+  const termAck = rc.createCommandAck({ requestId: req1, action: 'pause', status: rc.ACK_STATUSES.COMPLETED });
+  reg.resolve(token, req1, termAck);
+
+  assert.equal(waiter2Received, true);
 });
