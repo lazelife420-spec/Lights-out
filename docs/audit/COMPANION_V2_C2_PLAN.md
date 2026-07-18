@@ -1,8 +1,8 @@
 # Lights Out Companion V2 — C2 Plan: Phone Night Mode Start
 
-Date: 2026-07-17  
-Status: **Architecture plan only** — implementation blocked until C1 real-night observation is clean.  
-Target PR: `feat/companion-v2-c2-night-mode-start`  
+Date: 2026-07-17
+Status: **Architecture plan only** — implementation blocked until C1 real-night observation is clean.
+Target PR: `feat/companion-v2-c2-night-mode-start`
 Baseline: `main` at `b991e61e3cfb847120de64f0dcb122b8fa36fa1b` (post-C1 merge commit)
 
 ## 1. What C2 adds
@@ -34,7 +34,7 @@ C2 exposes the same catalogue the desktop renders, lets the phone pick a mode, a
 - `resolveForExecution(id)` — validates availability and returns canonical timer options including `durationSeconds`, `action`, `ritualId`, `nightModeId`, `nightModeTitle`, `nightModeVersion`, `dryRun: false`, `forceShutdown: false`, `muteSystem: false`, `gracePeriod: 2`.
 - `resolveNightModeStart(options)` — confirms a start still matches the canonical mode and returns the identity tuple.
 
-Ready modes: `quick-sleep`, `lights-down`, `movie-wind-down`, `full-shutdown`.  
+Ready modes: `quick-sleep`, `lights-down`, `movie-wind-down`, `full-shutdown`.
 Disabled modes: `quiet-house` (coming soon), `school-night` (needs router setup).
 
 ### 3.2 Desktop arming/start flow (already shipped)

@@ -185,7 +185,6 @@ serialTest('Companion integration: Host binding (Local vs LAN)', async (t) => {
   await companion.stop();
 });
 
-<<<<<<< HEAD
 for (const errorCode of ['HTTP_HEALTH_FAILED', 'PAIR_CHECK_FAILED', 'WEBSOCKET_UPGRADE_FAILED']) {
   serialTest(`Companion integration: ${errorCode} blocks readiness`, async () => {
     const port = await freePort();
@@ -216,7 +215,8 @@ serialTest('Companion integration: repeated token-rotation restarts release the 
     assert.notEqual(status.errorCode, 'EADDRINUSE');
   }
   await companion.stop();
-=======
+});
+
 test('Companion integration: sendToClient encodes a text frame for a client', () => {
   const writes = [];
   const mockClient = { alive: true, socket: { write: (buf) => { writes.push(buf); return true; } } };
@@ -253,5 +253,4 @@ test('Companion integration: sendToClient marks client dead on socket write erro
   const result = companion.sendToClient(mockClient, { type: 'nightModes', modes: [] });
   assert.equal(result, false, 'sendToClient should return false on error');
   assert.equal(mockClient.alive, false, 'client should be marked dead after write error');
->>>>>>> ce91785 (feat: C2 canonical Night Mode start from companion phone)
 });
