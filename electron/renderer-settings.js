@@ -140,9 +140,10 @@ function updateClockStyleVisibility() {
 }
 
 function collectWifiGuardSettings() {
+  const provider = els.selWifiProvider?.value || 'webhook';
   return {
-    enabled: els.chkWifiGuard?.checked || false,
-    provider: els.selWifiProvider?.value || 'firewall',
+    enabled: provider !== 'firewall' && (els.chkWifiGuard?.checked || false),
+    provider,
     routerIp: els.wifiRouterIp?.value || '',
     routerUser: els.wifiRouterUser?.value || 'admin',
     routerPass: els.wifiRouterPass?.value || '',
@@ -183,10 +184,11 @@ function collectAccountabilitySettings() {
 
 function applyWifiGuardSettings(wifi) {
   if (!wifi) return;
-  if (els.chkWifiGuard) els.chkWifiGuard.checked = !!wifi.enabled;
-  if (els.wifiGuardConfig) els.wifiGuardConfig.style.display = wifi.enabled ? '' : 'none';
+  const supportedProvider = wifi.provider !== 'firewall';
+  if (els.chkWifiGuard) els.chkWifiGuard.checked = supportedProvider && !!wifi.enabled;
+  if (els.wifiGuardConfig) els.wifiGuardConfig.style.display = supportedProvider && wifi.enabled ? '' : 'none';
   if (els.selWifiProvider) {
-    els.selWifiProvider.value = wifi.provider || 'firewall';
+    els.selWifiProvider.value = wifi.provider || 'webhook';
     els.selWifiProvider.dispatchEvent(new Event('change'));
   }
   if (els.wifiRouterIp) els.wifiRouterIp.value = wifi.routerIp || '';
@@ -197,6 +199,10 @@ function applyWifiGuardSettings(wifi) {
   if (els.chkWifiUnblockCancel) els.chkWifiUnblockCancel.checked = wifi.unblockOnCancel !== false;
   wifiSelectedDevices.macs = wifi.deviceMacs || [];
   wifiSelectedDevices.ips = wifi.deviceIps || [];
+  if (els.wifiTestResult && wifi.setupError) {
+    els.wifiTestResult.textContent = wifi.setupError;
+    els.wifiTestResult.style.color = '#ff9800';
+  }
 }
 
 function applyContentBlockerSettings(cb) {
@@ -209,6 +215,10 @@ function applyContentBlockerSettings(cb) {
   if (els.chkContentUnblockComplete) els.chkContentUnblockComplete.checked = cb.unblockOnComplete !== false;
   cbSchedules = Array.isArray(cb.schedules) ? cb.schedules : [];
   renderContentBlockerSchedules();
+  if (els.contentTestResult && cb.setupError) {
+    els.contentTestResult.textContent = cb.setupError;
+    els.contentTestResult.style.color = '#ff9800';
+  }
 }
 
 // Content Blocker recurring schedules -- independent of the shutdown timer's
@@ -332,6 +342,10 @@ function applyAccountabilitySettings(acc) {
   if (acc.partners?.[0]) {
     if (els.accWebhookUrl) els.accWebhookUrl.value = acc.partners[0].url || '';
     if (els.accPartnerName) els.accPartnerName.value = acc.partners[0].name || 'Partner';
+  }
+  if (els.accTestResult && acc.setupError) {
+    els.accTestResult.textContent = acc.setupError;
+    els.accTestResult.style.color = '#ff9800';
   }
 }
 

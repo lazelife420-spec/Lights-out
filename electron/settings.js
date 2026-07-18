@@ -173,7 +173,7 @@ const DEFAULTS = {
   },
   wifiGuard: {
     enabled: false,
-    provider: 'firewall',
+    provider: 'webhook',
     routerIp: '',
     routerUser: 'admin',
     routerPass: '',

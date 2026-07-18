@@ -1,5 +1,5 @@
-// Sleep Debt Tracker: tracks cumulative sleep debt against
-// your target bedtime. More motivating than streaks.
+// Estimated bedtime-deficit tracker. Values are inferred from a completed
+// Lights Out timer to a configured wake time; they are not measured sleep.
 
 const fs = require('fs');
 const path = require('path');
@@ -42,13 +42,13 @@ function save() {
 }
 
 // Record a night's sleep. Called when a timer completes.
-function recordNight(bedTime, wakeTime, actualHours) {
+function recordNight(bedTime, wakeTime, estimatedHours) {
   const data = load();
   const today = new Date().toISOString().slice(0, 10);
 
   // Calculate debt for this night.
-  const debt = Math.max(0, data.targetHours - actualHours);
-  const surplus = Math.max(0, actualHours - data.targetHours);
+  const debt = Math.max(0, data.targetHours - estimatedHours);
+  const surplus = Math.max(0, estimatedHours - data.targetHours);
 
   // Update or add entry for today.
   const existing = data.dailyLog.findIndex(e => e.date === today);
@@ -56,7 +56,10 @@ function recordNight(bedTime, wakeTime, actualHours) {
     date: today,
     bedTime: bedTime || '23:00',
     wakeTime: wakeTime || data.wakeTime || '07:00',
-    actualHours: Math.round(actualHours * 10) / 10,
+    // actualHours is retained for backwards-compatible data import only.
+    actualHours: Math.round(estimatedHours * 10) / 10,
+    estimatedHours: Math.round(estimatedHours * 10) / 10,
+    measurement: 'timer_estimate',
     targetHours: data.targetHours,
     debt: Math.round(debt * 10) / 10,
     surplus: Math.round(surplus * 10) / 10
@@ -82,7 +85,7 @@ function getDebtSummary() {
 
   const weekDebt = recent.reduce((sum, e) => sum + (e.debt || 0), 0);
   const weekSurplus = recent.reduce((sum, e) => sum + (e.surplus || 0), 0);
-  const weekAvg = recent.length ? (recent.reduce((sum, e) => sum + e.actualHours, 0) / recent.length) : 0;
+  const weekAvg = recent.length ? (recent.reduce((sum, e) => sum + (e.estimatedHours ?? e.actualHours ?? 0), 0) / recent.length) : 0;
 
   const totalDebt = data.dailyLog.reduce((sum, e) => sum + (e.debt || 0), 0);
   const totalSurplus = data.dailyLog.reduce((sum, e) => sum + (e.surplus || 0), 0);
@@ -98,7 +101,9 @@ function getDebtSummary() {
     nightsTracked: data.dailyLog.length,
     weekNights: recent.length,
     dailyLog: data.dailyLog.slice(-7).reverse(),
-    netDebt: Math.round((totalDebt - totalSurplus) * 10) / 10
+    netDebt: Math.round((totalDebt - totalSurplus) * 10) / 10,
+    basis: 'Estimated from timer completion to configured wake time; not measured sleep.',
+    isMeasuredSleep: false
   };
 }
 
@@ -130,11 +135,10 @@ function estimateSleepHours(bedTime, wakeTime) {
 
 // Get debt status label.
 function getDebtLabel(netDebt) {
-  if (netDebt <= 0) return { label: 'Sleep Rich', color: '#4caf50', icon: '\u{1F929}' };
-  if (netDebt <= 2) return { label: 'Slight Deficit', color: '#8bc34a', icon: '\u{1F610}' };
-  if (netDebt <= 5) return { label: 'In Debt', color: '#ff9800', icon: '\u{1F614}' };
-  if (netDebt <= 10) return { label: 'Deep Debt', color: '#ff5722', icon: '\u{1F635}' };
-  return { label: 'Critical Debt', color: '#ff4d4d', icon: '\u{1F624}' };
+  if (netDebt <= 0) return { label: 'No estimated deficit', color: '#4caf50', icon: '\u{2713}' };
+  if (netDebt <= 2) return { label: 'Small estimate', color: '#8bc34a', icon: '\u{223C}' };
+  if (netDebt <= 5) return { label: 'Moderate estimate', color: '#ff9800', icon: '\u{223C}' };
+  return { label: 'Large estimate', color: '#ff5722', icon: '\u{223C}' };
 }
 
 function reset() {

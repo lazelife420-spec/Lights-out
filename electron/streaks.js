@@ -147,7 +147,7 @@ function getWeekStats(events) {
     const [h, m] = (e.bedTime || '22:00').split(':').map(Number);
     const mins = (h * 60 + m);
     totalMin += mins;
-    return { date: e.date, bedTime: e.bedTime, onTime: mins <= 23 * 60, snoozed: e.snoozed };
+    return { date: e.date, bedTime: e.bedTime, onTime: mins < 23 * 60, snoozed: e.snoozed };
   });
   const avgMin = Math.round(totalMin / recent.length);
   const avgH = Math.floor(avgMin / 60) % 24;
@@ -248,7 +248,8 @@ function buildWeeklyNarrative(report) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sleep Score: composite 0-100 score
+// App-use routine consistency: composite 0-100 score. This describes Lights Out
+// completion timing and snooze behavior; it is not a sleep or health metric.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function getSleepScore() {
@@ -291,11 +292,11 @@ function getSleepScore() {
   const totalScore = Math.min(100, consistencyScore + onTimeScore + noSnoozeScore + ritualScore);
 
   let label;
-  if (totalScore >= 90) label = 'Legendary';
-  else if (totalScore >= 75) label = 'Excellent';
-  else if (totalScore >= 60) label = 'Good';
-  else if (totalScore >= 40) label = 'Fair';
-  else label = 'Needs Work';
+  if (totalScore >= 90) label = 'Very consistent';
+  else if (totalScore >= 75) label = 'Consistent';
+  else if (totalScore >= 60) label = 'Developing';
+  else if (totalScore >= 40) label = 'Variable';
+  else label = 'Sparse';
 
   return {
     score: totalScore,
@@ -359,7 +360,7 @@ function getTrend(granularity = 'week', limit = 12) {
       const [h, m] = (e.bedTime || '23:00').split(':').map(Number);
       const mins = h * 60 + m;
       totalMin += mins;
-      if (mins <= 23 * 60) onTimeCount++;
+      if (mins < 23 * 60) onTimeCount++;
       if (e.snoozed) snoozeCount++;
     }
     const avgMin = Math.round(totalMin / events.length);

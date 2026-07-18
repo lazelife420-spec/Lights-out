@@ -66,24 +66,29 @@ function readHosts() {
 // interpret `` `n `` as a newline inside a single-quoted string (only inside
 // double-quoted ones), so the old code silently wrote every hosts entry onto
 // one literal line, which Windows cannot parse as separate block rules.
-function buildWriteHostsCommand(content) {
+function buildWriteHostsCommand(content, hostsPath = HOSTS_PATH) {
   const b64 = Buffer.from(content, 'utf8').toString('base64');
-  return `$bytes = [System.Convert]::FromBase64String('${b64}'); [System.IO.File]::WriteAllBytes('${HOSTS_PATH}', $bytes)`;
+  const safePath = String(hostsPath).replace(/'/g, "''");
+  return `$bytes = [System.Convert]::FromBase64String('${b64}'); [System.IO.File]::WriteAllBytes('${safePath}', $bytes)`;
 }
 
 // Write the hosts file (requires admin, so we use PowerShell with elevation).
-async function writeHosts(content) {
+async function writeHosts(content, {
+  hostsPath = HOSTS_PATH,
+  runCommand = executePS,
+  fileSystem = fs
+} = {}) {
   // Write via PowerShell which can handle admin file access.
   try {
-    await executePS(buildWriteHostsCommand(content));
+    await runCommand(buildWriteHostsCommand(content, hostsPath));
     // Flush DNS cache so changes take effect immediately.
-    await executePS('ipconfig /flushdns');
+    await runCommand('ipconfig /flushdns');
     return true;
   } catch {
     // Fallback: try direct write (works if app is running as admin).
     try {
-      fs.writeFileSync(HOSTS_PATH, content, 'utf-8');
-      await executePS('ipconfig /flushdns');
+      fileSystem.writeFileSync(hostsPath, content, 'utf-8');
+      await runCommand('ipconfig /flushdns');
       return true;
     } catch {
       return false;
@@ -112,7 +117,12 @@ async function blockSites(blocklist) {
   content = content.trimEnd() + '\n\n' + blockSection + '\n';
 
   const success = await writeHosts(content);
-  return { success, sites: sites.length, provider: 'hosts' };
+  return {
+    success,
+    sites: sites.length,
+    provider: 'hosts',
+    error: success ? '' : 'Hosts file update was denied or unavailable; no block was confirmed.'
+  };
 }
 
 // Unblock all sites by removing the Lights Out section from the hosts file.
@@ -120,7 +130,11 @@ async function unblockSites() {
   let content = readHosts();
   content = removeBlockSection(content);
   const success = await writeHosts(content.trimEnd() + '\n');
-  return { success, provider: 'hosts' };
+  return {
+    success,
+    provider: 'hosts',
+    error: success ? '' : 'Hosts file update was denied or unavailable; no unblock was confirmed.'
+  };
 }
 
 // Remove the Lights Out block section from hosts content.
@@ -228,5 +242,7 @@ module.exports = {
   // Exposed for unit testing of the hosts-injection guard.
   __sanitizeSites: sanitizeSites,
   // Exposed for unit testing the hosts-file write command builder.
-  __buildWriteHostsCommand: buildWriteHostsCommand
+  __buildWriteHostsCommand: buildWriteHostsCommand,
+  // Controlled isolated-target permission harness; production callers use HOSTS_PATH.
+  __writeHosts: writeHosts
 };

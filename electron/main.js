@@ -16,6 +16,7 @@ const calProviders = require('./calendarProviders');
 const companion = require('./companion');
 const companionNetwork = require('./companionNetwork');
 const companionFirewall = require('./companionFirewall');
+const capabilityTruth = require('./capabilityTruth');
 const media = require('./media');
 const unsavedGuard = require('./unsavedGuard');
 const family = require('./family');
@@ -888,14 +889,14 @@ async function completeTimer() {
     });
   }
   sendAccountability('TIMER_COMPLETE');
-  // Record sleep debt for tonight.
+  // Record an app-timer estimate only; this is not measured sleep.
   try {
     const appSettings = settingsStore.getSection('app') || {};
     const bedTime = new Date().toTimeString().slice(0, 5);
     const estimated = sleepDebt.estimateSleepHours(bedTime, appSettings.wakeTime || '07:00');
     sleepDebt.recordNight(bedTime, appSettings.wakeTime || '07:00', estimated);
   } catch (e) {
-    console.error('Failed to record sleep debt:', e);
+    console.error('Failed to record estimated bedtime deficit:', e);
   }
 
   // Unsaved work guardian: check for unsaved work before power action.
@@ -1743,9 +1744,9 @@ ipcMain.handle('save-app-settings', async (event, settings = {}) => {
   if (settings.customization) settingsStore.updateSection('customization', settings.customization);
   if (settings.lastLight) settingsStore.updateSection('lastLight', settings.lastLight);
   if (settings.calendar) settingsStore.updateSection('calendar', settings.calendar);
-  if (settings.wifiGuard) settingsStore.updateSection('wifiGuard', settings.wifiGuard);
-  if (settings.contentBlocker) settingsStore.updateSection('contentBlocker', settings.contentBlocker);
-  if (settings.accountability) settingsStore.updateSection('accountability', settings.accountability);
+  if (settings.wifiGuard) settingsStore.updateSection('wifiGuard', capabilityTruth.sanitizeWifiGuard(settings.wifiGuard));
+  if (settings.contentBlocker) settingsStore.updateSection('contentBlocker', capabilityTruth.sanitizeContentBlocker(settings.contentBlocker));
+  if (settings.accountability) settingsStore.updateSection('accountability', capabilityTruth.sanitizeAccountability(settings.accountability));
   return {
     ...getLoginSettings(),
     app: settingsStore.getSection('app'),
@@ -1987,8 +1988,9 @@ ipcMain.handle('wifi-guard-unblock', async () => {
   return wifiGuard.unblockInternet(config);
 });
 ipcMain.handle('save-wifi-guard-settings', async (e, wifiSettings) => {
-  settingsStore.updateSection('wifiGuard', wifiSettings);
-  return { saved: true };
+  const sanitized = capabilityTruth.sanitizeWifiGuard(wifiSettings);
+  settingsStore.updateSection('wifiGuard', sanitized);
+  return { saved: true, settings: sanitized };
 });
 ipcMain.handle('get-wifi-guard-settings', async () => {
   return settingsStore.getSection('wifiGuard');
@@ -2003,16 +2005,18 @@ ipcMain.handle('content-block-status', async () => {
   return { blocked: contentBlocker.isBlocked(), sites: contentBlocker.getActiveBlocklist() };
 });
 ipcMain.handle('save-content-blocker-settings', async (e, s) => {
-  settingsStore.updateSection('contentBlocker', s);
+  const sanitized = capabilityTruth.sanitizeContentBlocker(s);
+  settingsStore.updateSection('contentBlocker', sanitized);
   checkContentBlockerSchedules(); // re-evaluate immediately, don't wait up to 60s
-  return { saved: true };
+  return { saved: true, settings: sanitized };
 });
 ipcMain.handle('get-content-blocker-settings', async () => {
   return settingsStore.getSection('contentBlocker');
 });
 ipcMain.handle('save-accountability-settings', async (e, s) => {
-  settingsStore.updateSection('accountability', s);
-  return { saved: true };
+  const sanitized = capabilityTruth.sanitizeAccountability(s);
+  settingsStore.updateSection('accountability', sanitized);
+  return { saved: true, settings: sanitized };
 });
 ipcMain.handle('get-accountability-settings', async () => {
   return settingsStore.getSection('accountability');
@@ -2049,7 +2053,7 @@ ipcMain.handle('get-reality-check', async () => {
   } catch { return null; }
 });
 
-// Sleep Debt IPC.
+// Legacy IPC name retained for compatibility; payload is an estimated bedtime deficit.
 ipcMain.handle('get-sleep-debt', async () => {
   try { return sleepDebt.getDebtSummary(); } catch { return null; }
 });

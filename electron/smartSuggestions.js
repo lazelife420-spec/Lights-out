@@ -1,5 +1,5 @@
 // Smart Suggestions: recommends timer duration and bedtime based on
-// sleep debt, override history, screen time, and streak patterns.
+// timer-derived bedtime-deficit estimates, override history, screen time, and streak patterns.
 
 const streaks = require('./streaks');
 const sleepDebt = require('./sleepDebt');
@@ -17,7 +17,7 @@ function getSuggestions() {
         type: 'bedtime',
         priority: 'high',
         title: 'Go to bed earlier tonight',
-        description: `You have ${debt.netDebt}h of sleep debt. Starting 30 minutes earlier helps recover.`,
+        description: `Timer history estimates a ${debt.netDebt}h bedtime deficit. Starting the routine earlier may reduce that estimate; it is not measured sleep.`,
         action: { adjustMinutes: -30 }
       });
     }

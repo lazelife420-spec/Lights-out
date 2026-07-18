@@ -77,7 +77,7 @@ function getOverrideConsequences(timerState) {
       consequences.push({
         type: 'debt',
         severity: 'high',
-        message: `You already owe ${debt.netDebt}h of sleep this week.`,
+        message: `Timer history estimates a ${debt.netDebt}h bedtime deficit this week; this is not measured sleep.`,
         icon: '\u{1F4B8}'
       });
     }
@@ -113,12 +113,13 @@ async function executeOverride(reason, timerState) {
     streaks.recordEvent(null, 'override', true);
   } catch {}
 
-  // 3. Record sleep debt.
+  // 3. Record the timer-derived bedtime-deficit estimate.
   try {
     const sleepDebt = require('./sleepDebt');
     const appSettings = settingsStore.getSection('app') || {};
     const bedTime = new Date().toTimeString().slice(0, 5);
     const estimated = sleepDebt.estimateSleepHours(bedTime, appSettings.wakeTime || '07:00');
+    // Timer-to-wake estimate only; never present this as measured sleep.
     sleepDebt.recordNight(bedTime, appSettings.wakeTime || '07:00', estimated);
   } catch {}
 

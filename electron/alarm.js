@@ -17,13 +17,14 @@ async function scheduleWakeAlarm(alarmTime, appExePath) {
   // Remove any previous wake alarm.
   await removeWakeAlarm();
 
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(alarmTime)) return { success: false, error: 'Invalid time format' };
   const [hours, minutes] = alarmTime.split(':').map(Number);
-  if (isNaN(hours) || isNaN(minutes)) return { success: false, error: 'Invalid time format' };
 
   // Build the PowerShell command to create a scheduled task that wakes the PC.
   const psCmd = [
     `$Action = New-ScheduledTaskAction -Execute '${appExePath.replace(/'/g, "''")}' -Argument '--first-light'`,
-    `$Trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).Date.AddHours(${hours}).AddMinutes(${minutes})`,
+    `$At = (Get-Date).Date.AddHours(${hours}).AddMinutes(${minutes}); if ($At -le (Get-Date)) { $At = $At.AddDays(1) }`,
+    '$Trigger = New-ScheduledTaskTrigger -Once -At $At',
     `$Settings = New-ScheduledTaskSettingsSet -WakeToRun -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable`,
     `Register-ScheduledTask -TaskName '${TASK_NAME}' -Action $Action -Trigger $Trigger -Settings $Settings -Force -Description 'Lights Out First Light wake-up alarm'`
   ].join('; ');

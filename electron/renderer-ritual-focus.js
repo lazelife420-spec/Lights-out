@@ -147,23 +147,22 @@ function renderFocusSession(fs) {
   }
 }
 
-// Load sleep debt on init.
+// Load the timer-derived bedtime-deficit estimate on init.
 async function loadSleepDebt() {
   try {
     const debt = await api.getSleepDebt?.();
     if (debt) renderSleepDebt(debt);
   } catch (e) {
-    console.error('Failed to load sleep debt:', e);
+    console.error('Failed to load estimated bedtime deficit:', e);
   }
 }
 
 function renderSleepDebt(debt) {
   if (!debt) return;
-  const label = debt.netDebt <= 0 ? 'Sleep Rich' :
-    debt.netDebt <= 2 ? 'Slight Deficit' :
-    debt.netDebt <= 5 ? 'In Debt' :
-    debt.netDebt <= 10 ? 'Deep Debt' : 'Critical';
-  const colors = { 'Sleep Rich': '#4caf50', 'Slight Deficit': '#8bc34a', 'In Debt': '#ff9800', 'Deep Debt': '#ff5722', 'Critical': '#ff4d4d' };
+  const label = debt.netDebt <= 0 ? 'No estimated deficit' :
+    debt.netDebt <= 2 ? 'Small estimate' :
+    debt.netDebt <= 5 ? 'Moderate estimate' : 'Large estimate';
+  const colors = { 'No estimated deficit': '#4caf50', 'Small estimate': '#8bc34a', 'Moderate estimate': '#ff9800', 'Large estimate': '#ff5722' };
   if (els.debtAmount) {
     els.debtAmount.textContent = `${debt.netDebt > 0 ? '+' : ''}${debt.netDebt}h`;
     els.debtAmount.style.color = colors[label] || 'var(--text-primary)';

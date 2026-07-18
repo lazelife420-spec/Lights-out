@@ -21,6 +21,7 @@ let config = {
   httpMethod: 'POST',
   httpHeaders: {},
   httpBodyTemplate: '{"brightness": {{BRIGHTNESS}}, "color_temp": {{COLOR_TEMP}}, "on": {{ON}}}',
+  verifiedConfigKey: '',
   // MQTT settings
   mqttBroker: '',
   mqttPort: 1883,
@@ -35,6 +36,13 @@ let config = {
   iftttWebhookKey: '',
   iftttEventName: 'lights_out'
 };
+
+function configurationKey(value = config) {
+  const provider = value.provider || 'none';
+  if (provider === 'hue') return `hue:${value.hueBridgeIp || ''}:${value.hueUsername || ''}:${value.hueGroupId || ''}`;
+  if (provider === 'http') return `http:${value.httpMethod || 'POST'}:${value.httpUrl || ''}:${value.httpBodyTemplate || ''}`;
+  return '';
+}
 
 // Runtime state
 let state = {
@@ -503,7 +511,7 @@ async function testSmartLightConnection() {
       }
       const lights = await getHueLights(config.hueBridgeIp, config.hueUsername);
       if (lights.length > 0) {
-        return { success: true, message: `Connected: ${lights.length} lights found` };
+        return { success: true, message: `Connected: ${lights.length} lights found`, verifiedConfigKey: configurationKey() };
       }
       return { success: false, message: 'No lights found - check bridge IP/username' };
     }
@@ -513,7 +521,7 @@ async function testSmartLightConnection() {
       }
       try {
         await invokeHttpLightAction(254, 366, true);
-        return { success: true, message: `Sent test to ${config.httpUrl}` };
+        return { success: true, message: `Sent test to ${config.httpUrl}`, verifiedConfigKey: configurationKey() };
       } catch (error) {
         return { success: false, message: error.message };
       }
@@ -551,7 +559,7 @@ async function testSmartLightConnection() {
 
 function loadConfig(newConfig) {
   if (!newConfig) return;
-  config = {
+  const merged = {
     ...config,
     provider: newConfig.provider || config.provider,
     mode: newConfig.mode || config.mode,
@@ -564,8 +572,11 @@ function loadConfig(newConfig) {
     httpUrl: newConfig.httpUrl || config.httpUrl,
     httpMethod: newConfig.httpMethod || config.httpMethod,
     httpHeaders: newConfig.httpHeaders || config.httpHeaders,
-    httpBodyTemplate: newConfig.httpBodyTemplate || config.httpBodyTemplate
+    httpBodyTemplate: newConfig.httpBodyTemplate || config.httpBodyTemplate,
+    verifiedConfigKey: newConfig.verifiedConfigKey || ''
   };
+  merged.enabled = Boolean(merged.enabled && merged.verifiedConfigKey && merged.verifiedConfigKey === configurationKey(merged));
+  config = merged;
 }
 
 function getConfig() {
@@ -584,6 +595,7 @@ module.exports = {
   // Configuration
   loadConfig,
   getConfig,
+  configurationKey,
   
   // Hue functions
   findHueBridge,
