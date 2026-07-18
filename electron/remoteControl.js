@@ -60,62 +60,138 @@ function validateCommand(cmd) {
   return { ok: true, command: { command } };
 }
 
+const REJECTION_REASONS = Object.freeze({
+  INVALID_REQUEST_ID: 'invalid_request_id',
+  REQUEST_ID_CONFLICT: 'request_id_conflict',
+  INVALID_PAYLOAD: 'invalid_payload',
+  UNSUPPORTED_ACTION: 'unsupported_action',
+  NOT_AUTHENTICATED: 'not_authenticated',
+  NOT_IDLE: 'not_idle',
+  NO_ACTIVE_TIMER: 'no_active_timer',
+  ALREADY_PAUSED: 'already_paused',
+  ALREADY_RUNNING: 'already_running',
+  MODE_UNKNOWN: 'mode_unknown',
+  MODE_UNAVAILABLE: 'mode_unavailable',
+  RITUAL_ACTIVE: 'ritual_active',
+  STALE_STATE: 'stale_state',
+  IDEMPOTENCY_CAPACITY: 'idempotency_capacity',
+  UPGRADE_REQUIRED: 'upgrade_required',
+  INTERNAL_ERROR: 'internal_error'
+});
+
+function createRequestId() {
+  const g = typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : global);
+  if (g.crypto?.randomUUID) {
+    return g.crypto.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  if (g.crypto?.getRandomValues) {
+    g.crypto.getRandomValues(bytes);
+  } else {
+    crypto.randomBytes(16).copy(bytes);
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40; // RFC 4122 Version 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // RFC 4122 Variant 10xx
+  const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function createCommandAck({ requestId, action, status, duplicate = false, reason = null, stateRevision = null }) {
+  return {
+    type: 'commandAck',
+    protocolVersion: 3,
+    requestId: requestId || null,
+    action: action || null,
+    status: status || 'rejected',
+    duplicate: Boolean(duplicate),
+    reason: reason || null,
+    stateRevision: stateRevision !== null && stateRevision !== undefined ? Number(stateRevision) : null
+  };
+}
+
 // Companion (phone PWA) uses a slightly different action vocabulary than the
 // family LAN protocol. Validate + sanitize it against the same safety bounds.
-// Returns { ok: true, message } with a sanitized message, or { ok: false, error }.
-const COMPANION_ACTIONS = ['start', 'startNightMode', 'getNightModes', 'togglePause', 'snooze', 'cancel'];
+// Returns { ok: true, message } with a sanitized message, or { ok: false, error, reason }.
+const COMPANION_ACTIONS = ['start', 'startNightMode', 'getNightModes', 'pause', 'resume', 'togglePause', 'snooze', 'cancel'];
+const MUTATING_COMPANION_ACTIONS = ['start', 'startNightMode', 'pause', 'resume', 'togglePause', 'snooze', 'cancel'];
+
+const REQUEST_ID_REGEX = /^[a-zA-Z0-9_-]{16,64}$/;
 
 function validateCompanionMessage(msg) {
-  if (!msg || typeof msg !== 'object') return { ok: false, error: 'malformed message' };
+  if (!msg || typeof msg !== 'object') return { ok: false, error: 'malformed message', reason: REJECTION_REASONS.INVALID_PAYLOAD };
   const action = msg.action;
-  if (!COMPANION_ACTIONS.includes(action)) return { ok: false, error: 'unknown action' };
+  if (!COMPANION_ACTIONS.includes(action)) return { ok: false, error: 'unknown action', reason: REJECTION_REASONS.UNSUPPORTED_ACTION };
 
-  if (action === 'start') {
-    const timerAction = msg.timerAction || 'shutdown';
-    if (!ALLOWED_ACTIONS.includes(timerAction)) return { ok: false, error: 'action not allowed' };
-    const duration = Number(msg.durationSeconds);
-    if (!Number.isInteger(duration) || duration < DURATION_MIN || duration > DURATION_MAX) {
-      return { ok: false, error: 'duration out of bounds' };
-    }
-    return { ok: true, message: { action, timerAction, durationSeconds: duration } };
-  }
-
-  if (action === 'startNightMode') {
-    const nightModeId = msg.nightModeId;
-    if (typeof nightModeId !== 'string' || nightModeId.length === 0) {
-      return { ok: false, error: 'missing or invalid nightModeId' };
-    }
-    // Canonical resolution happens on the desktop. The phone may not smuggle
-    // timer options, Dry Run, force flags, or a ritual origin.
-    return { ok: true, message: { action, nightModeId } };
-  }
-
+  // Read-only query: getNightModes
   if (action === 'getNightModes') {
-    return { ok: true, message: { action } };
-  }
-
-  if (action === 'snooze') {
-    const seconds = Number(msg.seconds);
-    if (!Number.isInteger(seconds) || seconds < SNOOZE_MIN || seconds > SNOOZE_MAX) {
-      return { ok: false, error: 'snooze out of bounds' };
+    let correlationId = null;
+    if (msg.correlationId !== undefined && msg.correlationId !== null) {
+      if (typeof msg.correlationId === 'string' && msg.correlationId.length > 0 && msg.correlationId.length <= 64) {
+        correlationId = msg.correlationId;
+      }
     }
-    return { ok: true, message: { action, seconds } };
+    return { ok: true, message: { action, correlationId } };
   }
 
-  // togglePause / cancel take no parameters.
-  return { ok: true, message: { action } };
+  // Mutating companion commands require protocolVersion: 3 and valid requestId
+  if (MUTATING_COMPANION_ACTIONS.includes(action)) {
+    if (msg.protocolVersion !== 3) {
+      return { ok: false, error: 'upgrade_required', reason: REJECTION_REASONS.UPGRADE_REQUIRED };
+    }
+
+    const requestId = msg.requestId;
+    if (typeof requestId !== 'string' || !REQUEST_ID_REGEX.test(requestId)) {
+      return { ok: false, error: 'invalid_request_id', reason: REJECTION_REASONS.INVALID_REQUEST_ID };
+    }
+
+    if (action === 'start') {
+      const timerAction = msg.timerAction || 'shutdown';
+      if (!ALLOWED_ACTIONS.includes(timerAction)) return { ok: false, error: 'action not allowed', reason: REJECTION_REASONS.INVALID_PAYLOAD };
+      const duration = Number(msg.durationSeconds);
+      if (!Number.isInteger(duration) || duration < DURATION_MIN || duration > DURATION_MAX) {
+        return { ok: false, error: 'duration out of bounds', reason: REJECTION_REASONS.INVALID_PAYLOAD };
+      }
+      return { ok: true, message: { protocolVersion: 3, requestId, action, timerAction, durationSeconds: duration } };
+    }
+
+    if (action === 'startNightMode') {
+      const nightModeId = msg.nightModeId;
+      if (typeof nightModeId !== 'string' || nightModeId.length === 0) {
+        return { ok: false, error: 'missing or invalid nightModeId', reason: REJECTION_REASONS.INVALID_PAYLOAD };
+      }
+      return { ok: true, message: { protocolVersion: 3, requestId, action, nightModeId } };
+    }
+
+    if (action === 'snooze') {
+      const seconds = Number(msg.seconds);
+      if (!Number.isInteger(seconds) || seconds < SNOOZE_MIN || seconds > SNOOZE_MAX) {
+        return { ok: false, error: 'snooze out of bounds', reason: REJECTION_REASONS.INVALID_PAYLOAD };
+      }
+      return { ok: true, message: { protocolVersion: 3, requestId, action, seconds } };
+    }
+
+    // pause / resume / togglePause / cancel take no parameters.
+    return { ok: true, message: { protocolVersion: 3, requestId, action } };
+  }
+
+  return { ok: false, error: 'unknown action', reason: REJECTION_REASONS.UNSUPPORTED_ACTION };
 }
 
 module.exports = {
   ALLOWED_COMMANDS,
   ALLOWED_ACTIONS,
   COMPANION_ACTIONS,
+  MUTATING_COMPANION_ACTIONS,
   DURATION_MIN,
   DURATION_MAX,
   SNOOZE_MIN,
   SNOOZE_MAX,
+  REJECTION_REASONS,
+  createRequestId,
+  createCommandAck,
   generateToken,
   tokensMatch,
   validateCommand,
   validateCompanionMessage
 };
+

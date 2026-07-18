@@ -98,23 +98,27 @@ test('validateCommand strips extra fields from parameterless commands', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// validateCompanionMessage (phone PWA protocol)
+// validateCompanionMessage (phone PWA protocol V3)
 // ─────────────────────────────────────────────────────────────────────────────
 
+const validReqId = 'req-1234567890123456';
+
 test('validateCompanionMessage rejects unknown actions', () => {
-  assert.equal(rc.validateCompanionMessage({ action: 'nuke' }).ok, false);
+  assert.equal(rc.validateCompanionMessage({ protocolVersion: 3, requestId: validReqId, action: 'nuke' }).ok, false);
   assert.equal(rc.validateCompanionMessage(null).ok, false);
 });
 
 test('validateCompanionMessage validates a start and blocks bad actions', () => {
-  const ok = rc.validateCompanionMessage({ action: 'start', timerAction: 'sleep', durationSeconds: 600 });
+  const ok = rc.validateCompanionMessage({ protocolVersion: 3, requestId: validReqId, action: 'start', timerAction: 'sleep', durationSeconds: 600 });
   assert.equal(ok.ok, true);
-  assert.deepEqual(ok.message, { action: 'start', timerAction: 'sleep', durationSeconds: 600 });
-  assert.equal(rc.validateCompanionMessage({ action: 'start', timerAction: 'logout', durationSeconds: 600 }).ok, false);
+  assert.deepEqual(ok.message, { protocolVersion: 3, requestId: validReqId, action: 'start', timerAction: 'sleep', durationSeconds: 600 });
+  assert.equal(rc.validateCompanionMessage({ protocolVersion: 3, requestId: validReqId, action: 'start', timerAction: 'logout', durationSeconds: 600 }).ok, false);
 });
 
 test('validateCompanionMessage strips desktop-owned identity and safety fields', () => {
   const result = rc.validateCompanionMessage({
+    protocolVersion: 3,
+    requestId: validReqId,
     action: 'start',
     timerAction: 'shutdown',
     durationSeconds: 900,
@@ -127,6 +131,8 @@ test('validateCompanionMessage strips desktop-owned identity and safety fields',
     forceShutdown: true
   });
   assert.deepEqual(result.message, {
+    protocolVersion: 3,
+    requestId: validReqId,
     action: 'start',
     timerAction: 'shutdown',
     durationSeconds: 900
@@ -135,9 +141,11 @@ test('validateCompanionMessage strips desktop-owned identity and safety fields',
 
 test('validateCompanionMessage keeps force shutdown, logout, and hibernate impossible', () => {
   for (const timerAction of ['logout', 'hibernate']) {
-    assert.equal(rc.validateCompanionMessage({ action: 'start', timerAction, durationSeconds: 900 }).ok, false);
+    assert.equal(rc.validateCompanionMessage({ protocolVersion: 3, requestId: validReqId, action: 'start', timerAction, durationSeconds: 900 }).ok, false);
   }
   const shutdown = rc.validateCompanionMessage({
+    protocolVersion: 3,
+    requestId: validReqId,
     action: 'start',
     timerAction: 'shutdown',
     durationSeconds: 900,
@@ -147,25 +155,29 @@ test('validateCompanionMessage keeps force shutdown, logout, and hibernate impos
   assert.equal('forceShutdown' in shutdown.message, false);
 });
 
-test('validateCompanionMessage clamps snooze and passes through togglePause', () => {
-  assert.equal(rc.validateCompanionMessage({ action: 'snooze', seconds: rc.SNOOZE_MAX + 1 }).ok, false);
-  assert.deepEqual(rc.validateCompanionMessage({ action: 'togglePause', x: 1 }).message, { action: 'togglePause' });
+test('validateCompanionMessage clamps snooze and passes through pause/resume/togglePause', () => {
+  assert.equal(rc.validateCompanionMessage({ protocolVersion: 3, requestId: validReqId, action: 'snooze', seconds: rc.SNOOZE_MAX + 1 }).ok, false);
+  assert.deepEqual(rc.validateCompanionMessage({ protocolVersion: 3, requestId: validReqId, action: 'togglePause', x: 1 }).message, { protocolVersion: 3, requestId: validReqId, action: 'togglePause' });
+  assert.deepEqual(rc.validateCompanionMessage({ protocolVersion: 3, requestId: validReqId, action: 'pause' }).message, { protocolVersion: 3, requestId: validReqId, action: 'pause' });
+  assert.deepEqual(rc.validateCompanionMessage({ protocolVersion: 3, requestId: validReqId, action: 'resume' }).message, { protocolVersion: 3, requestId: validReqId, action: 'resume' });
 });
 
 test('validateCompanionMessage accepts startNightMode with a valid nightModeId', () => {
-  const result = rc.validateCompanionMessage({ action: 'startNightMode', nightModeId: 'quick-sleep' });
+  const result = rc.validateCompanionMessage({ protocolVersion: 3, requestId: validReqId, action: 'startNightMode', nightModeId: 'quick-sleep' });
   assert.equal(result.ok, true);
-  assert.deepEqual(result.message, { action: 'startNightMode', nightModeId: 'quick-sleep' });
+  assert.deepEqual(result.message, { protocolVersion: 3, requestId: validReqId, action: 'startNightMode', nightModeId: 'quick-sleep' });
 });
 
 test('validateCompanionMessage rejects startNightMode with missing or invalid id', () => {
-  assert.equal(rc.validateCompanionMessage({ action: 'startNightMode' }).ok, false);
-  assert.equal(rc.validateCompanionMessage({ action: 'startNightMode', nightModeId: '' }).ok, false);
-  assert.equal(rc.validateCompanionMessage({ action: 'startNightMode', nightModeId: 123 }).ok, false);
+  assert.equal(rc.validateCompanionMessage({ protocolVersion: 3, requestId: validReqId, action: 'startNightMode' }).ok, false);
+  assert.equal(rc.validateCompanionMessage({ protocolVersion: 3, requestId: validReqId, action: 'startNightMode', nightModeId: '' }).ok, false);
+  assert.equal(rc.validateCompanionMessage({ protocolVersion: 3, requestId: validReqId, action: 'startNightMode', nightModeId: 123 }).ok, false);
 });
 
 test('validateCompanionMessage strips smuggled fields from startNightMode', () => {
   const result = rc.validateCompanionMessage({
+    protocolVersion: 3,
+    requestId: validReqId,
     action: 'startNightMode',
     nightModeId: 'quick-sleep',
     timerAction: 'shutdown',
@@ -188,9 +200,10 @@ test('validateCompanionMessage strips smuggled fields from startNightMode', () =
     actions: ['hibernate']
   });
   assert.equal(result.ok, true);
-  assert.deepEqual(result.message, { action: 'startNightMode', nightModeId: 'quick-sleep' });
+  assert.deepEqual(result.message, { protocolVersion: 3, requestId: validReqId, action: 'startNightMode', nightModeId: 'quick-sleep' });
 });
 
 test('validateCompanionMessage passes through getNightModes', () => {
-  assert.deepEqual(rc.validateCompanionMessage({ action: 'getNightModes' }).message, { action: 'getNightModes' });
+  assert.deepEqual(rc.validateCompanionMessage({ action: 'getNightModes' }).message, { action: 'getNightModes', correlationId: null });
 });
+
