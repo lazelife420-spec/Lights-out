@@ -567,7 +567,11 @@ function persistActiveTimer() {
     remainingSeconds: timerState.remainingSeconds,
     paused: timerState.paused,
     endsAt: timerState.endsAt,
-    savedAt: new Date().toISOString()
+    savedAt: new Date().toISOString(),
+    // Correlates this recovery snapshot to its run receipt so startup
+    // reconciliation can tell a still-recoverable run apart from a truly
+    // orphaned one, and so resuming it reuses the same receipt.
+    receiptId: activeReceiptId
   });
 }
 
@@ -609,7 +613,10 @@ function normalizeTimerOptions(input, legacyAction) {
     profileId: typeof options.profileId === 'string' ? options.profileId : null,
     source: options.source === 'remote' ? 'remote' : 'local',
     startOrigin: typeof options.startOrigin === 'string' ? options.startOrigin : null,
-    nightModeId: typeof options.nightModeId === 'string' ? options.nightModeId : null
+    nightModeId: typeof options.nightModeId === 'string' ? options.nightModeId : null,
+    // Set only by resume-recoverable-timer, to reuse the original receipt
+    // instead of creating a duplicate for the same run.
+    resumeReceiptId: typeof options.resumeReceiptId === 'string' ? options.resumeReceiptId : null
   };
 }
 
@@ -708,9 +715,17 @@ function beginValidatedCountdown(options, identity, nmIdentity) {
   timerState.phase = 'focus';
 
   emitTimerUpdate('started');
-  // Create a run receipt for this timer session.
-  const receipt = runReceipts.createRunReceipt(timerState);
-  activeReceiptId = receipt.id;
+  // Create a run receipt for this timer session -- unless this is
+  // resume-recoverable-timer resuming a run whose receipt is still
+  // 'running' from before a restart, in which case reuse it rather than
+  // creating a duplicate receipt for the same run.
+  const resumedReceipt = options.resumeReceiptId ? runReceipts.getReceiptById(options.resumeReceiptId) : null;
+  if (resumedReceipt && resumedReceipt.result === 'running') {
+    activeReceiptId = resumedReceipt.id;
+  } else {
+    const receipt = runReceipts.createRunReceipt(timerState);
+    activeReceiptId = receipt.id;
+  }
   // Send screen time reality check to renderer.
   screenTime.getScreenTimeToday().then(st => {
     const msg = screenTime.getRealityCheckMessage(st);
@@ -1790,6 +1805,22 @@ ipcMain.handle('save-app-settings', async (event, settings = {}) => {
   };
 });
 ipcMain.handle('discard-recoverable-timer', async () => {
+  // Finalize the abandoned receipt honestly instead of leaving it stuck at
+  // result:'running' forever once the user has explicitly said not to
+  // resume it.
+  const snapshot = settingsStore.getActiveTimer();
+  if (snapshot && snapshot.receiptId) {
+    const receipt = runReceipts.getReceiptById(snapshot.receiptId);
+    if (receipt && receipt.result === 'running') {
+      const now = new Date().toISOString();
+      runReceipts.updateRunReceipt(snapshot.receiptId, {
+        result: 'interrupted',
+        endedAt: now,
+        reconciliationReason: 'discarded-by-user',
+        reconciledAt: now
+      });
+    }
+  }
   settingsStore.setActiveTimer(null);
   return { success: true };
 });
@@ -2241,13 +2272,18 @@ ipcMain.handle('set-calendar-auto-start', async (e, enabled) => {
 ipcMain.handle('resume-recoverable-timer', async () => {
   const snapshot = getRecoverableTimer();
   if (!snapshot) return { success: false };
+  // Same pre-upgrade fallback as the startup reconciliation pass: a
+  // snapshot saved before receiptId existed can't name its receipt
+  // directly, so fall back to the most recently running one.
+  const resumeReceiptId = snapshot.receiptId || runReceipts.getMostRecentRunningReceiptId();
   const result = startTimer({
     durationSeconds: snapshot.remainingSeconds,
     action: snapshot.action,
     dryRun: snapshot.dryRun,
     forceShutdown: snapshot.forceShutdown,
     muteSystem: snapshot.muteSystem,
-    gracePeriod: snapshot.gracePeriod
+    gracePeriod: snapshot.gracePeriod,
+    resumeReceiptId
   });
   return result;
 });
@@ -2677,6 +2713,21 @@ app.whenReady().then(async () => {
   // Load persisted settings and rehydrate the smart-lights module.
   settingsStore.load();
   smartLights.loadConfig(settingsStore.getSection('smartLights'));
+
+  // Finalize any run receipt left at result:'running' by a process that
+  // ended (crash, force-kill, power loss) before it reached a terminal
+  // update. The one still-recoverable timer (if any) stays protected until
+  // the user resumes, discards, or it plays out via the recovery banner.
+  {
+    const recoverable = getRecoverableTimer();
+    // A snapshot persisted by a pre-upgrade build won't carry receiptId --
+    // fall back to correlating by "most recently running" so a genuinely
+    // still-recoverable run isn't wrongly finalized as orphaned.
+    const protectedReceiptId = recoverable
+      ? (recoverable.receiptId || runReceipts.getMostRecentRunningReceiptId())
+      : null;
+    runReceipts.reconcileOrphanedRunningReceipts(protectedReceiptId);
+  }
 
   // Load custom Last Light sequences from settings.
   const llSettings = settingsStore.getSection('lastLight') || {};
