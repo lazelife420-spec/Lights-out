@@ -32,9 +32,13 @@ function resolveStartDecision({ options, identity, profile, nmIdentity }) {
     profileRitualId
   });
 
+  // Generic remote sources cannot trigger rituals, but a phone Night Mode start
+  // is a trusted origin because validateCompanionMessage strips startOrigin and
+  // main only sets it after resolving the canonical mode.
+  const isTrustedCompanionOrigin = normalizedOptions.startOrigin === 'companion-night-mode';
   const useRitualGateway = effectiveRitualId === 'standard'
     && profileRitualContext.isEligibleOrigin(normalizedOptions.startOrigin)
-    && normalizedOptions.source !== 'remote';
+    && (normalizedOptions.source !== 'remote' || isTrustedCompanionOrigin);
 
   return {
     options: normalizedOptions,

@@ -276,8 +276,11 @@ test('getCatalogue returns deep copies safe for renderer card rendering', () => 
   const c2 = nightModes.getCatalogue();
   assert.notStrictEqual(c1, c2);
   assert.notStrictEqual(c1[0], c2[0]);
-  assert.notStrictEqual(c1[0].timer, c2[0].timer);
+  assert.notStrictEqual(c1[0].availability, c2[0].availability);
+  assert.notStrictEqual(c1[0].tags, c2[0].tags);
   assert.deepStrictEqual(c1, c2);
+  assert.strictEqual(c1[0].timer, undefined);
+  assert.strictEqual(c1[0].actions, undefined);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -8,7 +8,7 @@
 'use strict';
 
 // Eligible start origins that may trigger a profile ritual gateway.
-const ELIGIBLE_ORIGINS = Object.freeze(['play', 'profile-start']);
+const ELIGIBLE_ORIGINS = Object.freeze(['play', 'profile-start', 'companion-night-mode']);
 
 let pendingContext = null;
 

@@ -171,6 +171,7 @@ function isAvailable(mode) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function getCatalogue() {
+  // Presentation DTO only: no executable action arrays, command strings, or internal objects.
   return BUILT_IN_CATALOGUE.map(mode => ({
     id: mode.id,
     version: mode.version,
@@ -179,8 +180,9 @@ function getCatalogue() {
     artworkId: mode.artworkId,
     status: mode.status,
     availability: { ...mode.availability },
-    timer: { ...mode.timer },
-    actions: mode.actions.map(a => ({ ...a })),
+    durationSeconds: mode.timer.durationSeconds,
+    action: mode.timer.action,
+    ritualId: mode.timer.ritualId,
     tags: [...mode.tags]
   }));
 }
