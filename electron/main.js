@@ -1248,23 +1248,32 @@ function handleCompanionMessage(msg, client) {
   if (!rc.mode || rc.mode === 'off') return;
 
   switch (msg.action) {
-    case 'start':
+    case 'start': {
+      // Desktop remains authoritative over Dry Run: the phone protocol never
+      // carries a dryRun field (validateCompanionMessage strips it), so this
+      // reads the desktop's own persisted setting rather than trusting the client.
+      const appSettings = settingsStore.getSection('app') || {};
       startTimer({
         durationSeconds: msg.durationSeconds || 1800,
         action: msg.timerAction || 'shutdown',
-        source: 'remote'
+        source: 'remote',
+        dryRun: Boolean(appSettings.dryRun)
       });
       break;
+    }
     case 'startNightMode': {
       // Remote Night Mode start is allowed only while the desktop is fully idle.
       if (timerState.running || timerState.paused || ritualMode.getState().active) break;
       const resolution = nightModes.resolveForExecution(msg.nightModeId);
       if (!resolution.success) break;
+      // Desktop remains authoritative over Dry Run (see note above) — the phone
+      // supplies only the canonical nightModeId; policy comes from settingsStore.
+      const appSettings = settingsStore.getSection('app') || {};
       startTimer({
         ...resolution.resolved,
         source: 'remote',
         startOrigin: 'companion-night-mode',
-        dryRun: false
+        dryRun: Boolean(appSettings.dryRun)
       });
       break;
     }
@@ -1320,6 +1329,9 @@ function broadcastCompanionState() {
     timerName: appSettings.timerName || 'Last Call',
     pcName: require('os').hostname(),
     dryRun: timerState.dryRun,
+    // Authoritative Dry Run policy, independent of whether a timer is active —
+    // lets the phone UI show correct DRY RUN / REAL ACTION copy before starting.
+    dryRunPolicy: Boolean(appSettings.dryRun),
     nightModeId: timerState.nightModeId,
     nightModeTitle: timerState.nightModeTitle,
     nightModeVersion: timerState.nightModeVersion,
