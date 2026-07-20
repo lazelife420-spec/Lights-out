@@ -314,7 +314,7 @@
 
     <!-- Start controls (shown when idle) -->
     <div class="controls" id="idle-controls">
-      <div class="idle-safety"><strong>REAL ACTION</strong> — timers started from this phone can perform the selected PC action. Dry Run is not available from the phone.</div>
+      <div class="idle-safety" id="idle-safety-banner"><strong>REAL ACTION</strong> — timers started from this phone can perform the selected PC action.</div>
       <div class="section-label">When the timer ends</div>
       <div class="action-seg" id="action-seg">
         <button class="seg-btn" data-action="sleep" type="button">
@@ -635,9 +635,22 @@
     }
 
     function updateNightModeRunType() {
-      // Phone Night Mode starts are always REAL ACTION; the phone cannot choose Dry Run.
-      nmDetailRunType.textContent = 'This run will be: REAL ACTION';
-      nmDetailRunType.className = 'night-mode-run-type real';
+      // The phone cannot choose Dry Run — it only displays whatever the desktop
+      // has authoritatively decided (latestState.dryRunPolicy from settingsStore).
+      const dryRun = Boolean(latestState && latestState.dryRunPolicy);
+      nmDetailRunType.textContent = dryRun
+        ? 'DRY RUN — no PC power action will execute'
+        : 'This run will be: REAL ACTION';
+      nmDetailRunType.className = `night-mode-run-type ${dryRun ? 'dry' : 'real'}`;
+    }
+
+    function updateIdleSafetyBanner() {
+      const banner = document.getElementById('idle-safety-banner');
+      if (!banner) return;
+      const dryRun = Boolean(latestState && latestState.dryRunPolicy);
+      banner.innerHTML = dryRun
+        ? '<strong>DRY RUN</strong> — no PC power action will execute.'
+        : '<strong>REAL ACTION</strong> — timers started from this phone can perform the selected PC action.';
     }
 
     function toggleNightModeGrid() {
@@ -972,10 +985,14 @@
       if (!stateIsAuthoritative()) return;
       const s = Math.max(60, Math.min(24 * 60 * 60, Math.round(seconds)));
       const destination = pcName || 'this PC';
-      if (!confirm(`REAL ACTION: Start a ${selectedAction} timer on ${destination} for ${Math.round(s / 60)} minutes? Dry Run is not available from the phone.`)) return;
+      const dryRun = Boolean(latestState && latestState.dryRunPolicy);
+      const confirmMsg = dryRun
+        ? `DRY RUN: Start a ${selectedAction} timer on ${destination} for ${Math.round(s / 60)} minutes? No PC power action will execute.`
+        : `REAL ACTION: Start a ${selectedAction} timer on ${destination} for ${Math.round(s / 60)} minutes?`;
+      if (!confirm(confirmMsg)) return;
       if (!beginPending({
         kind: 'start',
-        success: 'Timer started — REAL ACTION',
+        success: dryRun ? 'Timer started — DRY RUN' : 'Timer started — REAL ACTION',
         matches: state => Boolean(state.running || state.paused)
       })) return;
       if (!send({ action: 'start', durationSeconds: s, timerAction: selectedAction })) clearPending({ timeout: true });
@@ -1066,6 +1083,7 @@
         confirmPendingFromState(latestState);
         syncMutationControls();
         updateNightModeRunType();
+        updateIdleSafetyBanner();
       }
 
       if (data.type === 'nightModes') {
@@ -1162,12 +1180,19 @@
     nmDetailClose.addEventListener('click', closeNightModeDetail);
     nmDetailStart.addEventListener('click', () => {
       if (!stateIsAuthoritative() || !nmSelectedId) return;
+      // Snapshot the id now: the very next state update (active:true) closes
+      // the detail sheet via closeNightModeDetail(), which resets the live
+      // nmSelectedId to null BEFORE confirmPendingFromState() runs in that
+      // same handler pass. A closure over the live variable would then always
+      // compare against null and never match, permanently false-timing-out
+      // even though the run genuinely started.
+      const requestedNightModeId = nmSelectedId;
       if (!beginPending({
         kind: 'startNightMode',
         success: 'Night Mode started',
-        matches: state => Boolean(state.running || state.paused) && state.nightModeId === nmSelectedId
+        matches: state => Boolean(state.running || state.paused) && state.nightModeId === requestedNightModeId
       })) return;
-      if (!send({ action: 'startNightMode', nightModeId: nmSelectedId })) clearPending({ timeout: true });
+      if (!send({ action: 'startNightMode', nightModeId: requestedNightModeId })) clearPending({ timeout: true });
     });
     nightModeBackdrop.addEventListener('click', (e) => { if (e.target === nightModeBackdrop) closeNightModeDetail(); });
     document.addEventListener('keydown', (e) => {

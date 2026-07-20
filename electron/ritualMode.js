@@ -142,6 +142,18 @@ function emitStep() {
 
   if (onStepCallback) onStepCallback(current, getState(), ritualState.runMeta, ritualState.runId);
 
+  // Remote-originated runs (started from the phone companion) have nobody
+  // physically at the desktop to click through the guided overlay -- every
+  // step there, even "auto" ones, normally advances only on a click (auto
+  // just changes the button label from "Next" to "Done"). Fast-forward
+  // through the whole sequence instead of getting stuck on the first step
+  // forever; each step's real side effect (block/dim/timer/lights) still
+  // runs via the onStepCallback above.
+  if (ritualState.runMeta && ritualState.runMeta.remoteOrigin) {
+    advanceStep(false);
+    return;
+  }
+
   // Auto-advance timed steps. The closure captures this run's ID so it
   // becomes a no-op if a new ritual has started in the meantime.
   if (current.auto && current.durationSeconds > 0) {

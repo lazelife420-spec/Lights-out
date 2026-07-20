@@ -1288,7 +1288,19 @@ check('profile-ritual-gateway: context module loaded and ritual gateway in start
   assertMatch(mainSrc, /startDecision\.resolveStartDecision\(/, 'startTimer does not use canonical decision resolver');
   assertMatch(mainSrc, /decision\.useRitualGateway/, 'startTimer does not route by decision.useRitualGateway');
   assertMatch(mainSrc, /profileRitualContext\.createContext\(/, 'ritual gateway does not create pending context');
-  assertMatch(mainSrc, /ritualMode\.startRitual\(null, \{ profileRitualToken: runToken \}\)/, 'ritual gateway does not pass token as run metadata');
+  assertMatch(mainSrc, /ritualMode\.startRitual\(null, \{ profileRitualToken: runToken,/, 'ritual gateway does not pass token as run metadata');
+});
+
+// 16c. Remote-origin ritual fast-forward (fix/v11.1.1-night-mode-remote-ritual).
+// Every ritual step, including "auto" ones, normally advances only via a
+// click on the desktop's guided-overlay UI. A phone-triggered ritual has no
+// one at the desktop to click through it, so it must fast-forward instead of
+// getting stuck "active" forever -- which previously blocked ALL further
+// Night Mode starts via the ritualMode.getState().active guard.
+check('ritual-mode: remote-originated rituals are marked and fast-forwarded, not left stuck active', () => {
+  assertMatch(mainSrc, /remoteOrigin: options\.source === 'remote'/, 'startTimer does not mark remote-origin ritual runs');
+  const ritualModeSrc = fs.readFileSync(path.join(root, 'ritualMode.js'), 'utf8');
+  assertMatch(ritualModeSrc, /ritualState\.runMeta\.remoteOrigin/, 'ritualMode does not fast-forward remote-origin runs');
 });
 
 check('profile-ritual-gateway: timer step uses run-owned token from runMeta', () => {

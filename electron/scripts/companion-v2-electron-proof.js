@@ -707,18 +707,21 @@ async function runElectronProof() {
   });
   await check('desktop cancelled receipt behavior remains intact', () => assert(receipts.getLatestReceipt()?.result === 'cancelled', 'cancelled receipt missing'));
 
-  await check('phone start explicitly reports Real Action', async () => {
+  await check('phone start confirm reflects desktop-authoritative Dry Run (ON)', async () => {
+    // Desktop Dry Run is ON in this harness's seeded settings.json — the phone
+    // cannot choose Dry Run itself, but it must display the desktop's actual
+    // policy rather than an unconditional "REAL ACTION" claim.
     const message = await phoneEval(`(() => {
       let captured = '';
       window.confirm = text => { captured = text; return false; };
       document.querySelector('[data-min="15"]').click();
       return captured;
     })()`);
-    assert(message.includes('REAL ACTION') && message.includes('Dry Run is not available from the phone'), message);
+    assert(message.includes('DRY RUN') && message.includes('No PC power action will execute'), message);
   });
-  await check('phone start cannot claim Dry Run', async () => {
+  await check('phone idle banner reflects desktop-authoritative Dry Run (ON)', async () => {
     const text = await phoneEval("document.querySelector('.idle-safety').textContent");
-    assert(text.includes('REAL ACTION') && text.includes('Dry Run is not available'), text);
+    assert(text.includes('DRY RUN') && text.includes('no PC power action will execute'), text);
   });
   await check('phone cannot overwrite desktop identity fields', () => {
     const forged = commandLog.some(message => 'nightModeId' in message || 'profileId' in message || 'dryRun' in message || 'forceShutdown' in message);
@@ -757,7 +760,7 @@ async function runElectronProof() {
   await waitFor(() => phoneEval("document.getElementById('night-mode-backdrop').classList.contains('show')"), 'Night Mode detail did not open');
   await check('C2: detail shows canonical duration, action, and ritual from desktop', async () => {
     const value = await phoneEval("({ title: nmDetailTitle.textContent, duration: nmDetailMeta.textContent, action: nmDetailMeta.textContent, ritual: nmDetailMeta.textContent, runType: nmDetailRunType.textContent })");
-    assert(value.title === 'Quick Sleep' && value.duration.includes('15 min') && value.action.includes('Sleep') && value.ritual.includes('Direct start') && value.runType.includes('REAL ACTION'), JSON.stringify(value));
+    assert(value.title === 'Quick Sleep' && value.duration.includes('15 min') && value.action.includes('Sleep') && value.ritual.includes('Direct start') && value.runType.includes('DRY RUN'), JSON.stringify(value));
   });
   await phone.setContentSize(390, 844);
   await phoneEval('window.scrollTo(0,0)');
@@ -771,15 +774,28 @@ async function runElectronProof() {
     assert(JSON.stringify(command) === JSON.stringify({ action: 'startNightMode', nightModeId: 'quick-sleep' }), JSON.stringify(command));
   });
   await waitFor(() => desktopEval("state.running === true && state.action === 'sleep' && state.remainingSeconds <= 900"), 'desktop did not start Quick Sleep from phone');
-  await check('C2: desktop resolves canonical mode and records Night Mode identity', async () => {
+  await check('C2: desktop resolves canonical mode and inherits desktop-authoritative Dry Run', async () => {
     const receipt = receipts.getLatestReceipt();
     const value = await desktopEval("({ running: state.running, action: state.action, remaining: state.remainingSeconds, dryRun: state.dryRun })");
-    assert(receipt && receipt.nightModeId === 'quick-sleep' && receipt.nightModeTitle === 'Quick Sleep' && receipt.nightModeVersion === 1 && value.running && value.action === 'sleep' && value.remaining <= 900 && value.dryRun === false, JSON.stringify({ receipt, value }));
+    assert(receipt && receipt.nightModeId === 'quick-sleep' && receipt.nightModeTitle === 'Quick Sleep' && receipt.nightModeVersion === 1 && value.running && value.action === 'sleep' && value.remaining <= 900 && value.dryRun === true && receipt.dryRun === true, JSON.stringify({ receipt, value }));
   });
   await waitFor(async () => {
     const value = await phoneEval("({ title: timerName.textContent, id: latestState.nightModeId, badge: safetyBadge.textContent, active: activeControls.style.display !== 'none' })");
-    return value.title === 'Quick Sleep' && value.id === 'quick-sleep' && value.badge === 'REAL ACTION' && value.active;
+    return value.title === 'Quick Sleep' && value.id === 'quick-sleep' && value.badge === 'DRY RUN' && value.active;
   }, 'phone active UI did not reflect canonical Night Mode identity');
+  await check('C2: successful Night Mode start is acknowledged, not falsely reported as "PC did not confirm"', async () => {
+    // Regression guard: nmDetailStart's matches() closure previously read the
+    // live nmSelectedId variable, which closeNightModeDetail() resets to null
+    // as soon as the resulting state update arrives (active:true) -- in the
+    // SAME handler pass, before confirmPendingFromState() ran. That made the
+    // match always fail and the command always time out at 5s, even though
+    // the run had genuinely started (visibly running, correct nightModeId).
+    const value = await phoneEval("({ pending: pendingOperation, text: pendingStatus.textContent, toast: document.getElementById('toast').textContent, shown: document.getElementById('toast').classList.contains('show'), selectedId: nmSelectedId })");
+    assert(value.pending === null, `pending operation should have cleared: ${JSON.stringify(value)}`);
+    assert(value.text !== 'PC did not confirm the change', `false negative ACK: ${JSON.stringify(value)}`);
+    assert(value.shown && value.toast === 'Night Mode started', `success toast missing: ${JSON.stringify(value)}`);
+    assert(value.selectedId === null, 'detail sheet should have closed (nmSelectedId reset) once the run went active');
+  });
   await phone.setContentSize(390, 844);
   await phoneEval('window.scrollTo(0,0)');
   await capture('c2-quick-sleep-active');
@@ -804,18 +820,27 @@ async function runElectronProof() {
   const ritualStartBefore = commandLog.length;
   await phoneEval("nmDetailStart.click()");
   await waitFor(() => commandLog.length === ritualStartBefore + 1 && commandLog[ritualStartBefore]?.action === 'startNightMode', 'Full Shutdown command did not reach main');
+  // Remote-originated rituals fast-forward through the whole guided sequence
+  // (fix/v11.1.1-night-mode-remote-ritual) -- nobody is at the desktop to
+  // click through it, so the ritual must complete on its own and land on the
+  // real countdown, not get stuck "active" forever. Checked via the receipt
+  // rather than the desktop renderer's own `state` mirror: emitTimerUpdate()
+  // never includes nightModeId/nightModeTitle in its payload (pre-existing,
+  // separate from this fix -- only broadcastCompanionState(), used by the
+  // phone, carries that field), so the desktop's own `state.nightModeId` is
+  // always undefined regardless of this fix.
   await waitFor(async () => {
     const ritual = await desktopEval("(async () => window.electronAPI.ritualState())()");
-    return ritual && ritual.active === true;
-  }, 'Full Shutdown from phone did not enter standard wind-down ritual');
+    const value = await desktopEval("({ running: state.running, action: state.action })");
+    const receipt = receipts.getLatestReceipt();
+    return ritual && ritual.active === false && value.running === true && value.action === 'shutdown'
+      && receipt && receipt.nightModeId === 'full-shutdown' && receipt.nightModeTitle === 'Full Shutdown' && receipt.result === 'running';
+  }, 'Full Shutdown from phone did not fast-forward through the ritual to a real countdown');
   await phone.setContentSize(390, 844);
   await phoneEval('window.scrollTo(0,0)');
-  await capture('c2-full-shutdown-ritual-active');
-  await desktopEval("window.electronAPI.ritualCancel && window.electronAPI.ritualCancel()");
-  await waitFor(async () => {
-    const ritual = await desktopEval("(async () => window.electronAPI.ritualState())()");
-    return ritual && ritual.active === false;
-  }, 'ritual did not cancel');
+  await capture('c2-full-shutdown-ritual-completed');
+  await desktopEval('window.electronAPI.cancelTimer()');
+  await waitFor(() => desktopEval('!state.running && !state.paused'), 'desktop did not cancel the Full Shutdown countdown');
 
   // Unknown / disabled mode rejection.
   await check('C2: main rejects forged startNightMode with unknown ID', async () => {
@@ -877,7 +902,12 @@ async function runElectronProof() {
 
   await check('C2: startNightMode rejected while a ritual is active', async () => {
     await ensureIdle();
-    await desktopEval(`window.electronAPI.startTimer(${JSON.stringify({ durationSeconds: 3600, action: 'shutdown', nightModeId: 'full-shutdown', startOrigin: 'companion-night-mode', source: 'remote' })})`);
+    // source:'local' (not 'remote') deliberately -- this simulates someone
+    // physically at the desktop mid-way through the guided overlay, still on
+    // step one. A remote-originated ritual now fast-forwards to completion
+    // instantly (fix/v11.1.1-night-mode-remote-ritual), so it can no longer
+    // be used to hold the ritual open for this guard check.
+    await desktopEval(`window.electronAPI.startTimer(${JSON.stringify({ durationSeconds: 3600, action: 'shutdown', nightModeId: 'full-shutdown', startOrigin: 'companion-night-mode', source: 'local' })})`);
     await waitFor(async () => {
       const ritual = await desktopEval("(async () => window.electronAPI.ritualState())()");
       return ritual && ritual.active === true;
@@ -906,6 +936,67 @@ async function runElectronProof() {
     assert(after === before + 1, `expected exactly one new receipt, got ${after - before}`);
     await ensureIdle();
   });
+
+  // ── C2: desktop remains authoritative over phone-initiated Dry Run ──
+  // (fix/v11.1.1-phone-dry-run-authority) The phone protocol never carries a
+  // dryRun field — validateCompanionMessage strips it — so these checks prove
+  // the desktop's own settingsStore.app.dryRun decides policy, not the client,
+  // and that a forged dryRun in a raw WS frame cannot move that policy either way.
+  const appSettingsModule = require(path.join(electronRoot, 'settings.js'));
+
+  await check('C2: forged dryRun:false from phone cannot disable desktop Dry Run (policy ON)', async () => {
+    assert(appSettingsModule.getSection('app').dryRun === true, 'test precondition: desktop Dry Run should be ON here');
+    await ensureIdle();
+    await sendRealWebSocketFrame({ action: 'startNightMode', nightModeId: 'quick-sleep', dryRun: false });
+    await waitFor(() => desktopEval('state.running === true'), 'forged-payload run did not start');
+    const value = await desktopEval('state.dryRun');
+    assert(value === true, `forged dryRun:false disabled desktop Dry Run (state.dryRun=${value})`);
+    const receipt = receipts.getLatestReceipt();
+    assert(receipt && receipt.dryRun === true, JSON.stringify(receipt));
+    await ensureIdle();
+  });
+
+  await check('C2: desktop Dry Run OFF makes phone Night Mode start REAL, not the client', async () => {
+    appSettingsModule.updateSection('app', { dryRun: false });
+    await sendRealWebSocketFrame({ action: 'startNightMode', nightModeId: 'quick-sleep' });
+    await waitFor(() => desktopEval('state.running === true'), 'phone-started run did not start after desktop Dry Run OFF');
+    const value = await desktopEval('state.dryRun');
+    assert(value === false, `run stayed Dry Run despite desktop policy OFF (state.dryRun=${value})`);
+    const receipt = receipts.getLatestReceipt();
+    assert(receipt && receipt.dryRun === false, JSON.stringify(receipt));
+    await ensureIdle();
+  });
+
+  await check('C2: forged dryRun:true from phone cannot fake Dry Run while desktop policy is OFF', async () => {
+    assert(appSettingsModule.getSection('app').dryRun === false, 'test precondition: desktop Dry Run should be OFF here');
+    await sendRealWebSocketFrame({ action: 'startNightMode', nightModeId: 'quick-sleep', dryRun: true });
+    await waitFor(() => desktopEval('state.running === true'), 'forged-payload run did not start');
+    const value = await desktopEval('state.dryRun');
+    assert(value === false, `forged dryRun:true faked desktop Dry Run (state.dryRun=${value})`);
+    await ensureIdle();
+  });
+
+  await check('C2: phone UI switches to REAL ACTION once desktop Dry Run policy goes OFF', async () => {
+    // broadcastCompanionState ticks every 2s; wait for the phone to observe the new policy.
+    await waitFor(async () => {
+      const value = await phoneEval('latestState && latestState.dryRunPolicy');
+      return value === false;
+    }, 'phone did not observe desktop Dry Run policy flip to OFF', 4000);
+    await phoneEval("(() => { const card = [...document.querySelectorAll('.night-mode-card')].find(c => c.querySelector('.night-mode-name').textContent === 'Quick Sleep'); if (card) card.click(); })()");
+    await waitFor(() => phoneEval("document.getElementById('night-mode-backdrop').classList.contains('show')"), 'detail did not open for dry-run-off UI check');
+    const runType = await phoneEval('nmDetailRunType.textContent');
+    const banner = await phoneEval("document.getElementById('idle-safety-banner').textContent");
+    assert(runType.includes('REAL ACTION'), runType);
+    assert(banner.includes('REAL ACTION'), banner);
+    await phoneEval("document.getElementById('nm-detail-close')?.click()");
+  });
+
+  // Restore Dry Run ON to match this harness's seeded settings.json for the remaining tests.
+  appSettingsModule.updateSection('app', { dryRun: true });
+  await waitFor(async () => {
+    const value = await phoneEval('latestState && latestState.dryRunPolicy');
+    return value === true;
+  }, 'phone did not observe desktop Dry Run policy restored to ON', 4000);
 
   // ── C2: per-generation catalogue refresh ──
   await phoneEval("(() => { if (!document.getElementById('night-mode-grid').classList.contains('visible')) document.getElementById('night-mode-toggle').click(); })()");

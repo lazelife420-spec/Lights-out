@@ -129,6 +129,54 @@ function receiptWarning(id) {
   return receipt;
 }
 
+// Look up a single receipt by id (used to decide whether a persisted
+// recovery snapshot still points at a live 'running' receipt).
+function getReceiptById(id) {
+  if (!id) return null;
+  const data = load();
+  return data.receipts.find(r => r.id === id) || null;
+}
+
+// Fallback correlation for a persisted activeTimer snapshot saved by a
+// pre-upgrade build, before the snapshot carried receiptId. Only one timer
+// can ever be running at a time, so if a still-valid recoverable snapshot
+// exists but can't name its receipt directly, the most recently created
+// 'running' receipt is it -- used so that migration boundary doesn't
+// misclassify a genuinely still-recoverable run as orphaned.
+function getMostRecentRunningReceiptId() {
+  const data = load();
+  for (let i = data.receipts.length - 1; i >= 0; i--) {
+    if (data.receipts[i].result === 'running') return data.receipts[i].id;
+  }
+  return null;
+}
+
+// Startup reconciliation: a receipt can be left at result:'running' forever
+// if the process that started it ended (crash, force-kill, power loss)
+// before it ever reached a terminal update. That reads as a currently-active
+// run in the receipt viewer and Copy Proof export indefinitely, which is
+// false proof. Finalize every 'running' receipt as 'interrupted' EXCEPT the
+// one identified by protectedReceiptId (the receipt tied to a still-valid,
+// still-recoverable persisted timer snapshot, if any) -- that one stays
+// 'running' until the user resumes, discards, cancels, or it completes.
+// Idempotent: once a receipt leaves 'running' it is never touched again.
+function reconcileOrphanedRunningReceipts(protectedReceiptId, reconciledAt) {
+  const data = load();
+  const timestamp = reconciledAt || new Date().toISOString();
+  const reconciledIds = [];
+  for (const receipt of data.receipts) {
+    if (receipt.result !== 'running') continue;
+    if (protectedReceiptId && receipt.id === protectedReceiptId) continue;
+    receipt.result = 'interrupted';
+    receipt.endedAt = timestamp;
+    receipt.reconciliationReason = 'orphaned-running-receipt';
+    receipt.reconciledAt = timestamp;
+    reconciledIds.push(receipt.id);
+  }
+  if (reconciledIds.length) save();
+  return reconciledIds;
+}
+
 // Get the latest receipt.
 function getLatestReceipt() {
   const data = load();
@@ -183,6 +231,9 @@ module.exports = {
   receiptPaused,
   receiptSnoozed,
   receiptWarning,
+  getReceiptById,
+  getMostRecentRunningReceiptId,
+  reconcileOrphanedRunningReceipts,
   getLatestReceipt,
   listReceipts,
   getAllReceiptsForExport,

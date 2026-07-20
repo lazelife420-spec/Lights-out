@@ -119,6 +119,12 @@ async function main() {
   assert.ok(fs.existsSync(executable), `Packaged executable missing: ${executable}`);
   const debugPort = await freePort();
   const blockedPort = await freePort();
+  // The product default (58732) is not guaranteed bindable on every Windows
+  // machine -- Hyper-V/WinNAT dynamically reserve ranges that can include it.
+  // Binding port 0 asks the OS for an ephemeral port, which by definition
+  // falls outside any excluded range. Production's default stays 58732;
+  // only this test's own "switch to a configured port" exercise uses testPort.
+  const testPort = await freePort();
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-packaged-gate-'));
   fs.writeFileSync(path.join(userData, 'settings.json'), JSON.stringify({
     app: { onboarded: true, action: 'sleep', durationSeconds: 900 },
@@ -154,6 +160,10 @@ async function main() {
     assert.equal(migrated.app.durationSeconds, 900);
     assert.equal(migrated.app.lockoutOnDim, false);
     assert.ok(Array.isArray(migrated.calendar.builtin.rules));
+
+    progress('proving production default port is unchanged (58732, read-only, no bind)');
+    const initialRemote = await cdp.evaluate(`electronAPI.getRemoteControl()`);
+    assert.equal(initialRemote.port, 58732, 'production default companion port must remain 58732');
 
     progress('proving occupied-port failure');
     await cdp.evaluate(`electronAPI.setRemoteControlMode('wifi')`);
@@ -205,9 +215,9 @@ async function main() {
     assert.equal(recoveredUi.hasUrl, true);
     assert.equal(recoveredUi.hasShortCode, true);
 
-    const defaultPort = await cdp.evaluate(`electronAPI.setRemoteControlPort(58732)`);
+    const defaultPort = await cdp.evaluate(`electronAPI.setRemoteControlPort(${testPort})`);
     assert.equal(defaultPort.ready, true);
-    assert.equal(defaultPort.port, 58732);
+    assert.equal(defaultPort.port, testPort);
     const firewallDefault = await firewallSnapshot();
     assert.equal(firewallDefault.length, 2);
     for (const rule of firewallDefault) {
@@ -216,7 +226,7 @@ async function main() {
       assert.equal(rule.Action, 'Allow');
       assert.equal(path.normalize(rule.Program), path.normalize(executable));
     }
-    assert.ok(firewallDefault.some(rule => rule.Protocol === 'TCP' && rule.LocalPort === '58732'));
+    assert.ok(firewallDefault.some(rule => rule.Protocol === 'TCP' && rule.LocalPort === String(testPort)));
     assert.ok(firewallDefault.some(rule => rule.Protocol === 'UDP' && rule.LocalPort === '58733'));
     const alternatePort = await cdp.evaluate(`electronAPI.setRemoteControlPort(${blockedPort})`);
     assert.equal(alternatePort.ready, true);
@@ -224,7 +234,7 @@ async function main() {
     assert.equal(firewallAlternate.length, 2);
     assert.ok(firewallAlternate.some(rule => rule.Protocol === 'TCP' && rule.LocalPort === String(blockedPort)));
     assert.ok(firewallAlternate.some(rule => rule.Protocol === 'UDP' && rule.LocalPort === '58733'));
-    await cdp.evaluate(`electronAPI.setRemoteControlPort(58732)`);
+    await cdp.evaluate(`electronAPI.setRemoteControlPort(${testPort})`);
 
     progress('proving widget and notifications');
     const widgetShown = await cdp.evaluate(`electronAPI.toggleWidget()`);
@@ -289,9 +299,10 @@ async function main() {
     console.log(JSON.stringify({
       packaged: true,
       profiles: { migratedExisting: true, missingDefaultsRestored: true },
+      productionDefaultPort: initialRemote.port,
       occupiedPort: { failed: true, ownerPidMatched: true, credentialsHidden: true },
       retry: { ready: true, host: retried.lanIp, port: retried.port },
-      defaultPort: { ready: true, port: 58732 },
+      defaultPort: { ready: true, port: defaultPort.port },
       firewall: { before: 0, active: 2, privateOnly: true, exactProgram: true, alternatePortUpdated: true, after: 0 },
       widget: { shown: true, hidden: true },
       notifications: { unreadBeforeOpen: 1, unreadAfterOpen: 0, duplicates: 1 },

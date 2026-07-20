@@ -27,6 +27,7 @@ function humanizeReceiptResult(result) {
     dry_run_completed: 'Dry Run Completed',
     cancelled: 'Cancelled',
     running: 'Running',
+    interrupted: 'Interrupted',
     error: 'Error',
     blocked: 'Blocked'
   };
