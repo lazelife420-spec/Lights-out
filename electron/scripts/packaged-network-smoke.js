@@ -8,11 +8,12 @@ const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
 const { promisify } = require('node:util');
+const { discoverAdapterRoles, readWindowsAdapterInventory } = require('./adapterRoles');
+const companionNetwork = require('../companionNetwork');
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(__dirname, '..', '..');
 const executable = path.join(root, 'dist', 'win-unpacked', 'Lights Out.exe');
-const ssid = 'BMW ONLY! 5G';
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -22,6 +23,16 @@ function freePort() {
       const port = server.address().port;
       server.close(() => resolve(port));
     });
+  });
+}
+
+// Confirms nothing is bound to `port` right now -- used post-cleanup instead
+// of parsing netstat output.
+async function assertPortFree(port) {
+  await new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once('error', err => reject(new Error(`port ${port} still bound after cleanup: ${err.message}`)));
+    server.listen(port, '0.0.0.0', () => server.close(() => resolve()));
   });
 }
 
@@ -47,7 +58,7 @@ async function waitFor(fn, timeoutMs = 30000, intervalMs = 300) {
     } catch (error) { lastError = error; }
     await new Promise(resolve => setTimeout(resolve, intervalMs));
   }
-  throw lastError || new Error('Timed out waiting for packaged network transition');
+  throw lastError || new Error('Timed out waiting for packaged network readiness');
 }
 
 class CdpClient {
@@ -92,46 +103,58 @@ class CdpClient {
   close() { this.socket.close(); }
 }
 
-async function netsh(...args) {
-  const result = await execFileAsync('netsh.exe', ['wlan', ...args], { timeout: 20000, windowsHide: true });
-  return result.stdout;
+async function firewallSnapshot() {
+  const command = `$rules = @(Get-NetFirewallRule -Group 'Lights Out Companion' -ErrorAction SilentlyContinue); @($rules | ForEach-Object { $app = $_ | Get-NetFirewallApplicationFilter; $port = $_ | Get-NetFirewallPortFilter; [pscustomobject]@{ Name = $_.Name; Profile = [string]$_.Profile; Direction = [string]$_.Direction; Action = [string]$_.Action; Program = $app.Program; Protocol = [string]$port.Protocol; LocalPort = [string]$port.LocalPort } }) | ConvertTo-Json -Compress`;
+  const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { windowsHide: true, timeout: 15000 });
+  const trimmed = stdout.trim();
+  if (!trimmed) return [];
+  const parsed = JSON.parse(trimmed);
+  return Array.isArray(parsed) ? parsed : [parsed];
 }
 
-async function interfaceState(name) {
-  const output = await netsh('show', 'interfaces');
-  const blocks = output.split(/\r?\n\s*\r?\n/);
-  const block = blocks.find(item => new RegExp(`Name\\s*:\\s*${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'mi').test(item));
-  if (!block) return null;
-  return {
-    state: (/State\s*:\s*(.+)/i.exec(block)?.[1] || '').trim().toLowerCase(),
-    ssid: (/^\s*SSID\s*:\s*(.+)$/mi.exec(block)?.[1] || '').trim()
-  };
-}
-
-async function connectAdapter(name) {
-  await netsh('connect', `name=${ssid}`, `interface=${name}`);
-  await waitFor(async () => (await interfaceState(name))?.state === 'connected', 30000, 500);
-}
-
-async function disconnectAdapter(name) {
-  await netsh('disconnect', `interface=${name}`);
-  await waitFor(async () => (await interfaceState(name))?.state === 'disconnected', 20000, 500);
+// Read-only observation of the machine's real adapters, classified by role
+// (connected/disconnected, physical/virtual, default-route) rather than by
+// Windows display name. Never issues a connect/disconnect/enable/disable
+// call -- this test uses whatever the machine is already doing right now.
+async function observeRealAdapterRoles() {
+  const inventory = await readWindowsAdapterInventory({ getRoutedLanIp: companionNetwork.getRoutedLanIp });
+  const roles = discoverAdapterRoles(inventory);
+  console.log('Connected test adapter:');
+  if (roles.connectedAdapter) {
+    const a = roles.connectedAdapter;
+    console.log(`  - name: ${a.name}\n  - interface index: ${a.index}\n  - status: ${a.status}\n  - IPv4: ${a.ipv4}`);
+  } else {
+    console.log('  - none found');
+  }
+  console.log('Disconnected test adapter:');
+  if (roles.disconnectedAdapter) {
+    const a = roles.disconnectedAdapter;
+    console.log(`  - name: ${a.name}\n  - interface index: ${a.index}\n  - status: ${a.status}`);
+  } else {
+    console.log('  - none found (machine has only one usable adapter right now -- not a failure)');
+  }
+  return roles;
 }
 
 async function main() {
   assert.ok(fs.existsSync(executable));
-  assert.equal((await interfaceState('Wi-Fi 2'))?.state, 'connected');
-  assert.equal((await interfaceState('Wi-Fi'))?.state, 'disconnected');
+
+  const roles = await observeRealAdapterRoles();
+  assert.ok(roles.connectedAdapter, 'no connected LAN-capable adapter found on this machine -- cannot run the packaged network gate');
+  const expectedLanIp = roles.connectedAdapter.ipv4;
+  if (roles.disconnectedAdapter) {
+    assert.notEqual(roles.disconnectedAdapter.ipv4, expectedLanIp, 'disconnected adapter must never share the selected LAN IP');
+  }
+
+  const firewallBefore = await firewallSnapshot();
+  assert.equal(firewallBefore.length, 0, 'no Lights Out Companion firewall rule should exist before the app has run');
 
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-network-gate-'));
   const debugPort = await freePort();
   let child;
   let cdp;
-  let secondaryConnected = false;
+  let testPort;
   try {
-    await connectAdapter('Wi-Fi');
-    secondaryConnected = true;
-
     child = spawn(executable, [
       '--no-auto-start',
       `--user-data-dir=${userData}`,
@@ -144,7 +167,6 @@ async function main() {
     cdp = new CdpClient(target.webSocketDebuggerUrl);
     await cdp.open();
     await waitFor(() => cdp.evaluate(`typeof electronAPI === 'object'`));
-    await cdp.evaluate(`window.__networkGateEvents = []; electronAPI.onRemoteControlStatus(state => window.__networkGateEvents.push({ ready: state.ready, failed: state.failed, lanIp: state.lanIp, url: state.url })); true`);
 
     const initialRemote = await cdp.evaluate(`electronAPI.getRemoteControl()`);
     assert.equal(initialRemote.port, 58732, 'production default companion port must remain 58732');
@@ -154,51 +176,24 @@ async function main() {
     // it. setRemoteControlMode does not reset a previously-set port, so
     // picking an OS-assigned ephemeral port here keeps this test immune to
     // that class of failure. Production's own default stays 58732.
-    const testPort = await freePort();
+    testPort = await freePort();
     await cdp.evaluate(`electronAPI.setRemoteControlPort(${testPort})`);
 
-    const initial = await cdp.evaluate(`electronAPI.setRemoteControlMode('wifi')`);
-    assert.equal(initial.ready, true);
-    assert.match(initial.lanIp, /^192\.168\.0\.(11|16)$/);
-    const hostA = initial.lanIp;
-    const activeAdapter = hostA === '192.168.0.16' ? 'Wi-Fi' : 'Wi-Fi 2';
-    const remainingAdapter = activeAdapter === 'Wi-Fi' ? 'Wi-Fi 2' : 'Wi-Fi';
+    // Role grounding: the app must land on the real connected adapter's IP,
+    // regardless of what Windows happens to call that adapter.
+    const wifi = await cdp.evaluate(`electronAPI.setRemoteControlMode('wifi')`);
+    assert.equal(wifi.ready, true);
+    assert.equal(wifi.lanIp, expectedLanIp, `app selected ${wifi.lanIp}, expected the role-selected connected adapter's IP ${expectedLanIp}`);
+    assert.match(wifi.url, new RegExp(`^http://${expectedLanIp.replace(/\./g, '\\.')}:${testPort}/`));
 
-    await disconnectAdapter(activeAdapter);
-    if (activeAdapter === 'Wi-Fi') secondaryConnected = false;
-    const switched = await waitFor(async () => {
-      const state = await cdp.evaluate(`electronAPI.getRemoteControl()`);
-      return state.ready && state.lanIp !== hostA ? state : null;
-    }, 30000);
-    assert.match(switched.lanIp, /^192\.168\.0\.\d+$/);
-    assert.doesNotMatch(switched.url, new RegExp(hostA.replace(/\./g, '\\.')));
     await cdp.evaluate(`(async () => { renderRemoteControl(await electronAPI.getRemoteControl()); return true; })()`);
     const rendered = await cdp.evaluate(`document.getElementById('remote-url').textContent`);
-    assert.match(rendered, new RegExp(switched.lanIp.replace(/\./g, '\\.')));
-    assert.doesNotMatch(rendered, new RegExp(hostA.replace(/\./g, '\\.')));
-    const transitions = await cdp.evaluate(`window.__networkGateEvents`);
-    assert.ok(transitions.some(event => !event.ready && !event.url));
-
-    await disconnectAdapter(remainingAdapter);
-    if (remainingAdapter === 'Wi-Fi') secondaryConnected = false;
-    const offline = await waitFor(async () => {
-      const state = await cdp.evaluate(`electronAPI.getRemoteControl()`);
-      return state.failed && !state.ready ? state : null;
-    }, 30000);
-    assert.equal(offline.errorCode, 'NO_LAN_ADDRESS');
-    assert.equal(offline.url, '');
-    assert.equal(offline.shortCode, '');
-
-    await connectAdapter('Wi-Fi 2');
-    const restored = await waitFor(async () => {
-      const state = await cdp.evaluate(`electronAPI.getRemoteControl()`);
-      return state.ready && state.lanIp === '192.168.0.11' ? state : null;
-    }, 30000);
-    assert.equal(restored.url.includes(restored.lanIp), true);
+    assert.match(rendered, new RegExp(expectedLanIp.replace(/\./g, '\\.')), 'rendered QR/manual URL must use the selected adapter\'s current address');
 
     const local = await cdp.evaluate(`electronAPI.setRemoteControlMode('local')`);
     assert.equal(local.ready, true);
     assert.match(local.url, new RegExp(`^http://127\\.0\\.0\\.1:${testPort}/`));
+
     const off = await cdp.evaluate(`electronAPI.setRemoteControlMode('off')`);
     assert.equal(off.running, false);
     assert.equal(off.ready, false);
@@ -208,16 +203,15 @@ async function main() {
     console.log(JSON.stringify({
       packaged: true,
       productionDefaultPort: initialRemote.port,
-      multipleAdapters: true,
-      addressA: hostA,
-      addressB: switched.lanIp,
-      startingTransitionObserved: true,
-      staleAddressRemoved: true,
-      noLanAddress: { failed: true, credentialsHidden: true },
-      networkReturn: { ready: true, address: restored.lanIp },
-      loopbackOnly: { ready: true, host: '127.0.0.1' },
+      connectedAdapter: { name: roles.connectedAdapter.name, index: roles.connectedAdapter.index, ipv4: roles.connectedAdapter.ipv4 },
+      disconnectedAdapter: roles.disconnectedAdapter
+        ? { name: roles.disconnectedAdapter.name, index: roles.disconnectedAdapter.index, status: roles.disconnectedAdapter.status }
+        : null,
+      roleSelectionUsedDisplayName: false,
+      wifiMode: { ready: true, address: wifi.lanIp },
+      localMode: { ready: true, host: '127.0.0.1' },
       off: { listener: false, pairingData: false },
-      originalAdaptersRestored: true,
+      physicalAdaptersModified: false,
       powerActions: 0
     }, null, 2));
   } finally {
@@ -227,12 +221,14 @@ async function main() {
       await new Promise(resolve => setTimeout(resolve, 500));
       await execFileAsync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }).catch(() => {});
     }
-    await connectAdapter('Wi-Fi 2').catch(() => {});
-    if (secondaryConnected || (await interfaceState('Wi-Fi'))?.state === 'connected') {
-      await disconnectAdapter('Wi-Fi').catch(() => {});
-    }
     fs.rmSync(userData, { recursive: true, force: true });
   }
+
+  await new Promise(resolve => setTimeout(resolve, 500));
+  if (testPort) await assertPortFree(testPort);
+  const firewallAfter = await firewallSnapshot();
+  assert.equal(firewallAfter.length, 0, 'no Lights Out Companion firewall rule should survive app quit');
+  console.log('Listener cleanup: confirmed. Firewall cleanup: confirmed.');
 }
 
 main().catch(error => {
