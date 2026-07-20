@@ -783,6 +783,19 @@ async function runElectronProof() {
     const value = await phoneEval("({ title: timerName.textContent, id: latestState.nightModeId, badge: safetyBadge.textContent, active: activeControls.style.display !== 'none' })");
     return value.title === 'Quick Sleep' && value.id === 'quick-sleep' && value.badge === 'DRY RUN' && value.active;
   }, 'phone active UI did not reflect canonical Night Mode identity');
+  await check('C2: successful Night Mode start is acknowledged, not falsely reported as "PC did not confirm"', async () => {
+    // Regression guard: nmDetailStart's matches() closure previously read the
+    // live nmSelectedId variable, which closeNightModeDetail() resets to null
+    // as soon as the resulting state update arrives (active:true) -- in the
+    // SAME handler pass, before confirmPendingFromState() ran. That made the
+    // match always fail and the command always time out at 5s, even though
+    // the run had genuinely started (visibly running, correct nightModeId).
+    const value = await phoneEval("({ pending: pendingOperation, text: pendingStatus.textContent, toast: document.getElementById('toast').textContent, shown: document.getElementById('toast').classList.contains('show'), selectedId: nmSelectedId })");
+    assert(value.pending === null, `pending operation should have cleared: ${JSON.stringify(value)}`);
+    assert(value.text !== 'PC did not confirm the change', `false negative ACK: ${JSON.stringify(value)}`);
+    assert(value.shown && value.toast === 'Night Mode started', `success toast missing: ${JSON.stringify(value)}`);
+    assert(value.selectedId === null, 'detail sheet should have closed (nmSelectedId reset) once the run went active');
+  });
   await phone.setContentSize(390, 844);
   await phoneEval('window.scrollTo(0,0)');
   await capture('c2-quick-sleep-active');
@@ -807,18 +820,27 @@ async function runElectronProof() {
   const ritualStartBefore = commandLog.length;
   await phoneEval("nmDetailStart.click()");
   await waitFor(() => commandLog.length === ritualStartBefore + 1 && commandLog[ritualStartBefore]?.action === 'startNightMode', 'Full Shutdown command did not reach main');
+  // Remote-originated rituals fast-forward through the whole guided sequence
+  // (fix/v11.1.1-night-mode-remote-ritual) -- nobody is at the desktop to
+  // click through it, so the ritual must complete on its own and land on the
+  // real countdown, not get stuck "active" forever. Checked via the receipt
+  // rather than the desktop renderer's own `state` mirror: emitTimerUpdate()
+  // never includes nightModeId/nightModeTitle in its payload (pre-existing,
+  // separate from this fix -- only broadcastCompanionState(), used by the
+  // phone, carries that field), so the desktop's own `state.nightModeId` is
+  // always undefined regardless of this fix.
   await waitFor(async () => {
     const ritual = await desktopEval("(async () => window.electronAPI.ritualState())()");
-    return ritual && ritual.active === true;
-  }, 'Full Shutdown from phone did not enter standard wind-down ritual');
+    const value = await desktopEval("({ running: state.running, action: state.action })");
+    const receipt = receipts.getLatestReceipt();
+    return ritual && ritual.active === false && value.running === true && value.action === 'shutdown'
+      && receipt && receipt.nightModeId === 'full-shutdown' && receipt.nightModeTitle === 'Full Shutdown' && receipt.result === 'running';
+  }, 'Full Shutdown from phone did not fast-forward through the ritual to a real countdown');
   await phone.setContentSize(390, 844);
   await phoneEval('window.scrollTo(0,0)');
-  await capture('c2-full-shutdown-ritual-active');
-  await desktopEval("window.electronAPI.ritualCancel && window.electronAPI.ritualCancel()");
-  await waitFor(async () => {
-    const ritual = await desktopEval("(async () => window.electronAPI.ritualState())()");
-    return ritual && ritual.active === false;
-  }, 'ritual did not cancel');
+  await capture('c2-full-shutdown-ritual-completed');
+  await desktopEval('window.electronAPI.cancelTimer()');
+  await waitFor(() => desktopEval('!state.running && !state.paused'), 'desktop did not cancel the Full Shutdown countdown');
 
   // Unknown / disabled mode rejection.
   await check('C2: main rejects forged startNightMode with unknown ID', async () => {
@@ -880,7 +902,12 @@ async function runElectronProof() {
 
   await check('C2: startNightMode rejected while a ritual is active', async () => {
     await ensureIdle();
-    await desktopEval(`window.electronAPI.startTimer(${JSON.stringify({ durationSeconds: 3600, action: 'shutdown', nightModeId: 'full-shutdown', startOrigin: 'companion-night-mode', source: 'remote' })})`);
+    // source:'local' (not 'remote') deliberately -- this simulates someone
+    // physically at the desktop mid-way through the guided overlay, still on
+    // step one. A remote-originated ritual now fast-forwards to completion
+    // instantly (fix/v11.1.1-night-mode-remote-ritual), so it can no longer
+    // be used to hold the ritual open for this guard check.
+    await desktopEval(`window.electronAPI.startTimer(${JSON.stringify({ durationSeconds: 3600, action: 'shutdown', nightModeId: 'full-shutdown', startOrigin: 'companion-night-mode', source: 'local' })})`);
     await waitFor(async () => {
       const ritual = await desktopEval("(async () => window.electronAPI.ritualState())()");
       return ritual && ritual.active === true;

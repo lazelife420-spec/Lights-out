@@ -660,7 +660,11 @@ function startTimer(input, legacyAction) {
     });
     // Start the standard ritual with run metadata binding the token to this
     // exact run. The ritual's onStep/onComplete callbacks receive the meta.
-    ritualMode.startRitual(null, { profileRitualToken: runToken });
+    // remoteOrigin marks runs with nobody physically at the desktop to click
+    // through the guided overlay (every step, including "auto" ones, normally
+    // requires a click) -- ritualMode fast-forwards those instead of getting
+    // stuck on the first step forever.
+    ritualMode.startRitual(null, { profileRitualToken: runToken, remoteOrigin: options.source === 'remote' });
     return { success: true, ritualStarted: true };
   }
 

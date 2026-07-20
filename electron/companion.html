@@ -1180,12 +1180,19 @@
     nmDetailClose.addEventListener('click', closeNightModeDetail);
     nmDetailStart.addEventListener('click', () => {
       if (!stateIsAuthoritative() || !nmSelectedId) return;
+      // Snapshot the id now: the very next state update (active:true) closes
+      // the detail sheet via closeNightModeDetail(), which resets the live
+      // nmSelectedId to null BEFORE confirmPendingFromState() runs in that
+      // same handler pass. A closure over the live variable would then always
+      // compare against null and never match, permanently false-timing-out
+      // even though the run genuinely started.
+      const requestedNightModeId = nmSelectedId;
       if (!beginPending({
         kind: 'startNightMode',
         success: 'Night Mode started',
-        matches: state => Boolean(state.running || state.paused) && state.nightModeId === nmSelectedId
+        matches: state => Boolean(state.running || state.paused) && state.nightModeId === requestedNightModeId
       })) return;
-      if (!send({ action: 'startNightMode', nightModeId: nmSelectedId })) clearPending({ timeout: true });
+      if (!send({ action: 'startNightMode', nightModeId: requestedNightModeId })) clearPending({ timeout: true });
     });
     nightModeBackdrop.addEventListener('click', (e) => { if (e.target === nightModeBackdrop) closeNightModeDetail(); });
     document.addEventListener('keydown', (e) => {

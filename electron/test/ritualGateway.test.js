@@ -304,3 +304,90 @@ test('consumeAny does not exist in module exports', () => {
   assert.equal(typeof profileRitualContext.consumeAny, 'undefined');
   assert.equal(typeof profileRitualContext._consumeAny, 'undefined');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Remote-origin fast-forward (fix/v11.1.1-night-mode-remote-ritual)
+//
+// Every ritual step, including "auto" ones, normally advances only via an
+// explicit advanceStep()/skipStep() call driven by a click on the desktop's
+// guided-overlay UI ("auto" only changes that button's label). A ritual
+// started from the phone companion has nobody at the desktop to click
+// through it, so remoteOrigin:true in startRitual's meta must fast-forward
+// through the whole sequence synchronously instead of getting stuck active
+// forever on the first step.
+// ═══════════════════════════════════════════════════════════════════════════
+
+test('remoteOrigin ritual completes synchronously, does not stay stuck active', () => {
+  const result = ritualMode.startRitual(null, { profileRitualToken: 'remote-token-1', remoteOrigin: true });
+  // DEFAULT_STEPS' first step ('breathe') is auto:false -- a local/manual
+  // ritual would still be active and on step 0 at this point (see the next
+  // test). A remote-origin ritual must already be fully complete.
+  assert.equal(result.active, false, 'remote-origin ritual must not still be active after startRitual returns');
+  assert.equal(ritualMode.getState().active, false);
+});
+
+test('local (non-remote) ritual is unaffected: still requires an explicit advance for a non-auto step', () => {
+  const result = ritualMode.startRitual(null, { profileRitualToken: 'local-token-1' });
+  assert.equal(result.active, true, 'a local ritual must still wait on its first (non-auto) step');
+  assert.equal(ritualMode.getState().currentStep, 0);
+  ritualMode.cancelRitual();
+});
+
+test('remoteOrigin ritual fires every step\'s onStep callback while fast-forwarding', () => {
+  const seenStepIds = [];
+  ritualMode.onStep((step) => { seenStepIds.push(step.id); });
+  ritualMode.startRitual(null, { profileRitualToken: 'remote-token-2', remoteOrigin: true });
+  assert.deepEqual(seenStepIds, ritualMode.DEFAULT_STEPS.map(s => s.id));
+  ritualMode.onStep(null);
+});
+
+test('remoteOrigin ritual calls onComplete exactly once, with the correct runMeta and runId', () => {
+  let completeCalls = 0;
+  let receivedMeta = null;
+  let receivedRunId = null;
+  ritualMode.onComplete((state, runMeta, runId) => {
+    completeCalls++;
+    receivedMeta = runMeta;
+    receivedRunId = runId;
+  });
+  ritualMode.startRitual(null, { profileRitualToken: 'remote-token-3', remoteOrigin: true });
+  const expectedRunId = ritualMode.getRunId();
+  assert.equal(completeCalls, 1);
+  assert.equal(receivedMeta.profileRitualToken, 'remote-token-3');
+  assert.equal(receivedRunId, expectedRunId);
+  ritualMode.onComplete(null);
+});
+
+test('remoteOrigin ritual marks every step completed (not skipped) -- side effects genuinely ran', () => {
+  ritualMode.startRitual(null, { profileRitualToken: 'remote-token-4', remoteOrigin: true });
+  // getState() reports the final completedSteps/skippedSteps bookkeeping
+  // even though the ritual is already inactive.
+  const state = ritualMode.getState();
+  assert.deepEqual(state.completedSteps, ritualMode.DEFAULT_STEPS.map(s => s.id));
+  assert.deepEqual(state.skippedSteps, []);
+});
+
+test('remoteOrigin ritual with a timed auto step does not wait for its duration', (t, done) => {
+  const timedSteps = [
+    { id: 'timed', label: 'Timed', durationSeconds: 60, skippable: true, auto: true },
+    { id: 'after', label: 'After', durationSeconds: 0, skippable: true, auto: false }
+  ];
+  const start = Date.now();
+  const result = ritualMode.startRitual(timedSteps, { profileRitualToken: 'remote-token-5', remoteOrigin: true });
+  const elapsedMs = Date.now() - start;
+  assert.equal(result.active, false, 'must not wait on the 60s timer for a remote-origin run');
+  assert.ok(elapsedMs < 1000, `fast-forward must be synchronous, took ${elapsedMs}ms`);
+  done();
+});
+
+test('remoteOrigin custom single-step ritual completes immediately, matching manual-completion semantics', () => {
+  let receivedMeta = null;
+  ritualMode.onComplete((state, runMeta) => { receivedMeta = runMeta; });
+  const result = ritualMode.startRitual(
+    [{ id: 'only', label: 'Only', durationSeconds: 0, skippable: true, auto: false }],
+    { profileRitualToken: 'remote-token-6', remoteOrigin: true }
+  );
+  assert.equal(result.active, false);
+  assert.equal(receivedMeta.profileRitualToken, 'remote-token-6');
+  ritualMode.onComplete(null);
+});
