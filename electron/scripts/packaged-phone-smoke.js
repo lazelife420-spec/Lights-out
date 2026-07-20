@@ -199,12 +199,21 @@ async function main() {
     await desktop.open();
     await waitFor(() => desktop.evaluate(`typeof electronAPI === 'object'`));
 
+    // The product default (58732) is not guaranteed bindable on every Windows
+    // machine -- Hyper-V/WinNAT dynamically reserve ranges that can include
+    // it. setRemoteControlMode does not reset a previously-set port, so
+    // picking an OS-assigned ephemeral port here keeps this test immune to
+    // that class of failure. Production's own default stays 58732.
+    const initialRemote = await desktop.evaluate(`electronAPI.getRemoteControl()`);
+    assert.equal(initialRemote.port, 58732, 'production default companion port must remain 58732');
+    const testPort = await freePort();
+    await desktop.evaluate(`electronAPI.setRemoteControlPort(${testPort})`);
     const ready = await desktop.evaluate(`electronAPI.setRemoteControlMode('wifi')`);
     assert.equal(ready.ready, true);
-    assert.equal(ready.port, 58732);
+    assert.equal(ready.port, testPort);
     const fresh = await desktop.evaluate(`electronAPI.regenerateRemoteToken()`);
     assert.equal(fresh.ready, true);
-    assert.match(fresh.url, /^http:\/\/192\.168\.0\.\d+:58732\/\?t=/);
+    assert.match(fresh.url, new RegExp(`^http://192\\.168\\.0\\.\\d+:${testPort}/\\?t=`));
     const privateUrl = new URL(fresh.url);
     privateUrl.searchParams.delete('host');
 

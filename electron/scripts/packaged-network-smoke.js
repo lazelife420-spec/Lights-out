@@ -146,6 +146,17 @@ async function main() {
     await waitFor(() => cdp.evaluate(`typeof electronAPI === 'object'`));
     await cdp.evaluate(`window.__networkGateEvents = []; electronAPI.onRemoteControlStatus(state => window.__networkGateEvents.push({ ready: state.ready, failed: state.failed, lanIp: state.lanIp, url: state.url })); true`);
 
+    const initialRemote = await cdp.evaluate(`electronAPI.getRemoteControl()`);
+    assert.equal(initialRemote.port, 58732, 'production default companion port must remain 58732');
+
+    // The product default (58732) is not guaranteed bindable on every Windows
+    // machine -- Hyper-V/WinNAT dynamically reserve ranges that can include
+    // it. setRemoteControlMode does not reset a previously-set port, so
+    // picking an OS-assigned ephemeral port here keeps this test immune to
+    // that class of failure. Production's own default stays 58732.
+    const testPort = await freePort();
+    await cdp.evaluate(`electronAPI.setRemoteControlPort(${testPort})`);
+
     const initial = await cdp.evaluate(`electronAPI.setRemoteControlMode('wifi')`);
     assert.equal(initial.ready, true);
     assert.match(initial.lanIp, /^192\.168\.0\.(11|16)$/);
@@ -187,7 +198,7 @@ async function main() {
 
     const local = await cdp.evaluate(`electronAPI.setRemoteControlMode('local')`);
     assert.equal(local.ready, true);
-    assert.match(local.url, /^http:\/\/127\.0\.0\.1:58732\//);
+    assert.match(local.url, new RegExp(`^http://127\\.0\\.0\\.1:${testPort}/`));
     const off = await cdp.evaluate(`electronAPI.setRemoteControlMode('off')`);
     assert.equal(off.running, false);
     assert.equal(off.ready, false);
@@ -196,6 +207,7 @@ async function main() {
 
     console.log(JSON.stringify({
       packaged: true,
+      productionDefaultPort: initialRemote.port,
       multipleAdapters: true,
       addressA: hostA,
       addressB: switched.lanIp,

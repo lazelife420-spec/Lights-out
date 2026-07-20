@@ -4,8 +4,25 @@
 // the test can inspect the exact WebSocket close frame sent on bad tokens.
 
 const http = require('http');
+const net = require('net');
 const companion = require('../companion');
 const remoteControl = require('../remoteControl');
+
+// The product default (companion.PWA_PORT, 58732) is not guaranteed bindable
+// on every Windows machine -- Hyper-V/WinNAT dynamically reserve ranges that
+// can include it. Binding port 0 asks the OS for an ephemeral port, which by
+// definition falls outside any excluded range, so this is immune to that
+// class of failure without needing to know the current exclusion ranges.
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const port = server.address().port;
+      server.close(() => resolve(port));
+    });
+  });
+}
 
 let passed = 0;
 let failed = 0;
@@ -140,6 +157,7 @@ function encodeTextFrame(obj) {
 
     const token = remoteControl.generateToken();
     const badToken = remoteControl.generateToken();
+    const testPort = await freePort();
 
     await check('companion: off by default', () => {
       const status = companion.getStatus();
@@ -148,7 +166,7 @@ function encodeTextFrame(obj) {
       assert(status.clients === 0, 'no clients by default');
     });
 
-    await companion.start({ token, host: '127.0.0.1' });
+    await companion.start({ token, host: '127.0.0.1', port: testPort });
 
     await check('companion: same-wifi starts and reports running', () => {
       const status = companion.getStatus();
@@ -158,33 +176,33 @@ function encodeTextFrame(obj) {
     });
 
     await check('companion: HTTP page served as inert pairing shell without token', async () => {
-      const res = await httpGet(`http://127.0.0.1:${companion.PWA_PORT}/`);
+      const res = await httpGet(`http://127.0.0.1:${testPort}/`);
       assert(res.status === 200, `expected 200 pairing shell, got ${res.status}`);
       assert(res.body.includes('Lights Out PC Companion'), 'page title missing');
       assert(res.body.includes('pair-input'), 'pairing input missing');
     });
 
     await check('companion: HTTP page with invalid token still served as inert shell', async () => {
-      const res = await httpGet(`http://127.0.0.1:${companion.PWA_PORT}/?t=${badToken}`);
+      const res = await httpGet(`http://127.0.0.1:${testPort}/?t=${badToken}`);
       assert(res.status === 200, `expected 200 pairing shell, got ${res.status}`);
       assert(res.body.includes('pair-input'), 'pairing input missing');
     });
 
     await check('companion: HTTP page with valid token served as inert shell', async () => {
-      const res = await httpGet(`http://127.0.0.1:${companion.PWA_PORT}/?t=${token}`);
+      const res = await httpGet(`http://127.0.0.1:${testPort}/?t=${token}`);
       assert(res.status === 200, `expected 200, got ${res.status}`);
       assert(res.body.includes('pair-input'), 'pairing input missing');
     });
 
     await check('companion: WebSocket without token rejected with 401', async () => {
-      const result = await wsUpgrade({ port: companion.PWA_PORT, host: '127.0.0.1', path: '/' });
+      const result = await wsUpgrade({ port: testPort, host: '127.0.0.1', path: '/' });
       assert(result.status === 401, `expected 401, got ${result.status}`);
       if (result.socket) result.socket.destroy();
     });
 
     await check('companion: WebSocket with invalid token rejected with 403', async () => {
       const result = await wsUpgrade({
-        port: companion.PWA_PORT,
+        port: testPort,
         host: '127.0.0.1',
         path: `/?t=${badToken}`
       });
@@ -194,7 +212,7 @@ function encodeTextFrame(obj) {
 
     await check('companion: WebSocket with valid token connects', async () => {
       const result = await wsUpgrade({
-        port: companion.PWA_PORT,
+        port: testPort,
         host: '127.0.0.1',
         path: `/?t=${token}`
       });
@@ -213,7 +231,7 @@ function encodeTextFrame(obj) {
       // Without a token the WebSocket handshake is rejected before any action
       // can reach the protected control plane.
       const result = await wsUpgrade({
-        port: companion.PWA_PORT,
+        port: testPort,
         host: '127.0.0.1',
         path: '/'
       });
@@ -224,7 +242,7 @@ function encodeTextFrame(obj) {
     await check('companion: protected action with bad token is rejected', async () => {
       // A bad token is also rejected before the handshake, so no action can be sent.
       const result = await wsUpgrade({
-        port: companion.PWA_PORT,
+        port: testPort,
         host: '127.0.0.1',
         path: `/?t=${badToken}`
       });
@@ -234,7 +252,7 @@ function encodeTextFrame(obj) {
 
     await check('companion: protected action with valid token is accepted', async () => {
       const result = await wsUpgrade({
-        port: companion.PWA_PORT,
+        port: testPort,
         host: '127.0.0.1',
         path: `/?t=${token}`
       });
@@ -256,7 +274,7 @@ function encodeTextFrame(obj) {
 
     await check('companion: invalid action over valid socket is ignored', async () => {
       const result = await wsUpgrade({
-        port: companion.PWA_PORT,
+        port: testPort,
         host: '127.0.0.1',
         path: `/?t=${token}`
       });
@@ -279,11 +297,11 @@ function encodeTextFrame(obj) {
     const newToken = remoteControl.generateToken();
     await companion.stop();
     await wait(400);
-    await companion.start({ token: newToken, host: '127.0.0.1' });
+    await companion.start({ token: newToken, host: '127.0.0.1', port: testPort });
 
     await check('companion: old token invalidated after rotation', async () => {
       const result = await wsUpgrade({
-        port: companion.PWA_PORT,
+        port: testPort,
         host: '127.0.0.1',
         path: `/?t=${token}`
       });
@@ -293,7 +311,7 @@ function encodeTextFrame(obj) {
 
     await check('companion: new token accepted after rotation', async () => {
       const result = await wsUpgrade({
-        port: companion.PWA_PORT,
+        port: testPort,
         host: '127.0.0.1',
         path: `/?t=${newToken}`
       });
@@ -313,7 +331,7 @@ function encodeTextFrame(obj) {
       const status = companion.getStatus();
       assert(!status.running, 'server should be stopped');
       let err;
-      try { await httpGet(`http://127.0.0.1:${companion.PWA_PORT}/`); }
+      try { await httpGet(`http://127.0.0.1:${testPort}/`); }
       catch (e) { err = e; }
       assert(err && err.code === 'ECONNREFUSED', `expected ECONNREFUSED, got ${err && err.code}`);
     });
