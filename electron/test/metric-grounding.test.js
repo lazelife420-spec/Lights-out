@@ -1,6 +1,6 @@
 'use strict';
 
-const test = require('node:test');
+const { test, mock } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -49,14 +49,24 @@ test('Completion count, completion streak, and routine score come only from app 
 });
 
 test('Before 11 PM and weekly on-time use the real 23:00 boundary', () => {
-  const events = [
-    { date: dateDaysAgo(2), bedTime: '22:59', snoozed: false },
-    { date: dateDaysAgo(1), bedTime: '23:00', snoozed: false },
-    { date: dateDaysAgo(0), bedTime: '23:01', snoozed: false }
-  ];
-  const week = streaks.getWeekStats(events);
-  assert.deepEqual(week.days.map(day => day.onTime), [true, false, false]);
-  assert.equal(week.onTimePercent, 33);
-  streaks.replaceAll({ events, streak: 0, bestStreak: 0, achievements: [] });
-  assert.equal(streaks.getTrend('week', 1)[0].onTimePercent, 33);
+  // getTrend() buckets by ISO week (Monday-start); dateDaysAgo(0..2) is only
+  // guaranteed to land in a single bucket if "today" isn't within 2 days of
+  // a Monday. Freeze the clock to a fixed mid-week instant (Wed, UTC noon,
+  // safe against +/-12h local-timezone reinterpretation in trendBucketKey)
+  // so this test doesn't intermittently fail depending on real-world timing.
+  mock.timers.enable({ apis: ['Date'], now: new Date('2024-01-10T12:00:00Z').getTime() });
+  try {
+    const events = [
+      { date: dateDaysAgo(2), bedTime: '22:59', snoozed: false },
+      { date: dateDaysAgo(1), bedTime: '23:00', snoozed: false },
+      { date: dateDaysAgo(0), bedTime: '23:01', snoozed: false }
+    ];
+    const week = streaks.getWeekStats(events);
+    assert.deepEqual(week.days.map(day => day.onTime), [true, false, false]);
+    assert.equal(week.onTimePercent, 33);
+    streaks.replaceAll({ events, streak: 0, bestStreak: 0, achievements: [] });
+    assert.equal(streaks.getTrend('week', 1)[0].onTimePercent, 33);
+  } finally {
+    mock.timers.reset();
+  }
 });
