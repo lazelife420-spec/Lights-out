@@ -12,6 +12,10 @@
   `1286bb9019aac63e27d2c94b7a3f01ed0b364818`
 - Portable smoke isolation fix and twice-gated proof HEAD:
   `2b530d2d02a39230fe3930fc58da7725e5e9461e`
+- Packaged-proof failure-safety lifecycle and redaction fix:
+  `fb19d77783e67c15e5dac4195af1e478428bae27`
+- Time-bounded descendant ownership fix and final twice-gated code HEAD:
+  `8d9a279555232c7326ce6ef82f1443f68bf367fa`
 
 ## Provenance decision
 
@@ -50,7 +54,37 @@ packaged truth; packaged network; and audit 0. Every runtime proof reported
 real power actions 0, and final process, listener, firewall, and temporary
 profile cleanup was confirmed.
 
-Because `8c5ec88..2b530d2` adds no packaged input, the portable and installer
+An independent proof-harness review then identified three valid defects:
+resource acquisition began before the guarded lifecycle, failure screenshots
+were not redacted, and the cleanup test asserted only callback execution. The
+`fb19d77` correction puts every nullable proof-owned resource under one outer
+guard; preserves the original error while attaching secondary cleanup
+diagnostics; performs idempotent, non-short-circuiting cleanup; verifies bounded
+release of exact PIDs, ports, firewall rule names, profile, and diagnostic
+staging; and captures failure screenshots only after opaque QR and credential
+redaction is confirmed. Real disposable profile, listener, child-process,
+combined, cleanup-error, firewall-adapter, and redaction/restoration tests
+replace the callback-only assertion.
+
+Controlled failures passed at `after-profile-created`,
+`after-blocker-created`, `after-process-launched`, `after-cdp-connected`,
+`after-firewall-rule-created`, and `during-proof`. Each preserved its expected
+primary error, cleaned owned resources, returned process/listener/firewall/temp
+state to baseline, and produced zero seeded-fake-secret matches. A failure in
+the first attempted two-gate run exposed a Windows stale parent-PID collision:
+an old unrelated process retained a parent PID later reused by a proof child.
+`8d9a279` constrains descendant ownership to processes created during the proof
+run and adds a regression test for that condition.
+
+At `8d9a279`, standalone packaged truth passed three consecutive clean runs.
+The complete exact-remote-head gate then passed twice: lint and four syntax
+checks; unit 289/0; smoke 261/0; companion smoke 15/0; packaged smoke 12/0;
+desktop UX functional gate; companion C2 88/0; receipt recovery 11/0 plus 2/0;
+standalone packaged truth; packaged network; and audit 0. Every runtime proof
+reported real power actions 0. Final process, listener, firewall, profile, and
+diagnostic-staging cleanup was confirmed.
+
+Because `8c5ec88..8d9a279` adds no packaged input, the portable and installer
 candidate hashes in `artifact-metadata.md` remain valid.
 
 ## Review commands

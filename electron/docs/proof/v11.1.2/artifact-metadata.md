@@ -34,6 +34,19 @@ Build date: 2026-07-23 (America/Los_Angeles)
 - Exact remote-head gate: passed twice at `2b530d2`; unit 281/0, smoke 261/0,
   companion smoke 15/0, packaged smoke 12/0, companion C2 88/0, receipt
   recovery 11/0 plus 2/0, packaged truth/network PASS, and audit 0.
+- Packaged-proof failure-safety closure: passed at `8d9a279`. Deterministic
+  partial-initialization failures covered all six stages; real profile,
+  listener, child, combined, cleanup-error, firewall-dispatch, redaction, and
+  stale parent-PID collision tests passed; seeded-fake-secret scans found zero
+  matches.
+- Final standalone packaged truth: three consecutive clean passes at
+  `8d9a279`, with console/page errors 0, real power actions 0, and owned
+  process, listener, firewall, profile, and diagnostic-staging cleanup
+  confirmed after every run.
+- Final exact remote-head gate: passed twice at `8d9a279`; unit 289/0, smoke
+  261/0, companion smoke 15/0, packaged smoke 12/0, desktop UX gate PASS,
+  companion C2 88/0, receipt recovery 11/0 plus 2/0, packaged truth/network
+  PASS, audit 0, and real power actions 0.
 
 ## Installer validation
 
@@ -54,6 +67,6 @@ These hashes are branch-candidate hashes. Merge and publication remain separate
 lanes; release artifacts should be rebuilt from the reviewed merge SHA unless
 reviewed-source-commit provenance is explicitly accepted.
 
-The proof-only commits through `2b530d2` change scripts, tests, and proof
+The proof-only commits through `8d9a279` change scripts, tests, and proof
 documentation only; they do not alter any `build.files` input. Therefore the
 portable and installer hashes above remain the valid branch-candidate hashes.
