@@ -10,8 +10,8 @@
   "screenshots": [
     {
       "name": "settings_1280_tonight.png",
-      "bytes": 345579,
-      "sha256": "aedfb998482f49aac35343134b24a31336da0f504cc8b947f1a8546122d59e79"
+      "bytes": 345078,
+      "sha256": "104ed75d319c536ceac1f191deb0f1d3a4f2219883c90ac266fd7320366023f9"
     },
     {
       "name": "settings_1280_general.png",
@@ -35,8 +35,8 @@
     },
     {
       "name": "settings_1920_tonight.png",
-      "bytes": 432962,
-      "sha256": "a66a2c535759c0cc19c858cb7d633b80365ef524d62eefbdbf4493acf42579c6"
+      "bytes": 432845,
+      "sha256": "5aaa26288403e13eafb217d1d097dba945db22289ac8d05fa95c64f067338879"
     },
     {
       "name": "settings_1920_general.png",
@@ -60,8 +60,8 @@
     },
     {
       "name": "settings_ultrawide_tonight.png",
-      "bytes": 468660,
-      "sha256": "9bd1cf701e3c990f1cc4f1ebbfe5cbe2de35c7d56dcf0a4e293df4dafcfca0af"
+      "bytes": 468531,
+      "sha256": "15a46b1fbf8699d3585ed48737eac98ae66caa3d9983847bf5bfd6e3cb3aa337"
     },
     {
       "name": "settings_ultrawide_general.png",

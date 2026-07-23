@@ -1,10 +1,10 @@
 {
-  "startTime": "2026-07-23T07:40:32.305Z",
+  "startTime": "2026-07-23T15:59:09.415Z",
   "branch": "ux/v11.1.2-desktop-consolidation",
-  "sha": "28c00605c9f9fe5f12670b6de0abaf4bc71b9342",
+  "sha": "8c5ec88c097df9ff5e28c509906aa1079b07c203",
   "runtime": "packaged",
   "exe": "<repo>\\dist\\win-unpacked\\Lights Out.exe",
-  "exeSha256": "4c62eab9f46176d0170ef4b97c65ca6cd24aeab3c77a43bf382c35eaa1048135",
+  "exeSha256": "9a1349d6ea755230130745418d693109ab4c38e9497b0f985a4df305077eef11",
   "phases": {
     "startup": {
       "status": "passed",
@@ -21,12 +21,12 @@
               {
                 "phase": "renderer-created",
                 "visible": false,
-                "at": 1784792432843
+                "at": 1784822349861
               },
               {
                 "phase": "renderer-ready",
                 "visible": false,
-                "at": 1784792433267
+                "at": 1784822350276
               }
             ],
             "dryRun": true,
@@ -46,12 +46,12 @@
               {
                 "phase": "renderer-created",
                 "visible": false,
-                "at": 1784792433688
+                "at": 1784822350693
               },
               {
                 "phase": "renderer-ready",
                 "visible": false,
-                "at": 1784792434112
+                "at": 1784822351079
               }
             ],
             "dryRun": true,
@@ -71,12 +71,12 @@
               {
                 "phase": "renderer-created",
                 "visible": false,
-                "at": 1784792434620
+                "at": 1784822351395
               },
               {
                 "phase": "renderer-ready",
                 "visible": false,
-                "at": 1784792435041
+                "at": 1784822351775
               }
             ],
             "dryRun": true,
@@ -95,12 +95,12 @@
               {
                 "phase": "renderer-created",
                 "visible": false,
-                "at": 1784792436851
+                "at": 1784822353265
               },
               {
                 "phase": "renderer-ready",
                 "visible": false,
-                "at": 1784792437280
+                "at": 1784822353636
               }
             ],
             "dryRun": true,
@@ -211,7 +211,7 @@
           "control": "ns-play-btn",
           "invocations": 1,
           "payload": {
-            "at": 1784792450305,
+            "at": 1784822366225,
             "options": {
               "durationSeconds": 120,
               "action": "shutdown",
@@ -235,7 +235,7 @@
                 "forceShutdown": false,
                 "muteSystem": false,
                 "gracePeriod": 2,
-                "endsAt": "2026-07-23T07:42:50.306Z",
+                "endsAt": "2026-07-23T16:01:26.226Z",
                 "phase": "focus",
                 "profileId": null,
                 "profileName": null,
@@ -247,9 +247,9 @@
             "senderId": 1
           },
           "receipt": {
-            "id": "r_1784792450308_tgm5yw",
+            "id": "r_1784822366226_y6ug09",
             "version": 1,
-            "startedAt": "2026-07-23T07:40:50.308Z",
+            "startedAt": "2026-07-23T15:59:26.226Z",
             "endedAt": null,
             "action": "shutdown",
             "profileId": null,
@@ -276,7 +276,7 @@
           "control": "space-key",
           "invocations": 1,
           "payload": {
-            "at": 1784792451586,
+            "at": 1784822367507,
             "options": {
               "durationSeconds": 120,
               "action": "shutdown",
@@ -300,7 +300,7 @@
                 "forceShutdown": false,
                 "muteSystem": false,
                 "gracePeriod": 2,
-                "endsAt": "2026-07-23T07:42:51.586Z",
+                "endsAt": "2026-07-23T16:01:27.508Z",
                 "phase": "focus",
                 "profileId": null,
                 "profileName": null,
@@ -312,9 +312,9 @@
             "senderId": 1
           },
           "receipt": {
-            "id": "r_1784792451588_f9094v",
+            "id": "r_1784822367508_aen65m",
             "version": 1,
-            "startedAt": "2026-07-23T07:40:51.588Z",
+            "startedAt": "2026-07-23T15:59:27.508Z",
             "endedAt": null,
             "action": "shutdown",
             "profileId": null,
@@ -341,7 +341,7 @@
           "control": "proof-again",
           "invocations": 1,
           "payload": {
-            "at": 1784792454723,
+            "at": 1784822370495,
             "options": {
               "durationSeconds": 1680,
               "action": "shutdown",
@@ -365,7 +365,7 @@
                 "forceShutdown": false,
                 "muteSystem": false,
                 "gracePeriod": 2,
-                "endsAt": "2026-07-23T08:08:54.724Z",
+                "endsAt": "2026-07-23T16:27:30.496Z",
                 "phase": "focus",
                 "profileId": null,
                 "profileName": null,
@@ -377,9 +377,9 @@
             "senderId": 1
           },
           "receipt": {
-            "id": "r_1784792454726_uo4mt0",
+            "id": "r_1784822370497_ad44ux",
             "version": 1,
-            "startedAt": "2026-07-23T07:40:54.726Z",
+            "startedAt": "2026-07-23T15:59:30.497Z",
             "endedAt": null,
             "action": "shutdown",
             "profileId": null,
@@ -427,7 +427,7 @@
           },
           "startCount": 1,
           "startPayload": {
-            "at": 1784792456365,
+            "at": 1784822371853,
             "options": {
               "durationSeconds": 5400,
               "action": "sleep",
@@ -470,7 +470,7 @@
               },
               "completedSteps": [],
               "skippedSteps": [],
-              "startedAt": "2026-07-23T07:40:56.365Z",
+              "startedAt": "2026-07-23T15:59:31.854Z",
               "progress": 0
             },
             {
@@ -488,7 +488,7 @@
                 "breathe"
               ],
               "skippedSteps": [],
-              "startedAt": "2026-07-23T07:40:56.365Z",
+              "startedAt": "2026-07-23T15:59:31.854Z",
               "progress": 20
             },
             {
@@ -507,19 +507,19 @@
                 "block"
               ],
               "skippedSteps": [],
-              "startedAt": "2026-07-23T07:40:56.365Z",
+              "startedAt": "2026-07-23T15:59:31.854Z",
               "progress": 40
             }
           ],
           "receipt": {
-            "receiptId": "r_1784792457633_22iph4",
+            "receiptId": "r_1784822373132_4uejqv",
             "nightModeId": "movie-wind-down",
             "modeTitle": "Movie Wind-Down",
             "durationSeconds": 5400,
             "finalAction": "sleep",
             "dryRun": true,
-            "startedAt": "2026-07-23T07:40:57.633Z",
-            "endedAt": "2026-07-23T07:40:58.151Z",
+            "startedAt": "2026-07-23T15:59:33.132Z",
+            "endedAt": "2026-07-23T15:59:33.651Z",
             "result": "cancelled",
             "cancelled": true,
             "powerActionAttempted": false
@@ -561,7 +561,7 @@
           },
           "startCount": 1,
           "startPayload": {
-            "at": 1784792463751,
+            "at": 1784822379204,
             "options": {
               "durationSeconds": 3600,
               "action": "shutdown",
@@ -604,7 +604,7 @@
               },
               "completedSteps": [],
               "skippedSteps": [],
-              "startedAt": "2026-07-23T07:41:03.752Z",
+              "startedAt": "2026-07-23T15:59:39.205Z",
               "progress": 0
             },
             {
@@ -622,7 +622,7 @@
                 "breathe"
               ],
               "skippedSteps": [],
-              "startedAt": "2026-07-23T07:41:03.752Z",
+              "startedAt": "2026-07-23T15:59:39.205Z",
               "progress": 20
             },
             {
@@ -641,19 +641,19 @@
                 "block"
               ],
               "skippedSteps": [],
-              "startedAt": "2026-07-23T07:41:03.752Z",
+              "startedAt": "2026-07-23T15:59:39.205Z",
               "progress": 40
             }
           ],
           "receipt": {
-            "receiptId": "r_1784792465028_rj6iev",
+            "receiptId": "r_1784822380481_06tpob",
             "nightModeId": "full-shutdown",
             "modeTitle": "Full Shutdown",
             "durationSeconds": 3600,
             "finalAction": "shutdown",
             "dryRun": true,
-            "startedAt": "2026-07-23T07:41:05.028Z",
-            "endedAt": "2026-07-23T07:41:05.550Z",
+            "startedAt": "2026-07-23T15:59:40.481Z",
+            "endedAt": "2026-07-23T15:59:41.006Z",
             "result": "cancelled",
             "cancelled": true,
             "powerActionAttempted": false
@@ -902,22 +902,22 @@
       "phase": "top-menu",
       "path": "<gate-root>\\screenshots\\topmenu-power-mouse-open.png",
       "name": "topmenu-power-mouse-open.png",
-      "size": 331924,
-      "sha256": "8398cf09305d69e9b4ee6a1a07c5cf9dbf4a7770419ee665ae7ca663b16772ca"
+      "size": 331886,
+      "sha256": "49a6396c9a784f191b22fcecadb6bfc6aabc78722aa9d11045a27f5b2a2bf2cd"
     },
     {
       "phase": "top-menu",
       "path": "<gate-root>\\screenshots\\topmenu-settings-mouse-open.png",
       "name": "topmenu-settings-mouse-open.png",
-      "size": 333915,
-      "sha256": "844bd93b6457303206571084cceaf0c3d0c3ec386c0badd5618b8855d0af1aca"
+      "size": 334354,
+      "sha256": "4e4d3defe8c83e324580052c31dca05cbf9101a264f5aef2be40ed381dabb271"
     },
     {
       "phase": "top-menu",
       "path": "<gate-root>\\screenshots\\topmenu-help-mouse-open.png",
       "name": "topmenu-help-mouse-open.png",
-      "size": 337853,
-      "sha256": "e3b975674b969879ee1a9b39f458e4094f1b292176e9d3fc6f4cd91beaed9d0b"
+      "size": 338482,
+      "sha256": "0055a9c25b430ddb4f435785e4e1673996602684e1ccd1f0faed5200a777a38e"
     },
     {
       "phase": "top-menu",
@@ -930,8 +930,8 @@
       "phase": "top-menu",
       "path": "<gate-root>\\screenshots\\topmenu-power-keyboard-open.png",
       "name": "topmenu-power-keyboard-open.png",
-      "size": 335223,
-      "sha256": "09c71a88be2139e21be68ff0f47771d76d916b274f291567911d867645e4119d"
+      "size": 335857,
+      "sha256": "fc3c875561d351364b31a07c407fd903d28a87a24f3e31bff2e01deeaca2cded"
     },
     {
       "phase": "top-menu",
@@ -944,71 +944,71 @@
       "phase": "shared-start",
       "path": "<gate-root>\\screenshots\\active-running-hero.png",
       "name": "active-running-hero.png",
-      "size": 216399,
-      "sha256": "ebbc8ef71bf5d44c1eec512d4da5fa4604243957af1e2afefe2b827e7ca536d9"
+      "size": 216285,
+      "sha256": "a873bd97d1f7685a9ea08a855837f92ad422a292fe04dc3c716a98c03403d719"
     },
     {
       "phase": "shared-start",
       "path": "<gate-root>\\screenshots\\morning-proof-visible.png",
       "name": "morning-proof-visible.png",
-      "size": 333122,
-      "sha256": "0a964925f19db39867044be55c503ca6a57937b2901ed1cf3a7054392602f1d1"
+      "size": 333054,
+      "sha256": "7fe9adab2b168238b089d2daef1000ecc22366ce3db3677b8ea28f134a5e21d4"
     },
     {
       "phase": "use-tonight",
       "path": "<gate-root>\\screenshots\\use-tonight-movie-wind-down-projection.png",
       "name": "use-tonight-movie-wind-down-projection.png",
-      "size": 333600,
-      "sha256": "99e60d06fc0ce124670a415c739b2755f359cc42ca25509d4561ad8e7112d55b"
+      "size": 333622,
+      "sha256": "31b9bc6b1454983be54de7538ecb060ff6b786a82df92486db34fae99d6662fe"
     },
     {
       "phase": "use-tonight",
       "path": "<gate-root>\\screenshots\\use-tonight-movie-wind-down-running.png",
       "name": "use-tonight-movie-wind-down-running.png",
-      "size": 214051,
-      "sha256": "8f6d029e901b3ea1a679e1bac4e2b3e76cf062799e57cdf8fb51d21d125d8ab4"
+      "size": 214334,
+      "sha256": "ca46d2a8ad5c493e1abcaf7143c400db9aea9795e13cd78a63e61c9d9c8c8233"
     },
     {
       "phase": "use-tonight",
       "path": "<gate-root>\\screenshots\\use-tonight-movie-wind-down-cancelled.png",
       "name": "use-tonight-movie-wind-down-cancelled.png",
-      "size": 335427,
-      "sha256": "38bdf7182bd0da7d290d5eecbfa5b13199b108f33b5e22d7816606330a4593cb"
+      "size": 335161,
+      "sha256": "c48777a2e4f08071c404052730e239f6021471f50700755d4285359018daa8d0"
     },
     {
       "phase": "use-tonight",
       "path": "<gate-root>\\screenshots\\use-tonight-movie-wind-down-restore.png",
       "name": "use-tonight-movie-wind-down-restore.png",
-      "size": 318487,
-      "sha256": "9966287a3056a3f1fa7188a888b0b227a3aa272e9f68962183797fc7461d12bb"
+      "size": 318593,
+      "sha256": "1c2f60ba484b0ebfd5949dd8a0e5fa9ef8a5c994e5f483936bb40d2124a6e53c"
     },
     {
       "phase": "use-tonight",
       "path": "<gate-root>\\screenshots\\use-tonight-full-shutdown-projection.png",
       "name": "use-tonight-full-shutdown-projection.png",
-      "size": 332047,
-      "sha256": "801ff47cededdd13576f482df806f5716189e68bd690099978d311145fbc906f"
+      "size": 332237,
+      "sha256": "d82a36ba0762d037da2a9492ac8c23f1645c75399968600a9e1c4ab5a96438cf"
     },
     {
       "phase": "use-tonight",
       "path": "<gate-root>\\screenshots\\use-tonight-full-shutdown-running.png",
       "name": "use-tonight-full-shutdown-running.png",
-      "size": 214995,
-      "sha256": "f8ac51cd3e42f14812341d7c7ee06c803d518e48892cd24335fe8a47f8d5762b"
+      "size": 215394,
+      "sha256": "ca84425e15822696ccd98fb33c4538848e5a93a8ea3534449c24ae86937e2ff3"
     },
     {
       "phase": "use-tonight",
       "path": "<gate-root>\\screenshots\\use-tonight-full-shutdown-cancelled.png",
       "name": "use-tonight-full-shutdown-cancelled.png",
-      "size": 333535,
-      "sha256": "ed1bf2b7eb8599554bb16d4576ecf16e937c411323f6578288db7dcbc259d387"
+      "size": 333458,
+      "sha256": "8ef17e0f2528ddfa6199e786ae414cd4f0811a8a4a9522dd41638ca3c2b2c9d7"
     },
     {
       "phase": "use-tonight",
       "path": "<gate-root>\\screenshots\\use-tonight-full-shutdown-restore.png",
       "name": "use-tonight-full-shutdown-restore.png",
-      "size": 316697,
-      "sha256": "cbd91aaa7c96bb915793e13580d93c68e104c05c4d30283bc2fb0f734f90d07a"
+      "size": 316396,
+      "sha256": "58ce041f9c7f8a0fa4cde42d27f244e9f8efe48e0a749ac97b1cc1d43d5c073d"
     },
     {
       "phase": "settings",
@@ -1035,48 +1035,48 @@
       "phase": "active-run",
       "path": "<gate-root>\\screenshots\\active-run-hd720.png",
       "name": "active-run-hd720.png",
-      "size": 224571,
-      "sha256": "a84011567634d88482c57de406a0a5f38b6ef177f972da4ae6efdff60da37b3f"
+      "size": 225005,
+      "sha256": "1dfa3f71d8207dd4f2b0a294ba30c4bc91784f9e570161e4f3dc4c64b58275b9"
     },
     {
       "phase": "active-run",
       "path": "<gate-root>\\screenshots\\active-run-hd1080.png",
       "name": "active-run-hd1080.png",
-      "size": 263475,
-      "sha256": "8a1b5e7c5a23149bc79be8a4534eaaefa20c4ae8ad056c9460b73c045e2a2d77"
+      "size": 263827,
+      "sha256": "89a7d2469a2310d554805d78529643ab37f9b6164dd017a94199b67500be7042"
     },
     {
       "phase": "active-run",
       "path": "<gate-root>\\screenshots\\active-run-workarea.png",
       "name": "active-run-workarea.png",
-      "size": 312187,
-      "sha256": "3fb44ff52418c68f7c609fe2924a3d8895aa13c1bf94420caaff76e35a2ae98c"
+      "size": 312712,
+      "sha256": "4383dcba04c3f72f1e20cd85040380480c30e3885bd18f9bfdbb13862c53a2a0"
     },
     {
       "phase": "active-run",
       "path": "<gate-root>\\screenshots\\active-paused-1280x720.png",
       "name": "active-paused-1280x720.png",
-      "size": 227244,
-      "sha256": "14cdb89cf6415f3a15f7ebfde49bd887f7dabd45e7c1aa17a06d40741be05dfa"
+      "size": 228056,
+      "sha256": "1abad9f87ea88fa56bc768262e990f4456034ead007eb45d86e70cdcc359878c"
     },
     {
       "phase": "active-run",
       "path": "<gate-root>\\screenshots\\active-resumed-1280x720.png",
       "name": "active-resumed-1280x720.png",
-      "size": 229569,
-      "sha256": "dd9cbe7bbfb827c86b4534b6a065254dd341722826f3df2fbae1f3f2783a3c5d"
+      "size": 230004,
+      "sha256": "70b4f49e1f82a4d160ea63113489b393448e8c515a6a2c4b8eb94095437cedf9"
     },
     {
       "phase": "active-run",
       "path": "<gate-root>\\screenshots\\active-cancelled-1280x720.png",
       "name": "active-cancelled-1280x720.png",
-      "size": 332358,
-      "sha256": "2d0a4c601757ab94aa255555744c5317901233c0553ba658a10218833c9018e2"
+      "size": 332463,
+      "sha256": "358db4d4dafdb07791d64e0c0289eae21a29d7ace23c97f3a8e0b1b9e9220375"
     }
   ],
   "status": "passed",
   "realPowerActions": 0,
-  "endTime": "2026-07-23T07:41:22.113Z",
+  "endTime": "2026-07-23T15:59:57.134Z",
   "rendererDiagnostics": [
     {
       "label": "userdata-startup-normal",

@@ -2,7 +2,7 @@
 
 This retained run exercised
 `dist/win-unpacked/Lights Out.exe` built from source commit
-`28c00605c9f9fe5f12670b6de0abaf4bc71b9342`.
+`8c5ec88c097df9ff5e28c509906aa1079b07c203`.
 
 - Status: passed
 - Screenshots: 25

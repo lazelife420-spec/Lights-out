@@ -1,7 +1,7 @@
-# Definitive desktop artifact metadata
+# Branch-candidate desktop artifact metadata
 
 Source commit:
-`28c00605c9f9fe5f12670b6de0abaf4bc71b9342`
+`8c5ec88c097df9ff5e28c509906aa1079b07c203`
 
 Build command: `cd electron && npm run build`
 
@@ -9,9 +9,9 @@ Build date: 2026-07-23 (America/Los_Angeles)
 
 | Artifact | Bytes | File version | Product version | Built (UTC-07:00) | SHA-256 | Authenticode |
 |---|---:|---|---|---|---|---|
-| `dist/win-unpacked/Lights Out.exe` | 225,784,832 | 11.1.2 | 11.1.2.0 | 2026-07-23 00:37:49.7311934 | `4c62eab9f46176d0170ef4b97c65ca6cd24aeab3c77a43bf382c35eaa1048135` | NotSigned |
-| `dist/LightsOut.exe` | 96,224,142 | 11.1.2 | 11.1.2 | 2026-07-23 00:39:19.3488618 | `2d52b292a049f2780be072e86be2860d6b6b95a7aeb58f3e77218c09ff808f2c` | NotSigned |
-| `dist/Lights Out Setup 11.1.2.exe` | 96,484,754 | 11.1.2 | 11.1.2 | 2026-07-23 00:39:21.1916095 | `1a26c6041de02c590cff49a13874a61c27c0597e5acd2eb97314dc6dc2ea287c` | NotSigned |
+| `dist/win-unpacked/Lights Out.exe` | 225,784,832 | 11.1.2 | 11.1.2.0 | 2026-07-23 01:19:08.6048806 | `9A1349D6EA755230130745418D693109AB4C38E9497B0F985A4DF305077EEF11` | NotSigned |
+| `dist/LightsOut.exe` | 96,223,434 | 11.1.2 | 11.1.2 | 2026-07-23 01:20:49.2683006 | `2D34AC2E0DA7346B6D337914CA91F5A8D10FE03BA5F53822652641C8B9F2FC9B` | NotSigned |
+| `dist/Lights Out Setup 11.1.2.exe` | 96,484,047 | 11.1.2 | 11.1.2 | 2026-07-23 01:20:51.1828736 | `0F3D5EEC224DC0DEDF8F5049B71F2A3AEF2F38CD29ACC015DE9C3CD41778617B` | NotSigned |
 
 ## Packaged and native proof
 
@@ -38,9 +38,12 @@ With no pre-existing registered installation:
 3. The installed executable reported file version 11.1.2 and product version
    11.1.2.0. Its SHA-256 matched the definitive unpacked executable before and
    after upgrade.
-4. The installed copy passed the complete six-phase desktop UX gate.
-5. Silent uninstall exited 0; the install directory and uninstall registry
+4. Silent uninstall exited 0; the install directory and uninstall registry
    entry were both removed.
 
 Windows Authenticode is truthfully `NotSigned` for the portable, installer, and
 unpacked executable. No signing claim is made.
+
+These hashes are branch-candidate hashes. Merge and publication remain separate
+lanes; release artifacts should be rebuilt from the reviewed merge SHA unless
+reviewed-source-commit provenance is explicitly accepted.
