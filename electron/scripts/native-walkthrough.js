@@ -1,6 +1,7 @@
 'use strict';
 
 const { spawn } = require('node:child_process');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const http = require('node:http');
 const net = require('node:net');
@@ -20,7 +21,11 @@ function freePort() {
 
 const root = path.resolve(__dirname, '..', '..');
 const executable = path.join(root, 'dist', 'win-unpacked', 'Lights Out.exe');
-const artifactDir = 'C:\\Users\\KickA\\.gemini\\antigravity-ide\\brain\\169fadba-cd86-4eb2-918c-4cb040032ea1';
+const artifactDir = process.env.LIGHTS_OUT_WALKTHROUGH_DIR
+  ? path.resolve(process.env.LIGHTS_OUT_WALKTHROUGH_DIR)
+  : fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-native-walkthrough-'));
+const captures = [];
+fs.mkdirSync(artifactDir, { recursive: true });
 
 function progress(msg) {
   console.log(`[walkthrough] ${msg}`);
@@ -99,7 +104,13 @@ class CdpClient {
   async screenshot(name) {
     const result = await this.command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
     const file = path.join(artifactDir, name);
-    fs.writeFileSync(file, Buffer.from(result.data, 'base64'));
+    const buffer = Buffer.from(result.data, 'base64');
+    fs.writeFileSync(file, buffer);
+    captures.push({
+      name,
+      bytes: buffer.length,
+      sha256: crypto.createHash('sha256').update(buffer).digest('hex')
+    });
     progress(`Captured screenshot: ${name}`);
   }
 
@@ -181,7 +192,14 @@ async function main() {
       await cdp.screenshot(`settings_${res.name}_appearance_sound.png`);
     }
 
-    progress('Walkthrough completed successfully!');
+    fs.writeFileSync(path.join(artifactDir, 'walkthrough-manifest.json'), JSON.stringify({
+      status: 'passed',
+      runtime: 'dist/win-unpacked/Lights Out.exe',
+      dryRun: true,
+      resolutions: ['1280x720', '1920x1080', '2560x1080'],
+      screenshots: captures
+    }, null, 2));
+    progress(`Walkthrough completed successfully: ${artifactDir}`);
   } finally {
     if (cdp) cdp.close();
     child.kill();
