@@ -19,6 +19,7 @@ const {
   cleanupOwnedResources,
   isPortFree,
   sanitizeText,
+  selectOwnedProcessTree,
   verifyOwnedCleanup
 } = require('../scripts/proof-lifecycle');
 
@@ -288,6 +289,17 @@ test('firewall cleanup dispatcher removes only exact owned rule names', async ()
   assert.deepEqual(cleanup.errors, []);
   assert.equal(verification.ok, true);
   assert.deepEqual([...rules], ['unrelated-rule']);
+});
+
+test('owned process tree excludes stale parent-PID collisions from before the proof run', () => {
+  const startedAt = 50_000;
+  const processes = [
+    { pid: 100, parentPid: 1, creationTime: 50_100 },
+    { pid: 101, parentPid: 100, creationTime: 50_200 },
+    { pid: 102, parentPid: 101, creationTime: 50_300 },
+    { pid: 900, parentPid: 101, creationTime: 10_000 }
+  ];
+  assert.deepEqual(selectOwnedProcessTree(processes, 100, startedAt), [100, 101, 102]);
 });
 
 class FakeElement {

@@ -192,15 +192,31 @@ async function waitForCondition(check, timeoutMs = 5000, intervalMs = 100) {
   return { ok: false, elapsedMs: Date.now() - startedAt, last };
 }
 
-async function windowsProcessTree(rootPid) {
+function selectOwnedProcessTree(processes, rootPid, startedAt = 0) {
+  const minimumCreationTime = Math.max(0, Number(startedAt) - 2000);
+  const eligible = (processes || []).filter(processInfo =>
+    Number(processInfo.creationTime) >= minimumCreationTime
+  );
+  const ids = [Number(rootPid)];
+  for (let index = 0; index < ids.length; index += 1) {
+    const parentPid = ids[index];
+    for (const processInfo of eligible) {
+      const pid = Number(processInfo.pid);
+      if (Number(processInfo.parentPid) === parentPid && !ids.includes(pid)) ids.push(pid);
+    }
+  }
+  return ids.filter(Number.isInteger);
+}
+
+async function windowsProcessTree(rootPid, startedAt = 0) {
   if (process.platform !== 'win32' || !rootPid) return [rootPid].filter(Boolean);
-  const command = `$all = @(Get-CimInstance Win32_Process); $ids = [System.Collections.Generic.List[int]]::new(); $ids.Add(${Number(rootPid)}); for ($i = 0; $i -lt $ids.Count; $i++) { $parent = $ids[$i]; @($all | Where-Object { $_.ParentProcessId -eq $parent }) | ForEach-Object { if (-not $ids.Contains([int]$_.ProcessId)) { $ids.Add([int]$_.ProcessId) } } }; @($ids) | ConvertTo-Json -Compress`;
+  const command = `@(Get-CimInstance Win32_Process | ForEach-Object { [pscustomobject]@{ pid = [int]$_.ProcessId; parentPid = [int]$_.ParentProcessId; creationTime = ([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds() } }) | ConvertTo-Json -Compress`;
   const result = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], {
     windowsHide: true,
     timeout: 15000
   });
   const parsed = JSON.parse(result.stdout.trim() || '[]');
-  return (Array.isArray(parsed) ? parsed : [parsed]).map(Number).filter(Number.isInteger);
+  return selectOwnedProcessTree(Array.isArray(parsed) ? parsed : [parsed], rootPid, startedAt);
 }
 
 async function inspectProcess(pid) {
@@ -235,7 +251,7 @@ async function terminateOwnedProcess(ownedProcess) {
   if (ownedProcess.ownershipToken && !String(info.commandLine || '').includes(ownedProcess.ownershipToken)) {
     throw new Error(`Refusing to terminate PID ${ownedProcess.pid}: ownership token missing`);
   }
-  const ownedPids = await windowsProcessTree(ownedProcess.pid);
+  const ownedPids = await windowsProcessTree(ownedProcess.pid, ownedProcess.startedAt);
   try { ownedProcess.child?.kill?.(); } catch {}
   if (process.platform === 'win32') {
     await new Promise(resolve => {
@@ -357,6 +373,7 @@ module.exports = {
   rendererRedactionRestoreExpression,
   sanitizeText,
   sanitizeValue,
+  selectOwnedProcessTree,
   terminateOwnedProcess,
   verifyOwnedCleanup,
   waitForCondition
