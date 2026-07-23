@@ -1,6 +1,7 @@
 const { spawnSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 /**
  * Packaged Runtime Smoke Test (Enhanced)
@@ -45,6 +46,32 @@ function assertMatch(src, regex, msg) {
   if (!regex.test(src)) throw new Error(msg || 'regex match failed');
 }
 
+function lightsOutProcessCount() {
+  const result = spawnSync('powershell', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    '@(Get-Process "Lights Out" -ErrorAction SilentlyContinue).Count'
+  ], { encoding: 'utf8', windowsHide: true });
+  return Number.parseInt(result.stdout.trim(), 10) || 0;
+}
+
+function waitForNoLightsOutProcesses(timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs;
+  let consecutiveEmptyChecks = 0;
+  while (Date.now() < deadline) {
+    if (lightsOutProcessCount() === 0) {
+      consecutiveEmptyChecks += 1;
+      if (consecutiveEmptyChecks >= 3) return;
+    } else {
+      consecutiveEmptyChecks = 0;
+      spawnSync('taskkill', ['/F', '/T', '/IM', 'Lights Out.exe'], { windowsHide: true });
+    }
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150);
+  }
+  throw new Error(`${lightsOutProcessCount()} orphan "Lights Out" processes remained after bounded cleanup`);
+}
+
 console.log('Starting Enhanced Packaged Runtime Smoke Test...\n');
 
 if (!fs.existsSync(exePath)) {
@@ -66,39 +93,33 @@ check('package: executable is readable', () => {
 
 // 2. Launch test with safety verification
 check('runtime: app launches cleanly with --minimized --no-auto-start', () => {
-  // Launch with safe flags
-  const child = require('child_process').spawn(exePath, ['--minimized', '--no-auto-start'], {
-    detached: true,
-    stdio: 'ignore',
-    env: { ...process.env, ELECTRON_IS_DEV: '0', LIGHTS_OUT_SUPPRESS_TRAY: '1' }
-  });
+  assert(lightsOutProcessCount() === 0, 'packaged smoke requires a clean Lights Out process state');
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-portable-smoke-'));
+  fs.writeFileSync(path.join(userData, 'settings.json'), JSON.stringify({
+    app: { onboarded: true },
+    remoteControl: { enabled: false, mode: 'off', port: 58732, lanIp: '', token: '' }
+  }));
+  try {
+    const child = require('child_process').spawn(exePath, [
+      '--minimized',
+      '--no-auto-start',
+      `--user-data-dir=${userData}`
+    ], {
+      detached: true,
+      stdio: 'ignore',
+      env: { ...process.env, ELECTRON_IS_DEV: '0', LIGHTS_OUT_SUPPRESS_TRAY: '1' }
+    });
 
-  if (!child.pid) throw new Error('Failed to get PID for launched process');
-
-  // Wait for initialization
-  spawnSync('powershell', ['-Command', 'Start-Sleep -s 3']);
-
-  // Check if process is still running
-  const list = spawnSync('tasklist', ['/FI', `PID eq ${child.pid}`, '/NH', '/FO', 'CSV'], { encoding: 'utf8' });
-  if (!list.stdout.includes(child.pid.toString())) {
-    throw new Error('Process exited prematurely or failed to start');
-  }
-
-  // Kill it gracefully first, then forcefully
-  spawnSync('taskkill', ['/PID', child.pid.toString()]);
-  spawnSync('powershell', ['-Command', 'Start-Sleep -s 1']);
-  spawnSync('taskkill', ['/F', '/T', '/PID', child.pid.toString()]);
-  
-  // Wait for OS to clean up
-  spawnSync('powershell', ['-Command', 'Start-Sleep -s 2']);
-
-  // Verify no orphans by name
-  const orphans = spawnSync('powershell', ['-Command', 'Get-Process "Lights Out" -ErrorAction SilentlyContinue | Measure-Object | Select-Object -ExpandProperty Count'], { encoding: 'utf8' });
-  const orphanCount = parseInt(orphans.stdout.trim()) || 0;
-  if (orphanCount > 0) {
-    // Try one more aggressive cleanup
-    spawnSync('powershell', ['-Command', 'Get-Process "Lights Out" -ErrorAction SilentlyContinue | Stop-Process -Force']);
-    throw new Error(`${orphanCount} orphan "Lights Out" processes remained after cleanup`);
+    if (!child.pid) throw new Error('Failed to get PID for launched process');
+    const deadline = Date.now() + 10000;
+    while (Date.now() < deadline && lightsOutProcessCount() === 0) {
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    }
+    assert(lightsOutProcessCount() > 0, 'packaged application did not remain running');
+  } finally {
+    spawnSync('taskkill', ['/F', '/T', '/IM', 'Lights Out.exe'], { windowsHide: true });
+    waitForNoLightsOutProcesses();
+    fs.rmSync(userData, { recursive: true, force: true });
   }
 });
 
@@ -151,6 +172,12 @@ check('cleanup: no lingering Electron processes after test', () => {
   if (electronCount > 0) {
     throw new Error(`${electronCount} electron processes still running`);
   }
+});
+
+check('cleanup: no lingering Lights Out processes or temporary profile', () => {
+  assert(lightsOutProcessCount() === 0, 'Lights Out process cleanup was not stable');
+  const profiles = fs.readdirSync(os.tmpdir()).filter(name => name.startsWith('lightsout-portable-smoke-'));
+  assert(profiles.length === 0, `${profiles.length} portable smoke profile(s) remain`);
 });
 
 check('cleanup: no lingering Node processes from app', () => {
