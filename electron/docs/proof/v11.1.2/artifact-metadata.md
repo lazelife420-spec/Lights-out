@@ -28,6 +28,12 @@ Build date: 2026-07-23 (America/Los_Angeles)
 - Native rebuilt walkthrough: passed at 1280×720, 1920×1080, and 2560×1080.
 - Companion V2 Electron proof: 88 passed, 0 failed, real power actions 0.
 - Receipt recovery Electron proof: passed, real power actions 0.
+- Standalone packaged truth: three consecutive clean passes at proof-only HEAD
+  `2b530d2`, including Power pointer transfer, Escape/focus restoration,
+  Settings and Help menus, zero console/page errors, and real power actions 0.
+- Exact remote-head gate: passed twice at `2b530d2`; unit 281/0, smoke 261/0,
+  companion smoke 15/0, packaged smoke 12/0, companion C2 88/0, receipt
+  recovery 11/0 plus 2/0, packaged truth/network PASS, and audit 0.
 
 ## Installer validation
 
@@ -47,3 +53,7 @@ unpacked executable. No signing claim is made.
 These hashes are branch-candidate hashes. Merge and publication remain separate
 lanes; release artifacts should be rebuilt from the reviewed merge SHA unless
 reviewed-source-commit provenance is explicitly accepted.
+
+The proof-only commits through `2b530d2` change scripts, tests, and proof
+documentation only; they do not alter any `build.files` input. Therefore the
+portable and installer hashes above remain the valid branch-candidate hashes.

@@ -26,6 +26,7 @@ touched.
   timestamps, hashes, Authenticode truth, installer validation, and post-build
   gate results.
 - [`provenance-review.md`](provenance-review.md) records the commit boundaries,
+  standalone packaged-truth closure, two exact remote-head gate passes,
   build-input decision, exact review commands, and publication boundary.
 
 Runtime profiles, Chromium caches, raw settings/receipt state, and disposable
