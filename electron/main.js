@@ -44,6 +44,7 @@ const startDecision = require('./startDecision');
 // Desktop UX Functional Gate instrumentation: only active when an explicit
 // proof flag is supplied. Never records in normal production runs.
 const DESKTOP_UX_PROOF = process.argv.includes('--desktop-ux-proof') || process.env.LIGHTS_OUT_DESKTOP_UX_GATE === '1';
+const SUPPRESS_AUTOMATION_TRAY = DESKTOP_UX_PROOF || process.env.LIGHTS_OUT_SUPPRESS_TRAY === '1';
 const startInvocationLog = [];
 const realPowerActionLog = [];
 
@@ -394,6 +395,8 @@ function createWindow() {
 }
 
 async function createTray() {
+  if (SUPPRESS_AUTOMATION_TRAY) return;
+  if (tray && !tray.isDestroyed()) return;
   await ensureTrayIcons();
   tray = new Tray(trayIcons.idle);
   refreshTrayMenu();
@@ -2969,6 +2972,8 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   app.isQuitting = true;
+  if (tray && !tray.isDestroyed()) tray.destroy();
+  tray = null;
   if (companionNetworkMonitor) {
     clearInterval(companionNetworkMonitor);
     companionNetworkMonitor = null;

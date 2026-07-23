@@ -159,7 +159,12 @@ async function main() {
       '--no-auto-start',
       `--user-data-dir=${userData}`,
       `--remote-debugging-port=${debugPort}`
-    ], { cwd: path.dirname(executable), windowsHide: true, stdio: 'ignore' });
+    ], {
+      cwd: path.dirname(executable),
+      windowsHide: true,
+      stdio: 'ignore',
+      env: { ...process.env, LIGHTS_OUT_SUPPRESS_TRAY: '1' }
+    });
     const target = await waitFor(async () => {
       const targets = await fetchJson(`http://127.0.0.1:${debugPort}/json/list`);
       return targets.find(item => item.type === 'page' && /index\.html/.test(item.url));

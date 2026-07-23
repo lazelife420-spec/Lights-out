@@ -44,6 +44,7 @@ async function runParent() {
       LIGHTSOUT_C1_PROOF_PORT: String(port),
       LIGHTSOUT_C1_PROOF_USERDATA: isolatedDir,
       LIGHTSOUT_C1_PROOF_CAPTURE_DIR: captureDir,
+      LIGHTS_OUT_SUPPRESS_TRAY: '1',
       ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
       ELECTRON_NO_ATTACH_CONSOLE: '1'
     },

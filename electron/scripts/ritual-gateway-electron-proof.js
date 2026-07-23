@@ -244,7 +244,7 @@ if (!fs.existsSync(electronBin)) {
 // Launch Electron with our proof script
 const child = spawn(electronBin, [proofPath], {
   cwd: path.join(__dirname, '..'),
-  env: { ...process.env, ELECTRON_NO_ATTACH_CONSOLE: '1' },
+  env: { ...process.env, ELECTRON_NO_ATTACH_CONSOLE: '1', LIGHTS_OUT_SUPPRESS_TRAY: '1' },
   stdio: ['ignore', 'pipe', 'pipe'],
   windowsHide: true
 });

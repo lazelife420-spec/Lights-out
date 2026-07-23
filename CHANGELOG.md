@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+- Automated Electron proof runs no longer create real Windows notification-area
+  icons. Tray creation is now idempotent, proof instances explicitly suppress
+  the tray, and normal app shutdown destroys its tray icon before exit.
+
 ## v11.1.2 — Desktop Consolidation (2026-07-22)
 
 Desktop: 11.1.2

@@ -182,7 +182,10 @@ async function spawnApp(userDataDir, settingsSeed = {}) {
     `--user-data-dir=${userDataDir}`,
     '--no-sandbox',
     '--disable-gpu'
-  ], { detached: true });
+  ], {
+    detached: true,
+    env: { ...process.env, LIGHTS_OUT_SUPPRESS_TRAY: '1' }
+  });
 
   // wait for CDP
   let list = [];

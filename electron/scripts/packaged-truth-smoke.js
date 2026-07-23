@@ -145,7 +145,12 @@ async function main() {
     '--no-auto-start',
     `--user-data-dir=${userData}`,
     `--remote-debugging-port=${debugPort}`
-  ], { cwd: path.dirname(executable), windowsHide: true, stdio: 'ignore' });
+  ], {
+    cwd: path.dirname(executable),
+    windowsHide: true,
+    stdio: 'ignore',
+    env: { ...process.env, LIGHTS_OUT_SUPPRESS_TRAY: '1' }
+  });
 
   let cdp;
   try {

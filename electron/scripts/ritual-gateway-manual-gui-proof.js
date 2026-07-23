@@ -390,7 +390,12 @@ if (!fs.existsSync(electronBin)) {
 
 const child = spawn(electronBin, [proofPath], {
   cwd: electronRoot,
-  env: { ...process.env, ELECTRON_NO_ATTACH_CONSOLE: '1', ELECTRON_DISABLE_SECURITY_WARNINGS: 'true' },
+  env: {
+    ...process.env,
+    ELECTRON_NO_ATTACH_CONSOLE: '1',
+    ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
+    LIGHTS_OUT_SUPPRESS_TRAY: '1'
+  },
   stdio: ['ignore', 'pipe', 'pipe'],
   windowsHide: true
 });

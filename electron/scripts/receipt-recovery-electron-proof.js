@@ -29,6 +29,7 @@ function runChildScenario(scenario) {
         LIGHTSOUT_RECEIPT_PROOF_CHILD: '1',
         LIGHTSOUT_RECEIPT_PROOF_SCENARIO: scenario,
         LIGHTSOUT_RECEIPT_PROOF_USERDATA: isolatedDir,
+        LIGHTS_OUT_SUPPRESS_TRAY: '1',
         ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
         ELECTRON_NO_ATTACH_CONSOLE: '1'
       },

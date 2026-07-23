@@ -70,7 +70,7 @@ check('runtime: app launches cleanly with --minimized --no-auto-start', () => {
   const child = require('child_process').spawn(exePath, ['--minimized', '--no-auto-start'], {
     detached: true,
     stdio: 'ignore',
-    env: { ...process.env, ELECTRON_IS_DEV: '0' }
+    env: { ...process.env, ELECTRON_IS_DEV: '0', LIGHTS_OUT_SUPPRESS_TRAY: '1' }
   });
 
   if (!child.pid) throw new Error('Failed to get PID for launched process');
@@ -126,6 +126,8 @@ check('safety: tray initialization guards against orphans', () => {
   const mainSrc = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
   if (!mainSrc.includes('let tray = null')) throw new Error('tray variable missing');
   if (!mainSrc.includes('async function createTray()')) throw new Error('createTray function missing');
+  if (!mainSrc.includes('if (SUPPRESS_AUTOMATION_TRAY) return')) throw new Error('automation tray suppression missing');
+  if (!mainSrc.includes('if (tray && !tray.isDestroyed()) return')) throw new Error('tray idempotency guard missing');
   if (!mainSrc.includes('tray = new Tray(')) throw new Error('tray creation missing');
 });
 
@@ -139,6 +141,7 @@ check('safety: quit handler cleans up processes', () => {
   const mainSrc = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
   if (!mainSrc.includes('app.on(\'before-quit\'')) throw new Error('before-quit handler missing');
   if (!mainSrc.includes('app.isQuitting = true')) throw new Error('quit flag missing');
+  if (!mainSrc.includes('tray.destroy()')) throw new Error('quit must destroy the tray icon');
 });
 
 // 4. Verify no Electron/Node processes linger

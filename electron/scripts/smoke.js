@@ -363,8 +363,24 @@ check('startup: portable temp cleanup only targets stale Lights Out extractions'
 
 check('tray: initialization and cleanup', () => {
   assertMatch(mainSrc, /let tray = null;/, 'tray variable missing');
+  assertMatch(mainSrc, /const SUPPRESS_AUTOMATION_TRAY = DESKTOP_UX_PROOF \|\| process\.env\.LIGHTS_OUT_SUPPRESS_TRAY === '1';/, 'automation tray suppression contract missing');
   assertMatch(mainSrc, /async function createTray\(\) \{/, 'createTray function missing');
+  assertMatch(mainSrc, /if \(SUPPRESS_AUTOMATION_TRAY\) return;/, 'automation must not create real Windows tray icons');
+  assertMatch(mainSrc, /if \(tray && !tray\.isDestroyed\(\)\) return;/, 'tray creation must be idempotent within one app process');
   assertMatch(mainSrc, /tray = new Tray\(trayIcons\.idle\);/, 'tray creation missing');
+  assertMatch(mainSrc, /before-quit[\s\S]{0,200}tray\.destroy\(\);[\s\S]{0,100}tray = null;/, 'quit must explicitly destroy the tray icon');
+  for (const runner of [
+    'desktop-ux-functional-gate.js',
+    'settings-native-proof.js',
+    'packaged-truth-smoke.js',
+    'packaged-network-smoke.js',
+    'native-walkthrough.js',
+    'companion-v2-electron-proof.js',
+    'receipt-recovery-electron-proof.js'
+  ]) {
+    const runnerSrc = fs.readFileSync(path.join(root, 'scripts', runner), 'utf8');
+    assertMatch(runnerSrc, /LIGHTS_OUT_(?:DESKTOP_UX_GATE|SUPPRESS_TRAY)/, `${runner} can create orphan tray icons`);
+  }
 });
 
 check('tray: hide/show and toggle logic', () => {
@@ -1522,7 +1538,7 @@ check('profile-ritual-gateway: auto-advance timer captures runId for staleness',
 });
 
 check('profile-ritual-gateway: shutdown cleanup', () => {
-  assertMatch(mainSrc, /before-quit[\s\S]{0,200}profileRitualContext\.clear\(\)/, 'app shutdown does not clear context');
+  assertMatch(mainSrc, /app\.on\('before-quit',[\s\S]*?profileRitualContext\.clear\(\)/, 'app shutdown does not clear context');
 });
 
 check('profile-ritual-gateway: no activeRitualRunToken global', () => {

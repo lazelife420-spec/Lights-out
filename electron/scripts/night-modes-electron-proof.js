@@ -261,6 +261,7 @@ const child = spawn(electronBin, [proofPath], {
   cwd: electronRoot,
   env: {
     ...process.env,
+    LIGHTS_OUT_SUPPRESS_TRAY: '1',
     ELECTRON_NO_ATTACH_CONSOLE: '1',
     ELECTRON_DISABLE_SECURITY_WARNINGS: 'true'
   },
