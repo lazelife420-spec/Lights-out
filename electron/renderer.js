@@ -277,6 +277,71 @@ const fallbackApi = (() => {
 
 const api = window.electronAPI || fallbackApi;
 const previewMode = !window.electronAPI;
+const desktopUxProofBridge = api.desktopUxProof;
+
+// Created before renderer initialization starts, then marked ready only after
+// DOM wiring, state restoration, Settings migration, menu wiring, first hero
+// render, and IPC listener registration have all completed.
+if (desktopUxProofBridge?.enabled) {
+  const startupSettingsPanel = document.getElementById('ns-panel-set');
+  const startupObservations = {
+    settingsEverVisible: false,
+    settingsVisibility: [],
+    completedAt: null
+  };
+  const recordStartupSettingsVisibility = phase => {
+    const visible = Boolean(startupSettingsPanel && getComputedStyle(startupSettingsPanel).display !== 'none');
+    startupObservations.settingsEverVisible ||= visible;
+    startupObservations.settingsVisibility.push({ phase, visible, at: Date.now() });
+  };
+  recordStartupSettingsVisibility('renderer-created');
+  const startupObserver = new MutationObserver(() => recordStartupSettingsVisibility('mutation'));
+  if (startupSettingsPanel) {
+    startupObserver.observe(startupSettingsPanel, { attributes: true, attributeFilter: ['class', 'style'] });
+  }
+  window.__desktopUxProof = {
+    ready: false,
+    version: desktopUxProofBridge.version || 1,
+    phase: 'renderer-created',
+    error: null,
+    startup: startupObservations,
+    finishStartupObservation: () => {
+      recordStartupSettingsVisibility('renderer-ready');
+      startupObservations.completedAt = Date.now();
+      startupObserver.disconnect();
+    },
+    getStartInvocations: () => desktopUxProofBridge.getStartInvocations(),
+    clearStartInvocations: () => desktopUxProofBridge.clearStartInvocations(),
+    getRealPowerActions: () => desktopUxProofBridge.getRealPowerActions(),
+    snapshot: () => ({
+      ready: window.__desktopUxProof.ready,
+      version: window.__desktopUxProof.version,
+      phase: window.__desktopUxProof.phase,
+      error: window.__desktopUxProof.error,
+      documentReadyState: document.readyState,
+      route: document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || null,
+      visiblePanel: Array.from(document.querySelectorAll('.ns-main-panel')).find(panel => getComputedStyle(panel).display !== 'none')?.id || null,
+      openMenu: document.querySelector('.menu-item.open')?.id || null,
+      activeModal: document.querySelector('.modal.active')?.id || null,
+      running: state.running,
+      paused: state.paused,
+      heroTitle: document.getElementById('ns-hero-title')?.textContent || null
+    })
+  };
+}
+
+function setDesktopUxProofPhase(phase, error = null) {
+  if (!window.__desktopUxProof) return;
+  window.__desktopUxProof.phase = phase;
+  window.__desktopUxProof.error = error ? String(error?.stack || error) : null;
+}
+
+function markDesktopUxProofReady() {
+  if (!window.__desktopUxProof) return;
+  window.__desktopUxProof.finishStartupObservation();
+  setDesktopUxProofPhase('ready');
+  window.__desktopUxProof.ready = true;
+}
 
 const els = {
   body: document.body,
@@ -287,7 +352,6 @@ const els = {
   timerName: document.getElementById('timer-name'),
   ringProgress: document.querySelector('.ring-progress'),
   timerInput: document.getElementById('timer-input'),
-  btnStart: document.getElementById('btn-start'),
   btnStop: document.getElementById('btn-stop'),
   btnPause: document.getElementById('btn-pause'),
   btnSnooze: document.getElementById('btn-snooze'),
@@ -297,7 +361,7 @@ const els = {
   btnMini: document.getElementById('btn-mini'),
   btnPlus: document.getElementById('btn-plus'),
   btnMinus: document.getElementById('btn-minus'),
-  optionsModal: document.getElementById('options-modal'),
+  panelSet: document.getElementById('ns-panel-set'),
   modalClose: document.getElementById('modal-close'),
   btnCancelOpt: document.getElementById('btn-cancel-opt'),
   btnSaveOpt: document.getElementById('btn-save-opt'),
@@ -1219,6 +1283,22 @@ async function openReceiptsLedger() {
 
 let settingsReturnTab = 'lib';
 
+// Desktop settings page: a fixed category rail beside a single visible
+// content panel, instead of one long scrolling list covering every domain
+// (power/safety, wind-down, phone companion, protection, accountability,
+// automations, appearance, advanced). Not persisted -- always reopens on
+// the first category, same reasoning as the nsActiveTab restore guard in
+// renderer-settings.js: a modal's internal navigation is transient session
+// state, not something that should leak into the next launch.
+function switchSettingsCategory(categoryId) {
+  document.querySelectorAll('.settings-rail-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.settingsCategory === categoryId);
+  });
+  document.querySelectorAll('.settings-categories .option-section[data-settings-category]').forEach(section => {
+    section.classList.toggle('settings-category-active', section.dataset.settingsCategory === categoryId);
+  });
+}
+
 function openSettingsPanel() {
   const activeTab = document.querySelector('.ns-nav-item.active')?.dataset?.nsTab;
   if (activeTab && !['set', 'help'].includes(activeTab)) settingsReturnTab = activeTab;
@@ -1226,13 +1306,132 @@ function openSettingsPanel() {
   updateLastLightUIFromState();
   loadRemoteControlState();
   setSidebarSelection('set');
-  els.optionsModal?.classList.add('active');
+  switchSettingsCategory('general');
+  applyMainPanelVisibility('set');
 }
 
+// Returns to whichever primary view (Tonight/Modes/Schedule/Stats) was
+// showing before Settings was opened -- a real panel switch, not dismissing
+// an overlay, so leaving Settings must re-show that panel's content, not
+// just its sidebar highlight.
 function closeSettingsPanel() {
-  els.optionsModal?.classList.remove('active');
-  setSidebarSelection(settingsReturnTab || 'lib');
+  const returnTab = settingsReturnTab || 'lib';
+  applyMainPanelVisibility(returnTab);
+  setSidebarSelection(returnTab);
   render();
+}
+
+// Persist everything currently shown in the Settings panel to the desktop.
+async function saveSettingsPanel() {
+  state.action = els.selAction.value;
+  state.graceMinutes = clamp(Number(els.graceMinutes.value) || 0, 0, 10);
+  state.forceShutdown = els.chkForceShutdown.checked;
+  state.muteSystem = els.chkMute.checked;
+  state.dryRun = Boolean(els.chkDryRun?.checked);
+  state.runAtLogin = Boolean(els.chkRunLogin?.checked);
+
+  // Save Smart Lights config
+  state.smartLights = {
+    enabled: els.chkSmartLights?.checked || false,
+    provider: els.selLightProvider?.value || 'none',
+    mode: els.selLightMode?.value || 'gradual_dim',
+    dimMinutes: clamp(Number(els.lightDimMinutes?.value) || 10, 1, 60),
+    hueBridgeIp: els.hueBridgeIp?.value || '',
+    hueUsername: els.hueUsername?.value || '',
+    hueGroupId: els.hueGroupId?.value || '',
+    httpUrl: els.httpUrl?.value || '',
+    httpMethod: els.httpMethod?.value || 'POST',
+    httpBodyTemplate: els.httpTemplate?.value || '{"brightness": {{BRIGHTNESS}}, "color_temp": {{COLOR_TEMP}}, "on": {{ON}}}',
+    verifiedConfigKey: state.smartLights.verifiedConfigKey || ''
+  };
+
+  state.lastLight = {
+    enabled: els.chkLastLight?.checked || false,
+    sequence: els.selLastLightSequence?.value || 'ClassicFade',
+    sound: els.selLastLightSound?.value || 'Off'
+  };
+
+  try {
+    const saved = await api.saveAppSettings({
+      runAtLogin: state.runAtLogin,
+      app: collectAppSettings(),
+      customization: state.customization,
+      lastLight: state.lastLight,
+      wifiGuard: collectWifiGuardSettings(),
+      contentBlocker: collectContentBlockerSettings(),
+      accountability: collectAccountabilitySettings()
+    });
+    if (typeof saved?.runAtLogin === 'boolean') state.runAtLogin = saved.runAtLogin;
+    applyWifiGuardSettings(saved?.wifiGuard);
+    applyContentBlockerSettings(saved?.contentBlocker);
+    applyAccountabilitySettings(saved?.accountability);
+  } catch (error) {
+    notify(`Login settings failed: ${error.message || error}`, 'warning', 4500);
+  }
+
+  try {
+    const requestedLights = state.smartLights.enabled;
+    state.smartLights = await api.saveSmartLightConfig(state.smartLights);
+    if (els.chkSmartLights) els.chkSmartLights.checked = Boolean(state.smartLights.enabled);
+    if (requestedLights && !state.smartLights.enabled) {
+      notify('Settings saved; Smart Lights remain off until this exact setup passes Test Connection', 'warning');
+    } else {
+      notify('Settings saved', 'success');
+    }
+  } catch (error) {
+    notify(`Smart lights save failed: ${error.message || error}`, 'error');
+  }
+
+  setAction(state.action);
+  render();
+}
+
+// Revert the Settings form to the last persisted values without restarting
+// the renderer or reattaching listeners.
+async function discardSettingsPanelChanges() {
+  try {
+    const [appSettings, lightConfig, wifiConfig, cbConfig, accConfig] = await Promise.all([
+      api.getAppSettings(),
+      api.getSmartLightConfig(),
+      api.getWifiGuardSettings?.(),
+      api.getContentBlockerSettings?.(),
+      api.getAccountabilitySettings?.()
+    ]);
+    if (typeof appSettings.runAtLogin === 'boolean') state.runAtLogin = appSettings.runAtLogin;
+    if (appSettings.app) await applyAppSettings(appSettings.app, { skipNavigation: true });
+    if (appSettings.customization) {
+      state.customization = { ...state.customization, ...appSettings.customization };
+    }
+    applyCustomization(state.customization);
+    if (appSettings.lastLight) {
+      state.lastLight = { ...state.lastLight, ...appSettings.lastLight };
+    }
+    updateLastLightUIFromState();
+    syncCustomizeUI();
+    loadRemoteControlState();
+    if (lightConfig) {
+      state.smartLights = {
+        enabled: lightConfig.enabled || false,
+        provider: lightConfig.provider || 'none',
+        mode: lightConfig.mode || 'gradual_dim',
+        dimMinutes: lightConfig.dimMinutes || 10,
+        hueBridgeIp: lightConfig.hueBridgeIp || '',
+        hueUsername: lightConfig.hueUsername || '',
+        hueGroupId: lightConfig.hueGroupId || '',
+        httpUrl: lightConfig.httpUrl || '',
+        httpMethod: lightConfig.httpMethod || 'POST',
+        httpBodyTemplate: lightConfig.httpBodyTemplate || '{"brightness": {{BRIGHTNESS}}, "color_temp": {{COLOR_TEMP}}, "on": {{ON}}}',
+        verifiedConfigKey: lightConfig.verifiedConfigKey || ''
+      };
+      updateLightsUIFromState();
+    }
+    if (wifiConfig) applyWifiGuardSettings(wifiConfig);
+    if (cbConfig) applyContentBlockerSettings(cbConfig);
+    if (accConfig) applyAccountabilitySettings(accConfig);
+  } catch (error) {
+    console.error('discardSettingsPanelChanges failed:', error);
+    notify('Could not restore persisted settings', 'warning');
+  }
 }
 
 function openHelpPanel() {
@@ -1249,6 +1448,11 @@ function applyMainPanelVisibility(panel) {
   if (els.panelModes) els.panelModes.style.display = panel === 'modes' ? '' : 'none';
   if (els.panelSch) els.panelSch.style.display = panel === 'sch' ? '' : 'none';
   if (els.panelStats) els.panelStats.style.display = panel === 'stats' ? '' : 'none';
+  // Settings is a full sibling panel too (see openSettingsPanel/closeSettingsPanel)
+  // -- not a modal overlay, so it must be hidden here exactly like the others
+  // whenever a different panel is selected by any path (sidebar, top menu, or
+  // this function called directly).
+  if (els.panelSet) els.panelSet.style.display = panel === 'set' ? '' : 'none';
   if (panel === 'sch') activateTopTab('schedule');
 }
 
@@ -1421,7 +1625,6 @@ function render() {
 
   updateRing(displaySeconds, totalSeconds);
 
-  els.btnStart.style.display = state.running || state.paused ? 'none' : 'flex';
   els.btnStop.style.display = state.running || state.paused ? 'flex' : 'none';
   els.btnPause.style.display = state.running || state.paused ? 'flex' : 'none';
   els.btnSnooze.disabled = !(state.running || state.paused);
@@ -1439,6 +1642,18 @@ function render() {
   if (nsHero) nsHero.style.display = isIdle ? '' : 'none';
   if (nsTrust) nsTrust.style.display = isIdle ? '' : 'none';
   document.body.classList.toggle('ns-lobby', isIdle);
+  renderTonightHero();
+  renderArmedModeBanner();
+
+  // Focused active-run screen: while a run is active, hide the idle-only
+  // lobby clutter (Saved Profiles, the streak callout, last night's
+  // completed-run proof card) so the screen shows only the running
+  // countdown, its controls, and the current mode/action -- not a stale
+  // "complete" panel sitting alongside a run that's still in progress.
+  const profilesSection = document.getElementById('profiles-section');
+  if (profilesSection) profilesSection.style.display = isIdle ? '' : 'none';
+  if (els.streakCallout && !isIdle) els.streakCallout.style.display = 'none';
+  if (els.morningProofSection && !isIdle) els.morningProofSection.style.display = 'none';
 
   els.timerInput.disabled = state.running || state.paused;
   els.btnPlus.disabled = state.running || state.paused;
@@ -1471,13 +1686,15 @@ function render() {
       }
     } else if (state.paused) {
       pill.classList.add('paused');
-      els.statusText.textContent = 'Paused';
+      if (state.dryRun) pill.classList.add('dryrun');
+      els.statusText.textContent = state.dryRun ? 'Dry Run · Paused' : 'Paused';
     } else {
       const phaseClass = state.phase === 'dim' ? 'dim' : state.phase === 'lastlight' ? 'lastlight' : 'running';
       pill.classList.add(phaseClass);
       if (state.dryRun) pill.classList.add('dryrun');
       const labels = { focus: 'Focus', dim: 'Winding Down', lastlight: 'Last Light', idle: 'Running' };
-      els.statusText.textContent = labels[state.phase] || 'Running';
+      const phaseLabel = labels[state.phase] || 'Running';
+      els.statusText.textContent = state.dryRun ? `Dry Run · ${phaseLabel}` : phaseLabel;
     }
   }
 
@@ -1492,8 +1709,8 @@ function render() {
   els.actionName.textContent = actionLabel();
   els.endTime.textContent = state.running || state.paused ? formatEndTime(state.endsAt) : 'Idle';
 
-  // Don't clobber the user's in-progress edits while the options modal is open.
-  if (!els.optionsModal?.classList.contains('active')) {
+  // Don't clobber the user's in-progress edits while the Settings panel is open.
+  if (els.panelSet?.style.display === 'none') {
     if (els.chkDryRun) els.chkDryRun.checked = state.dryRun;
     if (els.chkForceShutdown) els.chkForceShutdown.checked = state.forceShutdown;
     if (els.chkMute) els.chkMute.checked = state.muteSystem;
@@ -1624,9 +1841,18 @@ function updateAnalogHands(now) {
 // cannot leak into unrelated starts.
 // ─────────────────────────────────────────────────────────────────────────────
 
+async function persistArmedNightMode() {
+  try {
+    await api.saveAppSettings({ app: { armedNightMode: state.armedNightMode } });
+  } catch (e) {
+    console.error('persistArmedNightMode failed:', e);
+  }
+}
+
 function clearArmedNightMode() {
   state.armedNightMode = null;
   renderArmedModeBanner();
+  persistArmedNightMode();
 }
 
 function armNightMode(mode) { // eslint-disable-line no-unused-vars -- called from renderer-night-modes.js
@@ -1638,6 +1864,33 @@ function armNightMode(mode) { // eslint-disable-line no-unused-vars -- called fr
     ritualId: mode.ritualId || 'none'
   };
   renderArmedModeBanner();
+  persistArmedNightMode();
+}
+
+// Tonight's hero card: derives every displayed field (title, duration,
+// action, preview ring, CTA label) from the same state.armedNightMode /
+// state.action / inputSeconds() that the armed-mode banner and the
+// countdown ring already read. Previously this card's title/preview/CTA
+// were static markup, never bound to anything, so "Use Tonight" updated
+// the banner and the ring but left this card showing whatever had been
+// hardcoded in index.html -- two contradictory plans on screen at once.
+// Called from render() so it always stays in the same single pass as
+// every other lobby surface.
+function renderTonightHero() {
+  const titleEl = document.getElementById('ns-hero-title');
+  const previewEl = document.getElementById('ns-preview-time');
+  const playLabelEl = document.getElementById('ns-play-label');
+  if (!titleEl && !previewEl && !playLabelEl) return;
+
+  const armed = state.armedNightMode;
+  const planTitle = armed ? armed.nightModeTitle : 'Custom Timer';
+  const durationSeconds = armed ? armed.durationSeconds : inputSeconds();
+  const durationMin = Math.max(1, Math.round(durationSeconds / 60));
+  const planActionLabel = armed ? actionLabel(armed.action) : actionLabel();
+
+  if (titleEl) titleEl.textContent = `${planTitle} · ${durationMin} min · ${planActionLabel}`;
+  if (previewEl) previewEl.textContent = formatTime(durationSeconds);
+  if (playLabelEl) playLabelEl.textContent = `Start ${planTitle}`;
 }
 
 function renderArmedModeBanner() {
@@ -1669,6 +1922,16 @@ function checkArmedModeMatch() {
   }
 }
 
+// Single shared entry point for "start whatever is currently on Tonight" --
+// the armed Night Mode if one is selected, otherwise the custom timer
+// controls. Every caller that means "press the one primary Start action"
+// (the hero CTA, the Space keyboard shortcut, and "Play Tonight Again"
+// replaying last night's plan) goes through this one function, so there is
+// exactly one code path and no duplicate/competing start control.
+function startTonightPlan() {
+  return startTimer(inputSeconds(), 'play');
+}
+
 async function startTimer(seconds = inputSeconds(), origin = null) {
   const durationSeconds = Math.max(1, Math.round(seconds));
 
@@ -1690,7 +1953,6 @@ async function startTimer(seconds = inputSeconds(), origin = null) {
       startOrigin: origin,
       nightModeId
     });
-    clearArmedNightMode();
 
     if (result?.success === false) {
       notify(result.error || 'Timer could not start', 'error');
@@ -1989,6 +2251,11 @@ function renderTrend(trend) {
 // screen never displays a "0-night streak" or any unearned claim.
 function updateStreakCallout(summary) {
   if (!els.streakCallout) return;
+  // Never resurface it mid-run (e.g. a First Light morning briefing arriving
+  // while a run is still active) -- render()'s focused active-run screen
+  // owns hiding it, this just keeps that guarantee even for callers that
+  // don't go through render() first.
+  if (state.running || state.paused) { els.streakCallout.style.display = 'none'; return; }
   const streak = Number(summary && summary.streak) || 0;
   if (streak < 1) {
     els.streakCallout.style.display = 'none';
@@ -2179,8 +2446,78 @@ function applyTonightCard(card) {
   }
   notify(`Selected: ${card.querySelector('.card-title')?.textContent || 'Timer'}`, 'info');
 }
+// Top menu bar (Power/Settings/Help): click-to-toggle dropdowns with
+// outside-click/Escape/blur dismissal and roving-tabindex keyboard nav.
+// Replaces the old `.menu-item:hover .submenu` CSS rule, which closed the
+// dropdown the instant the pointer left `.menu-item`'s box -- on anything
+// but a perfectly straight, fast diagonal move toward an item, the menu
+// vanished before it could be clicked. Same idiom as the notification
+// drawer (`#btn-notif`/`#notif-drawer` above) and the context menu
+// (renderer-utils.js `showContextMenu`/`closeContextMenu`).
+function closeAllTopMenus() {
+  document.querySelectorAll('.menu-item.open').forEach(menu => {
+    menu.classList.remove('open');
+    menu.setAttribute('aria-expanded', 'false');
+  });
+}
+
+function wireTopMenus() {
+  const menus = Array.from(document.querySelectorAll('.menu-item'));
+  if (!menus.length) return;
+
+  function openMenu(menu) {
+    closeAllTopMenus();
+    menu.classList.add('open');
+    menu.setAttribute('aria-expanded', 'true');
+  }
+
+  menus.forEach(menu => {
+    menu.addEventListener('click', event => {
+      if (event.target.closest('.submenu-item')) return; // item's own handler runs and closes it
+      if (menu.classList.contains('open')) closeAllTopMenus();
+      else { openMenu(menu); menu.querySelector('.submenu-item')?.focus(); }
+    });
+
+    menu.addEventListener('keydown', event => {
+      const items = Array.from(menu.querySelectorAll('.submenu-item'));
+      const focusedIndex = items.indexOf(document.activeElement);
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeAllTopMenus();
+        menu.focus();
+        return;
+      }
+      if (!menu.classList.contains('open') && (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown')) {
+        event.preventDefault();
+        openMenu(menu);
+        items[0]?.focus();
+        return;
+      }
+      if (focusedIndex === -1) return;
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        items[(focusedIndex + 1) % items.length].focus();
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        items[(focusedIndex - 1 + items.length) % items.length].focus();
+      } else if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        document.activeElement.click();
+      }
+    });
+  });
+
+  document.addEventListener('mousedown', event => {
+    if (!event.target.closest('.menu-item')) closeAllTopMenus();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') closeAllTopMenus();
+  });
+  window.addEventListener('blur', closeAllTopMenus);
+}
+
 function wireEvents() {
-  els.btnStart.addEventListener('click', () => startTimer(inputSeconds(), 'play'));
   els.btnStop.addEventListener('click', cancelTimer);
   els.btnPause.addEventListener('click', togglePause);
   els.btnSnooze.addEventListener('click', () => snooze(5 * 60));
@@ -2191,9 +2528,9 @@ function wireEvents() {
   els.btnFullscreenClock?.addEventListener('click', enterFullscreenClock);
   els.btnFullscreenClockExit?.addEventListener('click', exitFullscreenClock);
   api.onFullScreenChanged?.(applyFullscreenClockState);
-  document.getElementById('menu-settings')?.addEventListener('click', event => {
-    if (event.target.closest('.submenu-item')) return;
-    openSettingsPanel();
+  wireTopMenus();
+  document.querySelectorAll('.settings-rail-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchSettingsCategory(btn.dataset.settingsCategory));
   });
   els.btnWidget?.addEventListener('click', async () => {
     try {
@@ -2642,7 +2979,7 @@ if (els.btnProofCopy) {
 // Northstar proof hero: Play Tonight Again — delegates to existing start flow.
 document.getElementById('btn-proof-again')?.addEventListener('click', () => {
   if (els.morningProofSection) els.morningProofSection.style.display = 'none';
-  document.getElementById('btn-start')?.click();
+  startTonightPlan();
 });
 
 // Northstar proof hero: Dismiss — hides the card.
@@ -2747,6 +3084,7 @@ if (els.btnClearReceipts) {
   document.querySelectorAll('.submenu-item').forEach(item => {
     item.addEventListener('click', event => {
       event.stopPropagation();
+      closeAllTopMenus();
 
       if (item.dataset.action) {
         setAction(item.dataset.action);
@@ -2822,8 +3160,8 @@ if (els.btnClearReceipts) {
     });
   });
 
-  // Northstar hero card PLAY button starts the timer.
-  document.getElementById('ns-play-btn')?.addEventListener('click', () => startTimer(inputSeconds(), 'play'));
+  // The Tonight hero CTA is the one primary Start control.
+  document.getElementById('ns-play-btn')?.addEventListener('click', () => startTonightPlan());
 
   // Armed Night Mode clear button.
   document.getElementById('armed-mode-clear')?.addEventListener('click', clearArmedNightMode);
@@ -2887,17 +3225,18 @@ if (els.btnClearReceipts) {
     }
   });
 
-  els.modalClose.addEventListener('click', () => {
+  // Back to Tonight and Cancel both discard any unsaved edits and return to
+  // the previous dashboard panel. Only the explicit Save button persists.
+  els.modalClose.addEventListener('click', async () => {
+    await discardSettingsPanelChanges();
     closeSettingsPanel();
   });
-  els.btnCancelOpt.addEventListener('click', () => {
+  els.btnCancelOpt.addEventListener('click', async () => {
+    await discardSettingsPanelChanges();
     closeSettingsPanel();
   });
-  els.optionsModal.addEventListener('click', event => {
-    if (event.target === els.optionsModal) {
-      closeSettingsPanel();
-    }
-  });
+  // No backdrop-click-to-close: Settings is an in-flow panel, not an overlay,
+  // so clicking its own background is just clicking the page.
 
   if (els.aboutModalClose) {
     els.aboutModalClose.addEventListener('click', () => els.aboutModal.classList.remove('active'));
@@ -2909,68 +3248,8 @@ if (els.btnClearReceipts) {
   }
 
   els.btnSaveOpt.addEventListener('click', async () => {
-    state.action = els.selAction.value;
-    state.graceMinutes = clamp(Number(els.graceMinutes.value) || 0, 0, 10);
-    state.forceShutdown = els.chkForceShutdown.checked;
-    state.muteSystem = els.chkMute.checked;
-    state.dryRun = Boolean(els.chkDryRun?.checked);
-    state.runAtLogin = Boolean(els.chkRunLogin?.checked);
-
-    // Save Smart Lights config
-    state.smartLights = {
-      enabled: els.chkSmartLights?.checked || false,
-      provider: els.selLightProvider?.value || 'none',
-      mode: els.selLightMode?.value || 'gradual_dim',
-      dimMinutes: clamp(Number(els.lightDimMinutes?.value) || 10, 1, 60),
-      hueBridgeIp: els.hueBridgeIp?.value || '',
-      hueUsername: els.hueUsername?.value || '',
-      hueGroupId: els.hueGroupId?.value || '',
-      httpUrl: els.httpUrl?.value || '',
-      httpMethod: els.httpMethod?.value || 'POST',
-      httpBodyTemplate: els.httpTemplate?.value || '{"brightness": {{BRIGHTNESS}}, "color_temp": {{COLOR_TEMP}}, "on": {{ON}}}',
-      verifiedConfigKey: state.smartLights.verifiedConfigKey || ''
-    };
-
-    state.lastLight = {
-      enabled: els.chkLastLight?.checked || false,
-      sequence: els.selLastLightSequence?.value || 'ClassicFade',
-      sound: els.selLastLightSound?.value || 'Off'
-    };
-
-    try {
-      const saved = await api.saveAppSettings({
-        runAtLogin: state.runAtLogin,
-        app: collectAppSettings(),
-        customization: state.customization,
-        lastLight: state.lastLight,
-        wifiGuard: collectWifiGuardSettings(),
-        contentBlocker: collectContentBlockerSettings(),
-        accountability: collectAccountabilitySettings()
-      });
-      if (typeof saved?.runAtLogin === 'boolean') state.runAtLogin = saved.runAtLogin;
-      applyWifiGuardSettings(saved?.wifiGuard);
-      applyContentBlockerSettings(saved?.contentBlocker);
-      applyAccountabilitySettings(saved?.accountability);
-    } catch (error) {
-      notify(`Login settings failed: ${error.message || error}`, 'warning', 4500);
-    }
-
-    try {
-      const requestedLights = state.smartLights.enabled;
-      state.smartLights = await api.saveSmartLightConfig(state.smartLights);
-      if (els.chkSmartLights) els.chkSmartLights.checked = Boolean(state.smartLights.enabled);
-      if (requestedLights && !state.smartLights.enabled) {
-        notify('Settings saved; Smart Lights remain off until this exact setup passes Test Connection', 'warning');
-      } else {
-        notify('Settings saved', 'success');
-      }
-    } catch (error) {
-      notify(`Smart lights save failed: ${error.message || error}`, 'error');
-    }
-
+    await saveSettingsPanel();
     closeSettingsPanel();
-    setAction(state.action);
-    render();
   });
 
   els.selAction.addEventListener('change', () => setAction(els.selAction.value));
@@ -3124,7 +3403,9 @@ if (els.btnClearReceipts) {
     });
   }
 
-  document.addEventListener('keydown', event => {
+  document.addEventListener('keydown', async event => {
+    if (event.defaultPrevented) return;
+
     if (event.target.tagName === 'INPUT' || event.target.tagName === 'SELECT') {
       if (event.key === 'Escape') event.target.blur();
       return;
@@ -3133,7 +3414,7 @@ if (els.btnClearReceipts) {
     if (event.key === ' ' || event.code === 'Space') {
       event.preventDefault();
       if (state.running || state.paused) togglePause();
-      else startTimer(inputSeconds(), 'play');
+      else startTonightPlan();
       return;
     }
 
@@ -3141,7 +3422,8 @@ if (els.btnClearReceipts) {
       // Close the topmost active modal/drawer.
       if (state.fullscreenClock) {
         exitFullscreenClock();
-      } else if (els.optionsModal.classList.contains('active')) {
+      } else if (els.panelSet && els.panelSet.style.display !== 'none') {
+        await discardSettingsPanelChanges();
         closeSettingsPanel();
       } else if (els.profilesModal?.classList.contains('active')) {
         els.profilesModal.classList.remove('active');
@@ -3517,7 +3799,7 @@ async function loadInitialData() {
     if (typeof appSettings.runAtLogin === 'boolean') {
       state.runAtLogin = appSettings.runAtLogin;
     }
-    if (appSettings.app) applyAppSettings(appSettings.app);
+    if (appSettings.app) await applyAppSettings(appSettings.app);
     if (appSettings.customization) {
       state.customization = { ...state.customization, ...appSettings.customization };
     }
@@ -3581,7 +3863,9 @@ async function loadInitialData() {
     console.error('loadInitialData failed:', e);
     els.batteryLevel.textContent = 'N/A';
     els.powerPlan.textContent = previewMode ? 'Preview' : 'AC Power';
+    return { ok: false, error: e };
   }
+  return { ok: true };
 }
 
 // Northstar sidebar tab: toggle active class + persist.
@@ -3686,11 +3970,27 @@ setupCalendarHandlers();
 setupRemoteControlHandlers();
 setupCbScheduleHandlers();
 setAction(state.action);
-loadInitialData().finally(render);
 applyAppVersion();
 refreshStreakCallout();
 
 checkOnboarding();
+
+void (async function initializeRenderer() {
+  setDesktopUxProofPhase('restoring-state');
+  const result = await loadInitialData();
+  render();
+  if (!result.ok) {
+    setDesktopUxProofPhase('initialization-failed', result.error);
+    return;
+  }
+  // Yield once so style/layout and the initial Tonight projection reflect the
+  // restored state before proof automation is allowed to interact.
+  await new Promise(resolve => requestAnimationFrame(() => resolve()));
+  markDesktopUxProofReady();
+})().catch(error => {
+  console.error('Renderer initialization failed:', error);
+  setDesktopUxProofPhase('initialization-failed', error);
+});
 
 // ───────────── Initial window height fit ─────────────
 // Pick a useful starting height once. Subsequent sizing belongs to the user;

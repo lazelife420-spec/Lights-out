@@ -46,13 +46,14 @@ app.whenReady().then(async () => {
   await wait(800);
   await capture(win, 'v9_streaks.png');
 
-  // Options modal - scroll to WiFi Guard + Content Blocker
+  // Settings (a real panel, see openSettingsPanel in renderer.js) - Protection
+  // category shows WiFi Guard + Content Blocker.
   await win.webContents.executeJavaScript(`
     (function(){
       var btn = document.querySelector('[data-tab="library"]');
       if (btn) btn.click();
-      var m = document.getElementById('options-modal');
-      if (m) m.classList.add('active');
+      if (typeof openSettingsPanel === 'function') openSettingsPanel();
+      if (typeof switchSettingsCategory === 'function') switchSettingsCategory('protection');
       var sec = document.querySelector('.wifi-guard-section');
       if (sec) sec.scrollIntoView({block:'start'});
       return true;
@@ -61,9 +62,10 @@ app.whenReady().then(async () => {
   await wait(800);
   await capture(win, 'v9_wifiguard.png');
 
-  // Scroll to content blocker + accountability
+  // Accountability category
   await win.webContents.executeJavaScript(`
     (function(){
+      if (typeof switchSettingsCategory === 'function') switchSettingsCategory('accountability');
       var sec = document.querySelector('.accountability-section');
       if (sec) sec.scrollIntoView({block:'start'});
       return true;
@@ -75,8 +77,7 @@ app.whenReady().then(async () => {
   // Warning modal with override button
   await win.webContents.executeJavaScript(`
     (function(){
-      var m = document.getElementById('options-modal');
-      if (m) m.classList.remove('active');
+      if (typeof closeSettingsPanel === 'function') closeSettingsPanel();
       if (typeof showWarningModal === 'function') showWarningModal('Shutdown in 2 minutes');
       return true;
     })();

@@ -25,12 +25,12 @@ app.whenReady().then(async () => {
   await wait(1200);
   await capture(win, '_ui_cockpit.png');
 
-  // Open the options modal and reveal the Customize section.
+  // Open Settings (a real panel, see openSettingsPanel/applyMainPanelVisibility
+  // in renderer.js) on the Appearance & Sound category to reveal Customize.
   await win.webContents.executeJavaScript(`
     (function(){
-      if (typeof syncCustomizeUI === 'function') syncCustomizeUI();
-      var m = document.getElementById('options-modal');
-      if (m) m.classList.add('active');
+      if (typeof openSettingsPanel === 'function') openSettingsPanel();
+      if (typeof switchSettingsCategory === 'function') switchSettingsCategory('appearance');
       var cz = document.querySelector('.customize-section');
       if (cz) cz.scrollIntoView({block:'start'});
       return true;
@@ -45,8 +45,7 @@ app.whenReady().then(async () => {
       if (typeof applyCustomization === 'function') {
         applyCustomization({ accent: '#a855f7', theme: 'aurora', ringStyle: 'glow', opacity: 1, volume: 1 });
       }
-      var m = document.getElementById('options-modal');
-      if (m) m.classList.remove('active');
+      if (typeof closeSettingsPanel === 'function') closeSettingsPanel();
       return true;
     })();
   `);

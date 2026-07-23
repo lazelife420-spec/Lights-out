@@ -2,6 +2,56 @@
 
 ## Unreleased
 
+## v11.1.2 — Desktop Consolidation (2026-07-22)
+
+Desktop: 11.1.2
+Android Companion: 11.1.1, unchanged
+
+### Changed
+- **Startup returns to Tonight.** Normal launches and legacy saved
+  `set`/`help` routes now settle on Tonight without flashing Settings. The
+  migration completes before the renderer declares itself ready and preserves
+  unrelated saved settings.
+- **Usable Power, Settings, and Help menus.** Top menus now remain open while
+  the pointer enters them and support click toggling, outside-click and Escape
+  dismissal, mutual exclusion, arrow-key navigation, Enter activation, and
+  focus return. Power choices still select intent only; confirmation and Dry
+  Run safeguards remain on the shared start path.
+- **Authoritative Use Tonight selection.** A selected Night Mode now drives the
+  hero title, duration, action, ritual summary, preview, CTA, start payload,
+  active-run identity, receipt attribution, and restart restoration from one
+  state. The main process continues to resolve canonical mode identity and
+  execution values.
+- **Settings is a desktop workspace.** Settings is now a primary in-flow view
+  with a persistent category rail and one selected category at a time instead
+  of a widened modal or all-category mega-scroll. Save, Cancel, Back, Escape,
+  sidebar state, and return navigation share one predictable lifecycle.
+- **One primary Start action.** The visible Tonight hero CTA, Space shortcut,
+  and Play Tonight Again all delegate to the same command and payload path.
+  The hidden duplicate Start control and competing listeners are gone.
+- **Focused active-run presentation.** The current countdown and selected mode
+  dominate while Saved Profiles, streak content, and prior proof are hidden.
+  Pause/Resume, Snooze, Cancel, and Dry Run status remain prominent, including
+  while paused.
+- **Navigation and terminology cleanup.** Desktop labels, routes, and control
+  descriptions now match the consolidated Tonight, Modes, Schedule, Settings,
+  and Stats surfaces.
+
+### Fixed
+- Registered ritual side-effect callbacks before the renderer becomes
+  interactive, closing an early-launch window where a standard ritual could
+  reach its timer step without creating the countdown or receipt.
+- Replaced the desktop proof runner's preload-existence guess with an explicit
+  renderer-ready handshake, fresh debugging ports, console/exception capture,
+  route/view/modal diagnostics, and enforced native assertions.
+
+### Safety
+- Timer, receipt, companion, and Windows power-action boundaries remain
+  unchanged. Dry Run is enabled in all release proof scenarios, and the native
+  desktop gate records zero real power actions.
+- This release does not claim Windows Authenticode signing.
+- Android source, `versionCode`, and `versionName` are unchanged.
+
 ## v11.1.0 — Night Modes Library (2026-07-16)
 
 ### Added

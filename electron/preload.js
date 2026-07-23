@@ -1,5 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+const DESKTOP_UX_PROOF = process.argv.includes('--desktop-ux-proof') || process.env.LIGHTS_OUT_DESKTOP_UX_GATE === '1' || process.env.LIGHTS_OUT_DESKTOP_UX_GATE === 'true';
+
 // Secure IPC bridge
 contextBridge.exposeInMainWorld('electronAPI', {
   // Timer control
@@ -284,5 +286,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Open settings from tray
   onOpenSettings: (callback) => {
     ipcRenderer.on('open-settings', () => callback());
-  }
+  },
+
+  // Native desktop UX proof bridge. The renderer owns the public readiness
+  // object so it can mark ready only after its complete async bootstrap.
+  ...(DESKTOP_UX_PROOF ? {
+    desktopUxProof: {
+      enabled: true,
+      version: 1,
+      getStartInvocations: () => ipcRenderer.invoke('get-start-invocations'),
+      clearStartInvocations: () => ipcRenderer.invoke('clear-start-invocations'),
+      getRealPowerActions: () => ipcRenderer.invoke('get-real-power-actions')
+    }
+  } : {})
 });

@@ -110,9 +110,9 @@ async function captureApp() {
   await win.webContents.executeJavaScript(`(function(){
     document.body.classList.remove('phase-dim'); document.body.classList.remove('warm-shift');
     if (typeof AmbientVisuals !== 'undefined') AmbientVisuals.stop();
-    var modal = document.getElementById('options-modal');
-    if (modal) modal.classList.add('active');
-    var hs = Array.from(document.querySelectorAll('#options-modal h3'));
+    if (typeof openSettingsPanel === 'function') openSettingsPanel();
+    if (typeof switchSettingsCategory === 'function') switchSettingsCategory('wind-down');
+    var hs = Array.from(document.querySelectorAll('#ns-panel-set h3'));
     var target = hs.find(function(h){ return /wind-down system actions/i.test(h.textContent); });
     if (target) target.scrollIntoView({ block: 'start' });
     return true;

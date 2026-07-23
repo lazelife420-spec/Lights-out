@@ -18,6 +18,9 @@ system-tune-backup-*/
 electron/assets/_ui_*.png
 electron/screenshots/
 visual_smoke/
+build-output.log
+desktop-ux-gate-output.log
+electron/docs/proof/**/userdata-*/
 
 # OS / editor cruft
 Thumbs.db

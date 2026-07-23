@@ -108,7 +108,7 @@ windowReady.then(async mainWindow => {
 
   async function clickStart() {
     await evaluate(\`(async () => {
-      document.getElementById('btn-start').click();
+      document.getElementById('ns-play-btn').click();
       await new Promise(resolve => setTimeout(resolve, 80));
     })()\`);
   }
@@ -125,7 +125,7 @@ windowReady.then(async mainWindow => {
     const loaded = await evaluate(\`({
       title: document.title,
       api: typeof window.electronAPI,
-      start: Boolean(document.getElementById('btn-start')),
+      start: Boolean(document.getElementById('ns-play-btn')),
       cards: document.querySelectorAll('.nm-card').length,
       running: state.running
     })\`);

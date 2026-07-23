@@ -102,7 +102,10 @@ class CdpClient {
 
   async evaluate(expression) {
     const response = await this.command('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
-    if (response.exceptionDetails) throw new Error(response.exceptionDetails.text || 'Runtime evaluation failed');
+    if (response.exceptionDetails) {
+      console.error('CDP Exception details:', JSON.stringify(response.exceptionDetails, null, 2));
+      throw new Error(response.exceptionDetails.exception?.description || response.exceptionDetails.text || 'Runtime evaluation failed');
+    }
     return response.result.value;
   }
 
@@ -264,22 +267,32 @@ async function main() {
       document.getElementById('notif-drawer-close').click();
       document.querySelector('[data-ns-tab="lib"]').click();
       const before = document.querySelector('.ns-nav-item[aria-current="page"]')?.dataset.nsTab;
+      // Power/Settings/Help are click-toggled dropdowns (wireTopMenus) --
+      // clicking the "Settings" label only opens its own dropdown; the
+      // dropdown's "Advanced Options..." item is what actually opens the
+      // settings page/modal.
       document.getElementById('menu-settings').click();
-      const topSettings = document.getElementById('options-modal').classList.contains('active');
+      const topMenuOpen = document.getElementById('menu-settings').classList.contains('open');
+      document.getElementById('open-options').click();
+      // Settings is a real panel (applyMainPanelVisibility), not a
+      // .active-toggled modal -- visibility is the inline display style.
+      const topSettings = document.getElementById('ns-panel-set').style.display !== 'none';
       document.getElementById('modal-close').click();
+      await new Promise(resolve => setTimeout(resolve, 300));
       const restored = document.querySelector('.ns-nav-item[aria-current="page"]')?.dataset.nsTab;
       document.querySelector('[data-ns-tab="set"]').click();
-      const sideSettings = document.getElementById('options-modal').classList.contains('active');
+      const sideSettings = document.getElementById('ns-panel-set').style.display !== 'none';
       document.getElementById('modal-close').click();
       document.querySelector('[data-ns-tab="modes"]').click();
       return {
-        before, topSettings, restored, sideSettings,
+        before, topMenuOpen, topSettings, restored, sideSettings,
         selected: document.querySelector('.ns-nav-item[aria-current="page"]')?.dataset.nsTab,
         modeTitles: [...document.querySelectorAll('.nm-card .nm-card-title')].map(el => el.textContent.trim()),
         hardStopPresent: document.body.textContent.includes('HARD STOP')
       };
     })()`);
     assert.equal(routes.before, 'lib');
+    assert.equal(routes.topMenuOpen, true);
     assert.equal(routes.topSettings, true);
     assert.equal(routes.restored, 'lib');
     assert.equal(routes.sideSettings, true);
