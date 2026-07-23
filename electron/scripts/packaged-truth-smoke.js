@@ -13,6 +13,15 @@ const {
   exerciseMenuContract,
   waitForAuthoritativeReadiness
 } = require('./packaged-proof-readiness');
+const {
+  attachCleanupDiagnostics,
+  cleanupOwnedResources,
+  injectFailure,
+  rendererRedactionInstallExpression,
+  rendererRedactionRestoreExpression,
+  sanitizeValue,
+  verifyOwnedCleanup
+} = require('./proof-lifecycle');
 
 const execFileAsync = promisify(execFile);
 
@@ -56,6 +65,29 @@ async function firewallSnapshot() {
   const result = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { windowsHide: true, timeout: 15000 });
   const parsed = JSON.parse(result.stdout.trim() || '[]');
   return Array.isArray(parsed) ? parsed : [parsed];
+}
+
+async function removeFirewallRules(ruleNames) {
+  if (process.platform !== 'win32' || !ruleNames?.length) return;
+  const encodedNames = Buffer.from(JSON.stringify(ruleNames), 'utf8').toString('base64');
+  const command = `$ProgressPreference = 'SilentlyContinue'; $names = ConvertFrom-Json ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encodedNames}'))); foreach ($name in @($names)) { $rule = Get-NetFirewallRule -Name $name -ErrorAction SilentlyContinue; if ($rule) { $rule | Remove-NetFirewallRule -ErrorAction Stop } }; exit 0`;
+  const encodedCommand = Buffer.from(command, 'utf16le').toString('base64');
+  await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encodedCommand], {
+    windowsHide: true,
+    timeout: 15000
+  });
+}
+
+async function countFirewallRules(ruleNames) {
+  if (process.platform !== 'win32' || !ruleNames?.length) return 0;
+  const encodedNames = Buffer.from(JSON.stringify(ruleNames), 'utf8').toString('base64');
+  const command = `$ProgressPreference = 'SilentlyContinue'; $names = ConvertFrom-Json ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encodedNames}'))); $count = 0; foreach ($name in @($names)) { $count += @(Get-NetFirewallRule -Name $name -ErrorAction SilentlyContinue).Count }; Write-Output $count; exit 0`;
+  const encodedCommand = Buffer.from(command, 'utf16le').toString('base64');
+  const result = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encodedCommand], {
+    windowsHide: true,
+    timeout: 15000
+  });
+  return Number.parseInt(result.stdout.trim(), 10) || 0;
 }
 
 async function waitFor(fn, timeoutMs = 15000, intervalMs = 150) {
@@ -135,11 +167,11 @@ class CdpClient {
     return response.result.value;
   }
 
-  async screenshot(name) {
+  async screenshot(name, directory = proofDir) {
     const result = await this.command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
-    fs.mkdirSync(proofDir, { recursive: true });
-    fs.writeFileSync(path.join(proofDir, name), Buffer.from(result.data, 'base64'));
-    return path.join(proofDir, name);
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(path.join(directory, name), Buffer.from(result.data, 'base64'));
+    return path.join(directory, name);
   }
 
   async click(selector) {
@@ -271,7 +303,7 @@ async function boundedDiagnostics(cdp, child, debugPort, userData, target, readi
   try { state = await rendererSnapshot(cdp); } catch (error) { state = { evaluationError: error.message }; }
   return {
     executable,
-    pid: child.pid,
+    pid: child?.pid || null,
     cdpPort: debugPort,
     userData,
     rendererUrl: target?.url || state?.href || null,
@@ -292,49 +324,120 @@ async function boundedDiagnostics(cdp, child, debugPort, userData, target, readi
   };
 }
 
-async function main() {
-  assert.ok(fs.existsSync(executable), `Packaged executable missing: ${executable}`);
-  const debugPort = await freePort();
-  const blockedPort = await freePort();
-  // The product default (58732) is not guaranteed bindable on every Windows
-  // machine -- Hyper-V/WinNAT dynamically reserve ranges that can include it.
-  // Binding port 0 asks the OS for an ephemeral port, which by definition
-  // falls outside any excluded range. Production's default stays 58732;
-  // only this test's own "switch to a configured port" exercise uses testPort.
-  const testPort = await freePort();
-  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-packaged-gate-'));
-  fs.writeFileSync(path.join(userData, 'settings.json'), JSON.stringify({
-    app: { onboarded: true, action: 'sleep', durationSeconds: 900 },
-    calendar: { builtin: { enabled: true, bedtime: '22:15', days: ['mon', 'tue'], action: 'sleep' } }
-  }));
-  const blocker = net.createServer();
-  const firewallBefore = await firewallSnapshot();
-  assert.equal(firewallBefore.length, 0);
-  await new Promise((resolve, reject) => {
-    blocker.once('error', reject);
-    blocker.listen(blockedPort, '0.0.0.0', resolve);
-  });
-
-  const child = spawn(executable, [
-    '--no-auto-start',
-    '--desktop-ux-proof',
-    `--user-data-dir=${userData}`,
-    `--remote-debugging-port=${debugPort}`
-  ], {
-    cwd: path.dirname(executable),
-    windowsHide: true,
-    stdio: 'ignore',
-    env: {
-      ...process.env,
-      LIGHTS_OUT_SUPPRESS_TRAY: '1',
-      LIGHTS_OUT_DESKTOP_UX_GATE: '1'
+async function captureRedactedFailureEvidence(cdp, stagingDirectory) {
+  if (!cdp || !stagingDirectory) return { screenshot: null, screenshotStatus: 'skipped-no-renderer' };
+  let installed = false;
+  try {
+    const redaction = await cdp.evaluate(rendererRedactionInstallExpression());
+    installed = Boolean(redaction?.confirmed && redaction?.qrMasked);
+    if (!installed) {
+      return {
+        screenshot: null,
+        screenshotStatus: 'skipped-redaction-unconfirmed',
+        redaction: sanitizeValue(redaction)
+      };
     }
-  });
+    const screenshot = await cdp.screenshot('packaged-truth-failure-redacted.png', stagingDirectory);
+    return {
+      screenshot,
+      screenshotStatus: 'captured-redacted',
+      redaction: sanitizeValue(redaction)
+    };
+  } finally {
+    if (installed) {
+      try { await cdp.evaluate(rendererRedactionRestoreExpression); } catch {}
+    }
+  }
+}
 
+async function main() {
+  const failureStage = process.env.LIGHTS_OUT_PACKAGED_PROOF_FAIL_STAGE || '';
+  const resources = {
+    tempProfile: null,
+    tempProfileOriginal: null,
+    blocker: null,
+    blockerPort: null,
+    cdpPort: null,
+    appProcess: null,
+    originalAppPid: null,
+    browser: null,
+    firewallRuleNames: [],
+    firewallRuleNamesAtCleanup: [],
+    diagnosticStaging: null,
+    diagnosticStagingOriginal: null,
+    ownedPids: []
+  };
+  let debugPort;
+  let blockedPort;
+  let testPort;
+  let userData;
+  let child;
   let cdp;
   let target;
   let readiness;
+  let successReport;
+  let primaryError = null;
+  let cleanupReport = { cleaned: [], errors: [] };
+  let cleanupVerification = { ok: true, leaks: [] };
+
   try {
+    assert.ok(fs.existsSync(executable), `Packaged executable missing: ${executable}`);
+    debugPort = await freePort();
+    blockedPort = await freePort();
+    // The product default (58732) is not guaranteed bindable on every Windows
+    // machine -- Hyper-V/WinNAT dynamically reserve ranges that can include it.
+    // Binding port 0 asks the OS for an ephemeral port, which by definition
+    // falls outside any excluded range. Production's default stays 58732;
+    // only this test's own "switch to a configured port" exercise uses testPort.
+    testPort = await freePort();
+    resources.cdpPort = debugPort;
+    resources.blockerPort = blockedPort;
+
+    userData = fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-packaged-gate-'));
+    resources.tempProfile = userData;
+    resources.tempProfileOriginal = userData;
+    resources.diagnosticStaging = fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-packaged-diagnostics-'));
+    resources.diagnosticStagingOriginal = resources.diagnosticStaging;
+    fs.writeFileSync(path.join(userData, 'settings.json'), JSON.stringify({
+      app: { onboarded: true, action: 'sleep', durationSeconds: 900 },
+      calendar: { builtin: { enabled: true, bedtime: '22:15', days: ['mon', 'tue'], action: 'sleep' } }
+    }));
+    injectFailure(failureStage, 'after-profile-created');
+
+    resources.blocker = net.createServer();
+    const firewallBefore = await firewallSnapshot();
+    assert.equal(firewallBefore.length, 0);
+    await new Promise((resolve, reject) => {
+      resources.blocker.once('error', reject);
+      resources.blocker.listen(blockedPort, '0.0.0.0', resolve);
+    });
+    injectFailure(failureStage, 'after-blocker-created');
+
+    child = spawn(executable, [
+      '--no-auto-start',
+      '--desktop-ux-proof',
+      `--user-data-dir=${userData}`,
+      `--remote-debugging-port=${debugPort}`
+    ], {
+      cwd: path.dirname(executable),
+      windowsHide: true,
+      stdio: 'ignore',
+      env: {
+        ...process.env,
+        LIGHTS_OUT_SUPPRESS_TRAY: '1',
+        LIGHTS_OUT_DESKTOP_UX_GATE: '1'
+      }
+    });
+    resources.originalAppPid = child.pid;
+    resources.appProcess = {
+      child,
+      pid: child.pid,
+      executable,
+      ownershipToken: `--user-data-dir=${userData}`,
+      startedAt: Date.now()
+    };
+    injectFailure(failureStage, 'after-process-launched');
+
     progress('waiting for renderer target');
     target = await waitFor(async () => {
       const targets = await fetchJson(`http://127.0.0.1:${debugPort}/json/list`);
@@ -343,8 +446,18 @@ async function main() {
     }, 20000);
     cdp = new CdpClient(target.webSocketDebuggerUrl);
     await cdp.open();
+    resources.browser = cdp;
     await cdp.command('Runtime.enable');
     await cdp.command('Page.enable');
+    if (process.env.LIGHTS_OUT_PACKAGED_PROOF_SEED_FAKE_SECRET === '1') {
+      await cdp.evaluate(`(() => {
+        document.getElementById('remote-url').textContent = 'http://192.0.2.16:62731/?t=SEEDED_FAKE_SECRET';
+        document.getElementById('remote-short-code').textContent = 'SEEDED-4821';
+        document.getElementById('remote-qr-wrap').innerHTML = '<canvas>SEEDED_FAKE_QR</canvas>';
+        return true;
+      })()`);
+    }
+    injectFailure(failureStage, 'after-cdp-connected');
     progress('verifying packaged process and CDP ownership');
     const ownership = await waitFor(() => processOwnership(child.pid, debugPort), 15000);
     assertOwnedEndpoint({
@@ -405,7 +518,8 @@ async function main() {
     await cdp.screenshot('occupied-port-failure.png');
 
     progress('proving retry and default port');
-    await new Promise(resolve => blocker.close(resolve));
+    await new Promise((resolve, reject) => resources.blocker.close(error => error ? reject(error) : resolve()));
+    resources.blocker = null;
     const retried = await cdp.evaluate(`electronAPI.retryRemoteControl()`);
     assert.equal(retried.ready, true);
     assert.equal(retried.failed, false);
@@ -426,6 +540,7 @@ async function main() {
     assert.equal(defaultPort.port, testPort);
     const firewallDefault = await firewallSnapshot();
     assert.equal(firewallDefault.length, 2);
+    resources.firewallRuleNames = firewallDefault.map(rule => rule.Name).filter(Boolean);
     for (const rule of firewallDefault) {
       assert.equal(rule.Profile, 'Private');
       assert.equal(rule.Direction, 'Inbound');
@@ -434,10 +549,12 @@ async function main() {
     }
     assert.ok(firewallDefault.some(rule => rule.Protocol === 'TCP' && rule.LocalPort === String(testPort)));
     assert.ok(firewallDefault.some(rule => rule.Protocol === 'UDP' && rule.LocalPort === '58733'));
+    injectFailure(failureStage, 'after-firewall-rule-created');
     const alternatePort = await cdp.evaluate(`electronAPI.setRemoteControlPort(${blockedPort})`);
     assert.equal(alternatePort.ready, true);
     const firewallAlternate = await firewallSnapshot();
     assert.equal(firewallAlternate.length, 2);
+    resources.firewallRuleNames = firewallAlternate.map(rule => rule.Name).filter(Boolean);
     assert.ok(firewallAlternate.some(rule => rule.Protocol === 'TCP' && rule.LocalPort === String(blockedPort)));
     assert.ok(firewallAlternate.some(rule => rule.Protocol === 'UDP' && rule.LocalPort === '58733'));
     await cdp.evaluate(`electronAPI.setRemoteControlPort(${testPort})`);
@@ -476,6 +593,7 @@ async function main() {
     const menuPowerActions = await cdp.evaluate(`window.__desktopUxProof.getRealPowerActions()`);
     assert.deepEqual(menuStartInvocations, [], 'handled menu input triggered the timer shortcut');
     assert.deepEqual(menuPowerActions, [], 'menu proof triggered a real power action');
+    injectFailure(failureStage, 'during-proof');
 
     progress('proving canonical routes and modes');
     await cdp.evaluate(`(() => {
@@ -528,7 +646,7 @@ async function main() {
     const finalSnapshot = await rendererSnapshot(cdp);
     assert.equal(finalSnapshot.generation, readiness.generation, 'renderer generation changed before proof completion');
 
-    console.log(JSON.stringify({
+    successReport = {
       packaged: true,
       profiles: { migratedExisting: true, missingDefaultsRestored: true },
       productionDefaultPort: initialRemote.port,
@@ -560,34 +678,57 @@ async function main() {
         lifecycle
       },
       powerActions: 0
-    }, null, 2));
+    };
   } catch (error) {
-    let screenshot = null;
-    if (cdp) {
-      try { screenshot = await cdp.screenshot(`packaged-truth-failure-${Date.now()}.png`); } catch {}
+    primaryError = error;
+    try {
+      const liveRules = await firewallSnapshot();
+      const exactOwnedNames = liveRules
+        .filter(rule => path.normalize(rule.Program || '').toLowerCase() === path.normalize(executable).toLowerCase())
+        .map(rule => rule.Name)
+        .filter(Boolean);
+      resources.firewallRuleNames = Array.from(new Set([
+        ...resources.firewallRuleNames,
+        ...exactOwnedNames
+      ]));
+    } catch {}
+    let evidence = { screenshot: null, screenshotStatus: 'skipped-no-renderer' };
+    try {
+      evidence = await captureRedactedFailureEvidence(cdp, resources.diagnosticStaging);
+    } catch (evidenceError) {
+      evidence = {
+        screenshot: null,
+        screenshotStatus: 'skipped-redaction-error',
+        error: evidenceError.message
+      };
     }
-    const diagnostics = await boundedDiagnostics(cdp, child, debugPort, userData, target, readiness);
-    diagnostics.screenshot = screenshot;
+    const diagnostics = sanitizeValue(
+      await boundedDiagnostics(cdp, child, debugPort, userData, target, readiness)
+    );
+    Object.assign(diagnostics, sanitizeValue(evidence));
     console.error(`[packaged-truth] failure diagnostics\n${JSON.stringify(diagnostics, null, 2)}`);
-    throw error;
   } finally {
     progress('cleaning isolated runtime');
-    if (blocker.listening) await new Promise(resolve => blocker.close(resolve));
-    if (cdp) {
-      try { await cdp.evaluate(`electronAPI.setRemoteControlMode('off')`); } catch {}
-    }
-    if (cdp) cdp.close();
-    try { child.kill(); } catch {}
-    await new Promise(resolve => setTimeout(resolve, 500));
-    if (process.platform === 'win32') {
-      await new Promise(resolve => {
-        const killer = spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
-        killer.on('close', resolve);
-        killer.on('error', resolve);
-      });
-    }
-    fs.rmSync(userData, { recursive: true, force: true });
+    resources.firewallRuleNamesAtCleanup = resources.firewallRuleNames.slice();
+    cleanupReport = await cleanupOwnedResources(resources, { removeFirewallRules });
+    cleanupVerification = await verifyOwnedCleanup(resources, { countFirewallRules });
   }
+
+  if (primaryError) throw attachCleanupDiagnostics(primaryError, cleanupReport, cleanupVerification);
+  if (cleanupReport.errors.length || !cleanupVerification.ok) {
+    const cleanupError = new Error('Packaged proof cleanup failed');
+    throw attachCleanupDiagnostics(cleanupError, cleanupReport, cleanupVerification);
+  }
+  successReport.cleanup = {
+    ownedProcesses: 0,
+    blockerPortFree: true,
+    cdpPortFree: true,
+    firewallRules: 0,
+    tempProfileRemoved: true,
+    diagnosticStagingRemoved: true,
+    elapsedMs: cleanupVerification.elapsedMs
+  };
+  console.log(JSON.stringify(sanitizeValue(successReport), null, 2));
 }
 
 main().catch(error => {
