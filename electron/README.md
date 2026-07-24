@@ -26,7 +26,7 @@ It explains which runtime is authoritative for a task and what verification path
 cd electron
 npm ci
 npm run electron:provision
-npm run electron:verify-provision
+npm run electron:verify
 npm start
 ```
 

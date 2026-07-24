@@ -41,14 +41,15 @@ Fresh runtime setup is therefore:
 ```powershell
 npm ci
 npm run electron:provision
-npm run electron:verify-provision
+npm run electron:verify
 ```
 
 The project does not add a `postinstall` hook, fabricate `hasInstallScript`
 metadata, invoke `node_modules/electron/install.js` directly, or change the
 locked Electron version. The offline provisioning-contract test verifies the
 locked Electron package exposes `install-electron`, the project script invokes
-that supported command, and no project postinstall provisions Electron.
+that supported command, no project postinstall provisions Electron, and the
+verifier executes the provisioned binary and matches its version to the lockfile.
 
 Three fresh two-stage setup runs passed with `electron.exe` and `path.txt`
 present after provisioning, `electron --version` reporting `v43.1.0`,
