@@ -108,11 +108,11 @@ proofPromise.then(async (mainWindow) => {
     const title = await mainWindow.webContents.executeJavaScript('document.title');
     if (!title || title === '') throw new Error('title empty');
     const btnExists = await mainWindow.webContents.executeJavaScript(
-      'document.getElementById("btn-start") ? "yes" : "no"'
+      'document.getElementById("ns-play-btn") ? "yes" : "no"'
     );
-    if (btnExists !== 'yes') throw new Error('#btn-start not found in DOM');
+    if (btnExists !== 'yes') throw new Error('#ns-play-btn not found in DOM');
     console.log('  [info] document.title = ' + title);
-    console.log('  [info] #btn-start found in DOM');
+    console.log('  [info] #ns-play-btn found in DOM');
   });
 
   // ── 1. Standard profile selection remains idle ──
@@ -132,7 +132,7 @@ proofPromise.then(async (mainWindow) => {
   });
 
   // ── 2. Main PLAY begins the ritual (DOM button click) ──
-  await asyncCheck('2. Main PLAY (btn-start click) begins ritual', async () => {
+  await asyncCheck('2. Main PLAY (ns-play-btn click) begins ritual', async () => {
     runReceipts.clearReceipts();
     profileRitualContext.clear();
 
@@ -150,13 +150,13 @@ proofPromise.then(async (mainWindow) => {
 
     // Click the actual Start button
     await mainWindow.webContents.executeJavaScript(
-      'document.getElementById("btn-start").click()'
+      'document.getElementById("ns-play-btn").click()'
     );
     await new Promise(r => setTimeout(r, 300));
 
     if (!ritualMode.getState().active) throw new Error('ritual not started by button click');
-    console.log('  [info] ritual active after btn-start click');
-    console.log('  [info] control used: #btn-start (click)');
+    console.log('  [info] ritual active after ns-play-btn click');
+    console.log('  [info] control used: #ns-play-btn (click)');
   });
 
   // ── 3. Current UI duration/action reach exactly one countdown ──
@@ -208,7 +208,7 @@ proofPromise.then(async (mainWindow) => {
       (function() { state.currentProfileId = '\${standardProfile.id}'; })()
     \`);
     await mainWindow.webContents.executeJavaScript(
-      'document.getElementById("btn-start").click()'
+      'document.getElementById("ns-play-btn").click()'
     );
     await new Promise(r => setTimeout(r, 200));
     if (!ritualMode.getState().active) throw new Error('ritual not started');
@@ -234,7 +234,7 @@ proofPromise.then(async (mainWindow) => {
       (function() { state.currentProfileId = '\${standardProfile.id}'; })()
     \`);
     await mainWindow.webContents.executeJavaScript(
-      'document.getElementById("btn-start").click()'
+      'document.getElementById("ns-play-btn").click()'
     );
     await new Promise(r => setTimeout(r, 200));
     if (!ritualMode.getState().active) throw new Error('ritual not active');
@@ -349,7 +349,7 @@ proofPromise.then(async (mainWindow) => {
     \`);
     // Click Start button — no profile → no ritual → direct
     await mainWindow.webContents.executeJavaScript(
-      'document.getElementById("btn-start").click()'
+      'document.getElementById("ns-play-btn").click()'
     );
     await new Promise(r => setTimeout(r, 300));
 
@@ -390,7 +390,12 @@ if (!fs.existsSync(electronBin)) {
 
 const child = spawn(electronBin, [proofPath], {
   cwd: electronRoot,
-  env: { ...process.env, ELECTRON_NO_ATTACH_CONSOLE: '1', ELECTRON_DISABLE_SECURITY_WARNINGS: 'true' },
+  env: {
+    ...process.env,
+    ELECTRON_NO_ATTACH_CONSOLE: '1',
+    ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
+    LIGHTS_OUT_SUPPRESS_TRAY: '1'
+  },
   stdio: ['ignore', 'pipe', 'pipe'],
   windowsHide: true
 });

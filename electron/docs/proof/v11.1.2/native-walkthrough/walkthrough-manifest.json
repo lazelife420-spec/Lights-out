@@ -1,0 +1,87 @@
+{
+  "status": "passed",
+  "runtime": "dist/win-unpacked/Lights Out.exe",
+  "dryRun": true,
+  "resolutions": [
+    "1280x720",
+    "1920x1080",
+    "2560x1080"
+  ],
+  "screenshots": [
+    {
+      "name": "settings_1280_tonight.png",
+      "bytes": 345078,
+      "sha256": "104ed75d319c536ceac1f191deb0f1d3a4f2219883c90ac266fd7320366023f9"
+    },
+    {
+      "name": "settings_1280_general.png",
+      "bytes": 63181,
+      "sha256": "20b5b61084027a56ab3a14a381d5492475de8a7f676d78af8d53c848a029ef49"
+    },
+    {
+      "name": "settings_1280_power_safety.png",
+      "bytes": 73040,
+      "sha256": "64c7f31c762df22acb39c5d57c2b4964668acd287b0438309df49b441c240a33"
+    },
+    {
+      "name": "settings_1280_protection.png",
+      "bytes": 82156,
+      "sha256": "f760a31061f03c3069dc674be7513bccd1e2c107ca7ca0790102eb341af1adb3"
+    },
+    {
+      "name": "settings_1280_appearance_sound.png",
+      "bytes": 79369,
+      "sha256": "2027942d1c8e6589fe21d192909bc112368751975c65a6a306cb96c27a18eae9"
+    },
+    {
+      "name": "settings_1920_tonight.png",
+      "bytes": 432845,
+      "sha256": "5aaa26288403e13eafb217d1d097dba945db22289ac8d05fa95c64f067338879"
+    },
+    {
+      "name": "settings_1920_general.png",
+      "bytes": 77667,
+      "sha256": "ad8c13abcce5a1ade14e95da7ed2300a9a7b7d5561578eb74f6f94fcadfe31e4"
+    },
+    {
+      "name": "settings_1920_power_safety.png",
+      "bytes": 88255,
+      "sha256": "cd6887a7e9a92ff9d993240edd54307e6d981c589b09a340ddd8c2b5258e8d4a"
+    },
+    {
+      "name": "settings_1920_protection.png",
+      "bytes": 97269,
+      "sha256": "141b3448265639b2f8873293d195d28b8ce022bb074ec04d2f22b39ca63bc605"
+    },
+    {
+      "name": "settings_1920_appearance_sound.png",
+      "bytes": 105639,
+      "sha256": "b702a65bd712e657e65dd0dbc35f8dc0aa2030c39cce0c92fe32a37c04e3994c"
+    },
+    {
+      "name": "settings_ultrawide_tonight.png",
+      "bytes": 468531,
+      "sha256": "15a46b1fbf8699d3585ed48737eac98ae66caa3d9983847bf5bfd6e3cb3aa337"
+    },
+    {
+      "name": "settings_ultrawide_general.png",
+      "bytes": 93828,
+      "sha256": "e4e0ca8a25fb091ed18d12fcc7684beb5721b0fe6fe79e15076d4183906b7a13"
+    },
+    {
+      "name": "settings_ultrawide_power_safety.png",
+      "bytes": 104498,
+      "sha256": "2af91c44cce53709d1169774e8bcbe25fb7b5f89c70d2c69c2e0da31ff9fac9f"
+    },
+    {
+      "name": "settings_ultrawide_protection.png",
+      "bytes": 114308,
+      "sha256": "c228e42e69a9eba4cf9654254022b70f1d2836605b3af50d1e2f72c2a8298008"
+    },
+    {
+      "name": "settings_ultrawide_appearance_sound.png",
+      "bytes": 121490,
+      "sha256": "3743838a2eb94044eb27d6c4b9f20818da652baeb34c6cca5fde4a88d8e484f8"
+    }
+  ]
+}

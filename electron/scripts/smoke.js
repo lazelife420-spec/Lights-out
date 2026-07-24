@@ -363,8 +363,24 @@ check('startup: portable temp cleanup only targets stale Lights Out extractions'
 
 check('tray: initialization and cleanup', () => {
   assertMatch(mainSrc, /let tray = null;/, 'tray variable missing');
+  assertMatch(mainSrc, /const SUPPRESS_AUTOMATION_TRAY = DESKTOP_UX_PROOF \|\| process\.env\.LIGHTS_OUT_SUPPRESS_TRAY === '1';/, 'automation tray suppression contract missing');
   assertMatch(mainSrc, /async function createTray\(\) \{/, 'createTray function missing');
+  assertMatch(mainSrc, /if \(SUPPRESS_AUTOMATION_TRAY\) return;/, 'automation must not create real Windows tray icons');
+  assertMatch(mainSrc, /if \(tray && !tray\.isDestroyed\(\)\) return;/, 'tray creation must be idempotent within one app process');
   assertMatch(mainSrc, /tray = new Tray\(trayIcons\.idle\);/, 'tray creation missing');
+  assertMatch(mainSrc, /before-quit[\s\S]{0,200}tray\.destroy\(\);[\s\S]{0,100}tray = null;/, 'quit must explicitly destroy the tray icon');
+  for (const runner of [
+    'desktop-ux-functional-gate.js',
+    'settings-native-proof.js',
+    'packaged-truth-smoke.js',
+    'packaged-network-smoke.js',
+    'native-walkthrough.js',
+    'companion-v2-electron-proof.js',
+    'receipt-recovery-electron-proof.js'
+  ]) {
+    const runnerSrc = fs.readFileSync(path.join(root, 'scripts', runner), 'utf8');
+    assertMatch(runnerSrc, /LIGHTS_OUT_(?:DESKTOP_UX_GATE|SUPPRESS_TRAY)/, `${runner} can create orphan tray icons`);
+  }
 });
 
 check('tray: hide/show and toggle logic', () => {
@@ -433,8 +449,27 @@ check('timer: pause, resume, snooze, and cancel state transitions remain wired i
   assertMatch(mainSrc, /function cancelTimer\(\) \{[\s\S]*timerState\.running = false;[\s\S]*timerState\.phase = 'idle';[\s\S]*emitTimerUpdate\('cancelled'\);/s, 'cancel timer flow changed');
 });
 
-check('ipc: timer and login handlers remain exposed from main', () => {
-  assertMatch(mainSrc, /ipcMain\.handle\('start-timer', async \(event, options, legacyAction\) => startTimer\(options, legacyAction\)\);/, 'start-timer IPC missing');
+check('ipc: shared Start architecture and timer/login handlers remain exposed', () => {
+  const rendererStartSrc = fs.readFileSync(path.join(root, 'renderer.js'), 'utf8');
+  const startHtmlSrc = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const startHandler = mainSrc.match(/ipcMain\.handle\('start-timer', async \(event, options, legacyAction\) => \{([\s\S]*?)\n\}\);/);
+  assert(startHandler, 'start-timer IPC handler missing');
+  const startDispatches = startHandler[1].match(/(?:await\s+)?startTimer\(options, legacyAction\)/g) || [];
+  assert(startDispatches.length === 1, `start-timer IPC must dispatch exactly once, found ${startDispatches.length}`);
+
+  const visibleHeroStarts = startHtmlSrc.match(/id="ns-play-btn"/g) || [];
+  assert(visibleHeroStarts.length === 1, `expected one semantic hero Start control, found ${visibleHeroStarts.length}`);
+  assert(!/id="btn-start"/.test(startHtmlSrc), 'hidden or competing #btn-start control must not return');
+  assertMatch(rendererStartSrc, /function startTonightPlan\(\)\s*\{\s*return startTimer\(inputSeconds\(\), 'play'\);\s*\}/, 'shared startTonightPlan command missing');
+  const explicitPlayPayloads = rendererStartSrc.match(/startTimer\(inputSeconds\(\), 'play'\)/g) || [];
+  assert(explicitPlayPayloads.length === 1, `expected one authoritative play payload, found ${explicitPlayPayloads.length}`);
+  const sharedStartReferences = rendererStartSrc.match(/startTonightPlan\(\)/g) || [];
+  assert(sharedStartReferences.length === 4, `hero, keyboard, and replay must share startTonightPlan; found ${sharedStartReferences.length - 1} callers`);
+  assertMatch(rendererStartSrc, /getElementById\('ns-play-btn'\)\?\.addEventListener\('click', \(\) => startTonightPlan\(\)\)/, 'hero CTA bypasses shared Start command');
+  assertMatch(rendererStartSrc, /event\.code === 'Space'[\s\S]*else startTonightPlan\(\);/s, 'Space shortcut bypasses shared Start command');
+  assertMatch(rendererStartSrc, /getElementById\('btn-proof-again'\)[\s\S]*startTonightPlan\(\);/s, 'proof replay bypasses shared Start command');
+  assert(!/getElementById\('ns-play-btn'\)[\s\S]{0,160}startTimer\(/.test(rendererStartSrc), 'hero CTA carries a competing start payload');
+
   assertMatch(mainSrc, /ipcMain\.handle\('cancel-timer', async \(\) => cancelTimer\(\)\);/, 'cancel-timer IPC missing');
   assertMatch(mainSrc, /ipcMain\.handle\('pause-timer', async \(\) => pauseTimer\(\)\);/, 'pause-timer IPC missing');
   assertMatch(mainSrc, /ipcMain\.handle\('resume-timer', async \(\) => resumeTimer\(\)\);/, 'resume-timer IPC missing');
@@ -514,7 +549,7 @@ check('widget: updates on lifecycle changes, not just timer ticks', () => {
 
 // 7. Core UI controls exist (start/pause/resume/snooze/cancel/mini + customize).
 const htmlSrc = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-for (const id of ['btn-start', 'btn-stop', 'btn-pause', 'btn-snooze', 'btn-mini', 'btn-warning-ledger', 'btn-notif', 'btn-widget', 'btn-companion', 'cz-accent', 'cz-theme', 'cz-ring', 'cz-opacity', 'cz-volume', 'cz-clock-format', 'cz-clock-scale', 'cz-clock-dial', 'cz-clock-date', 'chk-lastlight', 'sel-lastlight-sequence', 'warning-modal', 'last-light-overlay', 'morning-proof-section', 'proof-card', 'receipts-modal']) {
+for (const id of ['ns-play-btn', 'btn-stop', 'btn-pause', 'btn-snooze', 'btn-mini', 'btn-warning-ledger', 'btn-notif', 'btn-widget', 'btn-companion', 'cz-accent', 'cz-theme', 'cz-ring', 'cz-opacity', 'cz-volume', 'cz-clock-format', 'cz-clock-scale', 'cz-clock-dial', 'cz-clock-date', 'chk-lastlight', 'sel-lastlight-sequence', 'warning-modal', 'last-light-overlay', 'morning-proof-section', 'proof-card', 'receipts-modal']) {
   check(`ui: #${id} present`, () => {
     assert(htmlSrc.includes(`id="${id}"`), `missing #${id}`);
   });
@@ -529,12 +564,37 @@ check('ui: warning modal keeps snooze and cancel choices', () => {
   assertMatch(htmlSrc, /id="warning-cancel"/, 'warning cancel button missing');
 });
 
-check('layout: Advanced Options stays usable at normal and narrow window sizes', () => {
+check('layout: Settings is a real in-flow dashboard view, not a modal overlaying Tonight', () => {
   const cssSrc = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
-  assertMatch(htmlSrc, /class="modal-content options-modal-content"/, 'Advanced Options lacks its dedicated responsive class');
-  assertMatch(cssSrc, /\.options-modal-content\s*\{[\s\S]*width:\s*min\(94vw, 560px\);[\s\S]*max-height:\s*calc\(100vh - 32px\);[\s\S]*overflow:\s*hidden;/, 'Advanced Options is not viewport-bounded at normal sizes');
-  assertMatch(cssSrc, /\.options-modal-content \.modal-body\s*\{[\s\S]*flex:\s*1 1 auto;[\s\S]*min-height:\s*0;[\s\S]*max-height:\s*none;/, 'Advanced Options body is not independently scrollable');
-  assertMatch(cssSrc, /@media \(max-width: 500px\)[\s\S]*\.options-modal-content\s*\{[\s\S]*width:\s*100%;[\s\S]*max-height:\s*calc\(100vh - 16px\);/, 'Advanced Options lacks narrow-window sizing');
+  const rendererJsSrc = fs.readFileSync(path.join(root, 'renderer.js'), 'utf8');
+  // Settings must be a sibling of #ns-panel-lib/modes/sch/stats -- shown and
+  // hidden by applyMainPanelVisibility() like the others -- not a
+  // classList.add('active') modal with a backdrop.
+  assertMatch(htmlSrc, /<div class="ns-main-panel" id="ns-panel-set" style="display:none">/, 'Settings must be an ns-main-panel, not a .modal overlay');
+  assert(!/<div class="modal" id="ns-panel-set">/.test(htmlSrc), 'Settings must not use the .modal overlay class');
+  assertMatch(rendererJsSrc, /if \(els\.panelSet\) els\.panelSet\.style\.display = panel === 'set' \? '' : 'none';/, 'applyMainPanelVisibility must treat Settings as a real panel');
+  assertMatch(rendererJsSrc, /function openSettingsPanel\(\)\s*\{[\s\S]*applyMainPanelVisibility\('set'\);/, 'openSettingsPanel must show the panel via applyMainPanelVisibility, not toggle a modal class');
+  assertMatch(rendererJsSrc, /function closeSettingsPanel\(\)\s*\{[\s\S]*applyMainPanelVisibility\(returnTab\);/, 'closeSettingsPanel must restore the previous panel via applyMainPanelVisibility');
+  assert(!/els\.panelSet\?\.classList\.add\('active'\)/.test(rendererJsSrc), 'no code path may still toggle a modal .active class for Settings');
+  assert(!/els\.panelSet\.addEventListener\('click', event => \{\s*if \(event\.target === els\.panelSet\)/.test(rendererJsSrc), 'Settings must not have backdrop-click-to-close (it is not an overlay)');
+  assertMatch(cssSrc, /#ns-panel-set\.ns-main-panel\s*\{[\s\S]*height:\s*100%;[\s\S]*display:\s*flex;/, 'Settings panel must size itself as an in-flow view, not a centered dialog');
+  assertMatch(cssSrc, /\.settings-panel\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*1100px;/, 'Settings content must fill the dashboard width up to a desktop cap, not a narrow modal column');
+  assertMatch(cssSrc, /\.settings-panel \.modal-body\s*\{[\s\S]*flex:\s*1 1 auto;[\s\S]*min-height:\s*0;[\s\S]*max-height:\s*none;/, 'Settings body is not independently scrollable');
+  // Category rail + stable content panel, so changing one setting never
+  // requires scrolling through every other domain (lights, companion,
+  // wifi guard, accountability, ...) to find it.
+  assertMatch(htmlSrc, /<nav class="settings-rail"/, 'Settings needs a category rail, not one long scrolling list');
+  const categories = ['general', 'power-safety', 'wind-down', 'phone', 'protection', 'accountability', 'automations', 'appearance', 'advanced'];
+  for (const cat of categories) {
+    assertMatch(htmlSrc, new RegExp(`data-settings-category="${cat}"`), `settings category "${cat}" missing from rail or content`);
+  }
+  assertMatch(rendererJsSrc, /function switchSettingsCategory\(categoryId\)/, 'settings category switching must be wired in JS');
+  assertMatch(cssSrc, /\.settings-rail\s*\{[\s\S]*flex:\s*0 0 200px;/, 'settings rail must be a fixed-width column, not squeezed into the content flow');
+});
+
+check('layout: Settings migrates persisted nsActiveTab "set"/"help" to Tonight on launch', () => {
+  const rendererSettingsSrc = fs.readFileSync(path.join(root, 'renderer-settings.js'), 'utf8');
+  assertMatch(rendererSettingsSrc, /app\.nsActiveTab === 'set' \|\| app\.nsActiveTab === 'help'/, 'a persisted nsActiveTab of "set" or "help" must never be restored on launch');
 });
 
 check('ui: icon-only navigation and footer buttons have accessible labels', () => {
@@ -558,6 +618,7 @@ check('preload: timer, mini-mode, and tray-settings bridge APIs remain exposed',
   assertMatch(preloadSrc, /toggleMiniMode: \(\) => ipcRenderer\.send\('toggle-mini-mode'\)/, 'preload toggleMiniMode bridge missing');
   assertMatch(preloadSrc, /onMiniModeChanged: \(callback\) => \{[\s\S]*'mini-mode-changed'/s, 'preload onMiniModeChanged bridge missing');
   assertMatch(preloadSrc, /onOpenSettings: \(callback\) => \{[\s\S]*'open-settings'/s, 'preload onOpenSettings bridge missing');
+  assertMatch(preloadSrc, /desktopUxProof:\s*\{[\s\S]*enabled: true,[\s\S]*version: 1,[\s\S]*getStartInvocations:/s, 'proof-only preload bridge missing');
 });
 
 // The renderer is split across sibling <script> files sharing one global
@@ -567,15 +628,19 @@ check('preload: timer, mini-mode, and tray-settings bridge APIs remain exposed',
 // the checked code physically lives in.
 const RENDERER_FILES = ['renderer-utils.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'renderer.js'];
 const rendererSrc = RENDERER_FILES.map(f => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
-check('renderer: running-state controls still swap start-stop-pause visibility and label', () => {
-  assertMatch(rendererSrc, /els\.btnStart\.style\.display = state\.running \|\| state\.paused \? 'none' : 'flex';/, 'renderer start visibility changed');
+check('renderer: running-state controls still swap stop-pause visibility and label', () => {
+  // Start is no longer a separate setup-controls button toggled here -- the
+  // hero CTA (#ns-play-btn) is shown/hidden by the isIdle ns-hero-card
+  // visibility logic instead (see the "focused active-run screen" check).
   assertMatch(rendererSrc, /els\.btnStop\.style\.display = state\.running \|\| state\.paused \? 'flex' : 'none';/, 'renderer stop visibility changed');
   assertMatch(rendererSrc, /els\.btnPause\.style\.display = state\.running \|\| state\.paused \? 'flex' : 'none';/, 'renderer pause visibility changed');
   assertMatch(rendererSrc, /els\.btnPause\.querySelector\('span:last-child'\)\.textContent = state\.paused \? 'Resume' : 'Pause';/, 'renderer pause/resume label changed');
+  assertMatch(rendererSrc, /state\.dryRun \? `Dry Run · \$\{phaseLabel\}` : phaseLabel/, 'active Dry Run status must remain prominent');
+  assertMatch(rendererSrc, /state\.dryRun \? 'Dry Run · Paused' : 'Paused'/, 'paused Dry Run status must remain prominent');
 });
 
 check('renderer: keyboard shortcuts - Space (Start/Pause)', () => {
-  assertMatch(rendererSrc, /if \(event\.key === ' ' \|\| event\.code === 'Space'\) \{[\s\S]*if \(state\.running \|\| state\.paused\) togglePause\(\);[\s\S]*else startTimer\(inputSeconds\(\), 'play'\);/s, 'space shortcut changed');
+  assertMatch(rendererSrc, /if \(event\.key === ' ' \|\| event\.code === 'Space'\) \{[\s\S]*if \(state\.running \|\| state\.paused\) togglePause\(\);[\s\S]*else startTonightPlan\(\);/s, 'space shortcut changed');
 });
 
 check('renderer: keyboard shortcuts - Escape (Cancel/Modals)', () => {
@@ -599,6 +664,54 @@ check('renderer: keyboard shortcuts - Ctrl+Shift+X (Emergency Cancel)', () => {
 
 check('renderer: keyboard shortcuts - Presets (1-9)', () => {
   assertMatch(rendererSrc, /const presets = \{ '1': 5, '2': 10, '3': 15, '4': 30, '5': 60, '6': 120 \};/, 'preset shortcut map changed');
+});
+
+// Settings panel consolidation regression checks.
+check('settings: saveSettingsPanel is defined exactly once and Save calls it', () => {
+  const matches = [...rendererSrc.matchAll(/function saveSettingsPanel\(\)/g)];
+  assert(matches.length === 1, `expected one saveSettingsPanel definition, found ${matches.length}`);
+  assertMatch(rendererSrc, /els\.btnSaveOpt\.addEventListener\('click', async \(\) => \{\s*await saveSettingsPanel\(\);\s*closeSettingsPanel\(\);\s*\}\)/, 'Save button must call saveSettingsPanel once and then close');
+  const saveListeners = [...rendererSrc.matchAll(/els\.btnSaveOpt\.addEventListener/g)];
+  assert(saveListeners.length === 1, `expected one Save listener, found ${saveListeners.length}`);
+});
+
+check('settings: Cancel reloads persisted values before closing', () => {
+  assertMatch(rendererSrc, /async function discardSettingsPanelChanges\(\)/, 'discardSettingsPanelChanges must be defined');
+  assertMatch(rendererSrc, /els\.btnCancelOpt\.addEventListener\('click', async \(\) => \{\s*await discardSettingsPanelChanges\(\);\s*closeSettingsPanel\(\);\s*\}\)/, 'Cancel must discard changes before closing');
+});
+
+check('settings: Back to Tonight discards edits and does not save', () => {
+  assertMatch(rendererSrc, /els\.modalClose\.addEventListener\('click', async \(\) => \{\s*await discardSettingsPanelChanges\(\);\s*closeSettingsPanel\(\);\s*\}\)/, 'Back (modalClose) must discard changes, not call saveSettingsPanel');
+  assert(!/els\.modalClose\.addEventListener\('click', async \(\) => \{[^}]*saveSettingsPanel/.test(rendererSrc), 'Back button listener body must not invoke saveSettingsPanel');
+});
+
+check('settings: Settings panel listeners are attached exactly once', () => {
+  const modalCloseListeners = [...rendererSrc.matchAll(/els\.modalClose\.addEventListener/g)];
+  const cancelListeners = [...rendererSrc.matchAll(/els\.btnCancelOpt\.addEventListener/g)];
+  const saveListeners = [...rendererSrc.matchAll(/els\.btnSaveOpt\.addEventListener/g)];
+  assert(modalCloseListeners.length === 1, `expected one modalClose listener, found ${modalCloseListeners.length}`);
+  assert(cancelListeners.length === 1, `expected one Cancel listener, found ${cancelListeners.length}`);
+  assert(saveListeners.length === 1, `expected one Save listener, found ${saveListeners.length}`);
+});
+
+check('settings: persisted nsActiveTab "set" migrates to Tonight on launch', () => {
+  assertMatch(rendererSrc, /app\.nsActiveTab === 'set' \|\| app\.nsActiveTab === 'help'/, 'a persisted nsActiveTab of "set" or "help" must be detected');
+  assertMatch(rendererSrc, /await api\.saveAppSettings\(\{\s*app:\s*\{\s*nsActiveTab:\s*'lib'\s*\}\s*\}\)\.catch\(/, 'migration to Tonight must complete before renderer readiness');
+  assertMatch(rendererSrc, /window\.__desktopUxProof = \{[\s\S]*ready: false,[\s\S]*version:/s, 'renderer proof readiness object must exist before initialization');
+  assertMatch(rendererSrc, /await loadInitialData\(\)[\s\S]*render\(\);[\s\S]*markDesktopUxProofReady\(\);/s, 'proof readiness must follow state restoration and first render');
+});
+
+check('settings: legacy options-modal/optionsModal references are fully removed', () => {
+  assert(!rendererSrc.includes('options-modal'), 'renderer must not contain "options-modal" references');
+  assert(!rendererSrc.includes('optionsModal'), 'renderer must not contain "optionsModal" references');
+  assert(!/class="modal" id="ns-panel-set"/.test(htmlSrc), 'Settings must not use legacy .modal overlay markup');
+});
+
+check('settings: exactly one Settings panel binding exists', () => {
+  const panelSetBindings = [...rendererSrc.matchAll(/panelSet\s*[:=]\s*document\.getElementById\('ns-panel-set'\)/g)];
+  assert(panelSetBindings.length === 1, `expected one panelSet binding, found ${panelSetBindings.length}`);
+  const htmlMatches = [...htmlSrc.matchAll(/id="ns-panel-set"/g)];
+  assert(htmlMatches.length === 1, `expected one #ns-panel-set element, found ${htmlMatches.length}`);
 });
 
 check('ux: focus-visible and accessibility', () => {
@@ -891,7 +1004,16 @@ check('morning proof: Mission Complete overlay has accessible close affordances'
 
 check('morning proof: Play Tonight Again still works', () => {
   assertMatch(rendererSrc, /document\.getElementById\('btn-proof-again'\)\?\.addEventListener\('click', \(\) => \{/, 'Play Tonight Again button missing');
-  assertMatch(rendererSrc, /document\.getElementById\('btn-start'\)\?\.click\(\)/, 'Play Tonight Again should delegate to start button');
+  assertMatch(rendererSrc, /if \(els\.morningProofSection\) els\.morningProofSection\.style\.display = 'none';\s*\n\s*startTonightPlan\(\);/, 'Play Tonight Again should delegate to the shared start function, not a separate button');
+});
+
+check('ux: focused active-run screen hides idle-only lobby clutter while a run is active', () => {
+  // Saved Profiles, the streak callout, and last night's completed-run proof
+  // card must never sit alongside a countdown that's currently in progress.
+  assertMatch(htmlSrc, /<section class="profiles-section" id="profiles-section">/, 'profiles-section needs an id to be gated by render()');
+  assertMatch(rendererSrc, /const profilesSection = document\.getElementById\('profiles-section'\);\s*\n\s*if \(profilesSection\) profilesSection\.style\.display = isIdle \? '' : 'none';/, 'render() must hide Saved Profiles while a run is active');
+  assertMatch(rendererSrc, /if \(els\.streakCallout && !isIdle\) els\.streakCallout\.style\.display = 'none';/, 'render() must hide the streak callout while a run is active');
+  assertMatch(rendererSrc, /if \(els\.morningProofSection && !isIdle\) els\.morningProofSection\.style\.display = 'none';/, 'render() must hide the last-run proof card while a run is active');
 });
 
 check('companion: default settings are off with no token', () => {
@@ -924,7 +1046,14 @@ check('production truth: companion publishes pairing data only after readiness',
 check('production truth: UI feedback follows observable state', () => {
   assertMatch(preloadSrc, /toggleWidget: \(\) => ipcRenderer\.invoke\('toggle-widget'\)/, 'widget must use acknowledged IPC');
   assertMatch(rendererSrc, /duplicate = \[\.\.\.container\.querySelectorAll\('\.toast'\)\][\s\S]*duplicate\._dismissTimer/, 'duplicate toasts must be coalesced');
-  assertMatch(rendererSrc, /document\.getElementById\('menu-settings'\)\?\.addEventListener\('click'/, 'top Settings label needs a direct canonical action');
+  // Power/Settings/Help are click-toggled dropdowns (wireTopMenus), not a
+  // hover-only reveal and not a label that jumps straight to a modal --
+  // clicking the label must open/close its own submenu.
+  assertMatch(rendererSrc, /function wireTopMenus\(\)/, 'top menu bar needs click-toggle wiring, not hover-only dropdowns');
+  assertMatch(rendererSrc, /if \(menu\.classList\.contains\('open'\)\) closeAllTopMenus\(\);/, 'top menu label click must toggle its own dropdown open/closed');
+  assertMatch(rendererSrc, /if \(event\.defaultPrevented\) return;/, 'global shortcuts must not override handled top-menu keyboard navigation');
+  const cssSrcForMenus = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  assertMatch(cssSrcForMenus, /\.menu-item\.open \.submenu\s*\{/, 'submenu visibility must be driven by a click-toggled class, not :hover');
   assertMatch(rendererSrc, /notifDrawer\.classList\.toggle\('active', opening\)/, 'notification drawer must use the modal active state');
   assertMatch(mainSrc, /backgroundColor: '#0d0e11'/, 'main window needs a dark native background to prevent startup flash');
 });
@@ -1289,6 +1418,7 @@ check('profile-ritual-gateway: context module loaded and ritual gateway in start
   assertMatch(mainSrc, /decision\.useRitualGateway/, 'startTimer does not route by decision.useRitualGateway');
   assertMatch(mainSrc, /profileRitualContext\.createContext\(/, 'ritual gateway does not create pending context');
   assertMatch(mainSrc, /ritualMode\.startRitual\(null, \{ profileRitualToken: runToken,/, 'ritual gateway does not pass token as run metadata');
+  assertMatch(mainSrc, /setupRitualCallbacks\(\);\s*createWindow\(\);/, 'ritual side-effect callbacks must be registered before the renderer becomes interactive');
 });
 
 // 16c. Remote-origin ritual fast-forward (fix/v11.1.1-night-mode-remote-ritual).
@@ -1344,9 +1474,15 @@ check('profile-ritual-gateway: renderer sends startOrigin without ritual branchi
   assert(!/profile\.ritualId/.test(rendererSrc), 'renderer.js inspects profile.ritualId for routing');
   // Default origin must not be 'play' — only explicit callers should be eligible.
   assertMatch(rendererSrc, /origin = null\)/, 'renderer startTimer default origin should be null, not play');
-  // Only PLAY buttons and Space key pass 'play' explicitly.
+  // Only the shared startTonightPlan() wrapper passes 'play' explicitly --
+  // exactly one copy of the literal call, instead of three independent
+  // copies (hero CTA, the old #btn-start, Space key) that could drift.
   const playExplicit = (rendererSrc.match(/startTimer\(inputSeconds\(\), 'play'\)/g) || []).length;
-  assert(playExplicit === 3, `expected exactly 3 explicit 'play' callers, found ${playExplicit}`);
+  assert(playExplicit === 1, `expected exactly 1 explicit 'play' caller (inside startTonightPlan), found ${playExplicit}`);
+  // And exactly the hero CTA, Space shortcut, and "Play Tonight Again" call
+  // that shared wrapper (this count excludes its own definition line).
+  const planCallSites = (rendererSrc.match(/startTonightPlan\(\)/g) || []).length - 1;
+  assert(planCallSites === 3, `expected exactly 3 callers of startTonightPlan(), found ${planCallSites}`);
 });
 
 check('profile-ritual-gateway: remote source cannot trigger profile ritual', () => {
@@ -1402,7 +1538,7 @@ check('profile-ritual-gateway: auto-advance timer captures runId for staleness',
 });
 
 check('profile-ritual-gateway: shutdown cleanup', () => {
-  assertMatch(mainSrc, /before-quit[\s\S]{0,200}profileRitualContext\.clear\(\)/, 'app shutdown does not clear context');
+  assertMatch(mainSrc, /app\.on\('before-quit',[\s\S]*?profileRitualContext\.clear\(\)/, 'app shutdown does not clear context');
 });
 
 check('profile-ritual-gateway: no activeRitualRunToken global', () => {
@@ -1424,8 +1560,8 @@ check('stats-dashboard: module and IPC', () => {
 });
 
 // 18. Runtime UX truth: every visible nav/control has a real action or is disabled.
-check('ux: ns-play-btn is wired to startTimer', () => {
-  assertMatch(rendererSrc, /getElementById\('ns-play-btn'\)\?\.addEventListener\('click', \(\) => startTimer\(inputSeconds\(\), 'play'\)\)/, 'ns-play-btn not wired');
+check('ux: ns-play-btn is wired to the shared start function', () => {
+  assertMatch(rendererSrc, /getElementById\('ns-play-btn'\)\?\.addEventListener\('click', \(\) => startTonightPlan\(\)\)/, 'ns-play-btn not wired');
 });
 
 check('ux: ns-play-btn has exactly one click handler (no duplicate startTimer)', () => {
@@ -1435,6 +1571,20 @@ check('ux: ns-play-btn has exactly one click handler (no duplicate startTimer)',
 
 check('ux: ns-play-btn has aria-label', () => {
   assertMatch(htmlSrc, /id="ns-play-btn"[^>]*aria-label="Start tonight/, 'ns-play-btn aria-label missing');
+});
+
+check('ux: exactly one Start control exists -- no hidden or duplicate #btn-start', () => {
+  // There used to be two buttons (#btn-start in setup-controls, #ns-play-btn
+  // in the hero) that fired the identical startTimer(inputSeconds(), 'play')
+  // call. The fix is not a hidden duplicate kept alive for callers -- it is
+  // one element, one shared function (startTonightPlan), used by every
+  // caller: the hero CTA, "Play Tonight Again", and the Space shortcut.
+  assert(!/id="btn-start"/.test(htmlSrc), '#btn-start must not exist in the DOM at all -- no hidden duplicate control');
+  assert(!/getElementById\('btn-start'\)/.test(rendererSrc), 'no code may reference a #btn-start element anymore');
+  assertMatch(rendererSrc, /function startTonightPlan\(\)\s*\{\s*return startTimer\(inputSeconds\(\), 'play'\);\s*\}/, 'a single shared startTonightPlan() function must exist');
+  const startCallers = (rendererSrc.match(/startTonightPlan\(\)/g) || []).length;
+  assert(startCallers >= 4, `expected startTonightPlan() to be called by the hero CTA, Play Tonight Again, and the Space shortcut (plus its own definition), found ${startCallers} references`);
+  assertMatch(rendererSrc, /getElementById\('ns-play-btn'\)\?\.addEventListener\('click', \(\) => startTonightPlan\(\)\)/, 'the hero CTA must call the shared start function');
 });
 
 check('ux: Escape closes all modals (profiles, receipts, about, notif-drawer)', () => {
@@ -1679,6 +1829,8 @@ check('night-modes: armed mode state replaces window.__nightModeSelection', () =
   assertMatch(rendererSrc, /function armNightMode\(/, 'armNightMode function missing');
   assertMatch(rendererSrc, /function checkArmedModeMatch\(\)/, 'checkArmedModeMatch function missing');
   assert(!rendererSrc.includes('window.__nightModeSelection'), 'renderer.js still uses window.__nightModeSelection');
+  assert(!/const result = await api\.startTimer\([\s\S]{0,700}clearArmedNightMode\(\);/.test(rendererSrc), 'starting the selected plan must not erase restart restoration');
+  assertMatch(rendererSrc, /const restoredArmedMode = app\.armedNightMode[\s\S]*state\.action = restoredArmedMode\.action;[\s\S]*const restoredDuration = restoredArmedMode\?\.durationSeconds \?\? app\.durationSeconds;/s, 'restored selected plan must override stale custom action/duration controls');
 });
 
 check('night-modes: armed mode banner in HTML', () => {

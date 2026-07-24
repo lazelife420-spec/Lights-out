@@ -42,15 +42,36 @@ function collectAppSettings() {
     clockSeconds: state.clockSeconds !== false,
     clockSweep: state.clockSweep !== false,
     timerName: els.timerName?.textContent?.trim() || state.timerName || 'Last Call',
-    nsActiveTab: document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || 'lib',
+    // 'set'/'help' are modal-opening nav states, not persistent dashboard
+    // views -- never persist them as the restorable tab, or a modal left
+    // open when a save fires (Save button, live per-field auto-save, a
+    // top-bar quick toggle) reopens itself on the next launch.
+    nsActiveTab: (() => {
+      const active = document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || 'lib';
+      if (active === 'set' || active === 'help') {
+        return typeof settingsReturnTab === 'string' ? settingsReturnTab : 'lib';
+      }
+      return active;
+    })(),
     nsSelectedMode: document.querySelector('.ns-mode-card.selected')?.dataset?.nsMode || ''
   };
 }
 
-function applyAppSettings(app) {
+async function applyAppSettings(app, { skipNavigation = false } = {}) {
   if (!app) return;
-  if (app.action) state.action = app.action;
-  if (app.unit) state.unit = app.unit;
+  const restoredArmedMode = app.armedNightMode && typeof app.armedNightMode === 'object'
+    ? app.armedNightMode
+    : null;
+  if (app.armedNightMode !== undefined) state.armedNightMode = restoredArmedMode;
+  if (restoredArmedMode) {
+    // The selected plan is authoritative over stale custom controls. Main
+    // still canonicalizes nightModeId plus execution values before starting.
+    state.action = restoredArmedMode.action;
+    state.unit = 'min';
+  } else {
+    if (app.action) state.action = app.action;
+    if (app.unit) state.unit = app.unit;
+  }
   if (typeof app.sound === 'boolean') { state.sound = app.sound; SoundSystem.enabled = app.sound; }
   if (typeof app.gracefulClose === 'boolean') state.gracefulClose = app.gracefulClose;
   if (typeof app.forceShutdown === 'boolean') state.forceShutdown = app.forceShutdown;
@@ -60,8 +81,9 @@ function applyAppSettings(app) {
   if (Array.isArray(app.focusBlocklist)) {
     if (els.focusBlocklist) els.focusBlocklist.value = app.focusBlocklist.join(',');
   }
-  if (Number.isFinite(Number(app.durationSeconds)) && Number(app.durationSeconds) > 0 && !state.running) {
-    state.remainingSeconds = Number(app.durationSeconds);
+  const restoredDuration = restoredArmedMode?.durationSeconds ?? app.durationSeconds;
+  if (Number.isFinite(Number(restoredDuration)) && Number(restoredDuration) > 0 && !state.running) {
+    state.remainingSeconds = Number(restoredDuration);
     setInputFromSeconds(state.remainingSeconds);
   }
   setAction(state.action);
@@ -102,9 +124,21 @@ function applyAppSettings(app) {
     els.timerName.textContent = app.timerName;
     state.timerName = app.timerName;
   }
-  // Restore northstar sidebar tab.
-  if (app.nsActiveTab) {
-    handleSidebarNavigation(app.nsActiveTab, { persist: false });
+  // Restore northstar sidebar tab. If it is a modal/settings tab (set/help),
+  // migrate it to 'lib' on disk and navigate to 'lib' by default.
+  if (app.nsActiveTab === 'set' || app.nsActiveTab === 'help') {
+    app.nsActiveTab = 'lib';
+    await api.saveAppSettings({ app: { nsActiveTab: 'lib' } }).catch(error => {
+      console.error('Failed to migrate legacy active tab:', error);
+      throw error;
+    });
+  }
+  if (!skipNavigation) {
+    if (app.nsActiveTab) {
+      handleSidebarNavigation(app.nsActiveTab, { persist: false });
+    } else {
+      handleSidebarNavigation('lib', { persist: false });
+    }
   }
   // Restore northstar selected mode card.
   if (app.nsSelectedMode) {

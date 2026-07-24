@@ -1,0 +1,1152 @@
+{
+  "startTime": "2026-07-23T07:33:20.845Z",
+  "branch": "ux/v11.1.2-desktop-consolidation",
+  "sha": "4c3aecf0dc1b1904b7f47fceb613baf8edd8b20a",
+  "runtime": "source-electron",
+  "exe": "<repo>\\electron\\node_modules\\electron\\dist\\electron.exe",
+  "exeSha256": "67cff2ce5ac7976408aac30e17e9266443a351b44ec1ee613b444867a78dc9d7",
+  "phases": {
+    "startup": {
+      "status": "passed",
+      "results": [
+        {
+          "scenario": "normal",
+          "seeded": "lib",
+          "snapshot": {
+            "route": "lib",
+            "visiblePanel": "ns-panel-lib",
+            "settingsVisible": false,
+            "settingsEverVisible": false,
+            "startupVisibility": [
+              {
+                "phase": "renderer-created",
+                "visible": false,
+                "at": 1784792001435
+              },
+              {
+                "phase": "renderer-ready",
+                "visible": false,
+                "at": 1784792001876
+              }
+            ],
+            "dryRun": true,
+            "heroTitle": "Custom Timer · 28 min · Shutdown"
+          },
+          "persistedTab": "lib"
+        },
+        {
+          "scenario": "legacy-settings",
+          "seeded": "set",
+          "snapshot": {
+            "route": "lib",
+            "visiblePanel": "ns-panel-lib",
+            "settingsVisible": false,
+            "settingsEverVisible": false,
+            "startupVisibility": [
+              {
+                "phase": "renderer-created",
+                "visible": false,
+                "at": 1784792002411
+              },
+              {
+                "phase": "renderer-ready",
+                "visible": false,
+                "at": 1784792002843
+              }
+            ],
+            "dryRun": true,
+            "heroTitle": "Custom Timer · 28 min · Shutdown"
+          },
+          "persistedTab": "lib"
+        },
+        {
+          "scenario": "legacy-help",
+          "seeded": "help",
+          "snapshot": {
+            "route": "lib",
+            "visiblePanel": "ns-panel-lib",
+            "settingsVisible": false,
+            "settingsEverVisible": false,
+            "startupVisibility": [
+              {
+                "phase": "renderer-created",
+                "visible": false,
+                "at": 1784792003359
+              },
+              {
+                "phase": "renderer-ready",
+                "visible": false,
+                "at": 1784792003776
+              }
+            ],
+            "dryRun": true,
+            "heroTitle": "Custom Timer · 28 min · Shutdown"
+          },
+          "persistedTab": "lib"
+        },
+        {
+          "scenario": "settings-close-restart",
+          "snapshot": {
+            "route": "lib",
+            "visiblePanel": "ns-panel-lib",
+            "settingsVisible": false,
+            "settingsEverVisible": false,
+            "startupVisibility": [
+              {
+                "phase": "renderer-created",
+                "visible": false,
+                "at": 1784792005442
+              },
+              {
+                "phase": "renderer-ready",
+                "visible": false,
+                "at": 1784792005928
+              }
+            ],
+            "dryRun": true,
+            "heroTitle": "Custom Timer · 28 min · Shutdown"
+          }
+        }
+      ]
+    },
+    "top-menu": {
+      "status": "passed",
+      "results": {
+        "mouse": [
+          {
+            "step": "click-power",
+            "open": true
+          },
+          {
+            "step": "click-power-again",
+            "closed": true
+          },
+          {
+            "step": "click-settings",
+            "open": true
+          },
+          {
+            "step": "click-help-closes-settings",
+            "settingsClosed": true,
+            "helpOpen": true
+          },
+          {
+            "step": "pointer-transfer-stays-open",
+            "stillOpen": true
+          },
+          {
+            "step": "pointer-away-stays-open",
+            "stillOpen2": true
+          },
+          {
+            "step": "advanced-options-opens-settings",
+            "settingsVisible": true
+          },
+          {
+            "step": "close-restores-route",
+            "restored": "lib"
+          },
+          {
+            "step": "toggle-dryrun",
+            "dryRunIndicator": "OFF"
+          },
+          {
+            "step": "outside-click-closes",
+            "allClosed": true
+          },
+          {
+            "step": "power-selects-plan-without-execution",
+            "powerSelection": {
+              "action": "shutdown",
+              "dryRun": true,
+              "warningOpen": false
+            },
+            "starts": 0,
+            "realPowerActions": 0
+          },
+          {
+            "step": "help-item-activates",
+            "aboutOpen": true
+          }
+        ],
+        "keyboard": [
+          {
+            "step": "enter-opens-power",
+            "powerOpen": true
+          },
+          {
+            "step": "arrow-down-to-item",
+            "focusedItem": {
+              "text": "↻\n              Restart",
+              "action": "restart"
+            }
+          },
+          {
+            "step": "arrow-up",
+            "focusedItem": {
+              "text": "⏻\n              Shutdown",
+              "action": "shutdown"
+            }
+          },
+          {
+            "step": "escape-closes-and-focuses-trigger",
+            "closedByEscape": true
+          },
+          {
+            "step": "arrow-down-opens-settings",
+            "settingsOpen": true
+          },
+          {
+            "step": "enter-on-open-options",
+            "settingsOpenByEnter": true
+          }
+        ],
+        "assertions": []
+      }
+    },
+    "shared-start": {
+      "status": "passed",
+      "results": [
+        {
+          "control": "ns-play-btn",
+          "invocations": 1,
+          "payload": {
+            "at": 1784792018850,
+            "options": {
+              "durationSeconds": 120,
+              "action": "shutdown",
+              "dryRun": true,
+              "forceShutdown": false,
+              "muteSystem": false,
+              "gracePeriod": 2,
+              "profileId": null,
+              "startOrigin": "play"
+            },
+            "legacyAction": null,
+            "result": {
+              "success": true,
+              "state": {
+                "running": true,
+                "paused": false,
+                "totalSeconds": 120,
+                "remainingSeconds": 120,
+                "action": "shutdown",
+                "dryRun": true,
+                "forceShutdown": false,
+                "muteSystem": false,
+                "gracePeriod": 2,
+                "endsAt": "2026-07-23T07:35:38.851Z",
+                "phase": "focus",
+                "profileId": null,
+                "profileName": null,
+                "nightModeId": null,
+                "nightModeTitle": null,
+                "nightModeVersion": null
+              }
+            },
+            "senderId": 1
+          },
+          "receipt": {
+            "id": "r_1784792018854_rurnbb",
+            "version": 1,
+            "startedAt": "2026-07-23T07:33:38.854Z",
+            "endedAt": null,
+            "action": "shutdown",
+            "profileId": null,
+            "profileName": null,
+            "nightModeId": null,
+            "nightModeTitle": null,
+            "nightModeVersion": null,
+            "durationSeconds": 120,
+            "remainingSeconds": null,
+            "dryRun": true,
+            "forceShutdown": false,
+            "gracefulClose": true,
+            "result": "running",
+            "pauseCount": 0,
+            "snoozeCount": 0,
+            "cancelReason": null,
+            "warningsShown": 0,
+            "lastLightSequence": null,
+            "powerCommand": null,
+            "notes": null
+          }
+        },
+        {
+          "control": "space-key",
+          "invocations": 1,
+          "payload": {
+            "at": 1784792020156,
+            "options": {
+              "durationSeconds": 120,
+              "action": "shutdown",
+              "dryRun": true,
+              "forceShutdown": false,
+              "muteSystem": false,
+              "gracePeriod": 2,
+              "profileId": null,
+              "startOrigin": "play"
+            },
+            "legacyAction": null,
+            "result": {
+              "success": true,
+              "state": {
+                "running": true,
+                "paused": false,
+                "totalSeconds": 120,
+                "remainingSeconds": 120,
+                "action": "shutdown",
+                "dryRun": true,
+                "forceShutdown": false,
+                "muteSystem": false,
+                "gracePeriod": 2,
+                "endsAt": "2026-07-23T07:35:40.157Z",
+                "phase": "focus",
+                "profileId": null,
+                "profileName": null,
+                "nightModeId": null,
+                "nightModeTitle": null,
+                "nightModeVersion": null
+              }
+            },
+            "senderId": 1
+          },
+          "receipt": {
+            "id": "r_1784792020160_5esjdh",
+            "version": 1,
+            "startedAt": "2026-07-23T07:33:40.160Z",
+            "endedAt": null,
+            "action": "shutdown",
+            "profileId": null,
+            "profileName": null,
+            "nightModeId": null,
+            "nightModeTitle": null,
+            "nightModeVersion": null,
+            "durationSeconds": 120,
+            "remainingSeconds": null,
+            "dryRun": true,
+            "forceShutdown": false,
+            "gracefulClose": true,
+            "result": "running",
+            "pauseCount": 0,
+            "snoozeCount": 0,
+            "cancelReason": null,
+            "warningsShown": 0,
+            "lastLightSequence": null,
+            "powerCommand": null,
+            "notes": null
+          }
+        },
+        {
+          "control": "proof-again",
+          "invocations": 1,
+          "payload": {
+            "at": 1784792023468,
+            "options": {
+              "durationSeconds": 1680,
+              "action": "shutdown",
+              "dryRun": true,
+              "forceShutdown": false,
+              "muteSystem": false,
+              "gracePeriod": 2,
+              "profileId": null,
+              "startOrigin": "play"
+            },
+            "legacyAction": null,
+            "result": {
+              "success": true,
+              "state": {
+                "running": true,
+                "paused": false,
+                "totalSeconds": 1680,
+                "remainingSeconds": 1680,
+                "action": "shutdown",
+                "dryRun": true,
+                "forceShutdown": false,
+                "muteSystem": false,
+                "gracePeriod": 2,
+                "endsAt": "2026-07-23T08:01:43.469Z",
+                "phase": "focus",
+                "profileId": null,
+                "profileName": null,
+                "nightModeId": null,
+                "nightModeTitle": null,
+                "nightModeVersion": null
+              }
+            },
+            "senderId": 1
+          },
+          "receipt": {
+            "id": "r_1784792023475_r3win1",
+            "version": 1,
+            "startedAt": "2026-07-23T07:33:43.475Z",
+            "endedAt": null,
+            "action": "shutdown",
+            "profileId": null,
+            "profileName": null,
+            "nightModeId": null,
+            "nightModeTitle": null,
+            "nightModeVersion": null,
+            "durationSeconds": 1680,
+            "remainingSeconds": null,
+            "dryRun": true,
+            "forceShutdown": false,
+            "gracefulClose": true,
+            "result": "running",
+            "pauseCount": 0,
+            "snoozeCount": 0,
+            "cancelReason": null,
+            "warningsShown": 0,
+            "lastLightSequence": null,
+            "powerCommand": null,
+            "notes": null
+          }
+        }
+      ],
+      "proofDisplay": ""
+    },
+    "use-tonight": {
+      "status": "passed",
+      "results": [
+        {
+          "modeId": "movie-wind-down",
+          "armed": {
+            "id": "movie-wind-down",
+            "title": "Movie Wind-Down",
+            "durationSeconds": 5400,
+            "action": "sleep"
+          },
+          "hero": {
+            "title": "Movie Wind-Down · 90 min · Sleep",
+            "playLabel": "Start Movie Wind-Down",
+            "duration": "90",
+            "action": "sleep",
+            "preview": "1:30:00",
+            "endTime": "Idle",
+            "ritual": "90 min · Sleep · Standard ritual"
+          },
+          "startCount": 1,
+          "startPayload": {
+            "at": 1784792025151,
+            "options": {
+              "durationSeconds": 5400,
+              "action": "sleep",
+              "dryRun": true,
+              "forceShutdown": false,
+              "muteSystem": false,
+              "gracePeriod": 2,
+              "profileId": null,
+              "startOrigin": "play",
+              "nightModeId": "movie-wind-down"
+            },
+            "legacyAction": null,
+            "result": {
+              "success": true,
+              "ritualStarted": true
+            },
+            "senderId": 1
+          },
+          "active": {
+            "modeTitle": "Movie Wind-Down",
+            "timerLabel": "until sleep",
+            "dryRun": true,
+            "controls": {
+              "pause": "flex",
+              "snoozeDisabled": false,
+              "cancel": "flex"
+            }
+          },
+          "ritualTrace": [
+            {
+              "active": true,
+              "currentStep": 0,
+              "totalSteps": 5,
+              "currentStepInfo": {
+                "id": "breathe",
+                "label": "Guided Breathing",
+                "durationSeconds": 60,
+                "skippable": true,
+                "auto": false
+              },
+              "completedSteps": [],
+              "skippedSteps": [],
+              "startedAt": "2026-07-23T07:33:45.152Z",
+              "progress": 0
+            },
+            {
+              "active": true,
+              "currentStep": 1,
+              "totalSteps": 5,
+              "currentStepInfo": {
+                "id": "block",
+                "label": "Block Distractions",
+                "durationSeconds": 0,
+                "skippable": true,
+                "auto": true
+              },
+              "completedSteps": [
+                "breathe"
+              ],
+              "skippedSteps": [],
+              "startedAt": "2026-07-23T07:33:45.152Z",
+              "progress": 20
+            },
+            {
+              "active": true,
+              "currentStep": 2,
+              "totalSteps": 5,
+              "currentStepInfo": {
+                "id": "dim",
+                "label": "Dim Environment",
+                "durationSeconds": 0,
+                "skippable": true,
+                "auto": true
+              },
+              "completedSteps": [
+                "breathe",
+                "block"
+              ],
+              "skippedSteps": [],
+              "startedAt": "2026-07-23T07:33:45.152Z",
+              "progress": 40
+            }
+          ],
+          "receipt": {
+            "receiptId": "r_1784792026459_1lbhsy",
+            "nightModeId": "movie-wind-down",
+            "modeTitle": "Movie Wind-Down",
+            "durationSeconds": 5400,
+            "finalAction": "sleep",
+            "dryRun": true,
+            "startedAt": "2026-07-23T07:33:46.459Z",
+            "endedAt": "2026-07-23T07:33:46.977Z",
+            "result": "cancelled",
+            "cancelled": true,
+            "powerActionAttempted": false
+          },
+          "realPowerActions": 0
+        },
+        {
+          "modeId": "movie-wind-down",
+          "restart": true,
+          "restored": {
+            "id": "movie-wind-down",
+            "title": "Movie Wind-Down",
+            "durationSeconds": 5400,
+            "action": "sleep"
+          },
+          "hero": {
+            "title": "Movie Wind-Down · 90 min · Sleep",
+            "playLabel": "Start Movie Wind-Down",
+            "duration": "90",
+            "action": "sleep"
+          }
+        },
+        {
+          "modeId": "full-shutdown",
+          "armed": {
+            "id": "full-shutdown",
+            "title": "Full Shutdown",
+            "durationSeconds": 3600,
+            "action": "shutdown"
+          },
+          "hero": {
+            "title": "Full Shutdown · 60 min · Shutdown",
+            "playLabel": "Start Full Shutdown",
+            "duration": "60",
+            "action": "shutdown",
+            "preview": "1:00:00",
+            "endTime": "Idle",
+            "ritual": "60 min · Shutdown · Standard ritual"
+          },
+          "startCount": 1,
+          "startPayload": {
+            "at": 1784792032901,
+            "options": {
+              "durationSeconds": 3600,
+              "action": "shutdown",
+              "dryRun": true,
+              "forceShutdown": false,
+              "muteSystem": false,
+              "gracePeriod": 2,
+              "profileId": null,
+              "startOrigin": "play",
+              "nightModeId": "full-shutdown"
+            },
+            "legacyAction": null,
+            "result": {
+              "success": true,
+              "ritualStarted": true
+            },
+            "senderId": 1
+          },
+          "active": {
+            "modeTitle": "Full Shutdown",
+            "timerLabel": "until shutdown",
+            "dryRun": true,
+            "controls": {
+              "pause": "flex",
+              "snoozeDisabled": false,
+              "cancel": "flex"
+            }
+          },
+          "ritualTrace": [
+            {
+              "active": true,
+              "currentStep": 0,
+              "totalSteps": 5,
+              "currentStepInfo": {
+                "id": "breathe",
+                "label": "Guided Breathing",
+                "durationSeconds": 60,
+                "skippable": true,
+                "auto": false
+              },
+              "completedSteps": [],
+              "skippedSteps": [],
+              "startedAt": "2026-07-23T07:33:52.902Z",
+              "progress": 0
+            },
+            {
+              "active": true,
+              "currentStep": 1,
+              "totalSteps": 5,
+              "currentStepInfo": {
+                "id": "block",
+                "label": "Block Distractions",
+                "durationSeconds": 0,
+                "skippable": true,
+                "auto": true
+              },
+              "completedSteps": [
+                "breathe"
+              ],
+              "skippedSteps": [],
+              "startedAt": "2026-07-23T07:33:52.902Z",
+              "progress": 20
+            },
+            {
+              "active": true,
+              "currentStep": 2,
+              "totalSteps": 5,
+              "currentStepInfo": {
+                "id": "dim",
+                "label": "Dim Environment",
+                "durationSeconds": 0,
+                "skippable": true,
+                "auto": true
+              },
+              "completedSteps": [
+                "breathe",
+                "block"
+              ],
+              "skippedSteps": [],
+              "startedAt": "2026-07-23T07:33:52.902Z",
+              "progress": 40
+            }
+          ],
+          "receipt": {
+            "receiptId": "r_1784792034169_ie397u",
+            "nightModeId": "full-shutdown",
+            "modeTitle": "Full Shutdown",
+            "durationSeconds": 3600,
+            "finalAction": "shutdown",
+            "dryRun": true,
+            "startedAt": "2026-07-23T07:33:54.169Z",
+            "endedAt": "2026-07-23T07:33:54.687Z",
+            "result": "cancelled",
+            "cancelled": true,
+            "powerActionAttempted": false
+          },
+          "realPowerActions": 0
+        },
+        {
+          "modeId": "full-shutdown",
+          "restart": true,
+          "restored": {
+            "id": "full-shutdown",
+            "title": "Full Shutdown",
+            "durationSeconds": 3600,
+            "action": "shutdown"
+          },
+          "hero": {
+            "title": "Full Shutdown · 60 min · Shutdown",
+            "playLabel": "Start Full Shutdown",
+            "duration": "60",
+            "action": "shutdown"
+          }
+        }
+      ]
+    },
+    "settings": {
+      "status": "passed",
+      "results": [
+        {
+          "label": "1280x720",
+          "width": 1280,
+          "height": 720,
+          "layout": {
+            "route": "set",
+            "settingsDisplay": "flex",
+            "tonightDisplay": "none",
+            "railDisplay": "flex",
+            "activeCategories": 1,
+            "visibleCategories": 1,
+            "horizontalOverflow": false,
+            "panelRect": {
+              "width": 1100,
+              "height": 529.2000122070312,
+              "left": 98,
+              "right": 1198
+            }
+          }
+        },
+        {
+          "label": "1920x1080",
+          "width": 1920,
+          "height": 1080,
+          "layout": {
+            "route": "set",
+            "settingsDisplay": "flex",
+            "tonightDisplay": "none",
+            "railDisplay": "flex",
+            "activeCategories": 1,
+            "visibleCategories": 1,
+            "horizontalOverflow": false,
+            "panelRect": {
+              "width": 1100,
+              "height": 887.6000366210938,
+              "left": 98,
+              "right": 1198
+            }
+          }
+        },
+        {
+          "label": "ultrawide",
+          "width": 2752,
+          "height": 1152,
+          "layout": {
+            "route": "set",
+            "settingsDisplay": "flex",
+            "tonightDisplay": "none",
+            "railDisplay": "flex",
+            "activeCategories": 1,
+            "visibleCategories": 1,
+            "horizontalOverflow": false,
+            "panelRect": {
+              "width": 1100,
+              "height": 959.6000366210938,
+              "left": 98,
+              "right": 1198
+            }
+          }
+        },
+        {
+          "category": "power-safety",
+          "selected": {
+            "rail": "power-safety",
+            "content": "power-safety",
+            "activeSections": 1,
+            "distinctActiveCategories": 1
+          }
+        },
+        {
+          "category": "protection",
+          "selected": {
+            "rail": "protection",
+            "content": "protection",
+            "activeSections": 2,
+            "distinctActiveCategories": 1
+          }
+        },
+        {
+          "category": "appearance",
+          "selected": {
+            "rail": "appearance",
+            "content": "appearance",
+            "activeSections": 2,
+            "distinctActiveCategories": 1
+          }
+        },
+        {
+          "category": "advanced",
+          "selected": {
+            "rail": "advanced",
+            "content": "advanced",
+            "activeSections": 1,
+            "distinctActiveCategories": 1
+          }
+        },
+        {
+          "returnRoute": "modes"
+        }
+      ]
+    },
+    "active-run": {
+      "status": "passed",
+      "results": [
+        {
+          "label": "hd720",
+          "metrics": {
+            "display": {
+              "width": 2752,
+              "height": 1152
+            },
+            "workArea": {
+              "width": 2752,
+              "height": 1152
+            },
+            "outer": {
+              "width": 1296,
+              "height": 729
+            },
+            "inner": {
+              "width": 1280,
+              "height": 722
+            },
+            "dpr": 1.25
+          },
+          "focused": {
+            "modeTitle": "Movie Wind-Down",
+            "dryRunText": "\n          \n          Dry Run · Running\n        ",
+            "profilesHidden": true,
+            "streakHidden": true,
+            "proofHidden": true,
+            "pauseVisible": true,
+            "snoozeVisible": true,
+            "cancelVisible": true
+          }
+        },
+        {
+          "label": "hd1080",
+          "metrics": {
+            "display": {
+              "width": 2752,
+              "height": 1152
+            },
+            "workArea": {
+              "width": 2752,
+              "height": 1152
+            },
+            "outer": {
+              "width": 1936,
+              "height": 1088
+            },
+            "inner": {
+              "width": 1920,
+              "height": 1080
+            },
+            "dpr": 1.25
+          },
+          "focused": {
+            "modeTitle": "Movie Wind-Down",
+            "dryRunText": "\n          \n          Dry Run · Running\n        ",
+            "profilesHidden": true,
+            "streakHidden": true,
+            "proofHidden": true,
+            "pauseVisible": true,
+            "snoozeVisible": true,
+            "cancelVisible": true
+          }
+        },
+        {
+          "label": "workarea",
+          "metrics": {
+            "display": {
+              "width": 2752,
+              "height": 1152
+            },
+            "workArea": {
+              "width": 2752,
+              "height": 1152
+            },
+            "outer": {
+              "width": 2768,
+              "height": 1160
+            },
+            "inner": {
+              "width": 2752,
+              "height": 1152
+            },
+            "dpr": 1.25
+          },
+          "focused": {
+            "modeTitle": "Movie Wind-Down",
+            "dryRunText": "\n          \n          Dry Run · Running\n        ",
+            "profilesHidden": true,
+            "streakHidden": true,
+            "proofHidden": true,
+            "pauseVisible": true,
+            "snoozeVisible": true,
+            "cancelVisible": true
+          }
+        },
+        {
+          "state": "paused",
+          "pauseLabel": "Resume",
+          "pausedText": "Sleep paused"
+        },
+        {
+          "state": "resumed"
+        },
+        {
+          "state": "cancelled",
+          "restored": true
+        }
+      ],
+      "realPowerActions": 0
+    }
+  },
+  "screenshots": [
+    {
+      "phase": "top-menu",
+      "path": "<gate-root>\\screenshots\\topmenu-power-mouse-open.png",
+      "name": "topmenu-power-mouse-open.png",
+      "size": 332103,
+      "sha256": "7b94da97846a1ccbd9bcbaa725a46c8240cb9e603fbfcbf33d5c5dcef64cbd0a"
+    },
+    {
+      "phase": "top-menu",
+      "path": "<gate-root>\\screenshots\\topmenu-settings-mouse-open.png",
+      "name": "topmenu-settings-mouse-open.png",
+      "size": 334536,
+      "sha256": "78f6bc54843b3f5e3ffd89dddf6462a35cb09ce79a996536b5674a171f4f3c13"
+    },
+    {
+      "phase": "top-menu",
+      "path": "<gate-root>\\screenshots\\topmenu-help-mouse-open.png",
+      "name": "topmenu-help-mouse-open.png",
+      "size": 338518,
+      "sha256": "439e3ad4fe2ef7adbdb981e856122773e2a6d2be557a1aeb100c73ef95d4ed83"
+    },
+    {
+      "phase": "top-menu",
+      "path": "<gate-root>\\screenshots\\topmenu-settings-panel.png",
+      "name": "topmenu-settings-panel.png",
+      "size": 63108,
+      "sha256": "cd92ee6f8be32acd145c2169f05b5b5e7cf771ef1ca9e9a712b2724d5ea659d9"
+    },
+    {
+      "phase": "top-menu",
+      "path": "<gate-root>\\screenshots\\topmenu-power-keyboard-open.png",
+      "name": "topmenu-power-keyboard-open.png",
+      "size": 335749,
+      "sha256": "ced163af32e15bfa7d0450f8b007347fac6a3f45dc1d8c65db8164cb6215f205"
+    },
+    {
+      "phase": "top-menu",
+      "path": "<gate-root>\\screenshots\\topmenu-settings-keyboard-open.png",
+      "name": "topmenu-settings-keyboard-open.png",
+      "size": 73576,
+      "sha256": "7f927797bce472eff3762ceb594bc88b6a22459b8eaa47b8b777558c3d799e56"
+    },
+    {
+      "phase": "shared-start",
+      "path": "<gate-root>\\screenshots\\active-running-hero.png",
+      "name": "active-running-hero.png",
+      "size": 216211,
+      "sha256": "787ad63322e3ed665fb5b9a40f904e62e5f23a3535a820812acf326fd1ba4ad1"
+    },
+    {
+      "phase": "shared-start",
+      "path": "<gate-root>\\screenshots\\morning-proof-visible.png",
+      "name": "morning-proof-visible.png",
+      "size": 332931,
+      "sha256": "07529c96c39c0a0a0f463ca107aa90917c2a5fafc096f67945c84dca83397ad0"
+    },
+    {
+      "phase": "use-tonight",
+      "path": "<gate-root>\\screenshots\\use-tonight-movie-wind-down-projection.png",
+      "name": "use-tonight-movie-wind-down-projection.png",
+      "size": 330182,
+      "sha256": "b10ce9d55467e9d5e7783ae09b8f55766dd20fcdacdf62f556004946a7e18776"
+    },
+    {
+      "phase": "use-tonight",
+      "path": "<gate-root>\\screenshots\\use-tonight-movie-wind-down-running.png",
+      "name": "use-tonight-movie-wind-down-running.png",
+      "size": 214195,
+      "sha256": "286e8aa5e166abadb205764123dc3da68664c4da491fb8b5a64eb1b1698ca324"
+    },
+    {
+      "phase": "use-tonight",
+      "path": "<gate-root>\\screenshots\\use-tonight-movie-wind-down-cancelled.png",
+      "name": "use-tonight-movie-wind-down-cancelled.png",
+      "size": 335251,
+      "sha256": "a06422988f92a2001b7c6ce220aef121e1d5ff5fde506b083fec19a009e4d95d"
+    },
+    {
+      "phase": "use-tonight",
+      "path": "<gate-root>\\screenshots\\use-tonight-movie-wind-down-restore.png",
+      "name": "use-tonight-movie-wind-down-restore.png",
+      "size": 318741,
+      "sha256": "241962d99f360d5a5fab2c65c5dd4493deca5ef375e5bdef20d8018184f615cc"
+    },
+    {
+      "phase": "use-tonight",
+      "path": "<gate-root>\\screenshots\\use-tonight-full-shutdown-projection.png",
+      "name": "use-tonight-full-shutdown-projection.png",
+      "size": 332462,
+      "sha256": "13f341b64bf042804754be29cd8c19842a41b6cb0247e74d23c0ca232e984c60"
+    },
+    {
+      "phase": "use-tonight",
+      "path": "<gate-root>\\screenshots\\use-tonight-full-shutdown-running.png",
+      "name": "use-tonight-full-shutdown-running.png",
+      "size": 215134,
+      "sha256": "e2023f8fc281adeeb90f4131d6b32f6be7b85308afec7bdd96a1f1ae8e62382b"
+    },
+    {
+      "phase": "use-tonight",
+      "path": "<gate-root>\\screenshots\\use-tonight-full-shutdown-cancelled.png",
+      "name": "use-tonight-full-shutdown-cancelled.png",
+      "size": 333695,
+      "sha256": "071009318fa70838a8872b5ef362173c1223c35b8611b6f40539e6ffdc703f75"
+    },
+    {
+      "phase": "use-tonight",
+      "path": "<gate-root>\\screenshots\\use-tonight-full-shutdown-restore.png",
+      "name": "use-tonight-full-shutdown-restore.png",
+      "size": 316821,
+      "sha256": "9c0dab8830cb293c9d0185ad6c4e06e23ef4a1a7db5070ffeab5132e8bbea8ab"
+    },
+    {
+      "phase": "settings",
+      "path": "<gate-root>\\screenshots\\settings-1280x720.png",
+      "name": "settings-1280x720.png",
+      "size": 63108,
+      "sha256": "cd92ee6f8be32acd145c2169f05b5b5e7cf771ef1ca9e9a712b2724d5ea659d9"
+    },
+    {
+      "phase": "settings",
+      "path": "<gate-root>\\screenshots\\settings-1920x1080.png",
+      "name": "settings-1920x1080.png",
+      "size": 92329,
+      "sha256": "9b03216a6621c33492ca5380164b205507543ae93df31d5e1e841a357d16afa2"
+    },
+    {
+      "phase": "settings",
+      "path": "<gate-root>\\screenshots\\settings-ultrawide.png",
+      "name": "settings-ultrawide.png",
+      "size": 123808,
+      "sha256": "c669b24b773334e0c0b35b9f79ce54076519f126a9cbc2c4f47ba16206e4e3cd"
+    },
+    {
+      "phase": "active-run",
+      "path": "<gate-root>\\screenshots\\active-run-hd720.png",
+      "name": "active-run-hd720.png",
+      "size": 224838,
+      "sha256": "fb026045d41629cd675f56103c4e4a9ccc44b26ef553289c96dacff508fd065a"
+    },
+    {
+      "phase": "active-run",
+      "path": "<gate-root>\\screenshots\\active-run-hd1080.png",
+      "name": "active-run-hd1080.png",
+      "size": 263760,
+      "sha256": "047e0c52cf3971bd978dbfe3ae16fbc7cb8c72dc7a4fa287244822ab245c6a75"
+    },
+    {
+      "phase": "active-run",
+      "path": "<gate-root>\\screenshots\\active-run-workarea.png",
+      "name": "active-run-workarea.png",
+      "size": 312470,
+      "sha256": "8c00d65c9cee65e2459dc9148038e4023f839a38d113d62991dcaa8ae85f252a"
+    },
+    {
+      "phase": "active-run",
+      "path": "<gate-root>\\screenshots\\active-paused-1280x720.png",
+      "name": "active-paused-1280x720.png",
+      "size": 227509,
+      "sha256": "1e38fa2d5f56450a08e81e67b2a970307cc9f9ff90a734ac57e975e03f00d74d"
+    },
+    {
+      "phase": "active-run",
+      "path": "<gate-root>\\screenshots\\active-resumed-1280x720.png",
+      "name": "active-resumed-1280x720.png",
+      "size": 229834,
+      "sha256": "293f86741f15ee9d261bf1f2d0bcd290ed9fbdb5a003f898dcfced336ae18b46"
+    },
+    {
+      "phase": "active-run",
+      "path": "<gate-root>\\screenshots\\active-cancelled-1280x720.png",
+      "name": "active-cancelled-1280x720.png",
+      "size": 332555,
+      "sha256": "5357369a08c591e000f64532ef0cda3a65bafe8dfb57b80eeed2b1c9d4a6c795"
+    }
+  ],
+  "status": "passed",
+  "realPowerActions": 0,
+  "endTime": "2026-07-23T07:34:11.448Z",
+  "rendererDiagnostics": [
+    {
+      "label": "userdata-startup-normal",
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-startup-legacy-settings",
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-startup-legacy-help",
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-startup-settings-return",
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-startup-settings-return",
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-topmenu",
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-shared",
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-shared",
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-use-movie-wind-down",
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-use-movie-wind-down",
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-use-full-shutdown",
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-use-full-shutdown",
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-settings",
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-active",
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    }
+  ]
+}

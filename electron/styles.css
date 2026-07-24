@@ -354,7 +354,11 @@ body.warm-shift .ambient-canvas {
   color: var(--text-primary);
 }
 
-.menu-item:hover .submenu {
+/* Dropdown visibility is click-driven (see wireTopMenus() in renderer.js),
+   not hover-driven -- a hover-only menu closes the instant the pointer
+   drifts off-path between the label and the dropdown, which made Power/
+   Settings/Help effectively unusable. `.open` is toggled by JS. */
+.menu-item.open .submenu {
   display: block;
   animation: fadeInDown 0.2s ease;
 }
@@ -381,6 +385,8 @@ body.warm-shift .ambient-canvas {
   align-items: center;
   gap: 10px;
   padding: 8px 14px;
+  min-height: 36px;
+  box-sizing: border-box;
   font-size: 12px;
   color: var(--text-secondary);
   border-radius: 4px;
@@ -419,6 +425,8 @@ body.warm-shift .ambient-canvas {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
+  min-height: 36px;
+  box-sizing: border-box;
   font-size: 12px;
   color: var(--text-secondary);
   border-radius: 4px;
@@ -858,27 +866,6 @@ input:disabled {
   border-color: var(--accent-blue);
 }
 
-.start-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 12px 24px;
-  font-size: 14px;
-  font-weight: 600;
-  background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-blue-deep) 100%);
-  color: white;
-  border: none;
-  border-radius: var(--card-radius);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  box-shadow: 0 4px 12px rgba(74,158,255,0.3);
-}
-
-.start-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(74,158,255,0.4);
-}
-
 /* Presets Section */
 .presets-section {
   display: flex;
@@ -910,10 +897,6 @@ input:disabled {
   padding: 6px 8px;
 }
 
-.setup-controls .start-btn {
-  margin-bottom: 10px;
-}
-
 .setup-controls .chips-row {
   margin-top: 4px;
 }
@@ -943,51 +926,6 @@ input:disabled {
   border-color: var(--accent-cyan);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(118, 201, 255, 0.2);
-}
-
-/* Animated Start Button */
-.start-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 14px 30px;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-blue-deep) 100%);
-  color: white;
-  border: none;
-  border-radius: var(--card-radius);
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 6px 18px rgba(74,158,255,0.32), inset 0 1px 0 rgba(255,255,255,0.18);
-  position: relative;
-  overflow: hidden;
-}
-
-.start-btn::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-  transition: left 0.5s;
-}
-
-.start-btn:hover::before {
-  left: 100%;
-}
-
-.start-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 26px rgba(74,158,255,0.45), inset 0 1px 0 rgba(255,255,255,0.2);
-}
-
-.start-btn:active {
-  transform: translateY(0);
 }
 
 /* Glass morphism for cards */
@@ -1444,33 +1382,101 @@ body.phase-lastlight .cockpit {
   box-shadow: 0 16px 48px rgba(0,0,0,0.5);
 }
 
-#options-modal {
-  padding: 16px;
+/* Settings is an in-flow dashboard view -- a sibling of #ns-panel-lib /
+   #ns-panel-modes / #ns-panel-sch / #ns-panel-stats, shown and hidden by
+   applyMainPanelVisibility() the same way as the others. It is not a
+   floating dialog: no backdrop, no centering-over-Tonight, no click-outside
+   dismissal. */
+#ns-panel-set.ns-main-panel {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.options-modal-content {
-  width: min(94vw, 560px);
-  max-width: 560px;
-  max-height: calc(100vh - 32px);
+.settings-panel {
+  width: 100%;
+  max-width: 1100px;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--card-radius);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
 }
 
-.options-modal-content .modal-header,
-.options-modal-content .modal-footer {
+.settings-panel .modal-header,
+.settings-panel .modal-footer {
   flex: 0 0 auto;
 }
 
-.options-modal-content .modal-body {
+/* Desktop settings page: a fixed-width category rail beside a stable,
+   independently-scrolling content panel -- replaces the old single long
+   scrolling column that crammed every domain (lights, companion, family,
+   wifi guard, accountability, ...) into one ~560px-wide list. */
+.settings-panel .modal-body {
   flex: 1 1 auto;
   min-height: 0;
   max-height: none;
+  display: flex;
+  align-items: stretch;
+  padding: 0;
+  overflow: hidden;
+}
+
+.settings-rail {
+  flex: 0 0 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 18px 10px;
+  border-right: 1px solid var(--border-color);
+  overflow-y: auto;
+}
+
+.settings-rail-btn {
+  text-align: left;
+  padding: 10px 12px;
+  min-height: 36px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.settings-rail-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.settings-rail-btn.active {
+  background: rgba(118, 201, 255, 0.12);
+  color: var(--accent-cyan);
+}
+
+.settings-categories {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-y: auto;
   padding: 18px 20px;
   scrollbar-gutter: stable;
 }
 
-.options-modal-content .modal-footer {
+.settings-categories .option-section[data-settings-category] {
+  display: none;
+}
+
+.settings-categories .option-section[data-settings-category].settings-category-active {
+  display: block;
+}
+
+.settings-panel .modal-footer {
   padding: 12px 20px;
   border-top: 1px solid var(--border-color);
   background: var(--bg-card);
@@ -2104,25 +2110,40 @@ body.mini-mode .action-btn {
     flex-direction: column;
   }
 
-  #options-modal {
+  #ns-panel-set.ns-main-panel {
     padding: 8px;
   }
 
-  .options-modal-content {
+  .settings-panel {
     width: 100%;
-    max-height: calc(100vh - 16px);
+    max-width: 100%;
   }
 
-  .options-modal-content .modal-header {
+  .settings-panel .modal-header {
     padding: 12px 14px;
   }
 
-  .options-modal-content .modal-body {
-    padding: 14px;
-    gap: 14px;
+  /* Below the desktop breakpoint there isn't room for a 200px rail beside
+     content -- stack the rail as a horizontal, wrapping strip above the
+     (now full-width) category panel instead. */
+  .settings-panel .modal-body {
+    flex-direction: column;
   }
 
-  .options-modal-content .modal-footer {
+  .settings-rail {
+    flex: 0 0 auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+    padding: 10px;
+  }
+
+  .settings-categories {
+    padding: 14px;
+  }
+
+  .settings-panel .modal-footer {
     padding: 10px 14px;
   }
 }

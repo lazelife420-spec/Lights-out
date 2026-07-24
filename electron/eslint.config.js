@@ -49,7 +49,11 @@ const correctnessRules = {
 };
 
 module.exports = [
-  { ignores: ['node_modules/**', 'dist/**', 'assets/**', 'test-results/**', 'build.log'] },
+  // .claude/** excludes nested git worktrees that can land inside this
+  // directory (e.g. C:\...\electron\.claude\worktrees\<name>\electron\...) --
+  // without this, eslint recurses into another worktree's copy of these same
+  // filenames and reports it under the wrong (Node-globals) rule set.
+  { ignores: ['node_modules/**', 'dist/**', 'assets/**', 'test-results/**', 'build.log', '.claude/**'] },
 
   // Node main process, feature modules, preload, tests, build scripts.
   {

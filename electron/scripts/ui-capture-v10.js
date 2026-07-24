@@ -55,8 +55,10 @@ app.whenReady().then(async () => {
       document.getElementById('action-bar-running').style.display = 'none';
       document.getElementById('timer-main').textContent = '28:20';
       document.getElementById('timer-label').textContent = 'until shutdown';
-      // Open options modal and scroll to customize
-      document.getElementById('options-modal').classList.add('active');
+      // Open Settings (a real panel, see openSettingsPanel in renderer.js)
+      // on the Appearance & Sound category, which holds Customize.
+      if (typeof openSettingsPanel === 'function') openSettingsPanel();
+      if (typeof switchSettingsCategory === 'function') switchSettingsCategory('appearance');
       // Click the Library tab to make sure we're on the right tab
       var libTab = document.querySelector('[data-tab="library"]');
       if (libTab) libTab.click();

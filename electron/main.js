@@ -41,6 +41,13 @@ const windowGeometry = require('./windowGeometry');
 const nightModes = require('./nightModes');
 const startDecision = require('./startDecision');
 
+// Desktop UX Functional Gate instrumentation: only active when an explicit
+// proof flag is supplied. Never records in normal production runs.
+const DESKTOP_UX_PROOF = process.argv.includes('--desktop-ux-proof') || process.env.LIGHTS_OUT_DESKTOP_UX_GATE === '1';
+const SUPPRESS_AUTOMATION_TRAY = DESKTOP_UX_PROOF || process.env.LIGHTS_OUT_SUPPRESS_TRAY === '1';
+const startInvocationLog = [];
+const realPowerActionLog = [];
+
 const APP_ICON = path.join(__dirname, 'assets', 'icon.ico');
 const TRAY_ICON = path.join(__dirname, 'assets', 'tray-32.png');
 
@@ -388,6 +395,8 @@ function createWindow() {
 }
 
 async function createTray() {
+  if (SUPPRESS_AUTOMATION_TRAY) return;
+  if (tray && !tray.isDestroyed()) return;
   await ensureTrayIcons();
   tray = new Tray(trayIcons.idle);
   refreshTrayMenu();
@@ -1682,6 +1691,15 @@ async function executePowerAction(options = {}) {
     return { success: true, dryRun: true };
   }
 
+  if (DESKTOP_UX_PROOF) {
+    realPowerActionLog.push({
+      at: Date.now(),
+      action,
+      forceShutdown,
+      muteSystem
+    });
+  }
+
   try {
     if (muteSystem) {
       await executePowerShell('(New-Object -ComObject WScript.Shell).SendKeys([char]173)');
@@ -1749,7 +1767,23 @@ function setRunAtLogin(enabled) {
   return getLoginSettings();
 }
 
-ipcMain.handle('start-timer', async (event, options, legacyAction) => startTimer(options, legacyAction));
+ipcMain.handle('start-timer', async (event, options, legacyAction) => {
+  const invokedAt = Date.now();
+  const result = await startTimer(options, legacyAction);
+  if (DESKTOP_UX_PROOF) {
+    startInvocationLog.push({
+      at: invokedAt,
+      options: JSON.parse(JSON.stringify(options || null)),
+      legacyAction: legacyAction || null,
+      result: JSON.parse(JSON.stringify(result || null)),
+      senderId: event.sender.id
+    });
+  }
+  return result;
+});
+ipcMain.handle('get-start-invocations', async () => (DESKTOP_UX_PROOF ? startInvocationLog.slice() : []));
+ipcMain.handle('clear-start-invocations', async () => { if (DESKTOP_UX_PROOF) startInvocationLog.length = 0; return true; });
+ipcMain.handle('get-real-power-actions', async () => (DESKTOP_UX_PROOF ? realPowerActionLog.slice() : []));
 ipcMain.handle('cancel-timer', async () => cancelTimer());
 ipcMain.handle('pause-timer', async () => pauseTimer());
 ipcMain.handle('resume-timer', async () => resumeTimer());
@@ -2711,6 +2745,65 @@ if (!gotTheLock) {
   });
 }
 
+function setupRitualCallbacks() {
+  // Register before the renderer becomes interactive. Previously these were
+  // installed only after remote-control startup and several other async
+  // services, leaving a launch window where Use Tonight could start a ritual
+  // whose timer step had no side-effect handler.
+  ritualMode.onStep((step, state, runMeta, runId) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('ritual-step', { step, state });
+    }
+    const runToken = runMeta && runMeta.profileRitualToken ? runMeta.profileRitualToken : null;
+    try {
+      if (step.id === 'block') {
+        const cbConfig = settingsStore.getSection('contentBlocker');
+        if (cbConfig && cbConfig.enabled) {
+          const sites = contentBlocker.DEFAULT_BLOCKLIST;
+          contentBlocker.blockSites(sites).catch(() => {});
+        }
+      } else if (step.id === 'dim') {
+        const appSettings = settingsStore.getSection('app') || {};
+        if (appSettings.nightLightOnDim) applyDimPhase(0, 0);
+      } else if (step.id === 'timer') {
+        const ctx = profileRitualContext.consume(runToken);
+        if (ctx) {
+          beginValidatedCountdown(
+            { durationSeconds: ctx.durationSeconds, action: ctx.action, dryRun: ctx.dryRun,
+              forceShutdown: ctx.forceShutdown, muteSystem: ctx.muteSystem, gracePeriod: ctx.gracePeriod,
+              source: 'ritual' },
+            { profileId: ctx.profileId, profileName: ctx.profileName },
+            { nightModeId: ctx.nightModeId || null, nightModeTitle: ctx.nightModeTitle || null, nightModeVersion: ctx.nightModeVersion || null }
+          );
+        } else {
+          const config = ritualMode.getConfig();
+          beginValidatedCountdown(
+            { durationSeconds: config.timerDuration, action: config.timerAction, source: 'ritual' },
+            { profileId: null, profileName: null },
+            null
+          );
+        }
+      } else if (step.id === 'lights') {
+        const lightsConfig = settingsStore.getSection('smartLights');
+        if (lightsConfig && lightsConfig.enabled) {
+          smartLights.applyScene('night').catch(() => {});
+        }
+      }
+    } catch (err) {
+      if (runToken) profileRitualContext.clearIfOwned(runToken);
+      ritualMode.cancelIfCurrent(runId);
+      console.error('[ritual-step-error]', err);
+    }
+  });
+  ritualMode.onComplete((state, runMeta) => {
+    const runToken = runMeta && runMeta.profileRitualToken ? runMeta.profileRitualToken : null;
+    if (runToken) profileRitualContext.clearIfOwned(runToken);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('ritual-complete', state);
+    }
+  });
+}
+
 app.whenReady().then(async () => {
   cleanupStalePortableExtracts();
 
@@ -2740,7 +2833,8 @@ app.whenReady().then(async () => {
   // Initialize profiles module
   const profileCount = profiles.initialize();
   console.log(`Loaded ${profileCount} profiles`);
-  
+
+  setupRitualCallbacks();
   createWindow();
   await createTray();
   setupJumpList();
@@ -2853,72 +2947,6 @@ app.whenReady().then(async () => {
   // Autopilot Bedtime: schedule learned bedtime auto-start.
   autopilot.schedule(startTimer, mainWindow);
 
-  // Ritual Mode: forward steps to renderer and execute side effects.
-  // Each callback receives:
-  //   runMeta: immutable metadata (profileRitualToken for profile rituals, null for manual)
-  //   runId:   internal numeric run identity (always present, both profile and manual)
-  ritualMode.onStep((step, state, runMeta, runId) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('ritual-step', { step, state });
-    }
-    const runToken = runMeta && runMeta.profileRitualToken ? runMeta.profileRitualToken : null;
-    // Execute step side effects (wrapped in try/catch for error safety).
-    try {
-      if (step.id === 'block') {
-        const cbConfig = settingsStore.getSection('contentBlocker');
-        if (cbConfig && cbConfig.enabled) {
-          const sites = contentBlocker.DEFAULT_BLOCKLIST;
-          contentBlocker.blockSites(sites).catch(() => {});
-        }
-      } else if (step.id === 'dim') {
-        const appSettings = settingsStore.getSection('app') || {};
-        if (appSettings.nightLightOnDim) applyDimPhase(0, 0);
-      } else if (step.id === 'timer') {
-        // Token-verified consumption: proves this timer step belongs to the
-        // exact ritual run that created the context. Falls back to global ritual
-        // config for manual Begin Ritual (runToken is null → consume rejects).
-        const ctx = profileRitualContext.consume(runToken);
-        if (ctx) {
-          beginValidatedCountdown(
-            { durationSeconds: ctx.durationSeconds, action: ctx.action, dryRun: ctx.dryRun,
-              forceShutdown: ctx.forceShutdown, muteSystem: ctx.muteSystem, gracePeriod: ctx.gracePeriod,
-              source: 'ritual' },
-            { profileId: ctx.profileId, profileName: ctx.profileName },
-            { nightModeId: ctx.nightModeId || null, nightModeTitle: ctx.nightModeTitle || null, nightModeVersion: ctx.nightModeVersion || null }
-          );
-        } else {
-          const config = ritualMode.getConfig();
-          beginValidatedCountdown(
-            { durationSeconds: config.timerDuration, action: config.timerAction, source: 'ritual' },
-            { profileId: null, profileName: null },
-            null
-          );
-        }
-      } else if (step.id === 'lights') {
-        const lightsConfig = settingsStore.getSection('smartLights');
-        if (lightsConfig && lightsConfig.enabled) {
-          smartLights.applyScene('night').catch(() => {});
-        }
-      }
-    } catch (err) {
-      // On step-handler error:
-      // 1. Profile-context cleanup: owned by profileRitualToken (no-op if null/manual).
-      // 2. Run cancellation: owned by runId (works for BOTH profile and manual rituals).
-      if (runToken) profileRitualContext.clearIfOwned(runToken);
-      ritualMode.cancelIfCurrent(runId);
-      console.error('[ritual-step-error]', err);
-    }
-  });
-  ritualMode.onComplete((state, runMeta, runId) => {
-    // Token-safe cleanup: clear only this run's profile context (if unconsumed).
-    // runId is available but not needed here — completion is already the end state.
-    const runToken = runMeta && runMeta.profileRitualToken ? runMeta.profileRitualToken : null;
-    if (runToken) profileRitualContext.clearIfOwned(runToken);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('ritual-complete', state);
-    }
-  });
-
   // Calendar Auto-Start: check for upcoming events and auto-start timer.
   setInterval(checkCalendarAutoStart, 60000);
 
@@ -2944,6 +2972,8 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   app.isQuitting = true;
+  if (tray && !tray.isDestroyed()) tray.destroy();
+  tray = null;
   if (companionNetworkMonitor) {
     clearInterval(companionNetworkMonitor);
     companionNetworkMonitor = null;

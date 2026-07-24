@@ -118,11 +118,11 @@
         </button>
         <button class="ns-nav-item" data-ns-tab="sch" title="Open schedule" aria-label="Open schedule">
           <span class="ns-nav-icon" aria-hidden="true">&#x1F4C5;</span>
-          <span class="ns-nav-label">SCH</span>
+          <span class="ns-nav-label">SCHEDULE</span>
         </button>
         <button class="ns-nav-item" data-ns-tab="set" title="Open settings" aria-label="Open settings">
           <span class="ns-nav-icon" aria-hidden="true">&#x2699;</span>
-          <span class="ns-nav-label">SET</span>
+          <span class="ns-nav-label">SETTINGS</span>
         </button>
       </nav>
       <div class="ns-sidebar-footer">
@@ -146,59 +146,59 @@
         </div>
       </div>
       <nav class="main-menu">
-        <div class="menu-item" id="menu-power">
+        <div class="menu-item" id="menu-power" tabindex="0" role="button" aria-haspopup="menu" aria-expanded="false">
           <span>Power</span>
-          <div class="submenu">
-            <div class="submenu-item" data-action="shutdown">
+          <div class="submenu" role="menu" aria-label="Power">
+            <div class="submenu-item" role="menuitem" tabindex="-1" data-action="shutdown">
               <span class="icon">&#x23FB;</span>
               <span>Shutdown</span>
             </div>
-            <div class="submenu-item" data-action="restart">
+            <div class="submenu-item" role="menuitem" tabindex="-1" data-action="restart">
               <span class="icon">&#x21BB;</span>
               <span>Restart</span>
             </div>
-            <div class="submenu-item" data-action="sleep">
+            <div class="submenu-item" role="menuitem" tabindex="-1" data-action="sleep">
               <span class="icon">&#x263E;</span>
               <span>Sleep</span>
             </div>
-            <div class="submenu-item" data-action="hibernate">
+            <div class="submenu-item" role="menuitem" tabindex="-1" data-action="hibernate">
               <span class="icon">&#x2744;</span>
               <span>Hibernate</span>
             </div>
           </div>
         </div>
-        <div class="menu-item" id="menu-settings">
+        <div class="menu-item" id="menu-settings" tabindex="0" role="button" aria-haspopup="menu" aria-expanded="false">
           <span>Settings</span>
-          <div class="submenu">
-            <div class="submenu-item toggle" id="toggle-dryrun">
+          <div class="submenu" role="menu" aria-label="Settings">
+            <div class="submenu-item toggle" role="menuitemcheckbox" tabindex="-1" id="toggle-dryrun">
               <span>Dry Run Mode</span>
               <span class="toggle-indicator">OFF</span>
             </div>
-            <div class="submenu-item toggle" id="toggle-mute">
+            <div class="submenu-item toggle" role="menuitemcheckbox" tabindex="-1" id="toggle-mute">
               <span>Sound Effects</span>
               <span class="toggle-indicator">ON</span>
             </div>
-            <div class="submenu-item toggle" id="toggle-graceful">
+            <div class="submenu-item toggle" role="menuitemcheckbox" tabindex="-1" id="toggle-graceful">
               <span>Graceful Close</span>
               <span class="toggle-indicator">ON</span>
             </div>
-            <div class="submenu-item" id="open-options">
+            <div class="submenu-item" role="menuitem" tabindex="-1" id="open-options">
               <span>Advanced Options...</span>
             </div>
           </div>
         </div>
-        <div class="menu-item" id="menu-help">
+        <div class="menu-item" id="menu-help" tabindex="0" role="button" aria-haspopup="menu" aria-expanded="false">
           <span>Help</span>
-          <div class="submenu">
-            <div class="submenu-item" data-help="Use presets for quick starts, Options for launch behavior, and the tray menu for pause, snooze, or cancel.">
+          <div class="submenu" role="menu" aria-label="Help">
+            <div class="submenu-item" role="menuitem" tabindex="-1" data-help="Use presets for quick starts, Options for launch behavior, and the tray menu for pause, snooze, or cancel.">
               <span class="icon">&#x2139;</span>
               <span>Documentation</span>
             </div>
-            <div class="submenu-item" data-help="Space starts or pauses. Escape cancels. Ctrl+M toggles mini mode. Number keys 1-6 start quick presets.">
+            <div class="submenu-item" role="menuitem" tabindex="-1" data-help="Space starts or pauses. Escape cancels. Ctrl+M toggles mini mode. Number keys 1-6 start quick presets.">
               <span class="icon">&#x2328;</span>
               <span>Keyboard Shortcuts</span>
             </div>
-            <div class="submenu-item" id="open-about">
+            <div class="submenu-item" role="menuitem" tabindex="-1" id="open-about">
               <span class="icon">&#x24D8;</span>
               <span>About Lights Out</span>
             </div>
@@ -247,11 +247,11 @@
         <button class="armed-mode-clear" id="armed-mode-clear" title="Remove night mode selection" aria-label="Remove night mode selection">&times;</button>
       </div>
 
-      <!-- Northstar: Tonight's Run hero card (shown in lobby/idle state) -->
-      <section class="ns-hero-card" id="ns-hero-card" style="display:none" aria-label="Tonight's Run">
+      <!-- Northstar: Tonight's plan hero card (shown in lobby/idle state) -->
+      <section class="ns-hero-card" id="ns-hero-card" style="display:none" aria-label="Tonight's plan">
         <div class="ns-hero-body">
           <div class="ns-hero-left">
-            <div class="ns-hero-label">TONIGHT'S RUN</div>
+            <div class="ns-hero-label">TONIGHT'S PLAN</div>
             <div class="ns-hero-title" id="ns-hero-title">Weeknight &middot; 28 min &middot; Shutdown</div>
             <div class="ns-hero-meta">
               <span class="ns-hero-meta-item">Clearance: <span class="ns-meta-accent" id="ns-meta-clearance">Clear</span></span>
@@ -262,7 +262,7 @@
             </div>
             <button class="ns-play-btn" id="ns-play-btn" aria-label="Start tonight's timer">
               <span aria-hidden="true">&#x25B6;</span>
-              PLAY
+              <span class="ns-play-label" id="ns-play-label">PLAY</span>
             </button>
           </div>
           <div class="ns-hero-right">
@@ -365,10 +365,6 @@
               <button class="unit-btn" data-unit="sec">sec</button>
             </div>
           </div>
-          <button class="start-btn" id="btn-start">
-            <span class="icon">&#x25B6;</span>
-            <span>START</span>
-          </button>
           <div class="chips-row">
             <button class="chip" data-min="5">5m</button>
             <button class="chip" data-min="15">15m</button>
@@ -391,7 +387,7 @@
       </button>
 
       <!-- Saved Profiles -->
-      <section class="profiles-section">
+      <section class="profiles-section" id="profiles-section">
         <div class="profiles-header">
           <span class="profiles-title">Saved Profiles</span>
           <div class="profiles-header-actions">
@@ -879,38 +875,29 @@
         <button class="btn-secondary" id="btn-stats-view-ledger">View Full Ledger</button>
       </div>
 
-    </main>
-
-    <!-- Footer -->
-    <footer class="app-footer">
-      <div class="footer-left">
-        <span class="status-pill" id="status-pill">
-          <span class="status-dot" id="status-dot"></span>
-          <span class="status-text" id="status-text">Idle</span>
-        </span>
-        <span class="footer-branding">Forged by The Proof Foundry™</span>
-      </div>
-      <div class="footer-right">
-        <button class="footer-action" id="btn-notif" title="Open notifications" aria-label="Open notifications" style="position:relative">&#x1F514;
-          <span class="badge notif-badge" id="notif-badge" style="display:none;position:absolute;top:-2px;right:-4px;font-size:8px;background:#ff4d4d;color:#fff;border-radius:50%;min-width:14px;height:14px;display:none;align-items:center;justify-content:center;padding:0 3px"></span>
-        </button>
-        <button class="footer-action" id="btn-widget" title="Toggle desktop widget" aria-label="Toggle desktop widget">&#x1F4CA;</button>
-        <button class="footer-action" id="btn-companion" title="Open companion setup" aria-label="Open companion setup">&#x1F4F1;</button>
-        <span class="badge update-badge" id="badge-update" style="display:none" title="Update available">UPDATE</span>
-        <span id="version">v11.1.1</span>
-      </div>
-    </footer>
-
-  </div>
-
-  <!-- Options Modal -->
-  <div class="modal" id="options-modal">
-    <div class="modal-content options-modal-content">
+  <!-- Settings: a primary dashboard view (sibling of Tonight/Modes/Schedule/
+       Stats, shown via applyMainPanelVisibility('set')), not a modal dialog
+       overlaying Tonight. -->
+  <div class="ns-main-panel" id="ns-panel-set" style="display:none">
+    <div class="settings-panel">
       <div class="modal-header">
-        <h2>Advanced Options</h2>
-        <button class="modal-close" id="modal-close" aria-label="Close advanced options">&times;</button>
+        <h2>Settings</h2>
+        <button class="modal-close" id="modal-close" aria-label="Back to Tonight">&times;</button>
       </div>
       <div class="modal-body">
+        <nav class="settings-rail" aria-label="Settings categories">
+          <button type="button" class="settings-rail-btn" data-settings-category="general">General</button>
+          <button type="button" class="settings-rail-btn" data-settings-category="power-safety">Power &amp; Safety</button>
+          <button type="button" class="settings-rail-btn" data-settings-category="wind-down">Wind-Down</button>
+          <button type="button" class="settings-rail-btn" data-settings-category="phone">Phone Companion</button>
+          <button type="button" class="settings-rail-btn" data-settings-category="protection">Protection</button>
+          <button type="button" class="settings-rail-btn" data-settings-category="accountability">Accountability</button>
+          <button type="button" class="settings-rail-btn" data-settings-category="automations">Automations</button>
+          <button type="button" class="settings-rail-btn" data-settings-category="appearance">Appearance &amp; Sound</button>
+          <button type="button" class="settings-rail-btn" data-settings-category="advanced">Advanced</button>
+        </nav>
+        <div class="settings-categories">
+        <div class="option-section" data-settings-category="power-safety">
         <div class="option-group">
           <label>Action Type</label>
           <select id="sel-action">
@@ -944,20 +931,27 @@
             Dry run mode (skip the power action)
           </label>
         </div>
+        </div>
+
+        <div class="option-section" data-settings-category="general">
         <div class="option-group">
           <label class="checkbox-label">
             <input type="checkbox" id="chk-run-login">
             Run at login (start minimized and idle)
           </label>
         </div>
+        </div>
+
+        <div class="option-section" data-settings-category="advanced">
         <div class="option-group">
           <label>Focus Mode - Apps to close during wind-down</label>
           <input type="text" id="focus-blocklist" placeholder="e.g. chrome,discord,spotify" style="width:100%">
           <span style="font-size:9px;color:var(--text-muted)">Comma-separated process names. Closed gracefully during the dim phase.</span>
         </div>
+        </div>
 
         <!-- Wind-down System Actions -->
-        <div class="option-section">
+        <div class="option-section" data-settings-category="wind-down">
           <h3>&#x1F319; Wind-down system actions</h3>
           <div class="option-group">
             <label class="checkbox-label">
@@ -980,7 +974,7 @@
         </div>
 
         <!-- Smart Lights Section -->
-        <div class="option-section lights-section">
+        <div class="option-section lights-section" data-settings-category="wind-down">
           <h3>&#x1F4A1; Smart Lights <span class="status-pill status-local" style="font-size:8px">REQUIRES SETUP</span></h3>
           <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Nothing is controlled until you configure and successfully test the available Philips Hue or HTTP integration.</p>
           
@@ -1063,7 +1057,7 @@
         </div>
 
         <!-- First Light Section -->
-        <div class="option-section alarm-section">
+        <div class="option-section alarm-section" data-settings-category="automations">
           <h3>&#x1F305; First Light</h3>
 
           <div class="option-group">
@@ -1093,7 +1087,7 @@
         </div>
 
         <!-- Remote Control Section -->
-        <div class="option-section remote-control-section">
+        <div class="option-section remote-control-section" data-settings-category="phone">
           <div style="display:flex;justify-content:space-between;align-items:center">
             <h3>&#x1F4F1; Phone Companion</h3>
             <span id="companion-status-pill" class="status-pill status-off">Off</span>
@@ -1171,7 +1165,7 @@
         </div>
 
         <!-- Family Mode Section -->
-        <div class="option-section family-section">
+        <div class="option-section family-section" data-settings-category="phone">
           <h3>&#x1F468;&#x200D;&#x1F469;&#x200D;&#x1F467;&#x200D;&#x1F466; Family Mode</h3>
           <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Controls another PC only when that PC is running Lights Out with Family LAN enabled and the same pairing token. Discovery alone does not configure a peer.</p>
           <div class="option-group">
@@ -1182,7 +1176,7 @@
         </div>
 
         <!-- WiFi Guard Section -->
-        <div class="option-section wifi-guard-section">
+        <div class="option-section wifi-guard-section" data-settings-category="protection">
           <h3>&#x1F6E1;&#xFE0F; WiFi Guard <span class="status-pill status-local" style="font-size:8px">EXPERIMENTAL</span></h3>
           <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Requires a compatible router or your own webhook. Windows Firewall on this PC cannot block a different phone or tablet on the LAN.</p>
 
@@ -1264,7 +1258,7 @@
         </div>
 
         <!-- Content Blocker Section -->
-        <div class="option-section content-blocker-section">
+        <div class="option-section content-blocker-section" data-settings-category="protection">
           <h3>&#x1F6AB; Content Blocker <span class="status-pill status-local" style="font-size:8px">HOSTS FILE</span></h3>
           <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Edits the Windows hosts file and may require administrator approval. Secure DNS, VPNs, and cached browser connections can bypass it.</p>
 
@@ -1350,7 +1344,7 @@
         </div>
 
         <!-- Accountability Partner Section -->
-        <div class="option-section accountability-section">
+        <div class="option-section accountability-section" data-settings-category="accountability">
           <h3>&#x1F91D; Accountability Partner</h3>
           <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Sends JSON to a webhook you configure and test below. No message is sent until a partner webhook exists.</p>
 
@@ -1405,7 +1399,7 @@
         </div>
 
         <!-- Override Tax Section -->
-        <div class="option-section override-tax-section">
+        <div class="option-section override-tax-section" data-settings-category="accountability">
           <h3>&#x23F0; Override Tax</h3>
           <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Escalating cost for hitting snooze. Makes it harder to stay up the more you try.</p>
 
@@ -1449,7 +1443,7 @@
         </div>
 
         <!-- Autopilot Bedtime Section -->
-        <div class="option-section autopilot-section">
+        <div class="option-section autopilot-section" data-settings-category="automations">
           <h3>&#x1F916; Autopilot Bedtime</h3>
           <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Learns your pattern and auto-starts the timer at your habitual bedtime. You get a 5-minute warning.</p>
 
@@ -1484,7 +1478,7 @@
         </div>
 
         <!-- Customization Section -->
-        <div class="option-section customize-section">
+        <div class="option-section customize-section" data-settings-category="appearance">
           <h3>&#x1F3A8; Customize</h3>
 
           <div class="option-group">
@@ -1671,7 +1665,7 @@
         </div>
 
         <!-- Last Light Section -->
-        <div class="option-section lastlight-section">
+        <div class="option-section lastlight-section" data-settings-category="appearance">
           <h3>&#x1F319; Last Light</h3>
 
           <div class="option-group">
@@ -1729,12 +1723,37 @@
             </div>
           </div>
         </div>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn-secondary" id="btn-cancel-opt">Cancel</button>
         <button class="btn-primary" id="btn-save-opt">Save</button>
       </div>
     </div>
+  </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <div class="footer-left">
+        <span class="status-pill" id="status-pill">
+          <span class="status-dot" id="status-dot"></span>
+          <span class="status-text" id="status-text">Idle</span>
+        </span>
+        <span class="footer-branding">Forged by The Proof Foundry™</span>
+      </div>
+      <div class="footer-right">
+        <button class="footer-action" id="btn-notif" title="Open notifications" aria-label="Open notifications" style="position:relative">&#x1F514;
+          <span class="badge notif-badge" id="notif-badge" style="display:none;position:absolute;top:-2px;right:-4px;font-size:8px;background:#ff4d4d;color:#fff;border-radius:50%;min-width:14px;height:14px;display:none;align-items:center;justify-content:center;padding:0 3px"></span>
+        </button>
+        <button class="footer-action" id="btn-widget" title="Toggle desktop widget" aria-label="Toggle desktop widget">&#x1F4CA;</button>
+        <button class="footer-action" id="btn-companion" title="Open companion setup" aria-label="Open companion setup">&#x1F4F1;</button>
+        <span class="badge update-badge" id="badge-update" style="display:none" title="Update available">UPDATE</span>
+        <span id="version">v11.1.2</span>
+      </div>
+    </footer>
+
   </div>
 
   <!-- Profiles Management Modal -->
@@ -1967,7 +1986,7 @@
       <div class="modal-body about-body">
         <img class="about-wordmark" src="assets/brand/lights-out-wordmark-transparent.svg" alt="Lights Out" draggable="false">
         <p class="about-tagline">Bedtime shutdown timer for Windows.</p>
-        <p class="about-version" id="about-version">Version 11.1.1</p>
+        <p class="about-version" id="about-version">Version 11.1.2</p>
         <div class="about-updater" id="about-updater">
           <div class="updater-status" id="updater-status" data-state="idle">
             <span class="updater-dot"></span>
