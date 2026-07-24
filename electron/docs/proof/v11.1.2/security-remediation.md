@@ -29,6 +29,27 @@ versions, and requires an introducing parent path.
 Raw audit JSON is intentionally not retained because it is environment output,
 not review evidence.
 
+## Electron provisioning
+
+Electron 42+ intentionally separates package installation from native binary
+provisioning. `npm ci` installs the locked JavaScript package; it does not
+create `node_modules/electron/dist/electron.exe`. The official local
+`install-electron` command downloads the locked binary on demand.
+
+Fresh runtime setup is therefore:
+
+```powershell
+npm ci
+npm run electron:provision
+npm run electron:verify-provision
+```
+
+The project does not add a `postinstall` hook, fabricate `hasInstallScript`
+metadata, invoke `node_modules/electron/install.js` directly, or change the
+locked Electron version. The offline provisioning-contract test verifies the
+locked Electron package exposes `install-electron`, the project script invokes
+that supported command, and no project postinstall provisions Electron.
+
 ## Desktop UX functional gate
 
 The initial final-main gate failure was nondeterministic harness input evidence,
