@@ -24,9 +24,17 @@ It explains which runtime is authoritative for a task and what verification path
 ### Option 2: Run from PowerShell/Terminal
 ```powershell
 cd electron
-npm install   # Only needed first time
+npm ci
+npm run electron:provision
+npm run electron:verify-provision
 npm start
 ```
+
+Electron 42+ installs the JavaScript package during `npm ci` and downloads the
+native Electron binary only through its explicit official installer. Run
+`npm run electron:provision` before Electron runtime, smoke, or packaging
+commands in fresh worktrees and CI. This is an explicit setup step, not an
+automatic `postinstall` hook.
 
 ## Features
 
@@ -71,7 +79,8 @@ To create a standalone `.exe`:
 
 ```bash
 cd electron
-npm install
+npm ci
+npm run electron:provision
 npm run build
 ```
 
