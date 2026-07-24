@@ -1,0 +1,2621 @@
+{
+  "startTime": "2026-07-24T18:53:04.829Z",
+  "branch": "fix/v11.1.2-tar-audit-final-gate",
+  "sha": "201190ff8d9fc28d1da67e40aa21846c7f65ddce",
+  "runtime": "source-electron",
+  "exe": "<repo>\\electron\\node_modules\\electron\\dist\\electron.exe",
+  "exeSha256": "67cff2ce5ac7976408aac30e17e9266443a351b44ec1ee613b444867a78dc9d7",
+  "phases": {
+    "startup": {
+      "status": "passed",
+      "results": [
+        {
+          "scenario": "normal",
+          "seeded": "lib",
+          "snapshot": {
+            "route": "lib",
+            "visiblePanel": "ns-panel-lib",
+            "settingsVisible": false,
+            "settingsEverVisible": false,
+            "startupVisibility": [
+              {
+                "phase": "renderer-created",
+                "visible": false,
+                "at": 1784919185365
+              },
+              {
+                "phase": "renderer-ready",
+                "visible": false,
+                "at": 1784919185812
+              }
+            ],
+            "dryRun": true,
+            "heroTitle": "Custom Timer · 28 min · Shutdown"
+          },
+          "persistedTab": "lib"
+        },
+        {
+          "scenario": "legacy-settings",
+          "seeded": "set",
+          "snapshot": {
+            "route": "lib",
+            "visiblePanel": "ns-panel-lib",
+            "settingsVisible": false,
+            "settingsEverVisible": false,
+            "startupVisibility": [
+              {
+                "phase": "renderer-created",
+                "visible": false,
+                "at": 1784919186204
+              },
+              {
+                "phase": "renderer-ready",
+                "visible": false,
+                "at": 1784919186656
+              }
+            ],
+            "dryRun": true,
+            "heroTitle": "Custom Timer · 28 min · Shutdown"
+          },
+          "persistedTab": "lib"
+        },
+        {
+          "scenario": "legacy-help",
+          "seeded": "help",
+          "snapshot": {
+            "route": "lib",
+            "visiblePanel": "ns-panel-lib",
+            "settingsVisible": false,
+            "settingsEverVisible": false,
+            "startupVisibility": [
+              {
+                "phase": "renderer-created",
+                "visible": false,
+                "at": 1784919187024
+              },
+              {
+                "phase": "renderer-ready",
+                "visible": false,
+                "at": 1784919187460
+              }
+            ],
+            "dryRun": true,
+            "heroTitle": "Custom Timer · 28 min · Shutdown"
+          },
+          "persistedTab": "lib"
+        },
+        {
+          "scenario": "settings-close-restart",
+          "snapshot": {
+            "route": "lib",
+            "visiblePanel": "ns-panel-lib",
+            "settingsVisible": false,
+            "settingsEverVisible": false,
+            "startupVisibility": [
+              {
+                "phase": "renderer-created",
+                "visible": false,
+                "at": 1784919189233
+              },
+              {
+                "phase": "renderer-ready",
+                "visible": false,
+                "at": 1784919189690
+              }
+            ],
+            "dryRun": true,
+            "heroTitle": "Custom Timer · 28 min · Shutdown"
+          }
+        }
+      ]
+    },
+    "top-menu": {
+      "status": "passed",
+      "results": {
+        "mouse": [
+          {
+            "step": "click-power",
+            "open": true,
+            "ariaExpanded": "true",
+            "focusedElement": null,
+            "recentEvents": [
+              {
+                "type": "mousemove",
+                "target": "SPAN",
+                "activeElement": null,
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 1494.5999999996275
+              },
+              {
+                "type": "mousedown",
+                "target": "SPAN",
+                "activeElement": null,
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 1555.699999999255
+              },
+              {
+                "type": "focus",
+                "target": "menu-power",
+                "activeElement": "menu-power",
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 1556
+              },
+              {
+                "type": "focusin",
+                "target": "menu-power",
+                "activeElement": "menu-power",
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 1556
+              },
+              {
+                "type": "mouseup",
+                "target": "SPAN",
+                "activeElement": "menu-power",
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 1616.2999999988824
+              },
+              {
+                "type": "click",
+                "target": "SPAN",
+                "activeElement": "menu-power",
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 1616.3999999985099
+              },
+              {
+                "type": "blur",
+                "target": "menu-power",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-power"
+                ],
+                "settingsAriaExpanded": "false",
+                "at": 1616.8999999985099
+              },
+              {
+                "type": "focusout",
+                "target": "menu-power",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-power"
+                ],
+                "settingsAriaExpanded": "false",
+                "at": 1616.8999999985099
+              },
+              {
+                "type": "focus",
+                "target": "submenu-item selected",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-power"
+                ],
+                "settingsAriaExpanded": "false",
+                "at": 1630.2999999988824
+              },
+              {
+                "type": "focusin",
+                "target": "submenu-item selected",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-power"
+                ],
+                "settingsAriaExpanded": "false",
+                "at": 1630.2999999988824
+              }
+            ]
+          },
+          {
+            "step": "click-power-again",
+            "closed": true
+          },
+          {
+            "step": "click-settings",
+            "open": true
+          },
+          {
+            "step": "click-help-closes-settings",
+            "settingsClosed": true,
+            "helpOpen": true
+          },
+          {
+            "step": "pointer-transfer-stays-open",
+            "menuRect": {
+              "x": 675.4249877929688,
+              "y": 50.38195037841797
+            },
+            "beforePointerTransfer": {
+              "focusedElement": {
+                "id": "toggle-dryrun",
+                "text": "Dry Run Mode\n              ON",
+                "role": "menuitemcheckbox"
+              },
+              "settingsMenuOpen": true,
+              "settingsAriaExpanded": "true",
+              "selectedMenuItem": "toggle-dryrun",
+              "route": "lib",
+              "visiblePanels": [
+                "ns-panel-lib"
+              ],
+              "settingsVisible": false,
+              "recentEvents": [
+                {
+                  "type": "focus",
+                  "target": "menu-help",
+                  "activeElement": "menu-help",
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 3401.5
+                },
+                {
+                  "type": "focusin",
+                  "target": "menu-help",
+                  "activeElement": "menu-help",
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 3401.5999999996275
+                },
+                {
+                  "type": "mouseup",
+                  "target": "SPAN",
+                  "activeElement": "menu-help",
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 3463.0999999996275
+                },
+                {
+                  "type": "click",
+                  "target": "SPAN",
+                  "activeElement": "menu-help",
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 3463.199999999255
+                },
+                {
+                  "type": "blur",
+                  "target": "menu-help",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 3463.5999999996275
+                },
+                {
+                  "type": "focusout",
+                  "target": "menu-help",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 3463.5999999996275
+                },
+                {
+                  "type": "focus",
+                  "target": "submenu-item",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 3465.0999999996275
+                },
+                {
+                  "type": "focusin",
+                  "target": "submenu-item",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 3465.0999999996275
+                },
+                {
+                  "type": "mousemove",
+                  "target": "SPAN",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4035.0999999996275
+                },
+                {
+                  "type": "mousedown",
+                  "target": "SPAN",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4093.699999999255
+                },
+                {
+                  "type": "blur",
+                  "target": "submenu-item",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4093.89999999851
+                },
+                {
+                  "type": "focusout",
+                  "target": "submenu-item",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4093.89999999851
+                },
+                {
+                  "type": "focus",
+                  "target": "menu-settings",
+                  "activeElement": "menu-settings",
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4094
+                },
+                {
+                  "type": "focusin",
+                  "target": "menu-settings",
+                  "activeElement": "menu-settings",
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4094
+                },
+                {
+                  "type": "mouseup",
+                  "target": "SPAN",
+                  "activeElement": "menu-settings",
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4156.5
+                },
+                {
+                  "type": "click",
+                  "target": "SPAN",
+                  "activeElement": "menu-settings",
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4156.5
+                },
+                {
+                  "type": "blur",
+                  "target": "menu-settings",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 4157
+                },
+                {
+                  "type": "focusout",
+                  "target": "menu-settings",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 4157.0999999996275
+                },
+                {
+                  "type": "focus",
+                  "target": "toggle-dryrun",
+                  "activeElement": "toggle-dryrun",
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 4157.5
+                },
+                {
+                  "type": "focusin",
+                  "target": "toggle-dryrun",
+                  "activeElement": "toggle-dryrun",
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 4157.5
+                }
+              ]
+            },
+            "afterPointerTransfer": {
+              "focusedElement": {
+                "id": "toggle-dryrun",
+                "text": "Dry Run Mode\n              ON",
+                "role": "menuitemcheckbox"
+              },
+              "settingsMenuOpen": true,
+              "settingsAriaExpanded": "true",
+              "selectedMenuItem": "toggle-dryrun",
+              "route": "lib",
+              "visiblePanels": [
+                "ns-panel-lib"
+              ],
+              "settingsVisible": false,
+              "recentEvents": [
+                {
+                  "type": "focusin",
+                  "target": "menu-help",
+                  "activeElement": "menu-help",
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 3401.5999999996275
+                },
+                {
+                  "type": "mouseup",
+                  "target": "SPAN",
+                  "activeElement": "menu-help",
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 3463.0999999996275
+                },
+                {
+                  "type": "click",
+                  "target": "SPAN",
+                  "activeElement": "menu-help",
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 3463.199999999255
+                },
+                {
+                  "type": "blur",
+                  "target": "menu-help",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 3463.5999999996275
+                },
+                {
+                  "type": "focusout",
+                  "target": "menu-help",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 3463.5999999996275
+                },
+                {
+                  "type": "focus",
+                  "target": "submenu-item",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 3465.0999999996275
+                },
+                {
+                  "type": "focusin",
+                  "target": "submenu-item",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 3465.0999999996275
+                },
+                {
+                  "type": "mousemove",
+                  "target": "SPAN",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4035.0999999996275
+                },
+                {
+                  "type": "mousedown",
+                  "target": "SPAN",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4093.699999999255
+                },
+                {
+                  "type": "blur",
+                  "target": "submenu-item",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4093.89999999851
+                },
+                {
+                  "type": "focusout",
+                  "target": "submenu-item",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4093.89999999851
+                },
+                {
+                  "type": "focus",
+                  "target": "menu-settings",
+                  "activeElement": "menu-settings",
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4094
+                },
+                {
+                  "type": "focusin",
+                  "target": "menu-settings",
+                  "activeElement": "menu-settings",
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4094
+                },
+                {
+                  "type": "mouseup",
+                  "target": "SPAN",
+                  "activeElement": "menu-settings",
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4156.5
+                },
+                {
+                  "type": "click",
+                  "target": "SPAN",
+                  "activeElement": "menu-settings",
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4156.5
+                },
+                {
+                  "type": "blur",
+                  "target": "menu-settings",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 4157
+                },
+                {
+                  "type": "focusout",
+                  "target": "menu-settings",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 4157.0999999996275
+                },
+                {
+                  "type": "focus",
+                  "target": "toggle-dryrun",
+                  "activeElement": "toggle-dryrun",
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 4157.5
+                },
+                {
+                  "type": "focusin",
+                  "target": "toggle-dryrun",
+                  "activeElement": "toggle-dryrun",
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 4157.5
+                },
+                {
+                  "type": "mousemove",
+                  "target": "toggle-dryrun",
+                  "activeElement": "toggle-dryrun",
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 4294.799999998882
+                }
+              ]
+            },
+            "stillOpen": true
+          },
+          {
+            "step": "pointer-away-stays-open",
+            "afterPointerAway": {
+              "focusedElement": {
+                "id": "toggle-dryrun",
+                "text": "Dry Run Mode\n              ON",
+                "role": "menuitemcheckbox"
+              },
+              "settingsMenuOpen": true,
+              "settingsAriaExpanded": "true",
+              "selectedMenuItem": "toggle-dryrun",
+              "route": "lib",
+              "visiblePanels": [
+                "ns-panel-lib"
+              ],
+              "settingsVisible": false,
+              "recentEvents": [
+                {
+                  "type": "mouseup",
+                  "target": "SPAN",
+                  "activeElement": "menu-help",
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 3463.0999999996275
+                },
+                {
+                  "type": "click",
+                  "target": "SPAN",
+                  "activeElement": "menu-help",
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 3463.199999999255
+                },
+                {
+                  "type": "blur",
+                  "target": "menu-help",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 3463.5999999996275
+                },
+                {
+                  "type": "focusout",
+                  "target": "menu-help",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 3463.5999999996275
+                },
+                {
+                  "type": "focus",
+                  "target": "submenu-item",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 3465.0999999996275
+                },
+                {
+                  "type": "focusin",
+                  "target": "submenu-item",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 3465.0999999996275
+                },
+                {
+                  "type": "mousemove",
+                  "target": "SPAN",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4035.0999999996275
+                },
+                {
+                  "type": "mousedown",
+                  "target": "SPAN",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4093.699999999255
+                },
+                {
+                  "type": "blur",
+                  "target": "submenu-item",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4093.89999999851
+                },
+                {
+                  "type": "focusout",
+                  "target": "submenu-item",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4093.89999999851
+                },
+                {
+                  "type": "focus",
+                  "target": "menu-settings",
+                  "activeElement": "menu-settings",
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4094
+                },
+                {
+                  "type": "focusin",
+                  "target": "menu-settings",
+                  "activeElement": "menu-settings",
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4094
+                },
+                {
+                  "type": "mouseup",
+                  "target": "SPAN",
+                  "activeElement": "menu-settings",
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4156.5
+                },
+                {
+                  "type": "click",
+                  "target": "SPAN",
+                  "activeElement": "menu-settings",
+                  "openMenus": [
+                    "menu-help"
+                  ],
+                  "settingsAriaExpanded": "false",
+                  "at": 4156.5
+                },
+                {
+                  "type": "blur",
+                  "target": "menu-settings",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 4157
+                },
+                {
+                  "type": "focusout",
+                  "target": "menu-settings",
+                  "activeElement": null,
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 4157.0999999996275
+                },
+                {
+                  "type": "focus",
+                  "target": "toggle-dryrun",
+                  "activeElement": "toggle-dryrun",
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 4157.5
+                },
+                {
+                  "type": "focusin",
+                  "target": "toggle-dryrun",
+                  "activeElement": "toggle-dryrun",
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 4157.5
+                },
+                {
+                  "type": "mousemove",
+                  "target": "toggle-dryrun",
+                  "activeElement": "toggle-dryrun",
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 4294.799999998882
+                },
+                {
+                  "type": "mousemove",
+                  "target": "brand-mark",
+                  "activeElement": "toggle-dryrun",
+                  "openMenus": [
+                    "menu-settings"
+                  ],
+                  "settingsAriaExpanded": "true",
+                  "at": 4595
+                }
+              ]
+            },
+            "stillOpen2": true
+          },
+          {
+            "step": "advanced-options-opens-settings",
+            "settingsVisible": true
+          },
+          {
+            "step": "close-restores-route",
+            "restored": "lib"
+          },
+          {
+            "step": "toggle-dryrun",
+            "dryRunIndicator": "OFF"
+          },
+          {
+            "step": "outside-click-closes",
+            "allClosed": true
+          },
+          {
+            "step": "power-selects-plan-without-execution",
+            "powerSelection": {
+              "action": "shutdown",
+              "dryRun": true,
+              "warningOpen": false
+            },
+            "starts": 0,
+            "realPowerActions": 0
+          },
+          {
+            "step": "help-item-activates",
+            "aboutOpen": true
+          }
+        ],
+        "keyboard": [
+          {
+            "step": "enter-opens-power",
+            "powerOpen": true
+          },
+          {
+            "step": "arrow-down-to-item",
+            "focusedItem": {
+              "text": "↻\n              Restart",
+              "action": "restart"
+            }
+          },
+          {
+            "step": "arrow-up",
+            "focusedItem": {
+              "text": "⏻\n              Shutdown",
+              "action": "shutdown"
+            }
+          },
+          {
+            "step": "escape-closes-and-focuses-trigger",
+            "closedByEscape": true
+          },
+          {
+            "step": "arrow-down-opens-settings",
+            "focusedElement": {
+              "id": "toggle-dryrun",
+              "text": "Dry Run Mode\n              ON",
+              "role": "menuitemcheckbox"
+            },
+            "settingsMenuOpen": true,
+            "settingsAriaExpanded": "true",
+            "selectedMenuItem": "toggle-dryrun",
+            "route": "help",
+            "visiblePanels": [
+              "ns-panel-lib"
+            ],
+            "settingsVisible": false,
+            "recentEvents": [
+              {
+                "type": "blur",
+                "target": "submenu-item selected",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-power"
+                ],
+                "settingsAriaExpanded": "false",
+                "at": 10092.699999999255
+              },
+              {
+                "type": "focusout",
+                "target": "submenu-item selected",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-power"
+                ],
+                "settingsAriaExpanded": "false",
+                "at": 10092.699999999255
+              },
+              {
+                "type": "focus",
+                "target": "submenu-item",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-power"
+                ],
+                "settingsAriaExpanded": "false",
+                "at": 10093
+              },
+              {
+                "type": "focusin",
+                "target": "submenu-item",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-power"
+                ],
+                "settingsAriaExpanded": "false",
+                "at": 10093
+              },
+              {
+                "type": "blur",
+                "target": "submenu-item",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-power"
+                ],
+                "settingsAriaExpanded": "false",
+                "at": 10514.299999998882
+              },
+              {
+                "type": "focusout",
+                "target": "submenu-item",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-power"
+                ],
+                "settingsAriaExpanded": "false",
+                "at": 10514.299999998882
+              },
+              {
+                "type": "focus",
+                "target": "submenu-item selected",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-power"
+                ],
+                "settingsAriaExpanded": "false",
+                "at": 10514.599999999627
+              },
+              {
+                "type": "focusin",
+                "target": "submenu-item selected",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-power"
+                ],
+                "settingsAriaExpanded": "false",
+                "at": 10514.599999999627
+              },
+              {
+                "type": "blur",
+                "target": "submenu-item selected",
+                "activeElement": null,
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 10931.599999999627
+              },
+              {
+                "type": "focusout",
+                "target": "submenu-item selected",
+                "activeElement": null,
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 10931.599999999627
+              },
+              {
+                "type": "focus",
+                "target": "menu-power",
+                "activeElement": "menu-power",
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 10931.89999999851
+              },
+              {
+                "type": "focusin",
+                "target": "menu-power",
+                "activeElement": "menu-power",
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 10931.89999999851
+              },
+              {
+                "type": "blur",
+                "target": "menu-power",
+                "activeElement": null,
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 11364.199999999255
+              },
+              {
+                "type": "focusout",
+                "target": "menu-power",
+                "activeElement": null,
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 11364.299999998882
+              },
+              {
+                "type": "focus",
+                "target": "menu-settings",
+                "activeElement": "menu-settings",
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 11364.599999999627
+              },
+              {
+                "type": "focusin",
+                "target": "menu-settings",
+                "activeElement": "menu-settings",
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 11364.599999999627
+              },
+              {
+                "type": "blur",
+                "target": "menu-settings",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-settings"
+                ],
+                "settingsAriaExpanded": "true",
+                "at": 11365.5
+              },
+              {
+                "type": "focusout",
+                "target": "menu-settings",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-settings"
+                ],
+                "settingsAriaExpanded": "true",
+                "at": 11365.5
+              },
+              {
+                "type": "focus",
+                "target": "toggle-dryrun",
+                "activeElement": "toggle-dryrun",
+                "openMenus": [
+                  "menu-settings"
+                ],
+                "settingsAriaExpanded": "true",
+                "at": 11366.299999998882
+              },
+              {
+                "type": "focusin",
+                "target": "toggle-dryrun",
+                "activeElement": "toggle-dryrun",
+                "openMenus": [
+                  "menu-settings"
+                ],
+                "settingsAriaExpanded": "true",
+                "at": 11366.299999998882
+              }
+            ]
+          },
+          {
+            "step": "before-enter-on-open-options",
+            "focusedElement": {
+              "id": "open-options",
+              "text": "Advanced Options...",
+              "role": "menuitem"
+            },
+            "settingsMenuOpen": true,
+            "settingsAriaExpanded": "true",
+            "selectedMenuItem": "open-options",
+            "route": "help",
+            "visiblePanels": [
+              "ns-panel-lib"
+            ],
+            "settingsVisible": false,
+            "recentEvents": [
+              {
+                "type": "blur",
+                "target": "submenu-item",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-power"
+                ],
+                "settingsAriaExpanded": "false",
+                "at": 10514.299999998882
+              },
+              {
+                "type": "focusout",
+                "target": "submenu-item",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-power"
+                ],
+                "settingsAriaExpanded": "false",
+                "at": 10514.299999998882
+              },
+              {
+                "type": "focus",
+                "target": "submenu-item selected",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-power"
+                ],
+                "settingsAriaExpanded": "false",
+                "at": 10514.599999999627
+              },
+              {
+                "type": "focusin",
+                "target": "submenu-item selected",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-power"
+                ],
+                "settingsAriaExpanded": "false",
+                "at": 10514.599999999627
+              },
+              {
+                "type": "blur",
+                "target": "submenu-item selected",
+                "activeElement": null,
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 10931.599999999627
+              },
+              {
+                "type": "focusout",
+                "target": "submenu-item selected",
+                "activeElement": null,
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 10931.599999999627
+              },
+              {
+                "type": "focus",
+                "target": "menu-power",
+                "activeElement": "menu-power",
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 10931.89999999851
+              },
+              {
+                "type": "focusin",
+                "target": "menu-power",
+                "activeElement": "menu-power",
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 10931.89999999851
+              },
+              {
+                "type": "blur",
+                "target": "menu-power",
+                "activeElement": null,
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 11364.199999999255
+              },
+              {
+                "type": "focusout",
+                "target": "menu-power",
+                "activeElement": null,
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 11364.299999998882
+              },
+              {
+                "type": "focus",
+                "target": "menu-settings",
+                "activeElement": "menu-settings",
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 11364.599999999627
+              },
+              {
+                "type": "focusin",
+                "target": "menu-settings",
+                "activeElement": "menu-settings",
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 11364.599999999627
+              },
+              {
+                "type": "blur",
+                "target": "menu-settings",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-settings"
+                ],
+                "settingsAriaExpanded": "true",
+                "at": 11365.5
+              },
+              {
+                "type": "focusout",
+                "target": "menu-settings",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-settings"
+                ],
+                "settingsAriaExpanded": "true",
+                "at": 11365.5
+              },
+              {
+                "type": "focus",
+                "target": "toggle-dryrun",
+                "activeElement": "toggle-dryrun",
+                "openMenus": [
+                  "menu-settings"
+                ],
+                "settingsAriaExpanded": "true",
+                "at": 11366.299999998882
+              },
+              {
+                "type": "focusin",
+                "target": "toggle-dryrun",
+                "activeElement": "toggle-dryrun",
+                "openMenus": [
+                  "menu-settings"
+                ],
+                "settingsAriaExpanded": "true",
+                "at": 11366.299999998882
+              },
+              {
+                "type": "blur",
+                "target": "toggle-dryrun",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-settings"
+                ],
+                "settingsAriaExpanded": "true",
+                "at": 11596.199999999255
+              },
+              {
+                "type": "focusout",
+                "target": "toggle-dryrun",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-settings"
+                ],
+                "settingsAriaExpanded": "true",
+                "at": 11596.199999999255
+              },
+              {
+                "type": "focus",
+                "target": "open-options",
+                "activeElement": "open-options",
+                "openMenus": [
+                  "menu-settings"
+                ],
+                "settingsAriaExpanded": "true",
+                "at": 11596.599999999627
+              },
+              {
+                "type": "focusin",
+                "target": "open-options",
+                "activeElement": "open-options",
+                "openMenus": [
+                  "menu-settings"
+                ],
+                "settingsAriaExpanded": "true",
+                "at": 11596.599999999627
+              }
+            ]
+          },
+          {
+            "step": "enter-on-open-options",
+            "focusedElement": {
+              "id": null,
+              "text": "🌙\n        When do you go to bed?\n        We'll set a gentle reminder so you never miss your window.\n        \n          9 PMEarly bird\n          10 PMOn schedule\n          11 PMNight owl\n          MidnightStill going\n        \n        \n          \n          Or pick your own time\n        \n      \n\n      \n      \n        🚫\n        What keeps you up?\n        We'll help close distracting apps when it's time to wind down.\n        \n          BrowsersOne more tab...\n          Chat appsJust one message\n          MediaBackground noise\n          NothingI'm disciplined\n        \n        \n          \n          Or name specific apps\n        \n      \n\n      \n      \n        ✨\n        How should Lights Out send you off?\n        Each ritual is a cinematic shutdown sequence. Pick your vibe.\n        \n          \n            🌙\n            Classic Fade\n            Calm. Simple. Dignified.\n          \n          \n            🌐\n            Exit the Grid\n            Unplug from the feed.\n          \n          \n            🧠\n            Anti-Algorithm\n            The algorithm lost tonight.\n          \n          \n            ⚡\n            Signal Severance\n            Night secured. Period.\n          \n        \n        \n          \n          Play ambient rain during wind-down\n        \n      \n\n      \n        Back\n        Continue\n      \n    \n  \n\n  \n  \n    \n\n    \n    ✕\n\n    \n    \n      \n        \n      \n      \n        \n          🌙\n          TONIGHT\n        \n        \n          📚\n          MODES\n        \n        \n          📅\n          SCHEDULE\n        \n        \n          ⚙\n          SETTINGS\n        \n      \n      \n        \n          ?\n          ?\n        \n        \n          📊\n          STATS\n        \n      \n    \n\n    \n    \n      \n        \n          \n          Lights Out\n        \n      \n      \n        \n          Power\n          \n            \n              ⏻\n              Shutdown\n            \n            \n              ↻\n              Restart\n            \n            \n              ☾\n              Sleep\n            \n            \n              ❄\n              Hibernate\n            \n          \n        \n        \n          Settings\n          \n            \n              Dry Run Mode\n              ON\n            \n            \n              Sound Effects\n              ON\n            \n            \n              Graceful Close\n              ON\n            \n            \n              Advanced Options...\n            \n          \n        \n        \n          Help\n          \n            \n              ℹ\n              Documentation\n            \n            \n              ⌨\n              Keyboard Shortcuts\n            \n            \n              ⓘ\n              About Lights Out\n            \n          \n        \n      \n      \n        \n          ▣\n        \n        \n          —\n        \n        \n          □\n        \n        \n          ✕\n        \n      \n    \n\n    \n    \n      \n      Lights Out PC\n      Bedtime Mode for Windows\n    \n\n    \n    \n\n      \n      \n\n      \n      \n        \n          NIGHT MODE\n          \n          \n        \n        ×\n      \n\n      \n      \n        \n          \n            TONIGHT'S PLAN\n            Custom Timer · 28 min · Shutdown\n            \n              Clearance: Clear\n              ·\n              Ending: Classic Fade\n              ·\n              Proof: Tomorrow morning\n            \n            \n              ▶\n              Start Custom Timer\n            \n          \n          \n            \n              \n                \n                \n              \n              28:00\n              PREVIEW\n            \n          \n        \n      \n\n      \n      \n        \n          ✅\n          \n            LOCAL ONLY\n            Everything stays on this PC\n          \n        \n        \n          🔒\n          \n            FINAL CONFIRM ON\n            You confirm before it runs\n          \n        \n        \n          ⚠\n          \n            EMERGENCY CANCEL\n            Instantly stop at any time\n          \n        \n        \n          ☁\n          \n            NO CLOUD\n            No accounts. No tracking.\n          \n        \n      \n\n      \n      \n        \n          \n            \n            \n          \n          \n            Last Call\n            \n              \n              \n              XIIIIIIIIIIIIVVIVIIVIIIIXXXI\n              121234567891011\n              \n              \n              \n              \n              11:53\n              \n            \n            \n            Bedtime 22:30\n            \n          \n          ⛶\n        \n\n        \n        \n          \n            ⏸\n            Pause\n          \n          \n            ⏹\n            Snooze\n          \n          \n            ■\n            Cancel\n          \n        \n\n        \n        \n          \n            −\n            \n            +\n            \n              min\n              sec\n            \n          \n          \n            5m\n            15m\n            30m\n            45m\n            1h\n            2h\n          \n          🌙 Begin Ritual\n        \n      \n\n      \n      \n        🔥\n        0-night streak\n        \n        ›\n      \n\n      \n      \n        \n          Saved Profiles\n          \n            ➕ Save as Profile\n            ⚙\n          \n        \n        \n      \n        \n          \n          \n          Movie Night\n          \n          \n        \n        Sleep in 120m\n      \n    \n      \n        \n          \n          \n          Quick Nap\n          \n          \n        \n        Sleep in 30m\n      \n    \n      \n        \n          \n          \n          Work Focus\n          \n          \n        \n        Shutdown in 60m\n      \n    \n      \n        \n          \n          \n          Hard Stop\n          \n          \n        \n        Shutdown in 15m\n      \n    \n      \n\n      \n      \n        \n          \n            ⏻\n            Session\n          \n          \n            \n              Action\n              Shutdown\n            \n            \n              Ends\n              Idle\n            \n          \n        \n\n        \n          \n            ⚡\n            Power Status\n          \n          \n            \n              Battery\n              N/A\n            \n            \n              Power Plan\n              High performance\n            \n          \n        \n        \n        \n          \n            ⚠\n            Warnings\n          \n          \n            Apps may prevent shutdown\n            View Ledger\n          \n        \n      \n\n      \n      \n        \n\n          \n          \n\n          \n          \n            ☀\n            \n              LAST NIGHT\n              MISSION COMPLETE\n            \n            \n          \n\n          \n          \n            \n              —\n              SESSION\n            \n            \n              —\n              ACTION\n            \n            \n              0\n              SNOOZES\n            \n            \n              —\n              TOTAL RUNS\n            \n          \n\n          \n          \n\n          \n          \n            \n              ▶\n              Play Tonight Again\n            \n            View Ledger\n            Copy Proof\n            Close\n            ✕\n          \n\n        \n      \n\n      \n      \n\n      \n      \n        \n          \n            Your Night Modes\n            Choose what happens tonight.\n          \n          \n            \n      🌙\n      Quick Sleep\n      A short countdown, then sleep this PC.\n      \n        15 min\n        Sleep\n        \n      \n    \n      🔆\n      Lights Down\n      Wind down with a guided ritual before sleep.\n      \n        45 min\n        Sleep\n        \n      \n    \n      🎬\n      Movie Wind-Down\n      Finish watching, then let this PC sleep.\n      \n        1h 30m\n        Sleep\n        \n      \n    \n      ⚡\n      Full Shutdown\n      A firm end to the night with a guided ritual.\n      \n        1h\n        Shutdown\n        \n      \n    \n      🏠\n      Quiet House\n      Silence networked devices and settle the house.\n      \n        30 min\n        Sleep\n        COMING SOON\n      \n    \n      📚\n      School Night\n      Enforce bedtime with scheduled shutdown and content blocking.\n      \n        30 min\n        Shutdown\n        NEEDS SETUP\n      \n    \n            \n              ← Back\n              \n              \n              \n              \n                What Happens\n                \n              \n              \n                Details\n                \n              \n              \n                Status\n                \n              \n              \n                Use Tonight\n              \n            \n          \n        \n      \n      \n\n      \n      \n        \n          Quick Setup\n          Schedule\n          Clock\n          Focus\n          Countdown\n          Streaks\n        \n        \n          \n            \n              \n                45 MIN SLEEP\n                45 min sleep timer\n              \n              \n                30 MIN SLEEP\n                Short wind-down\n              \n              \n                2 HOUR SHUTDOWN\n                Graceful shutdown after 2 hours\n              \n            \n          \n          \n            \n              \n                \n                Shut down at a specific date & time\n              \n              \n              \n            \n\n            \n            \n              \n                📅\n                Calendar\n                \n                  Lights Out Calendar\n                  iCal / ICS Feed\n                  Google Calendar\n                  Outlook / Microsoft 365\n                  Calendly\n                \n              \n\n              \n              \n                \n    \n      \n        Bedtime\n        10:30 PM · Sun/Mon/Tue/Wed/Thu/Fri/Sat · Shutdown\n      \n      \n        \n        Edit\n        Delete\n      \n    \n  \n                + Add Rule\n\n                \n                  \n                    Label\n                    \n                  \n                  \n                    Time\n                    \n                  \n                  \n                    Duration (minutes, before the action fires)\n                    \n                  \n                  \n                    Active Days\n                    \n                      Sun\n                      Mon\n                      Tue\n                      Wed\n                      Thu\n                      Fri\n                      Sat\n                    \n                  \n                  \n                    Action\n                    \n                      Shutdown\n                      Sleep\n                      Hibernate\n                    \n                  \n                  \n                    Cancel\n                    Save Rule\n                  \n                \n\n                \n                  \n                  Auto-start timer from calendar events\n                \n              \n\n              \n              \n                \n                  iCal Feed URL\n                  \n                  Paste your calendar's secret iCal URL\n                \n                Fetch Events\n              \n\n              \n              \n                \n                  Google API Key\n                  \n                \n                \n                  Calendar ID\n                  \n                \n                Fetch Events\n              \n\n              \n              \n                \n                  Microsoft Graph Access Token\n                  \n                  Get from Azure AD app registration\n                \n                Fetch Events\n              \n\n              \n              \n                \n                  Personal Access Token\n                  \n                  Generate at calendly.com/integrations\n                \n                Fetch Events\n              \n\n              \n              \n      \n        Bedtime\n        Jul 24 at 10:30 PM 📅\n      \n      Start\n    \n      \n        Bedtime\n        Jul 25 at 10:30 PM 📅\n      \n      Start\n    \n      \n        Bedtime\n        Jul 26 at 10:30 PM 📅\n      \n      Start\n    \n      \n        Bedtime\n        Jul 27 at 10:30 PM 📅\n      \n      Start\n    \n      \n        Bedtime\n        Jul 28 at 10:30 PM 📅\n      \n      Start\n    \n      \n        Bedtime\n        Jul 29 at 10:30 PM 📅\n      \n      Start\n    \n      \n        Bedtime\n        Jul 30 at 10:30 PM 📅\n      \n      Start\n    \n      \n        Bedtime\n        Jul 31 at 10:30 PM 📅\n      \n      Start\n    \n      \n        Bedtime\n        Aug 1 at 10:30 PM 📅\n      \n      Start\n    \n      \n        Bedtime\n        Aug 2 at 10:30 PM 📅\n      \n      Start\n    \n\n              \n              \n                Next Event\n                Bedtime\n                Today at 10:30 PM\n                Start Timer\n              \n            \n          \n          \n            \n              10:30 PM\n              11:00 PM\n              12:00 AM\n            \n          \n          \n            \n              \n                🎯\n                Focus Session\n                Pomodoro-style deep work. Same ring, same sounds.\n              \n              \n                \n                  Pomodoro\n                  25/5 min\n                \n                \n                  Deep Work\n                  50/10 min\n                \n                \n                  Sprint\n                  15/3 min\n                \n              \n              \n                \n                  \n                    25:00\n                  \n                  Focus\n                \n                \n                \n                  Pause\n                  Stop\n                \n              \n              \n              \n                💸 Estimated Bedtime Deficit\n                Based on timer completion and the configured wake time; this is not measured sleep.\n                \n                  0h\n                  No estimated deficit\n                \n                No data yet\n              \n            \n          \n          \n            \n              1 Hour\n              2 Hours\n              4 Hours\n            \n          \n\n        \n        \n          \n            \n            \n              \n                \n                  \n                  \n                \n                --\n              \n              Routine consistency (need 3+ completed runs)\n              \n            \n\n            \n              0\n              Completion Streak\n            \n            \n              \n                0\n                Best\n              \n              \n                0\n                Completed Runs\n              \n              \n                --:--\n                Avg Bedtime\n              \n              \n                0%\n                Before 11 PM (7d)\n              \n            \n            \n              This Week\n              📋 Copy Report\n            \n            No nights logged this week yet. Start a timer tonight to begin this week's report.\n            \n              Completion History (Last 30 Days)\n              📋 Export Ledger\n            \n            252627282930010203040506070809101112131415161718192021222324\n            \n              Trends\n              \n                Weekly\n                Monthly\n              \n            \n            Not enough history yet.\n            Achievements\n            \n        🔒\n        ???\n        Not yet unlocked\n      \n        🔒\n        ???\n        Not yet unlocked\n      \n        🔒\n        ???\n        Not yet unlocked\n      \n        🔒\n        ???\n        Not yet unlocked\n      \n        🔒\n        ???\n        Not yet unlocked\n      \n        🔒\n        ???\n        Not yet unlocked\n      \n        🔒\n        ???\n        Not yet unlocked\n      \n        🔒\n        ???\n        Not yet unlocked\n      \n        🔒\n        ???\n        Not yet unlocked\n      \n          \n        \n        \n      \n\n      \n      \n        \n          \n            \n              📱\n              Companion Status\n            \n            \n              \n                Mode\n                Off\n              \n              \n                Status\n                Off\n              \n              \n                Network\n                —\n              \n              \n                Connected devices\n                0\n              \n            \n          \n        \n        \n          \n            \n              📋\n              Session History\n            \n            \n              No session history yet.\n            \n          \n        \n        View Full Ledger\n      \n\n  \n  \n    \n      \n        Settings\n        ×\n      \n      \n        \n          General\n          Power & Safety\n          Wind-Down\n          Phone Companion\n          Protection\n          Accountability\n          Automations\n          Appearance & Sound\n          Advanced\n        \n        \n        \n        \n          Action Type\n          \n            Shutdown\n            Restart\n            Sleep\n            Hibernate\n            Log Out\n          \n        \n        \n          Grace Period\n          \n          minutes\n        \n        \n          \n            \n            Force shutdown (close all apps)\n          \n        \n        \n          \n            \n            Mute system before action\n          \n        \n        \n          \n            \n            Dry run mode (skip the power action)\n          \n        \n        \n\n        \n        \n          \n            \n            Run at login (start minimized and idle)\n          \n        \n        \n\n        \n        \n          Focus Mode - Apps to close during wind-down\n          \n          Comma-separated process names. Closed gracefully during the dim phase.\n        \n        \n\n        \n        \n          🌙 Wind-down system actions\n          \n            \n              \n              Enable Windows Night Light (blue-light filter) during wind-down\n            \n          \n          \n            \n              \n              Auto-pause media players during wind-down\n            \n          \n          \n            \n              \n              Keep window on top and hide menu during wind-down\n            \n          \n        \n\n        \n        \n          💡 Smart Lights REQUIRES SETUP\n          Nothing is controlled until you configure and successfully test the available Philips Hue or HTTP integration.\n          \n          \n            \n              \n              Configure smart lights (enabled only after a successful test)\n            \n          \n\n          \n            \n              Provider\n              \n                None\n                Philips Hue\n                HTTP Webhook\n              \n            \n\n            \n              Mode\n              \n                Gradual Dim\n                Warm Shift + Dim\n                Off at End Only\n              \n            \n\n            \n              Dim Duration\n              \n              minutes before end\n            \n\n            \n            \n              \n                Bridge IP\n                \n                Discover\n              \n              \n                Username/API Key\n                \n                Register\n              \n              \n                Group/Room (optional)\n                \n                Load Groups\n              \n            \n\n            \n            \n              \n                Webhook URL\n                \n              \n              \n                Method\n                \n                  POST\n                  PUT\n                \n              \n              \n                Body Template\n                {\"brightness\": {{BRIGHTNESS}}, \"color_temp\": {{COLOR_TEMP}}, \"on\": {{ON}}}\n                Use {{BRIGHTNESS}}, {{COLOR_TEMP}}, {{ON}}\n              \n            \n\n            \n              Test Connection\n              \n            \n          \n        \n\n        \n        \n          🌅 First Light\n\n          \n            \n              \n              Set a First Light sunrise alarm\n            \n          \n          \n            \n              Wake-up Time\n              \n            \n            \n              Set First Light\n              Remove\n              No First Light scheduled\n            \n            \n              \n                Works with Sleep or Hibernate: schedules a Windows wake task,\n                then runs a 60-second sunrise brightening sequence on resume.\n                The morning bookend to your Last Light ritual.\n              \n            \n          \n        \n\n        \n        \n          \n            📱 Phone Companion\n            Off\n          \n          \n          Control this PC from your phone. Off by default and protected by a pairing code.\n          \n          \n            Off\n            This PC only\n            Connect Phone\n          \n          No listener running. Nothing is exposed on your network.\n\n          \n            \n              Companion is not reachable\n              \n              Retry connection\n            \n            \n              Desktop endpoint ready; Windows firewall access is not verified\n              \n            \n\n            \n              Companion port\n              \n                \n                Apply & retry\n              \n              Change this if another app owns the port. The QR updates only after the new listener passes its checks.\n            \n\n            \n              \n                \n              \n              📱 Scan with your phone camera to pair instantly\n            \n            \n            \n              \n                Manual URL fallback:\n                \n                  \n                  📋\n                \n              \n              \n              \n                \n                  Short pairing code:\n                  \n                \n                Regenerate\n              \n            \n\n            \n              ⚠  — don't recognize it? Hit Regenerate above.\n            \n\n            \n              ❓ Having trouble?\n              \n                Phone and PC must be on the same Wi-Fi network.\n                VPN or firewall can block local connections.\n                Use manual URL if QR scanning fails.\n              \n            \n            \n            Turn off companion\n          \n        \n\n        \n        \n          👨‍👩‍👧‍👦 Family Mode\n          Controls another PC only when that PC is running Lights Out with Family LAN enabled and the same pairing token. Discovery alone does not configure a peer.\n          \n            Scan for Peers\n            \n          \n          \n        \n\n        \n        \n          🛡️ WiFi Guard EXPERIMENTAL\n          Requires a compatible router or your own webhook. Windows Firewall on this PC cannot block a different phone or tablet on the LAN.\n\n          \n            \n              \n              Enable WiFi Guard\n            \n          \n\n          \n            \n              Provider\n              \n                Windows Firewall — unavailable for other devices\n                WiFi Adapter (disable entirely)\n                TP-Link Router\n                ASUS Router\n                Netgear Router\n                Custom Webhook\n              \n              \n                Router integrations are model-dependent and experimental. Webhook is the most explicit integration. Adapter disables this PC's Wi-Fi entirely.\n              \n            \n\n            \n            \n              \n                Router IP\n                \n              \n              \n                Username\n                \n              \n              \n                Password\n                \n              \n            \n\n            \n            \n              \n                Webhook URL\n                \n              \n            \n\n            \n              Devices to Block\n              Scan Network\n              \n              \n                Click devices to add them. Router and webhook modes receive the selected MAC/IP values.\n              \n            \n\n            \n              \n                \n                Block internet when dim phase starts\n              \n            \n            \n              \n                \n                Restore internet when timer is cancelled\n              \n            \n\n            \n              Test Block\n              Test Unblock\n              \n            \n          \n        \n\n        \n        \n          🚫 Content Blocker HOSTS FILE\n          Edits the Windows hosts file and may require administrator approval. Secure DNS, VPNs, and cached browser connections can bypass it.\n\n          \n            \n              \n              Enable content blocking\n            \n          \n\n          \n            \n              \n                \n                Use default blocklist (TikTok, Instagram, Reddit, YouTube, etc.)\n              \n            \n\n            \n              Custom sites to block (one per line)\n              \n              Added on top of the default list. Only used if \"Use default\" is checked, otherwise this IS the list.\n            \n\n            \n              \n                \n                Block sites when dim phase starts\n              \n            \n            \n              \n                \n                Unblock sites when timer completes or is cancelled\n              \n            \n\n            \n              Test Block\n              Test Unblock\n              \n            \n\n            \n              Blocking Schedule (independent of the shutdown timer -- e.g. block overnight whether or not a timer is running)\n              No blocking schedules yet. Add one to block sites on a recurring window, independent of the timer.\n              + Add Schedule\n\n              \n                \n                  Label\n                  \n                \n                \n                  Start Time\n                  \n                \n                \n                  End Time\n                  \n                \n                \n                  Active Days\n                  \n                    Sun\n                    Mon\n                    Tue\n                    Wed\n                    Thu\n                    Fri\n                    Sat\n                  \n                \n                \n                  Cancel\n                  Save Schedule\n                \n              \n            \n          \n        \n\n        \n        \n          🤝 Accountability Partner\n          Sends JSON to a webhook you configure and test below. No message is sent until a partner webhook exists.\n\n          \n            \n              \n              Enable accountability notifications\n            \n          \n\n          \n            \n              \n                \n                Notify when wind-down starts\n              \n            \n            \n              \n                \n                Notify when you hit snooze\n              \n            \n            \n              \n                \n                Notify when you cancel\n              \n            \n            \n              \n                \n                Notify when timer completes\n              \n            \n\n            \n              Partner Webhook URL\n              \n              Works with Discord, Slack, IFTTT, or any JSON webhook.\n            \n            \n              Partner Name\n              \n            \n\n            \n              Test Notification\n              \n            \n          \n        \n\n        \n        \n          ⏰ Override Tax\n          Escalating cost for hitting snooze. Makes it harder to stay up the more you try.\n\n          \n            \n              \n              Enable Override Tax\n            \n          \n\n          \n            \n              Free snoozes per session\n              \n              First N snoozes have no penalty.\n            \n            \n              Tomorrow tightens by (minutes)\n              \n              Each escalated snooze shortens tomorrow's timer by this much.\n            \n            \n              Max tighten cap (minutes)\n              \n            \n            \n              Require reason after snooze #\n              \n            \n            \n              \n                Session snoozes:\n                0\n              \n              \n                Tomorrow's debt:\n                0 min\n              \n            \n          \n        \n\n        \n        \n          🤖 Autopilot Bedtime\n          Learns your pattern and auto-starts the timer at your habitual bedtime. You get a 5-minute warning.\n\n          \n            \n              \n              Enable Autopilot\n            \n          \n\n          \n            \n              \n                Learned bedtime:\n                --:--\n              \n              \n                Confidence:\n                --\n              \n              \n                Based on:\n                -- nights\n              \n            \n            \n              Override bedtime (leave blank to use learned)\n              \n              Set a fixed time instead of using the learned pattern.\n            \n          \n        \n\n        \n        \n          🎨 Customize\n\n          \n            Accent Color\n            \n            \n              \n              \n              \n              \n              \n              \n            \n          \n\n          \n            Theme\n            \n              Midnight\n              Carbon\n              Aurora\n              Ember\n              Tide\n              Dawn\n            \n          \n\n          \n            Ring Style\n            \n              Glow\n              Neon\n              Sunset\n              Ember\n              Aurora\n              Midnight\n              Solid\n              Minimal\n            \n          \n\n          \n            Window Opacity\n            \n            100%\n          \n\n          \n            Sound Volume\n            \n            100%\n          \n\n          \n            \n              \n              Warm shift during wind-down\n            \n          \n\n          \n            \n              \n              Show current time when idle\n            \n          \n\n          \n            Clock Face\n            \n              Digital\n              Analog\n              Hybrid\n            \n          \n\n          \n            Time Format\n            \n              24-hour\n              12-hour\n            \n          \n\n          \n            Clock Size\n            \n            100%\n          \n\n          \n            \n              \n              Show the date on the idle clock\n            \n          \n\n          \n            \n              Clock Style\n              \n                Modern\n                Bold\n                Minimal\n                Neon\n                Classic (Roman)\n              \n            \n            \n              Clock Dial\n              \n                Hour markers\n                Minute rail\n                Arabic numerals\n                Roman numerals\n                Match style\n              \n            \n            \n              Clock Hand Color\n              \n            \n            \n              \n                \n                Show second hand\n              \n            \n            \n              \n                \n                Smooth sweep second hand\n              \n            \n          \n\n          \n            Ambient Soundscape\n            \n              Off\n              Rain\n              White Noise\n              Brown Noise\n              Crickets\n              Ocean Waves\n            \n          \n\n          \n            Ambient Visual\n            \n              Off\n              Fireplace\n              Rain on Glass\n              Starfield\n              Aurora\n            \n          \n\n          \n            \n              \n              Idle detection (nudge when you walk away)\n            \n          \n\n          \n            \n              \n              Bedtime reminder (15 min before)\n            \n          \n\n          \n            \n              \n              Auto-start timer from calendar events\n            \n          \n\n          \n            Reset to defaults\n          \n        \n\n        \n        \n          🌙 Last Light\n\n          \n            \n              \n              Play a finale before the power action\n            \n          \n\n          \n            \n              Sequence\n              \n                Classic Fade\n                Exit the Grid\n                Anti-Algorithm Protocol\n                Signal Severance\n              \n            \n            \n              Sound\n              \n                Off\n                Soft tick\n                Silent\n              \n            \n            \n              Preview finale\n            \n            \n              Custom Sequences\n              No custom sequences yet.\n              + New Sequence\n            \n            \n              \n                Name\n                \n              \n              \n                \n                  \n                  \n                  \n                \n              \n              + Step\n              \n                Save\n                Cancel\n              \n            \n          \n        \n        \n      \n      \n        Cancel\n        Save\n      \n    \n  \n\n    \n\n    \n    \n      \n        \n          \n          Dry Run\n        \n        Forged by The Proof Foundry™\n      \n      \n        🔔\n          2\n        \n        📊\n        📱\n        UPDATE\n        v11.1.2\n      \n    \n\n  \n\n  \n  \n    \n      \n        Saved Profiles\n        ×\n      \n      \n        \n        \n          Save Current Settings as Profile\n          Will save the current timer.\n          \n            Profile Name\n            \n          \n          \n            Profile Type\n            \n              Family member\n              Saved routine\n            \n          \n          \n            Avatar (optional)\n            \n          \n          \n            Accent (optional)\n            \n              App default\n              Blue\n              Purple\n              Cyan\n              Green\n              Amber\n              Rose\n            \n          \n          \n            Notes (optional)\n            \n          \n          Save Profile\n        \n\n        \n        \n          \n            Your Profiles\n            \n          \n          \n            All\n            Duration\n            Clock\n            📌 Pinned\n          \n          \n            \n          \n        \n\n        \n        \n          Export Profiles\n          Import Profiles\n          \n          Export All Data\n          Import All Data\n          \n        \n      \n      \n        Close\n      \n    \n  \n\n  \n  \n    \n      ⚠\n      Heads up\n      Power action is approaching.\n      \n        Snooze +5 min\n        Cancel timer\n        Dismiss\n        Emergency Override\n      \n    \n  \n\n  \n  \n    \n      \n        🚫\n        Emergency Override\n        You CAN stay up, but it costs.\n      \n      \n      \n        Why are you staying up?\n        \n      \n      \n        Override (I accept the consequences)\n        Never mind, wind down\n      \n    \n  \n\n  \n  \n    \n      \n        ⏰\n        Snooze has a cost\n        You can still snooze, but it won't be free.\n      \n      \n      \n        Why are you staying up?\n        \n      \n      \n        Snooze anyway\n        Go to sleep\n      \n    \n  \n\n  \n  \n    \n      \n        📶\n        This opens your PC to your Wi-Fi network\n      \n      \n        Any device on this Wi-Fi network that has the pairing code can start, pause, snooze, or cancel the timer.\n        It can never force a shutdown, log you out, or hibernate the PC — that stays local-only.\n        Regenerating the pairing code instantly revokes access for every connected device.\n        Turn this off any time from Settings.\n      \n      \n        I understand, connect phone\n        Cancel\n      \n    \n  \n\n  \n  \n    \n      \n        🔔 Notifications\n        ×\n      \n      \n        No notifications yet.\n      \n    \n  \n\n  \n  \n    \n      \n        🌙\n      \n      Bedtime Ritual\n      Preparing your wind-down sequence...\n      \n        \n      \n      \n        \n      \n      \n        Skip\n        Next\n      \n      Cancel Ritual\n    \n  \n\n  \n  \n    \n      \n        Run Receipts\n        ×\n      \n      \n        \n        \n        \n          📋 Export Ledger\n          Clear All Receipts\n        \n      \n    \n  \n\n  \n  \n    \n      🔥\n      Ritual Complete!\n      You kept your promise tonight. Rest well.\n      0\n      Completion Streak\n      Good Night\n    \n  \n\n  \n  \n    \n      \n        About\n        ×\n      \n      \n        \n        Bedtime shutdown timer for Windows.\n        Version 11.1.2\n        \n          \n            \n            Couldn't check for updates\n          \n          \n            Check for updates\n            Download\n          \n        \n        \n          A Proof Foundry Product\n          Forged by The Proof Foundry™\n        \n      \n    \n  \n\n  \n  \n    \n\n    \n\n      \n      \n        \n          LAST LIGHT\n        \n        \n        \n        \n          \n        \n      \n\n      \n      \n        LAST LIGHT\n\n        \n        \n          \n            \n            \n          \n          \n            —\n            TO DISCONNECT\n            🌙\n          \n        \n\n        \n        \n          ⏻\n          UNPLUG\n        \n        PROCEEDING AUTOMATICALLY\n\n        \n        \n      \n\n      \n      \n        99%\n        GRID STABILITY\n      \n\n    \n\n    \n    \n      ⚠\n      EMERGENCY CANCEL\n      Ctrl+Shift+S\n    \n  \n\n  \n  \n    \n      \n        Breathe\n        4\n      \n      Inhale\n      Cycle 1 of 4\n      Stop\n    \n  \n\n  \n  \n  \n  \n  \n  \n  \n  \n  \n  \n  \n  \n  \n\n\nOpen Settings for controls and About for version/update details.",
+              "role": null
+            },
+            "settingsMenuOpen": false,
+            "settingsAriaExpanded": "false",
+            "selectedMenuItem": null,
+            "route": "set",
+            "visiblePanels": [
+              "ns-panel-set"
+            ],
+            "settingsVisible": true,
+            "recentEvents": [
+              {
+                "type": "focusin",
+                "target": "submenu-item selected",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-power"
+                ],
+                "settingsAriaExpanded": "false",
+                "at": 10514.599999999627
+              },
+              {
+                "type": "blur",
+                "target": "submenu-item selected",
+                "activeElement": null,
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 10931.599999999627
+              },
+              {
+                "type": "focusout",
+                "target": "submenu-item selected",
+                "activeElement": null,
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 10931.599999999627
+              },
+              {
+                "type": "focus",
+                "target": "menu-power",
+                "activeElement": "menu-power",
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 10931.89999999851
+              },
+              {
+                "type": "focusin",
+                "target": "menu-power",
+                "activeElement": "menu-power",
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 10931.89999999851
+              },
+              {
+                "type": "blur",
+                "target": "menu-power",
+                "activeElement": null,
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 11364.199999999255
+              },
+              {
+                "type": "focusout",
+                "target": "menu-power",
+                "activeElement": null,
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 11364.299999998882
+              },
+              {
+                "type": "focus",
+                "target": "menu-settings",
+                "activeElement": "menu-settings",
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 11364.599999999627
+              },
+              {
+                "type": "focusin",
+                "target": "menu-settings",
+                "activeElement": "menu-settings",
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 11364.599999999627
+              },
+              {
+                "type": "blur",
+                "target": "menu-settings",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-settings"
+                ],
+                "settingsAriaExpanded": "true",
+                "at": 11365.5
+              },
+              {
+                "type": "focusout",
+                "target": "menu-settings",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-settings"
+                ],
+                "settingsAriaExpanded": "true",
+                "at": 11365.5
+              },
+              {
+                "type": "focus",
+                "target": "toggle-dryrun",
+                "activeElement": "toggle-dryrun",
+                "openMenus": [
+                  "menu-settings"
+                ],
+                "settingsAriaExpanded": "true",
+                "at": 11366.299999998882
+              },
+              {
+                "type": "focusin",
+                "target": "toggle-dryrun",
+                "activeElement": "toggle-dryrun",
+                "openMenus": [
+                  "menu-settings"
+                ],
+                "settingsAriaExpanded": "true",
+                "at": 11366.299999998882
+              },
+              {
+                "type": "blur",
+                "target": "toggle-dryrun",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-settings"
+                ],
+                "settingsAriaExpanded": "true",
+                "at": 11596.199999999255
+              },
+              {
+                "type": "focusout",
+                "target": "toggle-dryrun",
+                "activeElement": null,
+                "openMenus": [
+                  "menu-settings"
+                ],
+                "settingsAriaExpanded": "true",
+                "at": 11596.199999999255
+              },
+              {
+                "type": "focus",
+                "target": "open-options",
+                "activeElement": "open-options",
+                "openMenus": [
+                  "menu-settings"
+                ],
+                "settingsAriaExpanded": "true",
+                "at": 11596.599999999627
+              },
+              {
+                "type": "focusin",
+                "target": "open-options",
+                "activeElement": "open-options",
+                "openMenus": [
+                  "menu-settings"
+                ],
+                "settingsAriaExpanded": "true",
+                "at": 11596.599999999627
+              },
+              {
+                "type": "click",
+                "target": "open-options",
+                "activeElement": "open-options",
+                "openMenus": [
+                  "menu-settings"
+                ],
+                "settingsAriaExpanded": "true",
+                "at": 11827.799999998882
+              },
+              {
+                "type": "blur",
+                "target": "open-options",
+                "activeElement": null,
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 11838.699999999255
+              },
+              {
+                "type": "focusout",
+                "target": "open-options",
+                "activeElement": null,
+                "openMenus": [],
+                "settingsAriaExpanded": "false",
+                "at": 11838.699999999255
+              }
+            ],
+            "starts": 0,
+            "realPowerActions": 0
+          }
+        ],
+        "assertions": []
+      }
+    },
+    "shared-start": {
+      "status": "passed",
+      "results": [
+        {
+          "control": "ns-play-btn",
+          "invocations": 1,
+          "payload": {
+            "at": 1784919203989,
+            "options": {
+              "durationSeconds": 120,
+              "action": "shutdown",
+              "dryRun": true,
+              "forceShutdown": false,
+              "muteSystem": false,
+              "gracePeriod": 2,
+              "profileId": null,
+              "startOrigin": "play"
+            },
+            "legacyAction": null,
+            "result": {
+              "success": true,
+              "state": {
+                "running": true,
+                "paused": false,
+                "totalSeconds": 120,
+                "remainingSeconds": 120,
+                "action": "shutdown",
+                "dryRun": true,
+                "forceShutdown": false,
+                "muteSystem": false,
+                "gracePeriod": 2,
+                "endsAt": "2026-07-24T18:55:23.990Z",
+                "phase": "focus",
+                "profileId": null,
+                "profileName": null,
+                "nightModeId": null,
+                "nightModeTitle": null,
+                "nightModeVersion": null
+              }
+            },
+            "senderId": 1
+          },
+          "receipt": {
+            "id": "r_1784919203990_yx3tlh",
+            "version": 1,
+            "startedAt": "2026-07-24T18:53:23.990Z",
+            "endedAt": null,
+            "action": "shutdown",
+            "profileId": null,
+            "profileName": null,
+            "nightModeId": null,
+            "nightModeTitle": null,
+            "nightModeVersion": null,
+            "durationSeconds": 120,
+            "remainingSeconds": null,
+            "dryRun": true,
+            "forceShutdown": false,
+            "gracefulClose": true,
+            "result": "running",
+            "pauseCount": 0,
+            "snoozeCount": 0,
+            "cancelReason": null,
+            "warningsShown": 0,
+            "lastLightSequence": null,
+            "powerCommand": null,
+            "notes": null
+          }
+        },
+        {
+          "control": "space-key",
+          "invocations": 1,
+          "payload": {
+            "at": 1784919205272,
+            "options": {
+              "durationSeconds": 120,
+              "action": "shutdown",
+              "dryRun": true,
+              "forceShutdown": false,
+              "muteSystem": false,
+              "gracePeriod": 2,
+              "profileId": null,
+              "startOrigin": "play"
+            },
+            "legacyAction": null,
+            "result": {
+              "success": true,
+              "state": {
+                "running": true,
+                "paused": false,
+                "totalSeconds": 120,
+                "remainingSeconds": 120,
+                "action": "shutdown",
+                "dryRun": true,
+                "forceShutdown": false,
+                "muteSystem": false,
+                "gracePeriod": 2,
+                "endsAt": "2026-07-24T18:55:25.272Z",
+                "phase": "focus",
+                "profileId": null,
+                "profileName": null,
+                "nightModeId": null,
+                "nightModeTitle": null,
+                "nightModeVersion": null
+              }
+            },
+            "senderId": 1
+          },
+          "receipt": {
+            "id": "r_1784919205272_omfuty",
+            "version": 1,
+            "startedAt": "2026-07-24T18:53:25.272Z",
+            "endedAt": null,
+            "action": "shutdown",
+            "profileId": null,
+            "profileName": null,
+            "nightModeId": null,
+            "nightModeTitle": null,
+            "nightModeVersion": null,
+            "durationSeconds": 120,
+            "remainingSeconds": null,
+            "dryRun": true,
+            "forceShutdown": false,
+            "gracefulClose": true,
+            "result": "running",
+            "pauseCount": 0,
+            "snoozeCount": 0,
+            "cancelReason": null,
+            "warningsShown": 0,
+            "lastLightSequence": null,
+            "powerCommand": null,
+            "notes": null
+          }
+        },
+        {
+          "control": "proof-again",
+          "invocations": 1,
+          "payload": {
+            "at": 1784919208507,
+            "options": {
+              "durationSeconds": 1680,
+              "action": "shutdown",
+              "dryRun": true,
+              "forceShutdown": false,
+              "muteSystem": false,
+              "gracePeriod": 2,
+              "profileId": null,
+              "startOrigin": "play"
+            },
+            "legacyAction": null,
+            "result": {
+              "success": true,
+              "state": {
+                "running": true,
+                "paused": false,
+                "totalSeconds": 1680,
+                "remainingSeconds": 1680,
+                "action": "shutdown",
+                "dryRun": true,
+                "forceShutdown": false,
+                "muteSystem": false,
+                "gracePeriod": 2,
+                "endsAt": "2026-07-24T19:21:28.508Z",
+                "phase": "focus",
+                "profileId": null,
+                "profileName": null,
+                "nightModeId": null,
+                "nightModeTitle": null,
+                "nightModeVersion": null
+              }
+            },
+            "senderId": 1
+          },
+          "receipt": {
+            "id": "r_1784919208508_n4ptzs",
+            "version": 1,
+            "startedAt": "2026-07-24T18:53:28.508Z",
+            "endedAt": null,
+            "action": "shutdown",
+            "profileId": null,
+            "profileName": null,
+            "nightModeId": null,
+            "nightModeTitle": null,
+            "nightModeVersion": null,
+            "durationSeconds": 1680,
+            "remainingSeconds": null,
+            "dryRun": true,
+            "forceShutdown": false,
+            "gracefulClose": true,
+            "result": "running",
+            "pauseCount": 0,
+            "snoozeCount": 0,
+            "cancelReason": null,
+            "warningsShown": 0,
+            "lastLightSequence": null,
+            "powerCommand": null,
+            "notes": null
+          }
+        }
+      ],
+      "proofDisplay": ""
+    },
+    "use-tonight": {
+      "status": "passed",
+      "results": [
+        {
+          "modeId": "movie-wind-down",
+          "armed": {
+            "id": "movie-wind-down",
+            "title": "Movie Wind-Down",
+            "durationSeconds": 5400,
+            "action": "sleep"
+          },
+          "hero": {
+            "title": "Movie Wind-Down · 90 min · Sleep",
+            "playLabel": "Start Movie Wind-Down",
+            "duration": "90",
+            "action": "sleep",
+            "preview": "1:30:00",
+            "endTime": "Idle",
+            "ritual": "90 min · Sleep · Standard ritual"
+          },
+          "startCount": 1,
+          "startPayload": {
+            "at": 1784919211059,
+            "options": {
+              "durationSeconds": 5400,
+              "action": "sleep",
+              "dryRun": true,
+              "forceShutdown": false,
+              "muteSystem": false,
+              "gracePeriod": 2,
+              "profileId": null,
+              "startOrigin": "play",
+              "nightModeId": "movie-wind-down"
+            },
+            "legacyAction": null,
+            "result": {
+              "success": true,
+              "ritualStarted": true
+            },
+            "senderId": 1
+          },
+          "active": {
+            "modeTitle": "Movie Wind-Down",
+            "timerLabel": "until sleep",
+            "dryRun": true,
+            "controls": {
+              "pause": "flex",
+              "snoozeDisabled": false,
+              "cancel": "flex"
+            }
+          },
+          "ritualTrace": [
+            {
+              "active": true,
+              "currentStep": 0,
+              "totalSteps": 5,
+              "currentStepInfo": {
+                "id": "breathe",
+                "label": "Guided Breathing",
+                "durationSeconds": 60,
+                "skippable": true,
+                "auto": false
+              },
+              "completedSteps": [],
+              "skippedSteps": [],
+              "startedAt": "2026-07-24T18:53:31.060Z",
+              "progress": 0
+            },
+            {
+              "active": true,
+              "currentStep": 1,
+              "totalSteps": 5,
+              "currentStepInfo": {
+                "id": "block",
+                "label": "Block Distractions",
+                "durationSeconds": 0,
+                "skippable": true,
+                "auto": true
+              },
+              "completedSteps": [
+                "breathe"
+              ],
+              "skippedSteps": [],
+              "startedAt": "2026-07-24T18:53:31.060Z",
+              "progress": 20
+            },
+            {
+              "active": true,
+              "currentStep": 2,
+              "totalSteps": 5,
+              "currentStepInfo": {
+                "id": "dim",
+                "label": "Dim Environment",
+                "durationSeconds": 0,
+                "skippable": true,
+                "auto": true
+              },
+              "completedSteps": [
+                "breathe",
+                "block"
+              ],
+              "skippedSteps": [],
+              "startedAt": "2026-07-24T18:53:31.060Z",
+              "progress": 40
+            }
+          ],
+          "receipt": {
+            "receiptId": "r_1784919212318_73u8gu",
+            "nightModeId": "movie-wind-down",
+            "modeTitle": "Movie Wind-Down",
+            "durationSeconds": 5400,
+            "finalAction": "sleep",
+            "dryRun": true,
+            "startedAt": "2026-07-24T18:53:32.318Z",
+            "endedAt": "2026-07-24T18:53:32.845Z",
+            "result": "cancelled",
+            "cancelled": true,
+            "powerActionAttempted": false
+          },
+          "realPowerActions": 0
+        },
+        {
+          "modeId": "movie-wind-down",
+          "restart": true,
+          "restored": {
+            "id": "movie-wind-down",
+            "title": "Movie Wind-Down",
+            "durationSeconds": 5400,
+            "action": "sleep"
+          },
+          "hero": {
+            "title": "Movie Wind-Down · 90 min · Sleep",
+            "playLabel": "Start Movie Wind-Down",
+            "duration": "90",
+            "action": "sleep"
+          }
+        },
+        {
+          "modeId": "full-shutdown",
+          "armed": {
+            "id": "full-shutdown",
+            "title": "Full Shutdown",
+            "durationSeconds": 3600,
+            "action": "shutdown"
+          },
+          "hero": {
+            "title": "Full Shutdown · 60 min · Shutdown",
+            "playLabel": "Start Full Shutdown",
+            "duration": "60",
+            "action": "shutdown",
+            "preview": "1:00:00",
+            "endTime": "Idle",
+            "ritual": "60 min · Shutdown · Standard ritual"
+          },
+          "startCount": 1,
+          "startPayload": {
+            "at": 1784919218646,
+            "options": {
+              "durationSeconds": 3600,
+              "action": "shutdown",
+              "dryRun": true,
+              "forceShutdown": false,
+              "muteSystem": false,
+              "gracePeriod": 2,
+              "profileId": null,
+              "startOrigin": "play",
+              "nightModeId": "full-shutdown"
+            },
+            "legacyAction": null,
+            "result": {
+              "success": true,
+              "ritualStarted": true
+            },
+            "senderId": 1
+          },
+          "active": {
+            "modeTitle": "Full Shutdown",
+            "timerLabel": "until shutdown",
+            "dryRun": true,
+            "controls": {
+              "pause": "flex",
+              "snoozeDisabled": false,
+              "cancel": "flex"
+            }
+          },
+          "ritualTrace": [
+            {
+              "active": true,
+              "currentStep": 0,
+              "totalSteps": 5,
+              "currentStepInfo": {
+                "id": "breathe",
+                "label": "Guided Breathing",
+                "durationSeconds": 60,
+                "skippable": true,
+                "auto": false
+              },
+              "completedSteps": [],
+              "skippedSteps": [],
+              "startedAt": "2026-07-24T18:53:38.646Z",
+              "progress": 0
+            },
+            {
+              "active": true,
+              "currentStep": 1,
+              "totalSteps": 5,
+              "currentStepInfo": {
+                "id": "block",
+                "label": "Block Distractions",
+                "durationSeconds": 0,
+                "skippable": true,
+                "auto": true
+              },
+              "completedSteps": [
+                "breathe"
+              ],
+              "skippedSteps": [],
+              "startedAt": "2026-07-24T18:53:38.646Z",
+              "progress": 20
+            },
+            {
+              "active": true,
+              "currentStep": 2,
+              "totalSteps": 5,
+              "currentStepInfo": {
+                "id": "dim",
+                "label": "Dim Environment",
+                "durationSeconds": 0,
+                "skippable": true,
+                "auto": true
+              },
+              "completedSteps": [
+                "breathe",
+                "block"
+              ],
+              "skippedSteps": [],
+              "startedAt": "2026-07-24T18:53:38.646Z",
+              "progress": 40
+            }
+          ],
+          "receipt": {
+            "receiptId": "r_1784919219917_vm1dgh",
+            "nightModeId": "full-shutdown",
+            "modeTitle": "Full Shutdown",
+            "durationSeconds": 3600,
+            "finalAction": "shutdown",
+            "dryRun": true,
+            "startedAt": "2026-07-24T18:53:39.917Z",
+            "endedAt": "2026-07-24T18:53:40.443Z",
+            "result": "cancelled",
+            "cancelled": true,
+            "powerActionAttempted": false
+          },
+          "realPowerActions": 0
+        },
+        {
+          "modeId": "full-shutdown",
+          "restart": true,
+          "restored": {
+            "id": "full-shutdown",
+            "title": "Full Shutdown",
+            "durationSeconds": 3600,
+            "action": "shutdown"
+          },
+          "hero": {
+            "title": "Full Shutdown · 60 min · Shutdown",
+            "playLabel": "Start Full Shutdown",
+            "duration": "60",
+            "action": "shutdown"
+          }
+        }
+      ]
+    },
+    "settings": {
+      "status": "passed",
+      "results": [
+        {
+          "label": "1280x720",
+          "width": 1280,
+          "height": 720,
+          "layout": {
+            "route": "set",
+            "settingsDisplay": "flex",
+            "tonightDisplay": "none",
+            "railDisplay": "flex",
+            "activeCategories": 1,
+            "visibleCategories": 1,
+            "horizontalOverflow": false,
+            "panelRect": {
+              "width": 1100,
+              "height": 529.2000122070312,
+              "left": 98,
+              "right": 1198
+            }
+          }
+        },
+        {
+          "label": "1920x1080",
+          "width": 1920,
+          "height": 1080,
+          "layout": {
+            "route": "set",
+            "settingsDisplay": "flex",
+            "tonightDisplay": "none",
+            "railDisplay": "flex",
+            "activeCategories": 1,
+            "visibleCategories": 1,
+            "horizontalOverflow": false,
+            "panelRect": {
+              "width": 1100,
+              "height": 887.6000366210938,
+              "left": 98,
+              "right": 1198
+            }
+          }
+        },
+        {
+          "label": "ultrawide",
+          "width": 2752,
+          "height": 1152,
+          "layout": {
+            "route": "set",
+            "settingsDisplay": "flex",
+            "tonightDisplay": "none",
+            "railDisplay": "flex",
+            "activeCategories": 1,
+            "visibleCategories": 1,
+            "horizontalOverflow": false,
+            "panelRect": {
+              "width": 1100,
+              "height": 959.6000366210938,
+              "left": 98,
+              "right": 1198
+            }
+          }
+        },
+        {
+          "category": "power-safety",
+          "selected": {
+            "rail": "power-safety",
+            "content": "power-safety",
+            "activeSections": 1,
+            "distinctActiveCategories": 1
+          }
+        },
+        {
+          "category": "protection",
+          "selected": {
+            "rail": "protection",
+            "content": "protection",
+            "activeSections": 2,
+            "distinctActiveCategories": 1
+          }
+        },
+        {
+          "category": "appearance",
+          "selected": {
+            "rail": "appearance",
+            "content": "appearance",
+            "activeSections": 2,
+            "distinctActiveCategories": 1
+          }
+        },
+        {
+          "category": "advanced",
+          "selected": {
+            "rail": "advanced",
+            "content": "advanced",
+            "activeSections": 1,
+            "distinctActiveCategories": 1
+          }
+        },
+        {
+          "returnRoute": "modes"
+        }
+      ]
+    },
+    "active-run": {
+      "status": "passed",
+      "results": [
+        {
+          "label": "hd720",
+          "metrics": {
+            "display": {
+              "width": 2752,
+              "height": 1152
+            },
+            "workArea": {
+              "width": 2752,
+              "height": 1152
+            },
+            "outer": {
+              "width": 1296,
+              "height": 729
+            },
+            "inner": {
+              "width": 1280,
+              "height": 722
+            },
+            "dpr": 1.25
+          },
+          "focused": {
+            "modeTitle": "Movie Wind-Down",
+            "dryRunText": "\n          \n          Dry Run · Running\n        ",
+            "profilesHidden": true,
+            "streakHidden": true,
+            "proofHidden": true,
+            "pauseVisible": true,
+            "snoozeVisible": true,
+            "cancelVisible": true
+          }
+        },
+        {
+          "label": "hd1080",
+          "metrics": {
+            "display": {
+              "width": 2752,
+              "height": 1152
+            },
+            "workArea": {
+              "width": 2752,
+              "height": 1152
+            },
+            "outer": {
+              "width": 1936,
+              "height": 1088
+            },
+            "inner": {
+              "width": 1920,
+              "height": 1080
+            },
+            "dpr": 1.25
+          },
+          "focused": {
+            "modeTitle": "Movie Wind-Down",
+            "dryRunText": "\n          \n          Dry Run · Running\n        ",
+            "profilesHidden": true,
+            "streakHidden": true,
+            "proofHidden": true,
+            "pauseVisible": true,
+            "snoozeVisible": true,
+            "cancelVisible": true
+          }
+        },
+        {
+          "label": "workarea",
+          "metrics": {
+            "display": {
+              "width": 2752,
+              "height": 1152
+            },
+            "workArea": {
+              "width": 2752,
+              "height": 1152
+            },
+            "outer": {
+              "width": 2768,
+              "height": 1160
+            },
+            "inner": {
+              "width": 2752,
+              "height": 1152
+            },
+            "dpr": 1.25
+          },
+          "focused": {
+            "modeTitle": "Movie Wind-Down",
+            "dryRunText": "\n          \n          Dry Run · Running\n        ",
+            "profilesHidden": true,
+            "streakHidden": true,
+            "proofHidden": true,
+            "pauseVisible": true,
+            "snoozeVisible": true,
+            "cancelVisible": true
+          }
+        },
+        {
+          "state": "paused",
+          "pauseLabel": "Resume",
+          "pausedText": "Sleep paused"
+        },
+        {
+          "state": "resumed"
+        },
+        {
+          "state": "cancelled",
+          "restored": true
+        }
+      ],
+      "realPowerActions": 0
+    }
+  },
+  "screenshots": [
+    {
+      "phase": "top-menu",
+      "path": "<gate-root>\\screenshots\\topmenu-power-mouse-open.png",
+      "name": "topmenu-power-mouse-open.png",
+      "size": 332077,
+      "sha256": "2d1b73732fc63b09c675342eb4d70c04057586d84831135eb46a5ef3c6b0e845"
+    },
+    {
+      "phase": "top-menu",
+      "path": "<gate-root>\\screenshots\\topmenu-settings-mouse-open.png",
+      "name": "topmenu-settings-mouse-open.png",
+      "size": 334293,
+      "sha256": "356972686d44a39b2d9f91ffd3f24045f0e2bff611dee4ec714d3fc5ef39dc8d"
+    },
+    {
+      "phase": "top-menu",
+      "path": "<gate-root>\\screenshots\\topmenu-help-mouse-open.png",
+      "name": "topmenu-help-mouse-open.png",
+      "size": 338127,
+      "sha256": "7f73c1c374b44f8645aa8aa1c306184d3715c299027693474f6b24d337ab0142"
+    },
+    {
+      "phase": "top-menu",
+      "path": "<gate-root>\\screenshots\\topmenu-settings-panel.png",
+      "name": "topmenu-settings-panel.png",
+      "size": 63108,
+      "sha256": "cd92ee6f8be32acd145c2169f05b5b5e7cf771ef1ca9e9a712b2724d5ea659d9"
+    },
+    {
+      "phase": "top-menu",
+      "path": "<gate-root>\\screenshots\\topmenu-power-keyboard-open.png",
+      "name": "topmenu-power-keyboard-open.png",
+      "size": 335367,
+      "sha256": "f4dfe0d434a65b655dcb2811a9b51aee693cbd99ae5e794eca2b34ea4b011dd1"
+    },
+    {
+      "phase": "top-menu",
+      "path": "<gate-root>\\screenshots\\topmenu-settings-keyboard-open.png",
+      "name": "topmenu-settings-keyboard-open.png",
+      "size": 73576,
+      "sha256": "fca10ec063d902e6394443c1a956544c3294e759948389e5c845130c859e1d3d"
+    },
+    {
+      "phase": "shared-start",
+      "path": "<gate-root>\\screenshots\\active-running-hero.png",
+      "name": "active-running-hero.png",
+      "size": 216139,
+      "sha256": "261f7da6d944e5624cc32f9e17e0be16938961cb43b3f2f71fc6d4950b16d366"
+    },
+    {
+      "phase": "shared-start",
+      "path": "<gate-root>\\screenshots\\morning-proof-visible.png",
+      "name": "morning-proof-visible.png",
+      "size": 333074,
+      "sha256": "e46f9c709b715f6097e82a08c0eee2d1d9558044f3927713c30bb3d5f124f738"
+    },
+    {
+      "phase": "use-tonight",
+      "path": "<gate-root>\\screenshots\\use-tonight-movie-wind-down-projection.png",
+      "name": "use-tonight-movie-wind-down-projection.png",
+      "size": 333346,
+      "sha256": "70f7e38d617388663b71930d466672e9c68bc422de915b2736c3d8d99d48ce8c"
+    },
+    {
+      "phase": "use-tonight",
+      "path": "<gate-root>\\screenshots\\use-tonight-movie-wind-down-running.png",
+      "name": "use-tonight-movie-wind-down-running.png",
+      "size": 213851,
+      "sha256": "0e7c543949ae4758c15f9cd743c70a3cda9ec0a8d662176d36ff1176d77f7fa6"
+    },
+    {
+      "phase": "use-tonight",
+      "path": "<gate-root>\\screenshots\\use-tonight-movie-wind-down-cancelled.png",
+      "name": "use-tonight-movie-wind-down-cancelled.png",
+      "size": 340085,
+      "sha256": "cb74b6fc6313dc05bd7b176468aaee61931e5e1dc38a33d84f46ec7cef74c8db"
+    },
+    {
+      "phase": "use-tonight",
+      "path": "<gate-root>\\screenshots\\use-tonight-movie-wind-down-restore.png",
+      "name": "use-tonight-movie-wind-down-restore.png",
+      "size": 318317,
+      "sha256": "35e8edccbe52678190159bcba3e71831f8169f103d7af3cb7faeb9e4fd00a1eb"
+    },
+    {
+      "phase": "use-tonight",
+      "path": "<gate-root>\\screenshots\\use-tonight-full-shutdown-projection.png",
+      "name": "use-tonight-full-shutdown-projection.png",
+      "size": 328546,
+      "sha256": "18673932b4fd13ed4453e569da5c2964e873ed0b3b614765d46109b48b0e27fe"
+    },
+    {
+      "phase": "use-tonight",
+      "path": "<gate-root>\\screenshots\\use-tonight-full-shutdown-running.png",
+      "name": "use-tonight-full-shutdown-running.png",
+      "size": 214935,
+      "sha256": "0fbe096ed2577a297cb6fc8db5e9fe886e6162d6a7d71b6df4fc0e904666be11"
+    },
+    {
+      "phase": "use-tonight",
+      "path": "<gate-root>\\screenshots\\use-tonight-full-shutdown-cancelled.png",
+      "name": "use-tonight-full-shutdown-cancelled.png",
+      "size": 338873,
+      "sha256": "f306db0f293f685e5ed02a35f7178d556978c04e9544f7f4e0a8734434879b94"
+    },
+    {
+      "phase": "use-tonight",
+      "path": "<gate-root>\\screenshots\\use-tonight-full-shutdown-restore.png",
+      "name": "use-tonight-full-shutdown-restore.png",
+      "size": 316049,
+      "sha256": "afac4ad2af4b2fd2e8e012a50a9d6bc1dd5e2f8584cce126369c67bc915a482e"
+    },
+    {
+      "phase": "settings",
+      "path": "<gate-root>\\screenshots\\settings-1280x720.png",
+      "name": "settings-1280x720.png",
+      "size": 63108,
+      "sha256": "cd92ee6f8be32acd145c2169f05b5b5e7cf771ef1ca9e9a712b2724d5ea659d9"
+    },
+    {
+      "phase": "settings",
+      "path": "<gate-root>\\screenshots\\settings-1920x1080.png",
+      "name": "settings-1920x1080.png",
+      "size": 92329,
+      "sha256": "9b03216a6621c33492ca5380164b205507543ae93df31d5e1e841a357d16afa2"
+    },
+    {
+      "phase": "settings",
+      "path": "<gate-root>\\screenshots\\settings-ultrawide.png",
+      "name": "settings-ultrawide.png",
+      "size": 123808,
+      "sha256": "c669b24b773334e0c0b35b9f79ce54076519f126a9cbc2c4f47ba16206e4e3cd"
+    },
+    {
+      "phase": "active-run",
+      "path": "<gate-root>\\screenshots\\active-run-hd720.png",
+      "name": "active-run-hd720.png",
+      "size": 225072,
+      "sha256": "dbfaf680d076d9091b136e375bbdea15f9e6e739ddf1cabf530396888d84ed45"
+    },
+    {
+      "phase": "active-run",
+      "path": "<gate-root>\\screenshots\\active-run-hd1080.png",
+      "name": "active-run-hd1080.png",
+      "size": 263412,
+      "sha256": "cebfa33e978339bfbf181a6809be28ce83656fb99616c53bb8158633f716f8d4"
+    },
+    {
+      "phase": "active-run",
+      "path": "<gate-root>\\screenshots\\active-run-workarea.png",
+      "name": "active-run-workarea.png",
+      "size": 312538,
+      "sha256": "2fb05d43ecac5e6864deb42454cf2c457625d76aa2b42d99d8e461a61f73a92a"
+    },
+    {
+      "phase": "active-run",
+      "path": "<gate-root>\\screenshots\\active-paused-1280x720.png",
+      "name": "active-paused-1280x720.png",
+      "size": 226537,
+      "sha256": "48a6f5359853055c08289fc3d3990a62364112736262cc7207e4b6e450010b6d"
+    },
+    {
+      "phase": "active-run",
+      "path": "<gate-root>\\screenshots\\active-resumed-1280x720.png",
+      "name": "active-resumed-1280x720.png",
+      "size": 229695,
+      "sha256": "d62d9a9174f5c0f51b98db285d6265b6c1b168f0617331ee8f060b2fa5abd17f"
+    },
+    {
+      "phase": "active-run",
+      "path": "<gate-root>\\screenshots\\active-cancelled-1280x720.png",
+      "name": "active-cancelled-1280x720.png",
+      "size": 332596,
+      "sha256": "0aa8279b77d6d21f31b49968aa7875c766eae4dcba7c6dce9645022b7fbb08c6"
+    }
+  ],
+  "status": "passed",
+  "realPowerActions": 0,
+  "endTime": "2026-07-24T18:53:58.591Z",
+  "rendererDiagnostics": [
+    {
+      "label": "userdata-startup-normal",
+      "userDataDir": "<gate-root>\\userdata-startup-normal",
+      "cdpPort": 63143,
+      "renderer": {
+        "exists": true,
+        "ready": true,
+        "version": 1,
+        "phase": "ready",
+        "error": null
+      },
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-startup-legacy-settings",
+      "userDataDir": "<gate-root>\\userdata-startup-legacy-settings",
+      "cdpPort": 63149,
+      "renderer": {
+        "exists": true,
+        "ready": true,
+        "version": 1,
+        "phase": "ready",
+        "error": null
+      },
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-startup-legacy-help",
+      "userDataDir": "<gate-root>\\userdata-startup-legacy-help",
+      "cdpPort": 63156,
+      "renderer": {
+        "exists": true,
+        "ready": true,
+        "version": 1,
+        "phase": "ready",
+        "error": null
+      },
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-startup-settings-return",
+      "userDataDir": "<gate-root>\\userdata-startup-settings-return",
+      "cdpPort": 63162,
+      "renderer": {
+        "exists": true,
+        "ready": true,
+        "version": 1,
+        "phase": "ready",
+        "error": null
+      },
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-startup-settings-return",
+      "userDataDir": "<gate-root>\\userdata-startup-settings-return",
+      "cdpPort": 63168,
+      "renderer": {
+        "exists": true,
+        "ready": true,
+        "version": 1,
+        "phase": "ready",
+        "error": null
+      },
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-topmenu",
+      "userDataDir": "<gate-root>\\userdata-topmenu",
+      "cdpPort": 63174,
+      "renderer": {
+        "exists": true,
+        "ready": true,
+        "version": 1,
+        "phase": "ready",
+        "error": null
+      },
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-shared",
+      "userDataDir": "<gate-root>\\userdata-shared",
+      "cdpPort": 63193,
+      "renderer": {
+        "exists": true,
+        "ready": true,
+        "version": 1,
+        "phase": "ready",
+        "error": null
+      },
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-shared",
+      "userDataDir": "<gate-root>\\userdata-shared",
+      "cdpPort": 63204,
+      "renderer": {
+        "exists": true,
+        "ready": true,
+        "version": 1,
+        "phase": "ready",
+        "error": null
+      },
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-use-movie-wind-down",
+      "userDataDir": "<gate-root>\\userdata-use-movie-wind-down",
+      "cdpPort": 63213,
+      "renderer": {
+        "exists": true,
+        "ready": true,
+        "version": 1,
+        "phase": "ready",
+        "error": null
+      },
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-use-movie-wind-down",
+      "userDataDir": "<gate-root>\\userdata-use-movie-wind-down",
+      "cdpPort": 63223,
+      "renderer": {
+        "exists": true,
+        "ready": true,
+        "version": 1,
+        "phase": "ready",
+        "error": null
+      },
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-use-full-shutdown",
+      "userDataDir": "<gate-root>\\userdata-use-full-shutdown",
+      "cdpPort": 63230,
+      "renderer": {
+        "exists": true,
+        "ready": true,
+        "version": 1,
+        "phase": "ready",
+        "error": null
+      },
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-use-full-shutdown",
+      "userDataDir": "<gate-root>\\userdata-use-full-shutdown",
+      "cdpPort": 63241,
+      "renderer": {
+        "exists": true,
+        "ready": true,
+        "version": 1,
+        "phase": "ready",
+        "error": null
+      },
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-settings",
+      "userDataDir": "<gate-root>\\userdata-settings",
+      "cdpPort": 63248,
+      "renderer": {
+        "exists": true,
+        "ready": true,
+        "version": 1,
+        "phase": "ready",
+        "error": null
+      },
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    },
+    {
+      "label": "userdata-active",
+      "userDataDir": "<gate-root>\\userdata-active",
+      "cdpPort": 63258,
+      "renderer": {
+        "exists": true,
+        "ready": true,
+        "version": 1,
+        "phase": "ready",
+        "error": null
+      },
+      "consoleErrors": [],
+      "uncaughtExceptions": []
+    }
+  ]
+}

@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Fixed
+- Updated the transitive build-time `tar` resolution from 7.5.19 to 7.5.22,
+  resolving `GHSA-r292-9mhp-454m` without broad dependency updates.
 - Automated Electron proof runs no longer create real Windows notification-area
   icons. Tray creation is now idempotent, proof instances explicitly suppress
   the tray, and normal app shutdown destroys its tray icon before exit.
