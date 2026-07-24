@@ -128,8 +128,20 @@ class CdpSession {
   }
   eval(expr) { return this.send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }).then(r => r.result.value); }
   async click(sel) {
-    const rect = await this.eval(`(function(){const el=document.querySelector('${sel}'); if(!el) return null; el.scrollIntoView({block:'center',inline:'center'}); const r=el.getBoundingClientRect(); return {x:r.x+r.width/2, y:r.y+r.height/2, w:r.width, h:r.height};})()`);
-    if (!rect) throw new Error(`missing ${sel}`);
+    let rect = null;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const current = await this.eval(`(function(){const el=document.querySelector('${sel}'); if(!el) return null; el.scrollIntoView({block:'center',inline:'center'}); const r=el.getBoundingClientRect(); const x=r.x+r.width/2; const y=r.y+r.height/2; return {x,y,w:r.width,h:r.height,hit:document.elementFromPoint(x,y)?.closest('${sel}') === el};})()`);
+      if (!current || current.w <= 0 || current.h <= 0 || !current.hit) { await WAIT(50); continue; }
+      await WAIT(50);
+      const settled = await this.eval(`(function(){const el=document.querySelector('${sel}'); if(!el) return null; const r=el.getBoundingClientRect(); const x=r.x+r.width/2; const y=r.y+r.height/2; return {x,y,w:r.width,h:r.height,hit:document.elementFromPoint(x,y)?.closest('${sel}') === el};})()`);
+      if (settled && settled.w > 0 && settled.h > 0 && settled.hit && Math.abs(settled.x - current.x) < 0.5 && Math.abs(settled.y - current.y) < 0.5) {
+        await this.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: settled.x, y: settled.y });
+        await WAIT(50);
+        const hovered = await this.eval(`(function(){const el=document.querySelector('${sel}'); if(!el) return false; const r=el.getBoundingClientRect(); const x=r.x+r.width/2; const y=r.y+r.height/2; return document.elementFromPoint(x,y)?.closest('${sel}') === el;})()`);
+        if (hovered) { rect = settled; break; }
+      }
+    }
+    if (!rect) throw new Error(`missing or unstable ${sel}`);
     await this.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
     await WAIT(50);
     await this.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
@@ -245,15 +257,26 @@ class CdpSession {
 }
 
 async function stopApp(child) {
-  return new Promise(resolve => {
-    if (!child) return resolve();
-    try { child.cdpSession?.ws?.terminate(); } catch {}
-    try { child.kill(); } catch {}
-    const killer = spawn('taskkill', ['/F', '/T', '/PID', String(child.pid)], { windowsHide: true });
-    killer.on('error', () => {});
-    killer.on('close', () => resolve());
-    setTimeout(() => { try { process.kill(child.pid, 'SIGKILL'); } catch {} resolve(); }, 1500);
+  if (!child) return;
+  try { child.cdpSession?.ws?.terminate(); } catch {}
+  const exited = await new Promise(resolve => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve(true);
+    };
+    child.once('exit', finish);
+    try { child.kill(); } catch { finish(); }
+    setTimeout(() => {
+      if (settled) return;
+      const killer = spawn('taskkill', ['/F', '/T', '/PID', String(child.pid)], { windowsHide: true });
+      killer.once('error', finish);
+      killer.once('close', finish);
+    }, 1000);
+    setTimeout(finish, 3000);
   });
+  return exited;
 }
 
 async function spawnApp(userDataDir, seed = {}, { preserveSettings = false } = {}) {
@@ -283,10 +306,10 @@ async function spawnApp(userDataDir, seed = {}, { preserveSettings = false } = {
   const page = list.find(x => x.type === 'page' || x.title === 'Lights Out') || list[0];
   const session = new CdpSession(page.webSocketDebuggerUrl, port);
   await session.connect();
-  await session.waitForRendererReady();
+  const renderer = await session.waitForRendererReady();
   child.cdpSession = session;
-  runtimeSessions.push({ label: path.basename(userDataDir), session });
-  return { child, session, userDataDir };
+  runtimeSessions.push({ label: path.basename(userDataDir), userDataDir, port, renderer, session });
+  return { child, session, userDataDir, port, renderer };
 }
 
 const report = {
@@ -309,6 +332,34 @@ async function clearStarts(s) { await s.eval('window.__desktopUxProof?.clearStar
 async function getStarts(s) { return s.eval('window.__desktopUxProof?.getStartInvocations()'); }
 async function getRealPowerActions(s) { return s.eval('window.__desktopUxProof?.getRealPowerActions()'); }
 async function getDebug(s) { return s.eval(`({ running: state.running, paused: state.paused, action: state.action, dryRun: state.dryRun, input: document.getElementById('timer-input').value, invocations: window.__desktopUxProof?.getStartInvocations() })`); }
+async function getTopMenuKeyboardState(s) {
+  return s.eval(`({
+    focusedElement: { id: document.activeElement?.id || null, text: document.activeElement?.textContent?.trim() || null, role: document.activeElement?.getAttribute('role') || null },
+    settingsMenuOpen: document.getElementById('menu-settings')?.classList.contains('open') || false,
+    settingsAriaExpanded: document.getElementById('menu-settings')?.getAttribute('aria-expanded') || null,
+    selectedMenuItem: document.activeElement?.closest?.('.submenu-item')?.id || null,
+    route: document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || null,
+    visiblePanels: Array.from(document.querySelectorAll('.ns-main-panel')).filter(panel => getComputedStyle(panel).display !== 'none').map(panel => panel.id),
+    settingsVisible: getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none',
+    recentEvents: (window.__desktopUxGateEvents || []).slice(-20)
+  })`);
+}
+
+async function installTopMenuEventTrace(s) {
+  await s.eval(`(() => {
+    const events = [];
+    const add = event => events.push({
+      type: event.type,
+      target: event.target?.id || event.target?.className || event.target?.tagName || null,
+      activeElement: document.activeElement?.id || null,
+      openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
+      settingsAriaExpanded: document.getElementById('menu-settings')?.getAttribute('aria-expanded') || null,
+      at: performance.now()
+    });
+    ['blur', 'focus', 'focusin', 'focusout', 'mousedown', 'mouseup', 'click', 'mouseenter', 'mouseleave', 'mousemove'].forEach(type => window.addEventListener(type, add, true));
+    window.__desktopUxGateEvents = events;
+  })()`);
+}
 
 async function getStartupSnapshot(s) {
   return s.eval(`({
@@ -373,33 +424,41 @@ async function runTopMenuGate() {
   const phase = 'top-menu';
   const userData = path.join(ROOT_DIR, 'userdata-topmenu');
   const { child, session: s } = await spawnApp(userData);
+  const results = { mouse: [], keyboard: [], assertions: [] };
+  report.phases[phase] = { status: 'running', results };
   try {
     await s.resize(1280, 720);
     await s.waitFor('#menu-power');
     await WAIT(400);
-    const results = { mouse: [], keyboard: [], assertions: [] };
+    await installTopMenuEventTrace(s);
 
-    await s.click('#menu-power');
+    await s.click('#menu-power > span');
     await WAIT(200);
-    let open = await s.eval(`document.getElementById('menu-power').classList.contains('open')`);
-    results.mouse.push({ step: 'click-power', open });
-    requireGate(open, 'Power menu did not open on click');
+    const powerAfterClick = await s.eval(`({
+      open: document.getElementById('menu-power').classList.contains('open'),
+      ariaExpanded: document.getElementById('menu-power').getAttribute('aria-expanded'),
+      focusedElement: document.activeElement?.id || null,
+      recentEvents: (window.__desktopUxGateEvents || []).slice(-20)
+    })`);
+    let open = powerAfterClick.open;
+    results.mouse.push({ step: 'click-power', ...powerAfterClick });
+    requireGate(open, 'Power menu did not open on click', powerAfterClick);
     addShot(phase, await s.screenshot('topmenu-power-mouse-open.png'));
 
-    await s.click('#menu-power');
+    await s.click('#menu-power > span');
     await WAIT(200);
     open = await s.eval(`!document.querySelector('.menu-item.open')`);
     results.mouse.push({ step: 'click-power-again', closed: open });
     requireGate(open, 'Power trigger did not toggle closed');
 
-    await s.click('#menu-settings');
+    await s.click('#menu-settings > span');
     await WAIT(200);
     open = await s.eval(`document.getElementById('menu-settings').classList.contains('open')`);
     addShot(phase, await s.screenshot('topmenu-settings-mouse-open.png'));
     results.mouse.push({ step: 'click-settings', open });
     requireGate(open, 'Settings menu did not open on click');
 
-    await s.click('#menu-help');
+    await s.click('#menu-help > span');
     await WAIT(200);
     const settingsClosed = await s.eval(`!document.getElementById('menu-settings').classList.contains('open')`);
     const helpOpen = await s.eval(`document.getElementById('menu-help').classList.contains('open')`);
@@ -407,19 +466,22 @@ async function runTopMenuGate() {
     requireGate(settingsClosed && helpOpen, 'opening Help did not close Settings');
     addShot(phase, await s.screenshot('topmenu-help-mouse-open.png'));
 
-    await s.click('#menu-settings');
-    await WAIT(200);
+    await s.click('#menu-settings > span');
+    await s.condition(`document.getElementById('menu-settings').classList.contains('open')`);
     const menuRect = await s.eval(`(r=document.querySelector('#menu-settings .submenu').getBoundingClientRect(),{x:r.x+r.width/2,y:r.y+10})`);
+    const beforePointerTransfer = await getTopMenuKeyboardState(s);
     await s.movePointer(menuRect.x, menuRect.y);
     await WAIT(200);
-    const stillOpen = await s.eval(`document.getElementById('menu-settings').classList.contains('open')`);
-    results.mouse.push({ step: 'pointer-transfer-stays-open', stillOpen });
-    requireGate(stillOpen, 'menu closed while pointer entered its submenu');
+    const afterPointerTransfer = await getTopMenuKeyboardState(s);
+    const stillOpen = afterPointerTransfer.settingsMenuOpen;
+    results.mouse.push({ step: 'pointer-transfer-stays-open', menuRect, beforePointerTransfer, afterPointerTransfer, stillOpen });
+    requireGate(stillOpen, 'menu closed while pointer entered its submenu', afterPointerTransfer);
     await s.movePointer(20, 20);
     await WAIT(200);
-    const stillOpen2 = await s.eval(`document.getElementById('menu-settings').classList.contains('open')`);
-    results.mouse.push({ step: 'pointer-away-stays-open', stillOpen2 });
-    requireGate(stillOpen2, 'menu closed before an outside click');
+    const afterPointerAway = await getTopMenuKeyboardState(s);
+    const stillOpen2 = afterPointerAway.settingsMenuOpen;
+    results.mouse.push({ step: 'pointer-away-stays-open', afterPointerAway, stillOpen2 });
+    requireGate(stillOpen2, 'menu closed before an outside click', afterPointerAway);
 
     await s.click('#open-options');
     await WAIT(300);
@@ -433,17 +495,17 @@ async function runTopMenuGate() {
     results.mouse.push({ step: 'close-restores-route', restored });
     requireGate(restored === 'lib', 'closing Settings did not restore Tonight', restored);
 
-    await s.click('#menu-settings');
+    await s.click('#menu-settings > span');
     await s.click('#toggle-dryrun');
     await WAIT(200);
     const dryRunIndicator = await s.eval(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent`);
     results.mouse.push({ step: 'toggle-dryrun', dryRunIndicator });
     requireGate(dryRunIndicator === 'OFF', 'enabled Settings toggle did not activate', dryRunIndicator);
-    await s.click('#menu-settings');
+    await s.click('#menu-settings > span');
     await s.click('#toggle-dryrun');
     await s.condition(`state.dryRun === true`);
 
-    await s.click('#menu-power');
+    await s.click('#menu-power > span');
     const outside = await s.eval(`(r=document.getElementById('ns-hero-card').getBoundingClientRect(), {x:r.x+r.width/2, y:r.y+r.height/2})`);
     await s.clickXY(outside.x, outside.y);
     await WAIT(200);
@@ -452,7 +514,7 @@ async function runTopMenuGate() {
     requireGate(allClosed, 'outside click did not close top menu');
 
     await clearStarts(s);
-    await s.click('#menu-power');
+    await s.click('#menu-power > span');
     await s.click('#menu-power [data-action="shutdown"]');
     const powerSelection = await s.eval(`({ action: state.action, dryRun: state.dryRun, warningOpen: document.getElementById('warning-modal')?.classList.contains('active') || false })`);
     const startsAfterPowerSelection = await getStarts(s);
@@ -461,7 +523,7 @@ async function runTopMenuGate() {
     requireGate(startsAfterPowerSelection.length === 0 && realPowerActions.length === 0, 'Power menu selection bypassed the shared Start/confirmation path', { startsAfterPowerSelection, realPowerActions });
     results.mouse.push({ step: 'power-selects-plan-without-execution', powerSelection, starts: startsAfterPowerSelection.length, realPowerActions: realPowerActions.length });
 
-    await s.click('#menu-help');
+    await s.click('#menu-help > span');
     await s.click('#open-about');
     const aboutOpen = await s.eval(`document.getElementById('about-modal')?.classList.contains('active') || false`);
     requireGate(aboutOpen, 'enabled Help item did not activate');
@@ -493,18 +555,25 @@ async function runTopMenuGate() {
     results.keyboard.push({ step: 'escape-closes-and-focuses-trigger', closedByEscape });
     requireGate(closedByEscape, 'Escape did not close Power and return focus');
 
+    await clearStarts(s);
     await s.eval(`document.getElementById('menu-settings').focus()`);
     await s.key('ArrowDown');
-    await WAIT(200);
-    const settingsOpen = await s.eval(`document.getElementById('menu-settings').classList.contains('open')`);
-    results.keyboard.push({ step: 'arrow-down-opens-settings', settingsOpen });
-    requireGate(settingsOpen, 'ArrowDown did not open Settings');
+    await s.condition(`document.getElementById('menu-settings').classList.contains('open') && document.activeElement?.id === 'toggle-dryrun'`);
+    const settingsOpen = await getTopMenuKeyboardState(s);
+    results.keyboard.push({ step: 'arrow-down-opens-settings', ...settingsOpen });
+    requireGate(settingsOpen.settingsMenuOpen && settingsOpen.settingsAriaExpanded === 'true' && settingsOpen.selectedMenuItem === 'toggle-dryrun', 'ArrowDown did not open Settings and focus the first menu item', settingsOpen);
     await s.key('ArrowUp');
+    const beforeEnter = await getTopMenuKeyboardState(s);
+    results.keyboard.push({ step: 'before-enter-on-open-options', ...beforeEnter });
+    requireGate(beforeEnter.settingsMenuOpen && beforeEnter.settingsAriaExpanded === 'true' && beforeEnter.selectedMenuItem === 'open-options', 'Advanced Options was not focused before Enter', beforeEnter);
     await s.key('Enter');
-    await WAIT(300);
-    const settingsOpenByEnter = await s.eval(`document.getElementById('ns-panel-set').style.display !== 'none'`);
-    results.keyboard.push({ step: 'enter-on-open-options', settingsOpenByEnter });
-    requireGate(settingsOpenByEnter, 'Enter did not activate the focused Advanced Options item');
+    await s.condition(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none' && document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'set'`);
+    const afterEnter = await getTopMenuKeyboardState(s);
+    const startsAfterKeyboard = await getStarts(s);
+    const realPowerActionsAfterKeyboard = await getRealPowerActions(s);
+    results.keyboard.push({ step: 'enter-on-open-options', ...afterEnter, starts: startsAfterKeyboard.length, realPowerActions: realPowerActionsAfterKeyboard.length });
+    requireGate(afterEnter.settingsVisible && afterEnter.route === 'set', 'Enter did not activate the focused Advanced Options item', afterEnter);
+    requireGate(startsAfterKeyboard.length === 0 && realPowerActionsAfterKeyboard.length === 0, 'menu keyboard input started a timer or attempted a power action', { startsAfterKeyboard, realPowerActionsAfterKeyboard });
     addShot(phase, await s.screenshot('topmenu-settings-keyboard-open.png'));
 
     report.phases[phase] = { status: 'passed', results };
@@ -879,8 +948,11 @@ async function runActiveRunGate() {
 }
 
 async function writeArtifacts() {
-  report.rendererDiagnostics = runtimeSessions.map(({ label, session }) => ({
+  report.rendererDiagnostics = runtimeSessions.map(({ label, userDataDir, port, renderer, session }) => ({
     label,
+    userDataDir,
+    cdpPort: port,
+    renderer,
     consoleErrors: session.consoleMessages.filter(message => message.type === 'error'),
     uncaughtExceptions: session.exceptions
   }));
