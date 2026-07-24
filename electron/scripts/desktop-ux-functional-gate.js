@@ -524,6 +524,8 @@ async function runTopMenuGate() {
     results.mouse.push({ step: 'power-selects-plan-without-execution', powerSelection, starts: startsAfterPowerSelection.length, realPowerActions: realPowerActions.length });
 
     await s.click('#menu-help > span');
+    await s.condition(`document.getElementById('menu-help')?.classList.contains('open')`);
+    await WAIT(250);
     await s.click('#open-about');
     const aboutOpen = await s.eval(`document.getElementById('about-modal')?.classList.contains('active') || false`);
     requireGate(aboutOpen, 'enabled Help item did not activate');
