@@ -19,7 +19,8 @@
     "test:companion-v2-runtime": "node scripts/companion-v2-electron-proof.js",
     "test:receipt-recovery-runtime": "node scripts/receipt-recovery-electron-proof.js",
     "electron:provision": "install-electron --no",
-    "electron:verify-provision": "node scripts/verify-electron-provisioning.js",
+    "electron:verify": "node scripts/verify-electron-provisioning.js",
+    "electron:verify-provision": "npm run electron:verify",
     "test": "node --test"
   },
   "author": "Lights Out",
