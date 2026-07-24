@@ -2,14 +2,16 @@
 
 Date: 2026-07-24 (America/Los_Angeles)
 
-Both source-gate passes completed successfully after the narrow `tar` lockfile
-remediation and desktop UX functional-gate stabilization.
+Two source-gate passes completed successfully after the narrow `tar` lockfile
+remediation and desktop UX functional-gate stabilization. A subsequent
+independent rerun after provisioning and synthetic dependency coverage was added
+also completed successfully.
 
-| Gate | Pass 1 | Pass 2 |
+| Gate | Prior source gates | Independent rerun |
 |---|---:|---:|
 | ESLint | pass | pass |
 | Entry-point syntax checks | pass | pass |
-| Unit tests | 290 passed, 0 failed | 290 passed, 0 failed |
+| Unit tests | 290 passed, 0 failed | 295 passed, 0 failed |
 | Desktop smoke | 261 passed, 0 failed | 261 passed, 0 failed |
 | Companion smoke | 15 passed, 0 failed | 15 passed, 0 failed |
 | Packaged smoke | 12 passed, 0 failed | 12 passed, 0 failed |
