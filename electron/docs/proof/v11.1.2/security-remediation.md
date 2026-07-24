@@ -50,6 +50,26 @@ locked Electron version. The offline provisioning-contract test verifies the
 locked Electron package exposes `install-electron`, the project script invokes
 that supported command, and no project postinstall provisions Electron.
 
+Three fresh two-stage setup runs passed with `electron.exe` and `path.txt`
+present after provisioning, `electron --version` reporting `v43.1.0`,
+`tar@7.5.22`, and zero audit vulnerabilities. The `tar` regression suite now
+also proves synthetic `7.5.19` and `7.5.20` resolutions fail, `7.5.21` passes,
+all copies are inspected, vulnerable copies among fixed copies fail, and missing
+introducing-parent evidence fails.
+
+## Independent gate rerun
+
+A clean provisioned worktree passed unit tests, desktop smoke (`261/0`), and
+`npm audit`. Five consecutive native desktop UX gate runs passed with six
+phases and 25 screenshots each. The complete source gate then passed against
+the existing non-rebuilt package baseline: lint, syntax checks, unit tests,
+smokes, C2 proof, receipt recovery (`11/0 + 2/0`), packaged truth, packaged
+network, and audit. All scenarios reported zero real power actions.
+
+The existing package baseline remains stale because this branch changes
+`package.json`; no package was rebuilt, installed, signed, hashed, tagged,
+released, or published.
+
 ## Desktop UX functional gate
 
 The initial final-main gate failure was nondeterministic harness input evidence,
