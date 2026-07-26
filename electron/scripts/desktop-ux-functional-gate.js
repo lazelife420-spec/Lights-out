@@ -153,6 +153,19 @@ class CdpSession {
     await this.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
     await WAIT(120);
   }
+  async clickMenuItem(sel, timeout = 3000) {
+    const q = JSON.stringify(sel);
+    const point = await this.condition(`(() => {
+      const el = document.querySelector(${q});
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      const x = r.x + r.width / 2;
+      const y = r.y + r.height / 2;
+      return document.elementFromPoint(x, y)?.closest(${q}) === el ? { x, y } : false;
+    })()`, timeout);
+    await this.movePointer(point.x, point.y);
+    await this.clickXY(point.x, point.y);
+  }
   async movePointer(x, y) {
     await this.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
     await WAIT(80);
@@ -193,7 +206,8 @@ class CdpSession {
   async condition(fnExpr, timeout = 5000) {
     const t = Date.now();
     while (Date.now() - t < timeout) {
-      if (await this.eval(fnExpr)) return true;
+      const result = await this.eval(fnExpr);
+      if (result) return result;
       await WAIT(100);
     }
     throw new Error(`timeout condition ${fnExpr}`);
@@ -511,7 +525,7 @@ async function runTopMenuGate() {
     results.mouse.push({ step: 'pointer-away-stays-open', afterPointerAway, stillOpen2 });
     requireGate(stillOpen2, 'menu closed before an outside click', afterPointerAway);
 
-    await s.click('#open-options');
+    await s.clickMenuItem('#open-options');
     await waitFor(`document.getElementById('ns-panel-set').style.display !== 'none'`, 2000, 'Advanced Options did not open the Settings workspace');
     const settingsVisible = await s.eval(`document.getElementById('ns-panel-set').style.display !== 'none'`);
     results.mouse.push({ step: 'advanced-options-opens-settings', settingsVisible });
@@ -525,13 +539,13 @@ async function runTopMenuGate() {
 
     await s.click('#menu-settings > span');
     await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 2000, 'Settings menu did not reopen for toggle');
-    await s.click('#toggle-dryrun');
+    await s.clickMenuItem('#toggle-dryrun');
     await waitFor(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent === 'OFF'`, 2000, 'enabled Settings toggle did not activate');
     const dryRunIndicator = await s.eval(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent`);
     results.mouse.push({ step: 'toggle-dryrun', dryRunIndicator });
     requireGate(dryRunIndicator === 'OFF', 'enabled Settings toggle did not activate', dryRunIndicator);
     await s.click('#menu-settings > span');
-    await s.click('#toggle-dryrun');
+    await s.clickMenuItem('#toggle-dryrun');
     await waitFor(`state.dryRun === true`, 2000, 'Dry Run toggle did not restore');
 
     await s.click('#menu-power > span');
@@ -546,7 +560,7 @@ async function runTopMenuGate() {
     await clearStarts(s);
     await s.click('#menu-power > span');
     await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 2000, 'Power menu did not open for power selection');
-    await s.click('#menu-power [data-action="shutdown"]');
+    await s.clickMenuItem('#menu-power [data-action="shutdown"]');
     await waitFor(`state.action === 'shutdown' && state.dryRun === true`, 2000, 'Power selection changed safety state');
     const powerSelection = await s.eval(`({ action: state.action, dryRun: state.dryRun, warningOpen: document.getElementById('warning-modal')?.classList.contains('active') || false })`);
     const startsAfterPowerSelection = await getStarts(s);
@@ -557,7 +571,7 @@ async function runTopMenuGate() {
 
     await s.click('#menu-help > span');
     await waitFor(`document.getElementById('menu-help').classList.contains('open')`, 2000, 'Help menu did not open');
-    await s.click('#open-about');
+    await s.clickMenuItem('#open-about');
     await waitFor(`document.getElementById('about-modal')?.classList.contains('active') || false`, 2000, 'enabled Help item did not activate');
     const aboutOpen = await s.eval(`document.getElementById('about-modal')?.classList.contains('active') || false`);
     requireGate(aboutOpen, 'enabled Help item did not activate');
