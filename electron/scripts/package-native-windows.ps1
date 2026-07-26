@@ -4,7 +4,7 @@
 # Dry-run only: does not execute real power actions.
 param(
     [string]$SourceRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path,
-    [string]$OutputRoot = (Join-Path $SourceRoot '..' 'dist-native'),
+    [string]$OutputRoot = (Join-Path (Join-Path $SourceRoot '..') 'dist-native'),
     [string]$PackageName = 'Lights Out',
     [string]$Version = (Get-Content (Join-Path $SourceRoot 'package.json') | ConvertFrom-Json).version,
     [switch]$DryRun,
@@ -12,9 +12,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$OutputRoot = (Resolve-Path $OutputRoot -ErrorAction SilentlyContinue).Path ?? $OutputRoot
+$resolvedOutputRoot = Resolve-Path $OutputRoot -ErrorAction SilentlyContinue
+$OutputRoot = if ($resolvedOutputRoot) { $resolvedOutputRoot.Path } else { $OutputRoot }
 $UnpackedDir = Join-Path $OutputRoot 'win-unpacked'
-$AppDir = Join-Path $UnpackedDir 'resources' 'app'
+$AppDir = Join-Path (Join-Path $UnpackedDir 'resources') 'app'
 
 function Remove-IfExists($Path) {
     if (Test-Path $Path) { Remove-Item -Recurse -Force $Path }
@@ -65,7 +66,7 @@ Pop-Location
 Remove-Item (Join-Path $AppDir 'package-lock.json') -ErrorAction SilentlyContinue
 
 # 5. Copy provisioned Electron runtime
-$electronDist = Join-Path $SourceRoot 'node_modules' 'electron' 'dist'
+$electronDist = Join-Path (Join-Path (Join-Path $SourceRoot 'node_modules') 'electron') 'dist'
 if (-not (Test-Path $electronDist)) { throw "Electron dist not found. Run 'npm run electron:provision' first." }
 Get-ChildItem -Path $electronDist -Force | Copy-Item -Destination $UnpackedDir -Recurse -Force
 
@@ -78,7 +79,21 @@ if (Test-Path $exe) {
     Write-Warning 'electron.exe not found; cannot rename launcher.'
 }
 
-# 7. Produce portable ZIP
+# 7. Stamp Lights Out Windows identity on the staged executable
+$stampScript = Join-Path $PSScriptRoot 'stamp-windows-identity.ps1'
+if (Test-Path $stampScript) {
+    & $stampScript -SourceRoot $SourceRoot -ExePath $newExe -IconPath (Join-Path $SourceRoot 'assets\icon.ico')
+} else {
+    Write-Warning 'stamp-windows-identity.ps1 not found; executable branding skipped.'
+}
+
+# 8. Verify the executable identity
+$verifyScript = Join-Path $PSScriptRoot 'verify-windows-identity.ps1'
+if (Test-Path $verifyScript) {
+    & $verifyScript -ExePath $newExe
+}
+
+# 9. Produce portable ZIP
 if (-not $SkipZip) {
     $zipName = "Lights-Out-Portable-v$Version-win-x64.zip"
     $zipPath = Join-Path $OutputRoot $zipName
