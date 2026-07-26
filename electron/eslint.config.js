@@ -3,7 +3,13 @@
 // codebase's intentional patterns (empty catch blocks, LAN control-char regex).
 // Style is deliberately not enforced here — that's not what this lane is for.
 
-const js = require('@eslint/js');
+const { builtinRules } = require('eslint/use-at-your-own-risk');
+
+const recommendedRules = Object.fromEntries(
+  [...builtinRules]
+    .filter(([, rule]) => rule.meta?.docs?.recommended)
+    .map(([id]) => [id, 'error'])
+);
 
 // Globals shared by the Node main process (main.js, feature modules, preload,
 // tests, scripts). Writable ones are the CommonJS module bindings.
@@ -37,7 +43,7 @@ const browserGlobals = {
 };
 
 const correctnessRules = {
-  ...js.configs.recommended.rules,
+  ...recommendedRules,
   // Intentional patterns in this codebase — not defects:
   'no-empty': ['error', { allowEmptyCatch: true }], // best-effort try/catch
   'no-control-regex': 'off',                          // family.js strips \x00-\x1f
@@ -46,6 +52,9 @@ const correctnessRules = {
   // function arguments (common in callback/handler signatures) and _-prefixed
   // bindings; still warn on genuinely dead local variables.
   'no-unused-vars': ['warn', { args: 'none', varsIgnorePattern: '^_', ignoreRestSiblings: true, caughtErrors: 'none' }],
+  // ESLint 10 added these to recommended; preserve existing effective rules.
+  'no-useless-assignment': 'off',
+  'preserve-caught-error': 'off',
 };
 
 module.exports = [
