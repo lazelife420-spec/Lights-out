@@ -756,7 +756,7 @@ const state = {
   action: 'shutdown',
   unit: 'min',
   dryRun: false,
-  sound: false,
+  sound: true,
   gracefulClose: true,
   forceShutdown: false,
   muteSystem: false,
@@ -843,7 +843,7 @@ if (previewMode) {
 
 const SoundSystem = {
   ctx: null,
-  enabled: false,
+  enabled: true,
   master: 1,
 
   init() {
