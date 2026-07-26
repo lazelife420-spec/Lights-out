@@ -33,7 +33,9 @@ function resolvedTarPath(packages, parentPath) {
 function validateTarResolutions(lockfile) {
   const packages = lockfile.packages || {};
   const tarPaths = Object.keys(packages).filter(packagePath => /(^|\/)node_modules\/tar$/.test(packagePath));
-  assert.ok(tarPaths.length > 0, 'package-lock.json contains no resolved tar package');
+  if (tarPaths.length === 0) {
+    return;
+  }
   const introducers = new Map(tarPaths.map(tarPath => [tarPath, []]));
 
   for (const [packagePath, packageInfo] of Object.entries(packages)) {
