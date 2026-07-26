@@ -1015,6 +1015,19 @@ async function main() {
   console.log('Executable:', EXE_PATH);
   console.log('Root:', ROOT_DIR);
 
+  if (process.env.LIGHTS_OUT_DESKTOP_UX_MENU_ONLY === '1') {
+    await runTopMenuGate();
+    const menuUncaughtExceptions = runtimeSessions.flatMap(({ label, session }) => session.exceptions.map(exception => ({ label, ...exception })));
+    requireGate(menuUncaughtExceptions.length === 0, 'uncaught renderer exceptions were captured during top-menu gate', menuUncaughtExceptions);
+    report.status = 'passed';
+    report.realPowerActions = 0;
+    report.endTime = new Date().toISOString();
+    await writeArtifacts();
+    cleanupUserDataDirs();
+    console.log(JSON.stringify({ root: ROOT_DIR, screenshots: report.screenshots.length, phases: Object.keys(report.phases) }, null, 2));
+    return;
+  }
+
   await runStartupGate();
   await runTopMenuGate();
   await runSharedStartGate();
