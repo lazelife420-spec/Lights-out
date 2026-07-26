@@ -65,6 +65,15 @@ Push-Location $AppDir
 Pop-Location
 Remove-Item (Join-Path $AppDir 'package-lock.json') -ErrorAction SilentlyContinue
 
+# 4b. Remove non-runtime package artifacts from production node_modules
+$nodeModulesDir = Join-Path $AppDir 'node_modules'
+if (Test-Path $nodeModulesDir) {
+    $cleanupPatterns = @('test', 'tests', '__tests__', 'docs', 'doc', 'examples', 'example', 'demo', '.github', '*.map')
+    foreach ($pattern in $cleanupPatterns) {
+        Get-ChildItem -Path $nodeModulesDir -Recurse -Filter $pattern -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 # 5. Copy provisioned Electron runtime
 $electronDist = Join-Path (Join-Path (Join-Path $SourceRoot 'node_modules') 'electron') 'dist'
 if (-not (Test-Path $electronDist)) { throw "Electron dist not found. Run 'npm run electron:provision' first." }
