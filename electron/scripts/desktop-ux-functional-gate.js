@@ -290,10 +290,10 @@ async function stopApp(child) {
   const anyLightsOut = async () => {
     return new Promise(resolve => {
       let stdout = '';
-      let stderr = '';
+      let _stderr = '';
       const p = spawn('tasklist', ['/FI', 'IMAGENAME eq Lights Out.exe', '/NH'], { windowsHide: true });
       p.stdout.on('data', d => { stdout += d; });
-      p.stderr.on('data', d => { stderr += d; });
+      p.stderr.on('data', d => { _stderr += d; });
       p.on('error', () => resolve(false));
       p.on('close', () => resolve(stdout.includes('Lights Out.exe')));
     });
