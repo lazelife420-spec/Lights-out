@@ -9,7 +9,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
-const distNative = path.join(root, '..', 'dist-native', 'win-unpacked');
+const distNative = path.join(root, 'dist-native', 'win-unpacked');
 const executable = path.join(distNative, 'Lights Out.exe');
 const expected = {
   CompanyName: 'The Proof Foundry',
