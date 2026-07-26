@@ -257,8 +257,32 @@ class CdpSession {
 }
 
 async function stopApp(child) {
-  if (!child) return;
+  if (!child) return false;
+  const userDataDir = child.userDataDir;
   try { child.cdpSession?.ws?.terminate(); } catch {}
+  const escapedUserData = userDataDir ? userDataDir.replace(/'/g, "''") : '';
+
+  const runPowerShell = (cmd) => new Promise(resolve => {
+    const p = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', cmd], { windowsHide: true });
+    p.once('error', () => resolve(''));
+    p.once('close', () => resolve(''));
+  });
+
+  const killByUserData = async () => {
+    if (!userDataDir) return;
+    await runPowerShell(`Get-CimInstance Win32_Process -Filter "Name='Lights Out.exe'" | Where-Object { $_.CommandLine -like '*--user-data-dir=${escapedUserData}*' } | Stop-Process -Force -ErrorAction SilentlyContinue; exit 0`);
+  };
+
+  const processStillRunning = async () => {
+    if (!userDataDir) return false;
+    try {
+      const out = execSync(`Get-CimInstance Win32_Process -Filter "Name='Lights Out.exe'" | Where-Object { $_.CommandLine -like '*--user-data-dir=${escapedUserData}*' } | Select-Object -First 1 | ForEach-Object { $_.ProcessId }; exit 0`, { shell: 'powershell.exe', windowsHide: true, encoding: 'utf8', timeout: 5000 });
+      return out.trim().length > 0;
+    } catch {
+      return false;
+    }
+  };
+
   const exited = await new Promise(resolve => {
     let settled = false;
     const finish = () => {
@@ -268,15 +292,18 @@ async function stopApp(child) {
     };
     child.once('exit', finish);
     try { child.kill(); } catch { finish(); }
-    setTimeout(() => {
+    setTimeout(async () => {
       if (settled) return;
       const killer = spawn('taskkill', ['/F', '/T', '/PID', String(child.pid)], { windowsHide: true });
       killer.once('error', finish);
-      killer.once('close', finish);
+      killer.once('close', async () => { await killByUserData(); finish(); });
     }, 1000);
-    setTimeout(finish, 3000);
+    setTimeout(async () => { await killByUserData(); finish(); }, 4000);
   });
-  return exited;
+
+  await killByUserData();
+  const stillRunning = await processStillRunning();
+  return !stillRunning;
 }
 
 async function spawnApp(userDataDir, seed = {}, { preserveSettings = false } = {}) {
@@ -308,6 +335,7 @@ async function spawnApp(userDataDir, seed = {}, { preserveSettings = false } = {
   await session.connect();
   const renderer = await session.waitForRendererReady();
   child.cdpSession = session;
+  child.userDataDir = userDataDir;
   runtimeSessions.push({ label: path.basename(userDataDir), userDataDir, port, renderer, session });
   return { child, session, userDataDir, port, renderer };
 }
@@ -426,14 +454,16 @@ async function runTopMenuGate() {
   const { child, session: s } = await spawnApp(userData);
   const results = { mouse: [], keyboard: [], assertions: [] };
   report.phases[phase] = { status: 'running', results };
+  const waitFor = (expr, timeout = 2000, label = expr) => s.condition(expr, timeout).catch(err => {
+    throw new Error(`${label} -> ${err.message}`);
+  });
   try {
     await s.resize(1280, 720);
     await s.waitFor('#menu-power');
-    await WAIT(400);
     await installTopMenuEventTrace(s);
 
     await s.click('#menu-power > span');
-    await WAIT(200);
+    await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 2000, 'Power menu did not open on click');
     const powerAfterClick = await s.eval(`({
       open: document.getElementById('menu-power').classList.contains('open'),
       ariaExpanded: document.getElementById('menu-power').getAttribute('aria-expanded'),
@@ -446,20 +476,18 @@ async function runTopMenuGate() {
     addShot(phase, await s.screenshot('topmenu-power-mouse-open.png'));
 
     await s.click('#menu-power > span');
-    await WAIT(200);
-    open = await s.eval(`!document.querySelector('.menu-item.open')`);
+    open = await waitFor(`!document.querySelector('.menu-item.open')`, 2000, 'Power trigger did not toggle closed');
     results.mouse.push({ step: 'click-power-again', closed: open });
     requireGate(open, 'Power trigger did not toggle closed');
 
     await s.click('#menu-settings > span');
-    await WAIT(200);
-    open = await s.eval(`document.getElementById('menu-settings').classList.contains('open')`);
+    open = await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 2000, 'Settings menu did not open on click');
     addShot(phase, await s.screenshot('topmenu-settings-mouse-open.png'));
     results.mouse.push({ step: 'click-settings', open });
     requireGate(open, 'Settings menu did not open on click');
 
     await s.click('#menu-help > span');
-    await WAIT(200);
+    await waitFor(`!document.getElementById('menu-settings').classList.contains('open') && document.getElementById('menu-help').classList.contains('open')`, 2000, 'opening Help did not close Settings');
     const settingsClosed = await s.eval(`!document.getElementById('menu-settings').classList.contains('open')`);
     const helpOpen = await s.eval(`document.getElementById('menu-help').classList.contains('open')`);
     results.mouse.push({ step: 'click-help-closes-settings', settingsClosed, helpOpen });
@@ -467,55 +495,59 @@ async function runTopMenuGate() {
     addShot(phase, await s.screenshot('topmenu-help-mouse-open.png'));
 
     await s.click('#menu-settings > span');
-    await s.condition(`document.getElementById('menu-settings').classList.contains('open')`);
+    await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 2000, 'Settings menu did not reopen');
     const menuRect = await s.eval(`(r=document.querySelector('#menu-settings .submenu').getBoundingClientRect(),{x:r.x+r.width/2,y:r.y+10})`);
     const beforePointerTransfer = await getTopMenuKeyboardState(s);
     await s.movePointer(menuRect.x, menuRect.y);
-    await WAIT(200);
+    await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 2000, 'menu closed while pointer entered its submenu');
     const afterPointerTransfer = await getTopMenuKeyboardState(s);
     const stillOpen = afterPointerTransfer.settingsMenuOpen;
     results.mouse.push({ step: 'pointer-transfer-stays-open', menuRect, beforePointerTransfer, afterPointerTransfer, stillOpen });
     requireGate(stillOpen, 'menu closed while pointer entered its submenu', afterPointerTransfer);
     await s.movePointer(20, 20);
-    await WAIT(200);
+    await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 2000, 'menu closed before pointer left submenu');
     const afterPointerAway = await getTopMenuKeyboardState(s);
     const stillOpen2 = afterPointerAway.settingsMenuOpen;
     results.mouse.push({ step: 'pointer-away-stays-open', afterPointerAway, stillOpen2 });
     requireGate(stillOpen2, 'menu closed before an outside click', afterPointerAway);
 
     await s.click('#open-options');
-    await WAIT(300);
+    await waitFor(`document.getElementById('ns-panel-set').style.display !== 'none'`, 2000, 'Advanced Options did not open the Settings workspace');
     const settingsVisible = await s.eval(`document.getElementById('ns-panel-set').style.display !== 'none'`);
     results.mouse.push({ step: 'advanced-options-opens-settings', settingsVisible });
     requireGate(settingsVisible, 'Advanced Options did not open the Settings workspace');
     addShot(phase, await s.screenshot('topmenu-settings-panel.png'));
     await s.eval(`document.getElementById('modal-close').click()`);
-    await WAIT(300);
+    await waitFor(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'lib'`, 2000, 'closing Settings did not restore Tonight');
     const restored = await s.eval(`document.querySelector('.ns-nav-item.active')?.dataset.nsTab`);
     results.mouse.push({ step: 'close-restores-route', restored });
     requireGate(restored === 'lib', 'closing Settings did not restore Tonight', restored);
 
     await s.click('#menu-settings > span');
+    await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 2000, 'Settings menu did not reopen for toggle');
     await s.click('#toggle-dryrun');
-    await WAIT(200);
+    await waitFor(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent === 'OFF'`, 2000, 'enabled Settings toggle did not activate');
     const dryRunIndicator = await s.eval(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent`);
     results.mouse.push({ step: 'toggle-dryrun', dryRunIndicator });
     requireGate(dryRunIndicator === 'OFF', 'enabled Settings toggle did not activate', dryRunIndicator);
     await s.click('#menu-settings > span');
     await s.click('#toggle-dryrun');
-    await s.condition(`state.dryRun === true`);
+    await waitFor(`state.dryRun === true`, 2000, 'Dry Run toggle did not restore');
 
     await s.click('#menu-power > span');
+    await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 2000, 'Power menu did not open for outside-click test');
     const outside = await s.eval(`(r=document.getElementById('ns-hero-card').getBoundingClientRect(), {x:r.x+r.width/2, y:r.y+r.height/2})`);
     await s.clickXY(outside.x, outside.y);
-    await WAIT(200);
+    await waitFor(`!document.querySelector('.menu-item.open')`, 2000, 'outside click did not close top menu');
     const allClosed = await s.eval(`!document.querySelector('.menu-item.open')`);
     results.mouse.push({ step: 'outside-click-closes', allClosed });
     requireGate(allClosed, 'outside click did not close top menu');
 
     await clearStarts(s);
     await s.click('#menu-power > span');
+    await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 2000, 'Power menu did not open for power selection');
     await s.click('#menu-power [data-action="shutdown"]');
+    await waitFor(`state.action === 'shutdown' && state.dryRun === true`, 2000, 'Power selection changed safety state');
     const powerSelection = await s.eval(`({ action: state.action, dryRun: state.dryRun, warningOpen: document.getElementById('warning-modal')?.classList.contains('active') || false })`);
     const startsAfterPowerSelection = await getStarts(s);
     const realPowerActions = await getRealPowerActions(s);
@@ -524,7 +556,9 @@ async function runTopMenuGate() {
     results.mouse.push({ step: 'power-selects-plan-without-execution', powerSelection, starts: startsAfterPowerSelection.length, realPowerActions: realPowerActions.length });
 
     await s.click('#menu-help > span');
+    await waitFor(`document.getElementById('menu-help').classList.contains('open')`, 2000, 'Help menu did not open');
     await s.click('#open-about');
+    await waitFor(`document.getElementById('about-modal')?.classList.contains('active') || false`, 2000, 'enabled Help item did not activate');
     const aboutOpen = await s.eval(`document.getElementById('about-modal')?.classList.contains('active') || false`);
     requireGate(aboutOpen, 'enabled Help item did not activate');
     await s.eval(`document.getElementById('about-modal')?.classList.remove('active')`);
@@ -533,24 +567,24 @@ async function runTopMenuGate() {
     // Keyboard navigation
     await s.eval(`document.getElementById('menu-power').focus()`);
     await s.key('Enter');
-    await WAIT(200);
+    await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 2000, 'Enter did not open Power');
     const powerOpen = await s.eval(`document.getElementById('menu-power').classList.contains('open')`);
     addShot(phase, await s.screenshot('topmenu-power-keyboard-open.png'));
     results.keyboard.push({ step: 'enter-opens-power', powerOpen });
     requireGate(powerOpen, 'Enter did not open Power');
 
     await s.key('ArrowDown');
-    await WAIT(200);
+    await waitFor(`document.activeElement?.dataset?.action === 'restart'`, 2000, 'ArrowDown did not move to the next Power item');
     const focusedItem = await s.eval(`({ text: document.activeElement?.textContent?.trim(), action: document.activeElement?.dataset?.action || null })`);
     results.keyboard.push({ step: 'arrow-down-to-item', focusedItem });
     requireGate(focusedItem.action === 'restart', 'ArrowDown did not move to the next Power item', focusedItem);
     await s.key('ArrowUp');
-    await WAIT(200);
+    await waitFor(`document.activeElement?.dataset?.action === 'shutdown'`, 2000, 'ArrowUp did not move to the previous Power item');
     const focusedAfterUp = await s.eval(`({ text: document.activeElement?.textContent?.trim(), action: document.activeElement?.dataset?.action || null })`);
     results.keyboard.push({ step: 'arrow-up', focusedItem: focusedAfterUp });
     requireGate(focusedAfterUp.action === 'shutdown', 'ArrowUp did not move to the previous Power item', focusedAfterUp);
     await s.key('Escape');
-    await WAIT(200);
+    await waitFor(`!document.querySelector('.menu-item.open') && document.activeElement?.id === 'menu-power'`, 2000, 'Escape did not close Power and return focus');
     const closedByEscape = await s.eval(`!document.querySelector('.menu-item.open') && document.activeElement?.id === 'menu-power'`);
     results.keyboard.push({ step: 'escape-closes-and-focuses-trigger', closedByEscape });
     requireGate(closedByEscape, 'Escape did not close Power and return focus');
@@ -558,7 +592,7 @@ async function runTopMenuGate() {
     await clearStarts(s);
     await s.eval(`document.getElementById('menu-settings').focus()`);
     await s.key('ArrowDown');
-    await s.condition(`document.getElementById('menu-settings').classList.contains('open') && document.activeElement?.id === 'toggle-dryrun'`);
+    await waitFor(`document.getElementById('menu-settings').classList.contains('open') && document.activeElement?.id === 'toggle-dryrun'`, 2000, 'ArrowDown did not open Settings and focus the first menu item');
     const settingsOpen = await getTopMenuKeyboardState(s);
     results.keyboard.push({ step: 'arrow-down-opens-settings', ...settingsOpen });
     requireGate(settingsOpen.settingsMenuOpen && settingsOpen.settingsAriaExpanded === 'true' && settingsOpen.selectedMenuItem === 'toggle-dryrun', 'ArrowDown did not open Settings and focus the first menu item', settingsOpen);
@@ -567,7 +601,7 @@ async function runTopMenuGate() {
     results.keyboard.push({ step: 'before-enter-on-open-options', ...beforeEnter });
     requireGate(beforeEnter.settingsMenuOpen && beforeEnter.settingsAriaExpanded === 'true' && beforeEnter.selectedMenuItem === 'open-options', 'Advanced Options was not focused before Enter', beforeEnter);
     await s.key('Enter');
-    await s.condition(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none' && document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'set'`);
+    await waitFor(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none' && document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'set'`, 2000, 'Enter did not activate the focused Advanced Options item');
     const afterEnter = await getTopMenuKeyboardState(s);
     const startsAfterKeyboard = await getStarts(s);
     const realPowerActionsAfterKeyboard = await getRealPowerActions(s);
@@ -581,6 +615,7 @@ async function runTopMenuGate() {
     await stopApp(child);
   }
 }
+
 
 async function runSharedStartGate() {
   const phase = 'shared-start';
