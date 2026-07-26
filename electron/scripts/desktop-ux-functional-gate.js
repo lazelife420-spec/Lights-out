@@ -982,6 +982,16 @@ async function runActiveRunGate() {
   }
 }
 
+function cleanupUserDataDirs() {
+  try {
+    for (const entry of fs.readdirSync(ROOT_DIR)) {
+      if (entry.startsWith('userdata-')) {
+        fs.rmSync(path.join(ROOT_DIR, entry), { recursive: true, force: true });
+      }
+    }
+  } catch {}
+}
+
 async function writeArtifacts() {
   report.rendererDiagnostics = runtimeSessions.map(({ label, userDataDir, port, renderer, session }) => ({
     label,
@@ -1018,6 +1028,7 @@ async function main() {
   report.realPowerActions = 0;
   report.endTime = new Date().toISOString();
   await writeArtifacts();
+  cleanupUserDataDirs();
   console.log(JSON.stringify({ root: ROOT_DIR, screenshots: report.screenshots.length, phases: Object.keys(report.phases) }, null, 2));
 }
 
@@ -1028,6 +1039,7 @@ main().catch(async err => {
   try { await writeArtifacts(); } catch (artifactError) {
     console.error('Failed to write failure artifacts:', artifactError);
   }
+  cleanupUserDataDirs();
   console.error('Gate fatal:', err);
   process.exit(1);
 });
