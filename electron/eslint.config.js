@@ -62,7 +62,7 @@ module.exports = [
   // directory (e.g. C:\...\electron\.claude\worktrees\<name>\electron\...) --
   // without this, eslint recurses into another worktree's copy of these same
   // filenames and reports it under the wrong (Node-globals) rule set.
-  { ignores: ['node_modules/**', 'dist/**', 'assets/**', 'test-results/**', 'build.log', '.claude/**'] },
+  { ignores: ['node_modules/**', 'dist/**', 'dist-native/**', 'assets/**', 'test-results/**', 'build.log', '.claude/**'] },
 
   // Node main process, feature modules, preload, tests, build scripts.
   {
