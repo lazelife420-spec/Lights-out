@@ -284,13 +284,13 @@ async function stopApp(child) {
 
   const killByUserData = async () => {
     if (!userDataDir) return;
-    await runPowerShell(`Get-CimInstance Win32_Process -Filter "Name='Lights Out.exe'" | Where-Object { $_.CommandLine -like '*--user-data-dir=${escapedUserData}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; exit 0`);
+    await runPowerShell(`Get-CimInstance Win32_Process -Filter "Name='Lights Out.exe'" | Where-Object { $_.CommandLine -like '*--user-data-dir=*${escapedUserData}*' } | ForEach-Object { Stop-Process -Id ([int]$_.ProcessId) -Force -ErrorAction SilentlyContinue }; exit 0`);
   };
 
   const processStillRunning = async () => {
     if (!userDataDir) return false;
     try {
-      const out = execSync(`Get-CimInstance Win32_Process -Filter "Name='Lights Out.exe'" | Where-Object { $_.CommandLine -like '*--user-data-dir=${escapedUserData}*' } | Select-Object -First 1 | ForEach-Object { $_.ProcessId }; exit 0`, { shell: 'powershell.exe', windowsHide: true, encoding: 'utf8', timeout: 5000 });
+      const out = execSync(`Get-CimInstance Win32_Process -Filter "Name='Lights Out.exe'" | Where-Object { $_.CommandLine -like '*--user-data-dir=*${escapedUserData}*' } | Select-Object -First 1 | ForEach-Object { $_.ProcessId }; exit 0`, { shell: 'powershell.exe', windowsHide: true, encoding: 'utf8', timeout: 5000 });
       return out.trim().length > 0;
     } catch {
       return false;
