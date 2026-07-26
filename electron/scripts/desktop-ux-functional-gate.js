@@ -317,7 +317,8 @@ async function stopApp(child) {
 
   await killByUserData();
   const stillRunning = await processStillRunning();
-  return !stillRunning;
+  if (stillRunning) throw new Error(`Lights Out process tree for ${userDataDir} did not terminate`);
+  return true;
 }
 
 async function spawnApp(userDataDir, seed = {}, { preserveSettings = false } = {}) {
@@ -338,6 +339,7 @@ async function spawnApp(userDataDir, seed = {}, { preserveSettings = false } = {
   if (SOURCE_RUNTIME) launchArgs.push(ELECTRON_ROOT);
   launchArgs.push('--desktop-ux-proof');
   const child = spawn(EXE_PATH, launchArgs, { detached: true, windowsHide: true, env: { ...process.env, LIGHTS_OUT_DESKTOP_UX_GATE: '1' } });
+  child.unref();
   let list = [];
   for (let i = 0; i < 40; i++) {
     try { list = await cdpList(port); if (list.length) break; } catch {}
