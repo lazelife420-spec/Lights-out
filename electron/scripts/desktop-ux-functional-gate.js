@@ -284,7 +284,7 @@ async function stopApp(child) {
 
   const killByUserData = async () => {
     if (!userDataDir) return;
-    await runPowerShell(`Get-CimInstance Win32_Process -Filter "Name='Lights Out.exe'" | Where-Object { $_.CommandLine -like '*--user-data-dir=${escapedUserData}*' } | Stop-Process -Force -ErrorAction SilentlyContinue; exit 0`);
+    await runPowerShell(`Get-CimInstance Win32_Process -Filter "Name='Lights Out.exe'" | Where-Object { $_.CommandLine -like '*--user-data-dir=${escapedUserData}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; exit 0`);
   };
 
   const processStillRunning = async () => {
