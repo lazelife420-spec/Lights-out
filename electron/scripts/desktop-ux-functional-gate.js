@@ -271,54 +271,46 @@ class CdpSession {
 }
 
 async function stopApp(child) {
-  if (!child) return false;
+  if (!child) return true;
   const userDataDir = child.userDataDir;
   try { child.cdpSession?.ws?.terminate(); } catch {}
-  const escapedUserData = userDataDir ? userDataDir.replace(/'/g, "''") : '';
 
-  const runPowerShell = (cmd) => new Promise(resolve => {
-    const p = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', cmd], { windowsHide: true });
-    p.once('error', () => resolve(''));
-    p.once('close', () => resolve(''));
-  });
-
-  const killByUserData = async () => {
-    if (!userDataDir) return;
-    await runPowerShell(`Get-CimInstance Win32_Process -Filter "Name='Lights Out.exe'" | Where-Object { $_.CommandLine -like '*--user-data-dir=*${escapedUserData}*' } | ForEach-Object { Stop-Process -Id ([int]$_.ProcessId) -Force -ErrorAction SilentlyContinue }; exit 0`);
+  const runTaskkill = async (args) => {
+    return new Promise(resolve => {
+      const p = spawn('taskkill', args, { windowsHide: true });
+      let stdout = '';
+      let stderr = '';
+      p.stdout?.on('data', d => { stdout += d; });
+      p.stderr?.on('data', d => { stderr += d; });
+      p.on('error', () => resolve({ stdout, stderr, code: 1 }));
+      p.on('close', code => resolve({ stdout, stderr, code }));
+    });
   };
 
-  const processStillRunning = async () => {
-    if (!userDataDir) return false;
-    try {
-      const out = execSync(`Get-CimInstance Win32_Process -Filter "Name='Lights Out.exe'" | Where-Object { $_.CommandLine -like '*--user-data-dir=*${escapedUserData}*' } | Select-Object -First 1 | ForEach-Object { $_.ProcessId }; exit 0`, { shell: 'powershell.exe', windowsHide: true, encoding: 'utf8', timeout: 5000 });
-      return out.trim().length > 0;
-    } catch {
-      return false;
-    }
+  const anyLightsOut = async () => {
+    return new Promise(resolve => {
+      let stdout = '';
+      let stderr = '';
+      const p = spawn('tasklist', ['/FI', 'IMAGENAME eq Lights Out.exe', '/NH'], { windowsHide: true });
+      p.stdout.on('data', d => { stdout += d; });
+      p.stderr.on('data', d => { stderr += d; });
+      p.on('error', () => resolve(false));
+      p.on('close', () => resolve(stdout.includes('Lights Out.exe')));
+    });
   };
 
-  await new Promise(resolve => {
-    let settled = false;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      resolve(true);
-    };
-    child.once('exit', finish);
-    try { child.kill(); } catch { finish(); }
-    setTimeout(async () => {
-      if (settled) return;
-      const killer = spawn('taskkill', ['/F', '/T', '/PID', String(child.pid)], { windowsHide: true });
-      killer.once('error', finish);
-      killer.once('close', async () => { await killByUserData(); finish(); });
-    }, 1000);
-    setTimeout(async () => { await killByUserData(); finish(); }, 4000);
-  });
+  try { child.kill(); } catch {}
+  await WAIT(500);
+  await runTaskkill(['/F', '/T', '/PID', String(child.pid)]);
+  await WAIT(500);
+  await runTaskkill(['/F', '/IM', 'Lights Out.exe']);
 
-  await killByUserData();
-  const stillRunning = await processStillRunning();
-  if (stillRunning) throw new Error(`Lights Out process tree for ${userDataDir} did not terminate`);
-  return true;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    if (!(await anyLightsOut())) return true;
+    await runTaskkill(['/F', '/IM', 'Lights Out.exe']);
+    await WAIT(500);
+  }
+  throw new Error(`Lights Out process tree for ${userDataDir} did not terminate`);
 }
 
 async function spawnApp(userDataDir, seed = {}, { preserveSettings = false } = {}) {
@@ -1070,5 +1062,5 @@ main().catch(async err => {
   }
   cleanupUserDataDirs();
   console.error('Gate fatal:', err);
-  process.exit(1);
+  process.exitCode = 1;
 });
