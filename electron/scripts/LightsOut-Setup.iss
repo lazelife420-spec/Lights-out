@@ -53,27 +53,39 @@ function IsLightsOutRunning(): Boolean;
 var
   ResultCode: Integer;
   TempPath: String;
+  BatchPath: String;
+  BatchLines: TArrayOfString;
   Lines: TArrayOfString;
   I: Integer;
   Line: String;
   ExeName: String;
 begin
   Result := False;
-  TempPath := ExpandConstant('{tmp}\lo-running.txt');
   ExeName := ExpandConstant('{#MyAppExeName}');
-  if Exec(ExpandConstant('{sys}\cmd.exe'),
-          '/c ""' + ExpandConstant('{sys}\tasklist.exe') + '" /fi "imagename eq ' + ExeName + '" /nh > "' + TempPath + '""',
-          '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  TempPath := ExpandConstant('{tmp}\lo-running.txt');
+  BatchPath := ExpandConstant('{tmp}\lo-check-running.bat');
+
+  // Write a temporary batch file to avoid fragile quoting across cmd invocations.
+  SetArrayLength(BatchLines, 3);
+  BatchLines[0] := '@echo off';
+  BatchLines[1] := '"' + ExpandConstant('{sys}\tasklist.exe') + '" /fi "imagename eq ' + ExeName + '" /nh /fo csv > "' + TempPath + '"';
+  BatchLines[2] := 'exit /b 0';
+
+  if SaveStringsToFile(BatchPath, BatchLines, False) then
   begin
-    if LoadStringsFromFile(TempPath, Lines) then
+    if Exec(ExpandConstant('{sys}\cmd.exe'), '/c "' + BatchPath + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
     begin
-      for I := 0 to GetArrayLength(Lines) - 1 do
+      if LoadStringsFromFile(TempPath, Lines) then
       begin
-        Line := Lines[I];
-        if Pos(ExeName, Line) > 0 then
+        for I := 0 to GetArrayLength(Lines) - 1 do
         begin
-          Result := True;
-          Exit;
+          Line := Trim(Lines[I]);
+          // CSV output begins with the quoted image name when a process is found.
+          if Pos('"' + ExeName + '"', Line) = 1 then
+          begin
+            Result := True;
+            Exit;
+          end;
         end;
       end;
     end;
