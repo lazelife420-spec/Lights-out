@@ -283,7 +283,7 @@ async function stopApp(child) {
     }
   };
 
-  const exited = await new Promise(resolve => {
+  await new Promise(resolve => {
     let settled = false;
     const finish = () => {
       if (settled) return;
