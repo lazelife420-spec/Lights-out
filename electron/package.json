@@ -21,7 +21,12 @@
     "electron:provision": "install-electron --no",
     "electron:verify": "node scripts/verify-electron-provisioning.js",
     "electron:verify-provision": "npm run electron:verify",
+    "check-node": "node scripts/check-node.js",
+    "preflight": "npm run check-node && npm run electron:verify",
     "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22.13.0"
   },
   "author": "Lights Out",
   "license": "MIT",
