@@ -154,15 +154,6 @@ function extractFunction(source, name) {
   return source.slice(match.index, closeBrace + 1);
 }
 
-function extractObjectLiteral(source, declaration) {
-  const re = new RegExp(`${declaration.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*=\\s*\\{`);
-  const match = re.exec(source);
-  if (!match) throw new Error(`${declaration} not found`);
-  const openBrace = match.index + match.length - 1;
-  const closeBrace = findMatchingBrace(source, openBrace);
-  return source.slice(openBrace, closeBrace + 1);
-}
-
 function extractLastObjectLiteral(source, declaration) {
   const escaped = declaration.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const re = new RegExp(`${escaped}\\s*=\\s*\\{`, 'g');
