@@ -83,7 +83,7 @@ async function applyAppVersion() {
 }
 
 let onboardStep = 1;
-let onboardData = { bedtime: null, focus: null, sequence: null, sound: true };
+let onboardData = { bedtime: null, focus: null, sequence: null, sound: false };
 
 function showOnboarding() {
   if (!els.onboarding) return;
