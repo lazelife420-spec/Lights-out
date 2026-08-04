@@ -21,6 +21,56 @@ function Remove-IfExists($Path) {
     if (Test-Path $Path) { Remove-Item -Recurse -Force $Path }
 }
 
+function Normalize-ZipTimestamps {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Root
+  )
+
+  if (-not (Test-Path -LiteralPath $Root -PathType Container)) {
+    throw "Timestamp normalization root is missing: $Root"
+  }
+
+  # ZIP/DOS timestamps support local dates from 1980-01-01 through
+  # 2107-12-31. Electron's clean distribution uses 1980-01-01 UTC,
+  # which appears as 1979-12-31 in negative UTC offsets.
+  $zipMinimum = [datetime]::SpecifyKind(
+    [datetime]"1980-01-01T00:00:00",
+    [System.DateTimeKind]::Local
+  )
+
+  $zipMaximum = [datetime]::SpecifyKind(
+    [datetime]"2107-12-31T23:59:58",
+    [System.DateTimeKind]::Local
+  )
+
+  $invalidItems = @(
+    Get-ChildItem -LiteralPath $Root -Recurse -Force |
+      Where-Object {
+        $_.LastWriteTime -lt $zipMinimum -or
+        $_.LastWriteTime -gt $zipMaximum
+      }
+  )
+
+  foreach ($item in $invalidItems) {
+    $item.LastWriteTime = $zipMinimum
+  }
+
+  $remainingInvalidItems = @(
+    Get-ChildItem -LiteralPath $Root -Recurse -Force |
+      Where-Object {
+        $_.LastWriteTime -lt $zipMinimum -or
+        $_.LastWriteTime -gt $zipMaximum
+      }
+  )
+
+  if ($remainingInvalidItems.Count -ne 0) {
+    throw "Staged output still contains $($remainingInvalidItems.Count) ZIP-incompatible timestamp(s)"
+  }
+
+  Write-Host "Normalized $($invalidItems.Count) staged timestamp(s) for ZIP compatibility."
+}
+
 # 1. Clean staging
 Remove-IfExists $OutputRoot
 New-Item -ItemType Directory -Path $AppDir -Force | Out-Null
@@ -104,6 +154,7 @@ if (Test-Path $verifyScript) {
 
 # 9. Produce portable ZIP
 if (-not $SkipZip) {
+    Normalize-ZipTimestamps -Root $UnpackedDir
     $zipName = "Lights-Out-Portable-v$Version-win-x64.zip"
     $zipPath = Join-Path $OutputRoot $zipName
     Compress-Archive -Path "$UnpackedDir\*" -DestinationPath $zipPath -Force
