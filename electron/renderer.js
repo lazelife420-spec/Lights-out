@@ -3435,7 +3435,9 @@ if (els.btnClearReceipts) {
         document.getElementById('notif-drawer').classList.remove('active');
         document.getElementById('btn-notif')?.setAttribute('aria-expanded', 'false');
       } else if (document.getElementById('ritual-overlay')?.classList.contains('active')) {
-        document.getElementById('ritual-overlay').classList.remove('active');
+        event.preventDefault();
+        await api.ritualCancel?.();
+        hideRitualOverlay();
       } else if (document.getElementById('warning-modal')?.classList.contains('active')) {
         document.getElementById('warning-modal').classList.remove('active');
       } else if (document.getElementById('override-modal')?.classList.contains('active')) {
