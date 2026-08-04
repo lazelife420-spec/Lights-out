@@ -32,6 +32,8 @@ const RITUAL_DESCS = {
 function showRitualOverlay(state) {
   if (!els.ritualOverlay) return;
   els.ritualOverlay.style.display = '';
+  els.ritualOverlay.classList.add('active');
+  els.ritualOverlay.setAttribute('aria-hidden', 'false');
   updateRitualOverlay(state);
 }
 
@@ -39,6 +41,13 @@ function updateRitualOverlay(state) {
   if (!els.ritualOverlay || !state) return;
   const step = state.currentStepInfo;
   if (!step) { hideRitualOverlay(); return; }
+
+  // Main-process ritual steps can arrive without the manual Begin Ritual
+  // button path (for example, Use Tonight with a standard Night Mode). Make
+  // every active step establish the same visible modal lifecycle.
+  els.ritualOverlay.style.display = '';
+  els.ritualOverlay.classList.add('active');
+  els.ritualOverlay.setAttribute('aria-hidden', 'false');
 
   els.ritualStepIcon.textContent = RITUAL_ICONS[step.id] || '\u{1F319}';
   els.ritualStepTitle.textContent = step.label;
@@ -57,7 +66,10 @@ function updateRitualOverlay(state) {
 }
 
 function hideRitualOverlay() {
-  if (els.ritualOverlay) els.ritualOverlay.style.display = 'none';
+  if (!els.ritualOverlay) return;
+  els.ritualOverlay.classList.remove('active');
+  els.ritualOverlay.style.display = 'none';
+  els.ritualOverlay.setAttribute('aria-hidden', 'true');
 }
 
 const BREATHING_PHASES = [
