@@ -1705,9 +1705,8 @@ async function executePowerAction(options = {}) {
   }
 
   try {
-    if (muteSystem) {
-      await executePowerShell('(New-Object -ComObject WScript.Shell).SendKeys([char]173)');
-    }
+    // Volume/mute manipulation is intentionally disabled; the app no longer
+    // touches the system volume during power actions.
 
     switch (action) {
       case 'shutdown':
