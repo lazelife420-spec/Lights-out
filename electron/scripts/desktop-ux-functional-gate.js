@@ -583,7 +583,13 @@ async function runTopMenuGate() {
   const { child, session: s } = await spawnApp(userData);
   const results = { mouse: [], keyboard: [], assertions: [] };
   report.phases[phase] = { status: 'running', results };
-  const waitFor = (expression, label, timeout = 2000) => s.condition(expression, timeout, label);
+  // Each native click already blocks on a fresh powershell.exe + Add-Type
+  // compile before this function ever starts polling (measured floor ~2.0s,
+  // 1971-2030ms across 10 samples with the packaged app running concurrently);
+  // a 2000ms post-click assertion budget left effectively no margin for
+  // real-world scheduling variance on top of that floor. 5000ms keeps this a
+  // finite, named, diagnosed wait -- not a retry -- just with real headroom.
+  const waitFor = (expression, label, timeout = 5000) => s.condition(expression, timeout, label);
   try {
     await s.resize(1280, 720);
     await s.waitFor('#menu-power');
@@ -1150,7 +1156,8 @@ async function runActiveRunGate() {
 // reset only through supported visible UI between iterations (no restart).
 async function runWarmTopMenuPass(s) {
   const results = { mouse: [], keyboard: [] };
-  const waitFor = (expression, label, timeout = 2000) => s.condition(expression, timeout, label);
+  // Same measured-overhead basis as runTopMenuGate's waitFor: see the comment there.
+  const waitFor = (expression, label, timeout = 5000) => s.condition(expression, timeout, label);
 
   await s.click('#menu-power > span');
   let open = await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'warm Power menu open after native click');
@@ -1198,30 +1205,33 @@ async function runWarmTopMenuPass(s) {
 
 async function runWarmSettingsTogglePass(s) {
   const results = [];
+  // Same measured-overhead basis as runTopMenuGate's waitFor (~2.0s floor per
+  // native click): these post-click assertions follow the identical top-menu
+  // click pattern, so they carry the same widened, finite budget.
   await s.click('#menu-settings > span');
-  await s.condition(`document.getElementById('menu-settings').classList.contains('open')`, 2000, 'warm Settings menu open for Dry Run toggle');
+  await s.condition(`document.getElementById('menu-settings').classList.contains('open')`, 5000, 'warm Settings menu open for Dry Run toggle');
   await s.click('#toggle-dryrun');
-  await s.condition(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent === 'OFF'`, 2000, 'warm Dry Run toggle visibly disabled');
+  await s.condition(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent === 'OFF'`, 5000, 'warm Dry Run toggle visibly disabled');
   let indicator = await s.eval(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent`);
   requireGate(indicator === 'OFF', 'warm Dry Run toggle did not visibly disable', indicator);
   results.push({ step: 'toggle-off', indicator });
 
   await s.click('#menu-settings > span');
-  await s.condition(`document.getElementById('menu-settings').classList.contains('open')`, 2000, 'warm Settings menu reopened to restore Dry Run');
+  await s.condition(`document.getElementById('menu-settings').classList.contains('open')`, 5000, 'warm Settings menu reopened to restore Dry Run');
   await s.click('#toggle-dryrun');
-  await s.condition(`state.dryRun === true`, 2000, 'warm Dry Run restored');
+  await s.condition(`state.dryRun === true`, 5000, 'warm Dry Run restored');
   indicator = await s.eval(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent`);
   requireGate(indicator === 'ON', 'warm Dry Run toggle did not visibly restore', indicator);
   results.push({ step: 'toggle-on-restore', indicator });
 
   await s.click('#open-options');
-  await s.condition(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none'`, 2000, 'warm Advanced Options opens Settings panel');
+  await s.condition(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none'`, 5000, 'warm Advanced Options opens Settings panel');
   const settingsVisible = await s.eval(`document.getElementById('ns-panel-set').style.display !== 'none'`);
   requireGate(settingsVisible, 'warm Advanced Options did not open the Settings workspace');
   results.push({ step: 'advanced-options-opens-settings', settingsVisible });
 
   await s.click('#modal-close');
-  await s.condition(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'lib'`, 2000, 'warm native Settings close restores Tonight');
+  await s.condition(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'lib'`, 5000, 'warm native Settings close restores Tonight');
   const restored = await s.eval(`document.querySelector('.ns-nav-item.active')?.dataset.nsTab`);
   requireGate(restored === 'lib', 'warm closing Settings did not restore Tonight', restored);
   results.push({ step: 'close-restores-route', restored });
