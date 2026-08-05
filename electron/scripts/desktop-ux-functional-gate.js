@@ -927,6 +927,17 @@ async function armAndStartMode(s, modeId, phase) {
   }
   results.ritualTrace = ritualTrace;
   requireGate(receipt && receipt.result === 'running', `${modeId} did not create a running receipt at the ritual timer step`, ritualTrace);
+  // The backend timer can start (receipt.result === 'running') at the ritual's
+  // final auto/"Done" step before the overlay itself is dismissed -- it only
+  // closes through the visible Done/Skip/Cancel/Escape lifecycle, never
+  // automatically just because the receipt is running. Close it here through
+  // the same visible control before touching anything the overlay still covers.
+  const overlayStillActive = await s.eval(`document.getElementById('ritual-overlay')?.classList.contains('active') || false`);
+  results.overlayDismissedAfterRunning = overlayStillActive;
+  if (overlayStillActive) {
+    await s.click('#btn-ritual-next');
+    await s.condition(`!document.getElementById('ritual-overlay')?.classList.contains('active')`, 3000, `${modeId} ritual overlay dismissed via visible Done after the receipt started running`);
+  }
   await s.click('#btn-stop');
   await s.condition(`!state.running && !state.paused`, 3000, `${modeId} native Cancel stops active run`);
   receipt = await s.eval(`window.electronAPI.getLatestReceipt()`);
