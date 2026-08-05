@@ -3,7 +3,7 @@
 // Use Tonight (two Night Modes with restart), and active-run visual focus.
 'use strict';
 
-const { spawn, execSync } = require('child_process');
+const { spawn, execSync, execFileSync } = require('child_process');
 const fs = require('fs');
 const http = require('http');
 const net = require('net');
@@ -24,6 +24,131 @@ fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
 
 const WAIT = ms => new Promise(r => setTimeout(r, ms));
 const runtimeSessions = [];
+
+const NATIVE_INPUT_POWERSHELL = String.raw`
+$ErrorActionPreference = 'Stop'
+$PayloadBase64 = $env:LIGHTS_OUT_NATIVE_INPUT_PAYLOAD
+if ([string]::IsNullOrWhiteSpace($PayloadBase64)) { throw 'native input payload is missing' }
+$payload = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($PayloadBase64)) | ConvertFrom-Json
+Add-Type @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class LightsOutNativeInput {
+  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+  [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X; public int Y; }
+  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+  [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr hWnd, out RECT rect);
+  [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr hWnd, ref POINT point);
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int command);
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extraInfo);
+  [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extraInfo);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
+  public static IntPtr FindVisibleWindowForProcessIds(int[] processIds) {
+    var expected = new HashSet<uint>();
+    foreach (var processId in processIds) expected.Add((uint)processId);
+    var found = IntPtr.Zero;
+    long largestArea = 0;
+    EnumWindows((hWnd, lParam) => {
+      uint processId;
+      RECT rect;
+      GetWindowThreadProcessId(hWnd, out processId);
+      if (expected.Contains(processId) && IsWindowVisible(hWnd) && GetClientRect(hWnd, out rect) && rect.Right > rect.Left && rect.Bottom > rect.Top) {
+        long area = (long)(rect.Right - rect.Left) * (rect.Bottom - rect.Top);
+        if (area > largestArea) {
+          largestArea = area;
+          found = hWnd;
+        }
+      }
+      return true;
+    }, IntPtr.Zero);
+    return found;
+  }
+  public static uint GetProcessId(IntPtr hWnd) {
+    uint processId;
+    GetWindowThreadProcessId(hWnd, out processId);
+    return processId;
+  }
+  public static string GetTitle(IntPtr hWnd) {
+    var text = new StringBuilder(512);
+    GetWindowText(hWnd, text, text.Capacity);
+    return text.ToString();
+  }
+}
+'@
+$expectedExecutable = [IO.Path]::GetFullPath([string]$payload.executable)
+$executableProcesses = @(Get-Process | Where-Object {
+  try { return [IO.Path]::GetFullPath($_.Path) -eq $expectedExecutable } catch { return $false }
+})
+$hwnd = [LightsOutNativeInput]::FindVisibleWindowForProcessIds([int[]]@($executableProcesses.Id))
+if ($hwnd -eq [IntPtr]::Zero) {
+  $candidates = $executableProcesses | Select-Object Id, ProcessName, MainWindowHandle, MainWindowTitle, Path | ConvertTo-Json -Compress
+  throw "Lights Out native window was not found for exact executable $expectedExecutable; candidates=$candidates"
+}
+$process = Get-Process -Id ([int][LightsOutNativeInput]::GetProcessId($hwnd))
+$client = New-Object LightsOutNativeInput+RECT
+$window = New-Object LightsOutNativeInput+RECT
+$origin = New-Object LightsOutNativeInput+POINT
+if (-not [LightsOutNativeInput]::GetClientRect($hwnd, [ref]$client)) { throw 'GetClientRect failed' }
+if (-not [LightsOutNativeInput]::ClientToScreen($hwnd, [ref]$origin)) { throw 'ClientToScreen failed' }
+if (-not [LightsOutNativeInput]::GetWindowRect($hwnd, [ref]$window)) { throw 'GetWindowRect failed' }
+[void][LightsOutNativeInput]::ShowWindow($hwnd, 9)
+[void][LightsOutNativeInput]::SetForegroundWindow($hwnd)
+Start-Sleep -Milliseconds 40
+$screenX = $null
+$screenY = $null
+if ($payload.kind -eq 'pointer') {
+  $scaleX = ($client.Right - $client.Left) / [double]$payload.innerWidth
+  $scaleY = ($client.Bottom - $client.Top) / [double]$payload.innerHeight
+  $screenX = [Math]::Round($origin.X + ([double]$payload.clientX * $scaleX))
+  $screenY = [Math]::Round($origin.Y + ([double]$payload.clientY * $scaleY))
+  if (-not [LightsOutNativeInput]::SetCursorPos($screenX, $screenY)) { throw 'SetCursorPos failed' }
+  if ($payload.action -eq 'click') {
+    [LightsOutNativeInput]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)
+    Start-Sleep -Milliseconds 50
+    [LightsOutNativeInput]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
+  }
+} elseif ($payload.kind -eq 'key') {
+  $vk = [byte]$payload.virtualKey
+  $modifiers = @($payload.modifiers)
+  foreach ($modifier in $modifiers) { [LightsOutNativeInput]::keybd_event([byte]$modifier, 0, 0, [UIntPtr]::Zero) }
+  [LightsOutNativeInput]::keybd_event($vk, 0, 0, [UIntPtr]::Zero)
+  Start-Sleep -Milliseconds 35
+  [LightsOutNativeInput]::keybd_event($vk, 0, 2, [UIntPtr]::Zero)
+  [array]::Reverse($modifiers)
+  foreach ($modifier in $modifiers) { [LightsOutNativeInput]::keybd_event([byte]$modifier, 0, 2, [UIntPtr]::Zero) }
+} else {
+  throw "Unknown native input kind: $($payload.kind)"
+}
+[pscustomobject]@{
+  processId = $process.Id
+  windowHandle = $hwnd.ToInt64()
+  windowTitle = [LightsOutNativeInput]::GetTitle($hwnd)
+  windowBounds = @{ left = $window.Left; top = $window.Top; right = $window.Right; bottom = $window.Bottom }
+  clientBounds = @{ left = $origin.X; top = $origin.Y; width = $client.Right - $client.Left; height = $client.Bottom - $client.Top }
+  screenPoint = if ($null -ne $screenX) { @{ x = $screenX; y = $screenY } } else { $null }
+} | ConvertTo-Json -Depth 5 -Compress
+`;
+
+function invokeNativeInput(payload) {
+  const encoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64');
+  const output = execFileSync('powershell.exe', [
+    '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+    '-Command', NATIVE_INPUT_POWERSHELL
+  ], {
+    encoding: 'utf8',
+    windowsHide: true,
+    env: { ...process.env, LIGHTS_OUT_NATIVE_INPUT_PAYLOAD: encoded }
+  });
+  return JSON.parse(output.trim());
+}
 
 function redactArtifactValue(value) {
   if (typeof value === 'string') {
@@ -128,44 +253,56 @@ class CdpSession {
   }
   eval(expr) { return this.send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }).then(r => r.result.value); }
   async click(sel) {
-    let rect = null;
-    for (let attempt = 0; attempt < 20; attempt++) {
-      const current = await this.eval(`(function(){const el=document.querySelector('${sel}'); if(!el) return null; el.scrollIntoView({block:'center',inline:'center'}); const r=el.getBoundingClientRect(); const x=r.x+r.width/2; const y=r.y+r.height/2; return {x,y,w:r.width,h:r.height,hit:document.elementFromPoint(x,y)?.closest('${sel}') === el};})()`);
-      if (!current || current.w <= 0 || current.h <= 0 || !current.hit) { await WAIT(50); continue; }
-      await WAIT(50);
-      const settled = await this.eval(`(function(){const el=document.querySelector('${sel}'); if(!el) return null; const r=el.getBoundingClientRect(); const x=r.x+r.width/2; const y=r.y+r.height/2; return {x,y,w:r.width,h:r.height,hit:document.elementFromPoint(x,y)?.closest('${sel}') === el};})()`);
-      if (settled && settled.w > 0 && settled.h > 0 && settled.hit && Math.abs(settled.x - current.x) < 0.5 && Math.abs(settled.y - current.y) < 0.5) {
-        await this.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: settled.x, y: settled.y });
-        await WAIT(50);
-        const hovered = await this.eval(`(function(){const el=document.querySelector('${sel}'); if(!el) return false; const r=el.getBoundingClientRect(); const x=r.x+r.width/2; const y=r.y+r.height/2; return document.elementFromPoint(x,y)?.closest('${sel}') === el;})()`);
-        if (hovered) { rect = settled; break; }
-      }
-    }
-    if (!rect) throw new Error(`missing or unstable ${sel}`);
-    await this.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
-    await WAIT(50);
-    await this.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
+    const q = JSON.stringify(sel);
+    const rect = await this.condition(`(() => {
+      const el = document.querySelector(${q});
+      if (!el) return false;
+      el.scrollIntoView({ block: 'center', inline: 'center' });
+      const r = el.getBoundingClientRect();
+      const x = r.x + r.width / 2;
+      const y = r.y + r.height / 2;
+      return r.width > 0 && r.height > 0 && document.elementFromPoint(x, y)?.closest(${q}) === el
+        ? { x, y, width: r.width, height: r.height, innerWidth: window.innerWidth, innerHeight: window.innerHeight, dpr: window.devicePixelRatio }
+        : false;
+    })()`, 3000, `native target ${sel}`);
+    const native = invokeNativeInput({ kind: 'pointer', action: 'click', executable: EXE_PATH, clientX: rect.x, clientY: rect.y, innerWidth: rect.innerWidth, innerHeight: rect.innerHeight });
+    report.nativeInputs.push({ timestamp: new Date().toISOString(), method: 'win32-mouse', selector: sel, measured: rect, native, retryCount: 0 });
     await WAIT(120);
+    return { rect, native };
   }
   async clickXY(x, y) {
-    await this.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
-    await WAIT(50);
-    await this.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
+    const viewport = await this.eval(`({ innerWidth: window.innerWidth, innerHeight: window.innerHeight, dpr: window.devicePixelRatio })`);
+    const native = invokeNativeInput({ kind: 'pointer', action: 'click', executable: EXE_PATH, clientX: x, clientY: y, innerWidth: viewport.innerWidth, innerHeight: viewport.innerHeight });
+    report.nativeInputs.push({ timestamp: new Date().toISOString(), method: 'win32-mouse', selector: null, measured: { x, y, ...viewport }, native, retryCount: 0 });
     await WAIT(120);
+    return { point: { x, y }, native };
   }
   async movePointer(x, y) {
-    await this.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+    const viewport = await this.eval(`({ innerWidth: window.innerWidth, innerHeight: window.innerHeight, dpr: window.devicePixelRatio })`);
+    const native = invokeNativeInput({ kind: 'pointer', action: 'move', executable: EXE_PATH, clientX: x, clientY: y, innerWidth: viewport.innerWidth, innerHeight: viewport.innerHeight });
+    report.nativeInputs.push({ timestamp: new Date().toISOString(), method: 'win32-mouse-move', measured: { x, y, ...viewport }, native, retryCount: 0 });
     await WAIT(80);
+    return { point: { x, y }, native };
   }
   async key(k) {
-    const map = { Escape: ['Escape', 27], Enter: ['Enter', 13], ' ': ['Space', 32], ArrowDown: ['ArrowDown', 40], ArrowUp: ['ArrowUp', 38], ArrowLeft: ['ArrowLeft', 37], ArrowRight: ['ArrowRight', 39], Tab: ['Tab', 9] };
-    const [code, keyCode] = map[k] || [k, k.charCodeAt(0)];
-    const down = { type: 'keyDown', key: k, code, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode };
-    if (k.length === 1 && k.charCodeAt(0) >= 32) down.text = k;
-    await this.send('Input.dispatchKeyEvent', down);
-    await WAIT(60);
-    await this.send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode });
+    const map = { Escape: 0x1B, Enter: 0x0D, ' ': 0x20, ArrowDown: 0x28, ArrowUp: 0x26, ArrowLeft: 0x25, ArrowRight: 0x27, Tab: 0x09, Backspace: 0x08 };
+    const virtualKey = map[k] || (k.length === 1 ? k.toUpperCase().charCodeAt(0) : null);
+    if (virtualKey === null) throw new Error(`unsupported native key ${k}`);
+    const native = invokeNativeInput({ kind: 'key', executable: EXE_PATH, virtualKey, modifiers: [] });
+    report.nativeInputs.push({ timestamp: new Date().toISOString(), method: 'win32-keyboard', keySequence: [k], native, retryCount: 0 });
     await WAIT(150);
+    return native;
+  }
+  async chord(modifiers, k) {
+    const modifierMap = { Control: 0x11, Shift: 0x10, Alt: 0x12 };
+    const keyMap = { Escape: 0x1B, Enter: 0x0D, ' ': 0x20, ArrowDown: 0x28, ArrowUp: 0x26, ArrowLeft: 0x25, ArrowRight: 0x27, Tab: 0x09 };
+    const virtualKey = keyMap[k] || (k.length === 1 ? k.toUpperCase().charCodeAt(0) : null);
+    const modifierKeys = modifiers.map(modifier => modifierMap[modifier]);
+    if (virtualKey === null || modifierKeys.some(key => !key)) throw new Error(`unsupported native chord ${modifiers.join('+')}+${k}`);
+    const native = invokeNativeInput({ kind: 'key', executable: EXE_PATH, virtualKey, modifiers: modifierKeys });
+    report.nativeInputs.push({ timestamp: new Date().toISOString(), method: 'win32-keyboard', keySequence: [...modifiers, k], native, retryCount: 0 });
+    await WAIT(150);
+    return native;
   }
   async screenshot(name) {
     const r = await this.send('Page.captureScreenshot', { format: 'png' });
@@ -182,21 +319,32 @@ class CdpSession {
     await this.eval(`window.resizeTo(${w}, ${h})`);
     await WAIT(300);
   }
-  async waitFor(sel, timeout = 5000) {
+  async waitFor(sel, timeout = 5000, label = `selector ${sel} exists`) {
     const t = Date.now();
     while (Date.now() - t < timeout) {
       if (await this.eval(`!!document.querySelector('${sel}')`)) return true;
       await WAIT(100);
     }
-    throw new Error(`timeout waiting for ${sel}`);
+    const diagnostic = await this.captureTimeout(label);
+    throw new Error(`timeout waiting for ${label}: ${JSON.stringify(diagnostic)}`);
   }
-  async condition(fnExpr, timeout = 5000) {
+  async condition(fnExpr, timeout = 5000, label = fnExpr) {
     const t = Date.now();
     while (Date.now() - t < timeout) {
-      if (await this.eval(fnExpr)) return true;
+      const result = await this.eval(fnExpr);
+      if (result) return result;
       await WAIT(100);
     }
-    throw new Error(`timeout condition ${fnExpr}`);
+    const diagnostic = await this.captureTimeout(label);
+    throw new Error(`timeout waiting for ${label}: ${JSON.stringify(diagnostic)}`);
+  }
+  async captureTimeout(label) {
+    const safe = String(label).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').slice(0, 80) || 'state';
+    let screenshot = null;
+    try { screenshot = await this.screenshot(`timeout-${Date.now()}-${safe}.png`); } catch (error) { screenshot = { error: error.message }; }
+    let renderer = null;
+    try { renderer = await this.rendererDiagnostics(); } catch (error) { renderer = { error: error.message }; }
+    return { label, timeoutScreenshot: screenshot, renderer };
   }
   async rendererDiagnostics() {
     let state = null;
@@ -257,26 +405,32 @@ class CdpSession {
 }
 
 async function stopApp(child) {
-  if (!child) return;
+  if (!child) return true;
+  const userDataDir = child.userDataDir;
   try { child.cdpSession?.ws?.terminate(); } catch {}
-  const exited = await new Promise(resolve => {
-    let settled = false;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      resolve(true);
-    };
-    child.once('exit', finish);
-    try { child.kill(); } catch { finish(); }
-    setTimeout(() => {
-      if (settled) return;
-      const killer = spawn('taskkill', ['/F', '/T', '/PID', String(child.pid)], { windowsHide: true });
-      killer.once('error', finish);
-      killer.once('close', finish);
-    }, 1000);
-    setTimeout(finish, 3000);
+  const runTaskkill = args => new Promise(resolve => {
+    const process = spawn('taskkill', args, { windowsHide: true });
+    process.once('error', () => resolve(false));
+    process.once('close', code => resolve(code === 0));
   });
-  return exited;
+  const hasLightsOutProcess = () => new Promise(resolve => {
+    let stdout = '';
+    const process = spawn('tasklist', ['/FI', 'IMAGENAME eq Lights Out.exe', '/NH'], { windowsHide: true });
+    process.stdout.on('data', data => { stdout += data; });
+    process.once('error', () => resolve(false));
+    process.once('close', () => resolve(stdout.includes('Lights Out.exe')));
+  });
+
+  try { child.kill(); } catch {}
+  await WAIT(500);
+  await runTaskkill(['/F', '/T', '/PID', String(child.pid)]);
+  await WAIT(500);
+  await runTaskkill(['/F', '/IM', 'Lights Out.exe']);
+  for (let check = 0; check < 10; check++) {
+    if (!(await hasLightsOutProcess())) return true;
+    await WAIT(500);
+  }
+  throw new Error(`Lights Out process tree for ${userDataDir} did not terminate`);
 }
 
 async function spawnApp(userDataDir, seed = {}, { preserveSettings = false } = {}) {
@@ -296,7 +450,8 @@ async function spawnApp(userDataDir, seed = {}, { preserveSettings = false } = {
   ];
   if (SOURCE_RUNTIME) launchArgs.push(ELECTRON_ROOT);
   launchArgs.push('--desktop-ux-proof');
-  const child = spawn(EXE_PATH, launchArgs, { detached: true, windowsHide: true, env: { ...process.env, LIGHTS_OUT_DESKTOP_UX_GATE: '1' } });
+  const child = spawn(EXE_PATH, launchArgs, { detached: true, windowsHide: false, env: { ...process.env, LIGHTS_OUT_DESKTOP_UX_GATE: '1' } });
+  child.unref();
   let list = [];
   for (let i = 0; i < 40; i++) {
     try { list = await cdpList(port); if (list.length) break; } catch {}
@@ -308,6 +463,7 @@ async function spawnApp(userDataDir, seed = {}, { preserveSettings = false } = {
   await session.connect();
   const renderer = await session.waitForRendererReady();
   child.cdpSession = session;
+  child.userDataDir = userDataDir;
   runtimeSessions.push({ label: path.basename(userDataDir), userDataDir, port, renderer, session });
   return { child, session, userDataDir, port, renderer };
 }
@@ -320,7 +476,9 @@ const report = {
   exe: EXE_PATH,
   exeSha256: sha256(EXE_PATH),
   phases: {},
-  screenshots: []
+  screenshots: [],
+  nativeInputs: [],
+  retryCount: 0
 };
 
 function addShot(phase, s) {
@@ -331,7 +489,6 @@ function addShot(phase, s) {
 async function clearStarts(s) { await s.eval('window.__desktopUxProof?.clearStartInvocations()'); }
 async function getStarts(s) { return s.eval('window.__desktopUxProof?.getStartInvocations()'); }
 async function getRealPowerActions(s) { return s.eval('window.__desktopUxProof?.getRealPowerActions()'); }
-async function getDebug(s) { return s.eval(`({ running: state.running, paused: state.paused, action: state.action, dryRun: state.dryRun, input: document.getElementById('timer-input').value, invocations: window.__desktopUxProof?.getStartInvocations() })`); }
 async function getTopMenuKeyboardState(s) {
   return s.eval(`({
     focusedElement: { id: document.activeElement?.id || null, text: document.activeElement?.textContent?.trim() || null, role: document.activeElement?.getAttribute('role') || null },
@@ -426,14 +583,14 @@ async function runTopMenuGate() {
   const { child, session: s } = await spawnApp(userData);
   const results = { mouse: [], keyboard: [], assertions: [] };
   report.phases[phase] = { status: 'running', results };
+  const waitFor = (expression, label, timeout = 2000) => s.condition(expression, timeout, label);
   try {
     await s.resize(1280, 720);
     await s.waitFor('#menu-power');
-    await WAIT(400);
     await installTopMenuEventTrace(s);
 
     await s.click('#menu-power > span');
-    await WAIT(200);
+    await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'Power menu open after native click');
     const powerAfterClick = await s.eval(`({
       open: document.getElementById('menu-power').classList.contains('open'),
       ariaExpanded: document.getElementById('menu-power').getAttribute('aria-expanded'),
@@ -446,20 +603,18 @@ async function runTopMenuGate() {
     addShot(phase, await s.screenshot('topmenu-power-mouse-open.png'));
 
     await s.click('#menu-power > span');
-    await WAIT(200);
-    open = await s.eval(`!document.querySelector('.menu-item.open')`);
+    open = await waitFor(`!document.querySelector('.menu-item.open')`, 'Power menu closed after second native click');
     results.mouse.push({ step: 'click-power-again', closed: open });
     requireGate(open, 'Power trigger did not toggle closed');
 
     await s.click('#menu-settings > span');
-    await WAIT(200);
-    open = await s.eval(`document.getElementById('menu-settings').classList.contains('open')`);
+    open = await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu open after native click');
     addShot(phase, await s.screenshot('topmenu-settings-mouse-open.png'));
     results.mouse.push({ step: 'click-settings', open });
     requireGate(open, 'Settings menu did not open on click');
 
     await s.click('#menu-help > span');
-    await WAIT(200);
+    await waitFor(`!document.getElementById('menu-settings').classList.contains('open') && document.getElementById('menu-help').classList.contains('open')`, 'Help open and Settings closed');
     const settingsClosed = await s.eval(`!document.getElementById('menu-settings').classList.contains('open')`);
     const helpOpen = await s.eval(`document.getElementById('menu-help').classList.contains('open')`);
     results.mouse.push({ step: 'click-help-closes-settings', settingsClosed, helpOpen });
@@ -467,55 +622,59 @@ async function runTopMenuGate() {
     addShot(phase, await s.screenshot('topmenu-help-mouse-open.png'));
 
     await s.click('#menu-settings > span');
-    await s.condition(`document.getElementById('menu-settings').classList.contains('open')`);
+    await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu reopened for pointer transfer');
     const menuRect = await s.eval(`(r=document.querySelector('#menu-settings .submenu').getBoundingClientRect(),{x:r.x+r.width/2,y:r.y+10})`);
     const beforePointerTransfer = await getTopMenuKeyboardState(s);
     await s.movePointer(menuRect.x, menuRect.y);
-    await WAIT(200);
+    await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu remains open inside submenu');
     const afterPointerTransfer = await getTopMenuKeyboardState(s);
     const stillOpen = afterPointerTransfer.settingsMenuOpen;
     results.mouse.push({ step: 'pointer-transfer-stays-open', menuRect, beforePointerTransfer, afterPointerTransfer, stillOpen });
     requireGate(stillOpen, 'menu closed while pointer entered its submenu', afterPointerTransfer);
     await s.movePointer(20, 20);
-    await WAIT(200);
+    await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu remains open until dismissal click');
     const afterPointerAway = await getTopMenuKeyboardState(s);
     const stillOpen2 = afterPointerAway.settingsMenuOpen;
     results.mouse.push({ step: 'pointer-away-stays-open', afterPointerAway, stillOpen2 });
     requireGate(stillOpen2, 'menu closed before an outside click', afterPointerAway);
 
     await s.click('#open-options');
-    await WAIT(300);
+    await waitFor(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none'`, 'Advanced Options opens Settings panel');
     const settingsVisible = await s.eval(`document.getElementById('ns-panel-set').style.display !== 'none'`);
     results.mouse.push({ step: 'advanced-options-opens-settings', settingsVisible });
     requireGate(settingsVisible, 'Advanced Options did not open the Settings workspace');
     addShot(phase, await s.screenshot('topmenu-settings-panel.png'));
-    await s.eval(`document.getElementById('modal-close').click()`);
-    await WAIT(300);
+    await s.click('#modal-close');
+    await waitFor(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'lib'`, 'native Settings close restores Tonight');
     const restored = await s.eval(`document.querySelector('.ns-nav-item.active')?.dataset.nsTab`);
     results.mouse.push({ step: 'close-restores-route', restored });
     requireGate(restored === 'lib', 'closing Settings did not restore Tonight', restored);
 
     await s.click('#menu-settings > span');
+    await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu open for Dry Run toggle');
     await s.click('#toggle-dryrun');
-    await WAIT(200);
+    await waitFor(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent === 'OFF'`, 'Dry Run toggle visibly disabled');
     const dryRunIndicator = await s.eval(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent`);
     results.mouse.push({ step: 'toggle-dryrun', dryRunIndicator });
     requireGate(dryRunIndicator === 'OFF', 'enabled Settings toggle did not activate', dryRunIndicator);
     await s.click('#menu-settings > span');
+    await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu reopened to restore Dry Run');
     await s.click('#toggle-dryrun');
-    await s.condition(`state.dryRun === true`);
+    await waitFor(`state.dryRun === true`, 'Dry Run restored');
 
     await s.click('#menu-power > span');
+    await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'Power menu open for outside dismissal');
     const outside = await s.eval(`(r=document.getElementById('ns-hero-card').getBoundingClientRect(), {x:r.x+r.width/2, y:r.y+r.height/2})`);
     await s.clickXY(outside.x, outside.y);
-    await WAIT(200);
-    const allClosed = await s.eval(`!document.querySelector('.menu-item.open')`);
+    const allClosed = await waitFor(`!document.querySelector('.menu-item.open')`, 'outside native click closes every top menu');
     results.mouse.push({ step: 'outside-click-closes', allClosed });
     requireGate(allClosed, 'outside click did not close top menu');
 
     await clearStarts(s);
     await s.click('#menu-power > span');
+    await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'Power menu open for plan selection');
     await s.click('#menu-power [data-action="shutdown"]');
+    await waitFor(`state.action === 'shutdown' && state.dryRun === true`, 'Shutdown plan selected without leaving Dry Run');
     const powerSelection = await s.eval(`({ action: state.action, dryRun: state.dryRun, warningOpen: document.getElementById('warning-modal')?.classList.contains('active') || false })`);
     const startsAfterPowerSelection = await getStarts(s);
     const realPowerActions = await getRealPowerActions(s);
@@ -524,41 +683,49 @@ async function runTopMenuGate() {
     results.mouse.push({ step: 'power-selects-plan-without-execution', powerSelection, starts: startsAfterPowerSelection.length, realPowerActions: realPowerActions.length });
 
     await s.click('#menu-help > span');
+    await waitFor(`document.getElementById('menu-help').classList.contains('open')`, 'Help menu open');
     await s.click('#open-about');
+    await waitFor(`document.getElementById('about-modal')?.classList.contains('active') || false`, 'About modal open from native menu selection');
     const aboutOpen = await s.eval(`document.getElementById('about-modal')?.classList.contains('active') || false`);
     requireGate(aboutOpen, 'enabled Help item did not activate');
-    await s.eval(`document.getElementById('about-modal')?.classList.remove('active')`);
+    await s.key('Escape');
+    await waitFor(`!document.getElementById('about-modal')?.classList.contains('active')`, 'Escape closes About modal');
     results.mouse.push({ step: 'help-item-activates', aboutOpen });
 
     // Keyboard navigation
-    await s.eval(`document.getElementById('menu-power').focus()`);
+    await s.click('#menu-power > span');
+    await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'Power menu primed for keyboard path');
+    await s.key('Escape');
+    await waitFor(`!document.querySelector('.menu-item.open') && document.activeElement?.id === 'menu-power'`, 'Power trigger focused after Escape');
     await s.key('Enter');
-    await WAIT(200);
+    await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'Enter opens Power menu');
     const powerOpen = await s.eval(`document.getElementById('menu-power').classList.contains('open')`);
     addShot(phase, await s.screenshot('topmenu-power-keyboard-open.png'));
     results.keyboard.push({ step: 'enter-opens-power', powerOpen });
     requireGate(powerOpen, 'Enter did not open Power');
 
     await s.key('ArrowDown');
-    await WAIT(200);
+    await waitFor(`document.activeElement?.dataset?.action === 'restart'`, 'ArrowDown focuses Restart');
     const focusedItem = await s.eval(`({ text: document.activeElement?.textContent?.trim(), action: document.activeElement?.dataset?.action || null })`);
     results.keyboard.push({ step: 'arrow-down-to-item', focusedItem });
     requireGate(focusedItem.action === 'restart', 'ArrowDown did not move to the next Power item', focusedItem);
     await s.key('ArrowUp');
-    await WAIT(200);
+    await waitFor(`document.activeElement?.dataset?.action === 'shutdown'`, 'ArrowUp focuses Shutdown');
     const focusedAfterUp = await s.eval(`({ text: document.activeElement?.textContent?.trim(), action: document.activeElement?.dataset?.action || null })`);
     results.keyboard.push({ step: 'arrow-up', focusedItem: focusedAfterUp });
     requireGate(focusedAfterUp.action === 'shutdown', 'ArrowUp did not move to the previous Power item', focusedAfterUp);
     await s.key('Escape');
-    await WAIT(200);
-    const closedByEscape = await s.eval(`!document.querySelector('.menu-item.open') && document.activeElement?.id === 'menu-power'`);
+    const closedByEscape = await waitFor(`!document.querySelector('.menu-item.open') && document.activeElement?.id === 'menu-power'`, 'Escape closes Power and returns focus');
     results.keyboard.push({ step: 'escape-closes-and-focuses-trigger', closedByEscape });
     requireGate(closedByEscape, 'Escape did not close Power and return focus');
 
     await clearStarts(s);
-    await s.eval(`document.getElementById('menu-settings').focus()`);
+    await s.click('#menu-settings > span');
+    await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu primed for keyboard path');
+    await s.key('Escape');
+    await waitFor(`document.activeElement?.id === 'menu-settings'`, 'Settings trigger focused after Escape');
     await s.key('ArrowDown');
-    await s.condition(`document.getElementById('menu-settings').classList.contains('open') && document.activeElement?.id === 'toggle-dryrun'`);
+    await waitFor(`document.getElementById('menu-settings').classList.contains('open') && document.activeElement?.id === 'toggle-dryrun'`, 'ArrowDown opens Settings and focuses first item');
     const settingsOpen = await getTopMenuKeyboardState(s);
     results.keyboard.push({ step: 'arrow-down-opens-settings', ...settingsOpen });
     requireGate(settingsOpen.settingsMenuOpen && settingsOpen.settingsAriaExpanded === 'true' && settingsOpen.selectedMenuItem === 'toggle-dryrun', 'ArrowDown did not open Settings and focus the first menu item', settingsOpen);
@@ -567,7 +734,7 @@ async function runTopMenuGate() {
     results.keyboard.push({ step: 'before-enter-on-open-options', ...beforeEnter });
     requireGate(beforeEnter.settingsMenuOpen && beforeEnter.settingsAriaExpanded === 'true' && beforeEnter.selectedMenuItem === 'open-options', 'Advanced Options was not focused before Enter', beforeEnter);
     await s.key('Enter');
-    await s.condition(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none' && document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'set'`);
+    await waitFor(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none' && document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'set'`, 'Enter activates Advanced Options');
     const afterEnter = await getTopMenuKeyboardState(s);
     const startsAfterKeyboard = await getStarts(s);
     const realPowerActionsAfterKeyboard = await getRealPowerActions(s);
@@ -593,17 +760,13 @@ async function runSharedStartGate() {
     await WAIT(400);
     const results = [];
 
-    await s.eval(`document.getElementById('timer-input').value = '2'; document.getElementById('timer-input').dispatchEvent(new Event('input'));`);
-    await WAIT(200);
+    await s.click('#timer-input');
+    await s.chord(['Control'], 'A');
+    await s.key('2');
+    await s.condition(`document.getElementById('timer-input').value === '2'`, 2000, 'native timer input contains 2 minutes');
     await clearStarts(s);
     await s.click('#ns-play-btn');
-    let running = false;
-    for (let i = 0; i < 30; i++) { await WAIT(200); running = await s.eval('state.running'); if (running) break; }
-    if (!running) {
-      const debug = await getDebug(s);
-      console.error('hero click did not start:', JSON.stringify(debug, null, 2));
-      throw new Error('ns-play-btn did not start timer: ' + JSON.stringify(debug));
-    }
+    await s.condition(`state.running`, 6000, 'hero Start enters running state');
     const heroInvocations = await getStarts(s);
     requireGate(heroInvocations.length === 1, 'hero Start dispatched a duplicate or missing payload', heroInvocations);
     requireGate(heroInvocations[0]?.options?.startOrigin === 'play' && heroInvocations[0]?.options?.dryRun === true, 'hero Start payload violated shared Start/Dry Run contract', heroInvocations[0]);
@@ -611,26 +774,20 @@ async function runSharedStartGate() {
     try { heroReceipt = await s.eval('window.electronAPI.getLatestReceipt()'); } catch {}
     results.push({ control: 'ns-play-btn', invocations: heroInvocations.length, payload: heroInvocations[0], receipt: heroReceipt });
     addShot(phase, await s.screenshot('active-running-hero.png'));
-    await s.eval(`window.electronAPI.cancelTimer()`);
-    await WAIT(800);
+    await s.click('#btn-stop');
+    await s.condition(`!state.running && !state.paused`, 3000, 'native Cancel stops hero-started session');
 
     await clearStarts(s);
     await s.key(' ');
-    running = false;
-    for (let i = 0; i < 30; i++) { await WAIT(200); running = await s.eval('state.running'); if (running) break; }
-    if (!running) {
-      const debug = await getDebug(s);
-      console.error('space did not start:', JSON.stringify(debug, null, 2));
-      throw new Error('space did not start timer: ' + JSON.stringify(debug));
-    }
+    await s.condition(`state.running`, 6000, 'Space enters running state');
     const spaceInvocations = await getStarts(s);
     requireGate(spaceInvocations.length === 1, 'Space Start dispatched a duplicate or missing payload', spaceInvocations);
     requireGate(spaceInvocations[0]?.options?.startOrigin === 'play' && spaceInvocations[0]?.options?.dryRun === true, 'Space payload diverged from shared Start contract', spaceInvocations[0]);
     let spaceReceipt = null;
     try { spaceReceipt = await s.eval('window.electronAPI.getLatestReceipt()'); } catch {}
     results.push({ control: 'space-key', invocations: spaceInvocations.length, payload: spaceInvocations[0], receipt: spaceReceipt });
-    await s.eval(`window.electronAPI.cancelTimer()`);
-    await WAIT(800);
+    await s.click('#btn-stop');
+    await s.condition(`!state.running && !state.paused`, 3000, 'native Cancel stops Space-started session');
 
     // Restart to load morning proof (receipt) so proof-again appears
     await stopApp(child);
@@ -645,13 +802,7 @@ async function runSharedStartGate() {
       addShot(phase, await s2.screenshot('morning-proof-visible.png'));
       await clearStarts(s2);
       await s2.click('#btn-proof-again');
-      let running2 = false;
-      for (let i = 0; i < 30; i++) { await WAIT(200); running2 = await s2.eval('state.running'); if (running2) break; }
-      if (!running2) {
-        const debug = await s2.eval(`({ running: state.running, paused: state.paused, action: state.action, dryRun: state.dryRun, input: document.getElementById('timer-input').value, invocations: window.__startInvocations, proofDisplay: document.getElementById('morning-proof-section')?.style.display })`);
-        console.error('proof-again did not start:', JSON.stringify(debug, null, 2));
-        throw new Error('proof-again did not start timer: ' + JSON.stringify(debug));
-      }
+      await s2.condition(`state.running`, 6000, 'Morning Proof replay enters running state');
       const againInvocations = await getStarts(s2);
       requireGate(againInvocations.length === 1, 'proof replay dispatched a duplicate or missing payload', againInvocations);
       requireGate(againInvocations[0]?.options?.startOrigin === 'play' && againInvocations[0]?.options?.dryRun === true, 'proof replay payload diverged from shared Start contract', againInvocations[0]);
@@ -673,12 +824,12 @@ async function armAndStartMode(s, modeId, phase) {
     'full-shutdown': { title: 'Full Shutdown', durationSeconds: 3600, action: 'shutdown', ritualId: 'standard' }
   }[modeId];
   const results = { modeId };
-  await s.eval(`document.querySelector('[data-ns-tab="modes"]').click()`);
+  await s.click('[data-ns-tab="modes"]');
   await s.waitFor('#nm-cards-grid .nm-card');
-  await s.eval(`document.querySelector('.nm-card[data-mode-id="${modeId}"]').click()`);
-  await s.condition(`document.getElementById('nm-detail-panel').style.display !== 'none' && !document.getElementById('nm-btn-use-tonight').disabled`, 3000);
-  await s.eval(`document.getElementById('nm-btn-use-tonight').click()`);
-  await s.condition(`state.armedNightMode !== null && state.armedNightMode.nightModeId === '${modeId}'`, 3000);
+  await s.click(`.nm-card[data-mode-id="${modeId}"]`);
+  await s.condition(`document.getElementById('nm-detail-panel').style.display !== 'none' && !document.getElementById('nm-btn-use-tonight').disabled`, 3000, `${modeId} detail panel ready`);
+  await s.click('#nm-btn-use-tonight');
+  await s.condition(`state.armedNightMode !== null && state.armedNightMode.nightModeId === '${modeId}'`, 3000, `${modeId} armed through native Use Tonight`);
   results.armed = await s.eval(`state.armedNightMode ? { id: state.armedNightMode.nightModeId, title: state.armedNightMode.nightModeTitle, durationSeconds: state.armedNightMode.durationSeconds, action: state.armedNightMode.action } : null`);
   results.hero = await s.eval(`({
     title: document.getElementById('ns-hero-title').textContent,
@@ -703,7 +854,7 @@ async function armAndStartMode(s, modeId, phase) {
   addShot(phase, await s.screenshot(`${phase}-${modeId}-projection.png`));
   await clearStarts(s);
   await s.click('#ns-play-btn');
-  await s.condition(`state.running`, 3000);
+  await s.condition(`state.running`, 3000, `${modeId} enters running ritual state`);
   const invocations = await getStarts(s);
   results.startCount = invocations.length;
   results.startPayload = invocations[0] || null;
@@ -724,23 +875,60 @@ async function armAndStartMode(s, modeId, phase) {
   requireGate(results.active.modeTitle === expected.title && results.active.dryRun === true, `${modeId} active-run title/safety state drifted`, results.active);
   requireGate(results.active.controls.pause !== 'none' && !results.active.controls.snoozeDisabled && results.active.controls.cancel !== 'none', `${modeId} active-run controls are not visible`, results.active);
   addShot(phase, await s.screenshot(`${phase}-${modeId}-running.png`));
-  // Standard-ritual modes must reach the 'timer' step before beginValidatedCountdown
-  // creates a receipt. Advance the ritual until a running receipt appears.
+  // Standard-ritual modes must reach the timer step before a receipt exists.
+  // Advance only through the visible ritual control with one native click per step.
   let receipt = null;
   const ritualTrace = [];
-  for (let i = 0; i < 10; i++) {
+  for (let step = 0; step < 10; step++) {
     receipt = await s.eval(`window.electronAPI.getLatestReceipt()`);
     if (receipt && receipt.result === 'running') break;
     const ritualState = await s.eval(`window.electronAPI.ritualState()`);
     ritualTrace.push(ritualState);
-    if (!ritualState?.active) break;
-    await s.eval(`window.electronAPI.ritualAdvance()`);
-    await WAIT(500);
+    if (!ritualState?.active) {
+      receipt = await s.condition(
+        `window.electronAPI.getLatestReceipt().then(value => value?.result === 'running' ? value : false)`,
+        5000,
+        `${modeId} running receipt appears after ritual completion`
+      );
+      break;
+    }
+    const ritualVisual = await s.eval(`(() => {
+      const overlay = document.getElementById('ritual-overlay');
+      const next = document.getElementById('btn-ritual-next');
+      const rect = next?.getBoundingClientRect();
+      return {
+        overlayVisible: Boolean(overlay && getComputedStyle(overlay).display !== 'none' && overlay.classList.contains('active')),
+        nextVisible: Boolean(next && rect && rect.width > 0 && rect.height > 0)
+      };
+    })()`);
+    if (!ritualVisual.overlayVisible || !ritualVisual.nextVisible) {
+      receipt = await s.condition(
+        `window.electronAPI.getLatestReceipt().then(value => value?.result === 'running' ? value : false)`,
+        5000,
+        `${modeId} running receipt appears after automatic ritual transition`
+      );
+      break;
+    }
+    const previousVisual = await s.eval(`({
+      title: document.getElementById('ritual-step-title')?.textContent || '',
+      description: document.getElementById('ritual-step-desc')?.textContent || '',
+      nextLabel: document.getElementById('btn-ritual-next')?.textContent || ''
+    })`);
+    await s.click('#btn-ritual-next');
+    await s.condition(`(() => {
+      const overlayActive = document.getElementById('ritual-overlay')?.classList.contains('active');
+      const current = {
+        title: document.getElementById('ritual-step-title')?.textContent || '',
+        description: document.getElementById('ritual-step-desc')?.textContent || '',
+        nextLabel: document.getElementById('btn-ritual-next')?.textContent || ''
+      };
+      return !overlayActive || JSON.stringify(current) !== ${JSON.stringify(JSON.stringify(previousVisual))};
+    })()`, 3000, `${modeId} ritual step ${step + 1} advances visibly`);
   }
   results.ritualTrace = ritualTrace;
   requireGate(receipt && receipt.result === 'running', `${modeId} did not create a running receipt at the ritual timer step`, ritualTrace);
-  await s.eval(`window.electronAPI.cancelTimer()`);
-  await WAIT(800);
+  await s.click('#btn-stop');
+  await s.condition(`!state.running && !state.paused`, 3000, `${modeId} native Cancel stops active run`);
   receipt = await s.eval(`window.electronAPI.getLatestReceipt()`);
   results.receipt = receipt ? {
     receiptId: receipt.id,
@@ -963,6 +1151,14 @@ async function writeArtifacts() {
   fs.writeFileSync(path.join(ROOT_DIR, 'SHA256SUMS.txt'), sums + '\n');
 }
 
+function cleanupUserDataDirs() {
+  try {
+    for (const entry of fs.readdirSync(ROOT_DIR)) {
+      if (entry.startsWith('userdata-')) fs.rmSync(path.join(ROOT_DIR, entry), { recursive: true, force: true });
+    }
+  } catch {}
+}
+
 async function main() {
   if (!fs.existsSync(EXE_PATH)) throw new Error(`Desktop runtime executable missing: ${EXE_PATH}`);
   console.log('Desktop UX Functional Gate');
@@ -983,6 +1179,7 @@ async function main() {
   report.realPowerActions = 0;
   report.endTime = new Date().toISOString();
   await writeArtifacts();
+  cleanupUserDataDirs();
   console.log(JSON.stringify({ root: ROOT_DIR, screenshots: report.screenshots.length, phases: Object.keys(report.phases) }, null, 2));
 }
 
@@ -993,6 +1190,7 @@ main().catch(async err => {
   try { await writeArtifacts(); } catch (artifactError) {
     console.error('Failed to write failure artifacts:', artifactError);
   }
+  cleanupUserDataDirs();
   console.error('Gate fatal:', err);
-  process.exit(1);
+  process.exitCode = 1;
 });

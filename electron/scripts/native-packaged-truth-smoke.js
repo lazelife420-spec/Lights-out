@@ -4,6 +4,7 @@
 // Validates dist-native/win-unpacked/Lights Out.exe branding and clean launch/exit.
 
 const { execFileSync, spawn } = require('node:child_process');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -65,6 +66,13 @@ console.log('Starting Native Packaged Truth Smoke Test...\n');
 
 check('native: dist-native/win-unpacked/Lights Out.exe exists', () => {
   assert(fs.existsSync(executable), `Executable missing: ${executable}`);
+  const resolved = fs.realpathSync(executable);
+  assert(resolved === executable, `Packaged executable resolved unexpectedly: ${resolved}`);
+  assert(path.basename(resolved).toLowerCase() === 'lights out.exe', `Unexpected executable name: ${resolved}`);
+  assert(!resolved.toLowerCase().includes(`${path.sep}node_modules${path.sep}electron${path.sep}`), 'Source Electron runtime was substituted');
+  const digest = crypto.createHash('sha256').update(fs.readFileSync(resolved)).digest('hex');
+  assert(/^[a-f0-9]{64}$/.test(digest), 'Packaged executable hash was not produced');
+  console.log(`    packaged executable SHA-256: ${digest}`);
 });
 
 check('native: executable is reasonably sized', () => {
