@@ -11,6 +11,7 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const WebSocket = require('ws');
+const { decideRitualStepAction } = require('./ritual-step-progression');
 
 const ELECTRON_ROOT = path.resolve(__dirname, '..');
 const SOURCE_ELECTRON_EXE = path.join(ELECTRON_ROOT, 'node_modules', 'electron', 'dist', 'electron.exe');
@@ -881,69 +882,95 @@ async function armAndStartMode(s, modeId, phase) {
   requireGate(results.active.modeTitle === expected.title && results.active.dryRun === true, `${modeId} active-run title/safety state drifted`, results.active);
   requireGate(results.active.controls.pause !== 'none' && !results.active.controls.snoozeDisabled && results.active.controls.cancel !== 'none', `${modeId} active-run controls are not visible`, results.active);
   addShot(phase, await s.screenshot(`${phase}-${modeId}-running.png`));
-  // Standard-ritual modes must reach the timer step before a receipt exists.
-  // Advance only through the visible ritual control with one native click per step.
+  // Standard-ritual modes must reach the timer step before a receipt exists,
+  // and the overlay itself only closes once every distinct visible step has
+  // been acknowledged through its own native click -- `auto` steps only
+  // relabel the same #btn-ritual-next control ("Done" vs "Next"), they don't
+  // auto-advance, and the backend receipt can go 'running' one step before
+  // the ritual's actual last step. Track a fingerprint per step so the same
+  // step is never clicked twice, and bound the loop by the ritual's own
+  // reported step count (ritualState().totalSteps) plus a small safety
+  // margin, not an arbitrary large number.
   let receipt = null;
   const ritualTrace = [];
-  for (let step = 0; step < 10; step++) {
-    receipt = await s.eval(`window.electronAPI.getLatestReceipt()`);
-    if (receipt && receipt.result === 'running') break;
+  const ritualStepLog = [];
+  const clickedStepFingerprints = new Set();
+  let overlayDismissed = false;
+  for (let attempt = 0; ; attempt++) {
+    const currentReceipt = await s.eval(`window.electronAPI.getLatestReceipt()`);
+    if (currentReceipt && currentReceipt.result === 'running') receipt = currentReceipt;
+
     const ritualState = await s.eval(`window.electronAPI.ritualState()`);
     ritualTrace.push(ritualState);
-    if (!ritualState?.active) {
-      receipt = await s.condition(
-        `window.electronAPI.getLatestReceipt().then(value => value?.result === 'running' ? value : false)`,
-        5000,
-        `${modeId} running receipt appears after ritual completion`
-      );
-      break;
-    }
-    const ritualVisual = await s.eval(`(() => {
+    const overlayActive = await s.eval(`(() => {
       const overlay = document.getElementById('ritual-overlay');
+      return Boolean(overlay && getComputedStyle(overlay).display !== 'none' && overlay.classList.contains('active'));
+    })()`);
+
+    const realPowerActionsDuringRitual = await getRealPowerActions(s);
+    const control = await s.eval(`(() => {
       const next = document.getElementById('btn-ritual-next');
-      const rect = next?.getBoundingClientRect();
+      if (!next) return { exists: false };
+      const r = next.getBoundingClientRect();
+      const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+      const hit = document.elementFromPoint(cx, cy);
       return {
-        overlayVisible: Boolean(overlay && getComputedStyle(overlay).display !== 'none' && overlay.classList.contains('active')),
-        nextVisible: Boolean(next && rect && rect.width > 0 && rect.height > 0)
+        exists: true,
+        visible: r.width > 0 && r.height > 0,
+        label: next.textContent || '',
+        hitTestOk: Boolean(hit && (hit === next || next.contains(hit) || hit.closest?.('#btn-ritual-next') === next))
       };
     })()`);
-    if (!ritualVisual.overlayVisible || !ritualVisual.nextVisible) {
-      receipt = await s.condition(
-        `window.electronAPI.getLatestReceipt().then(value => value?.result === 'running' ? value : false)`,
-        5000,
-        `${modeId} running receipt appears after automatic ritual transition`
-      );
-      break;
+
+    const decision = decideRitualStepAction({
+      ritualActive: Boolean(ritualState?.active),
+      overlayActive,
+      totalSteps: ritualState?.totalSteps,
+      currentStep: ritualState?.currentStep,
+      currentStepId: ritualState?.currentStepInfo?.id,
+      controlExists: Boolean(control.exists),
+      controlVisible: Boolean(control.visible),
+      controlLabel: control.label,
+      controlHitTestOk: Boolean(control.hitTestOk),
+      clickedFingerprints: clickedStepFingerprints,
+      attempt,
+      realPowerActionsCount: realPowerActionsDuringRitual.length
+    });
+
+    if (decision.action === 'done') { overlayDismissed = true; break; }
+    requireGate(decision.action === 'click', `${modeId} ${decision.reason || 'ritual progression failed'}`, { decision, control, ritualTrace, ritualStepLog });
+
+    const fingerprint = decision.fingerprint;
+    const before = addShot(phase, await s.screenshot(`${phase}-${modeId}-ritual-${fingerprint.replace(':', '-')}-before.png`));
+    const stepBeforeChange = { currentStep: ritualState?.currentStep, stepId: ritualState?.currentStepInfo?.id };
+    const { native } = await s.click('#btn-ritual-next');
+    clickedStepFingerprints.add(fingerprint);
+
+    const transitionStartedAt = Date.now();
+    let transition;
+    try {
+      await s.condition(`(() => {
+        const overlay = document.getElementById('ritual-overlay');
+        const overlayStillActive = Boolean(overlay && getComputedStyle(overlay).display !== 'none' && overlay.classList.contains('active'));
+        if (!overlayStillActive) return true;
+        return window.electronAPI.ritualState().then(rs =>
+          rs?.currentStep !== ${JSON.stringify(stepBeforeChange.currentStep)} ||
+          rs?.currentStepInfo?.id !== ${JSON.stringify(stepBeforeChange.stepId)}
+        );
+      })()`, 3000, `${modeId} ritual step ${fingerprint} transitions (overlay dismissed or step changed)`);
+      transition = { success: true, elapsedMs: Date.now() - transitionStartedAt };
+    } catch (err) {
+      transition = { success: false, elapsedMs: Date.now() - transitionStartedAt, error: err.message };
     }
-    const previousVisual = await s.eval(`({
-      title: document.getElementById('ritual-step-title')?.textContent || '',
-      description: document.getElementById('ritual-step-desc')?.textContent || '',
-      nextLabel: document.getElementById('btn-ritual-next')?.textContent || ''
-    })`);
-    await s.click('#btn-ritual-next');
-    await s.condition(`(() => {
-      const overlayActive = document.getElementById('ritual-overlay')?.classList.contains('active');
-      const current = {
-        title: document.getElementById('ritual-step-title')?.textContent || '',
-        description: document.getElementById('ritual-step-desc')?.textContent || '',
-        nextLabel: document.getElementById('btn-ritual-next')?.textContent || ''
-      };
-      return !overlayActive || JSON.stringify(current) !== ${JSON.stringify(JSON.stringify(previousVisual))};
-    })()`, 3000, `${modeId} ritual step ${step + 1} advances visibly`);
+    requireGate(transition.success, `${modeId} ritual step ${fingerprint} did not transition after its one native click`, { transition, ritualTrace, ritualStepLog });
+    const after = addShot(phase, await s.screenshot(`${phase}-${modeId}-ritual-${fingerprint.replace(':', '-')}-after.png`));
+
+    ritualStepLog.push({ fingerprint, label: control.label, native, before: before.name, after: after.name, transitionElapsedMs: transition.elapsedMs });
   }
   results.ritualTrace = ritualTrace;
+  results.ritualStepLog = ritualStepLog;
+  requireGate(overlayDismissed, `${modeId} ritual overlay did not dismiss through the visible progression control`, { ritualTrace, ritualStepLog });
   requireGate(receipt && receipt.result === 'running', `${modeId} did not create a running receipt at the ritual timer step`, ritualTrace);
-  // The backend timer can start (receipt.result === 'running') at the ritual's
-  // final auto/"Done" step before the overlay itself is dismissed -- it only
-  // closes through the visible Done/Skip/Cancel/Escape lifecycle, never
-  // automatically just because the receipt is running. Close it here through
-  // the same visible control before touching anything the overlay still covers.
-  const overlayStillActive = await s.eval(`document.getElementById('ritual-overlay')?.classList.contains('active') || false`);
-  results.overlayDismissedAfterRunning = overlayStillActive;
-  if (overlayStillActive) {
-    await s.click('#btn-ritual-next');
-    await s.condition(`!document.getElementById('ritual-overlay')?.classList.contains('active')`, 3000, `${modeId} ritual overlay dismissed via visible Done after the receipt started running`);
-  }
   await s.click('#btn-stop');
   await s.condition(`!state.running && !state.paused`, 3000, `${modeId} native Cancel stops active run`);
   receipt = await s.eval(`window.electronAPI.getLatestReceipt()`);
