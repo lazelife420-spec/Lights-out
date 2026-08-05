@@ -1135,6 +1135,197 @@ async function runActiveRunGate() {
   }
 }
 
+// --- Warm-mode: one continuing packaged process reused across N iterations,
+// reset only through supported visible UI between iterations (no restart).
+async function runWarmTopMenuPass(s) {
+  const results = { mouse: [], keyboard: [] };
+  const waitFor = (expression, label, timeout = 2000) => s.condition(expression, timeout, label);
+
+  await s.click('#menu-power > span');
+  let open = await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'warm Power menu open after native click');
+  requireGate(open, 'warm Power menu did not open on click');
+  results.mouse.push({ step: 'click-power-open', open });
+
+  await s.click('#menu-power > span');
+  open = await waitFor(`!document.querySelector('.menu-item.open')`, 'warm Power menu closed after second native click');
+  requireGate(open, 'warm Power trigger did not toggle closed');
+  results.mouse.push({ step: 'click-power-close', closed: open });
+
+  await s.click('#menu-settings > span');
+  open = await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'warm Settings menu open after native click');
+  requireGate(open, 'warm Settings menu did not open on click');
+  results.mouse.push({ step: 'click-settings-open', open });
+
+  await s.click('#menu-help > span');
+  await waitFor(`!document.getElementById('menu-settings').classList.contains('open') && document.getElementById('menu-help').classList.contains('open')`, 'warm Help open and Settings closed');
+  results.mouse.push({ step: 'click-help-closes-settings' });
+
+  const outside = await s.eval(`(r=document.getElementById('ns-hero-card').getBoundingClientRect(), {x:r.x+r.width/2, y:r.y+r.height/2})`);
+  await s.clickXY(outside.x, outside.y);
+  const allClosed = await waitFor(`!document.querySelector('.menu-item.open')`, 'warm outside native click closes every top menu');
+  requireGate(allClosed, 'warm outside click did not close top menu');
+  results.mouse.push({ step: 'outside-click-closes', allClosed });
+
+  await s.click('#menu-power > span');
+  await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'warm Power menu primed for keyboard path');
+  await s.key('Escape');
+  await waitFor(`!document.querySelector('.menu-item.open') && document.activeElement?.id === 'menu-power'`, 'warm Power trigger focused after Escape');
+  await s.key('Enter');
+  const powerOpen = await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'warm Enter opens Power menu');
+  requireGate(powerOpen, 'warm Enter did not open Power');
+  results.keyboard.push({ step: 'enter-opens-power', powerOpen });
+  await s.key('ArrowDown');
+  await waitFor(`document.activeElement?.dataset?.action === 'restart'`, 'warm ArrowDown focuses Restart');
+  results.keyboard.push({ step: 'arrow-down-focuses-restart' });
+  await s.key('Escape');
+  const closedByEscape = await waitFor(`!document.querySelector('.menu-item.open') && document.activeElement?.id === 'menu-power'`, 'warm Escape closes Power and returns focus');
+  requireGate(closedByEscape, 'warm Escape did not close Power and return focus');
+  results.keyboard.push({ step: 'escape-closes', closedByEscape });
+
+  return results;
+}
+
+async function runWarmSettingsTogglePass(s) {
+  const results = [];
+  await s.click('#menu-settings > span');
+  await s.condition(`document.getElementById('menu-settings').classList.contains('open')`, 2000, 'warm Settings menu open for Dry Run toggle');
+  await s.click('#toggle-dryrun');
+  await s.condition(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent === 'OFF'`, 2000, 'warm Dry Run toggle visibly disabled');
+  let indicator = await s.eval(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent`);
+  requireGate(indicator === 'OFF', 'warm Dry Run toggle did not visibly disable', indicator);
+  results.push({ step: 'toggle-off', indicator });
+
+  await s.click('#menu-settings > span');
+  await s.condition(`document.getElementById('menu-settings').classList.contains('open')`, 2000, 'warm Settings menu reopened to restore Dry Run');
+  await s.click('#toggle-dryrun');
+  await s.condition(`state.dryRun === true`, 2000, 'warm Dry Run restored');
+  indicator = await s.eval(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent`);
+  requireGate(indicator === 'ON', 'warm Dry Run toggle did not visibly restore', indicator);
+  results.push({ step: 'toggle-on-restore', indicator });
+
+  await s.click('#open-options');
+  await s.condition(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none'`, 2000, 'warm Advanced Options opens Settings panel');
+  const settingsVisible = await s.eval(`document.getElementById('ns-panel-set').style.display !== 'none'`);
+  requireGate(settingsVisible, 'warm Advanced Options did not open the Settings workspace');
+  results.push({ step: 'advanced-options-opens-settings', settingsVisible });
+
+  await s.click('#modal-close');
+  await s.condition(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'lib'`, 2000, 'warm native Settings close restores Tonight');
+  const restored = await s.eval(`document.querySelector('.ns-nav-item.active')?.dataset.nsTab`);
+  requireGate(restored === 'lib', 'warm closing Settings did not restore Tonight', restored);
+  results.push({ step: 'close-restores-route', restored });
+  return results;
+}
+
+async function runWarmSharedStartPass(s) {
+  const results = [];
+  await clearStarts(s);
+  await s.click('#ns-play-btn');
+  await s.condition(`state.running`, 6000, 'warm hero Start enters running state');
+  let invocations = await getStarts(s);
+  requireGate(invocations.length === 1 && invocations[0]?.options?.startOrigin === 'play' && invocations[0]?.options?.dryRun === true, 'warm hero Start payload violated shared Start/Dry Run contract', invocations);
+  results.push({ control: 'ns-play-btn', invocations: invocations.length });
+  await s.click('#btn-stop');
+  await s.condition(`!state.running && !state.paused`, 3000, 'warm native Cancel stops hero-started session');
+
+  await clearStarts(s);
+  await s.key(' ');
+  await s.condition(`state.running`, 6000, 'warm Space enters running state');
+  invocations = await getStarts(s);
+  requireGate(invocations.length === 1 && invocations[0]?.options?.startOrigin === 'play' && invocations[0]?.options?.dryRun === true, 'warm Space Start payload diverged from shared Start contract', invocations);
+  results.push({ control: 'space-key', invocations: invocations.length });
+  await s.click('#btn-stop');
+  await s.condition(`!state.running && !state.paused`, 3000, 'warm native Cancel stops Space-started session');
+
+  const realPowerActions = await getRealPowerActions(s);
+  requireGate(realPowerActions.length === 0, 'warm shared-start pass attempted a real power action', realPowerActions);
+  return results;
+}
+
+async function assertWarmBaseline(s, iterationLabel) {
+  const baseline = await s.eval(`({
+    route: document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || null,
+    openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
+    activeModals: Array.from(document.querySelectorAll('.modal.active')).map(modal => modal.id),
+    running: state.running,
+    paused: state.paused,
+    dryRun: state.dryRun,
+    ritualOverlayActive: document.getElementById('ritual-overlay')?.classList.contains('active') || false,
+    heroVisible: getComputedStyle(document.getElementById('ns-hero-card')).display !== 'none'
+  })`);
+  requireGate(
+    baseline.route === 'lib' &&
+    baseline.openMenus.length === 0 &&
+    baseline.activeModals.length === 0 &&
+    baseline.running === false &&
+    baseline.paused === false &&
+    baseline.dryRun === true &&
+    !baseline.ritualOverlayActive &&
+    baseline.heroVisible,
+    `warm iteration ${iterationLabel} did not reach the known reset baseline before proceeding`,
+    baseline
+  );
+  return baseline;
+}
+
+async function resetToWarmBaseline(s) {
+  for (let i = 0; i < 3; i++) {
+    const openState = await s.eval(`({
+      openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
+      activeModals: Array.from(document.querySelectorAll('.modal.active')).map(modal => modal.id)
+    })`);
+    if (openState.openMenus.length === 0 && openState.activeModals.length === 0) break;
+    await s.key('Escape');
+    await WAIT(150);
+  }
+  const active = await s.eval(`state.running || state.paused`);
+  if (active) {
+    await s.click('#btn-stop');
+    await s.condition(`!state.running && !state.paused`, 3000, 'warm reset stops any active run through the supported Cancel control');
+  }
+  const route = await s.eval(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || null`);
+  if (route !== 'lib') {
+    await s.click('[data-ns-tab="lib"]');
+    await s.condition(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'lib'`, 2000, 'warm reset returns to the Tonight tab through the visible nav');
+  }
+}
+
+async function runWarmIteration(s, iterationIndex, modeId) {
+  const phase = `warm-${iterationIndex}`;
+  const results = {};
+  results.topMenu = await runWarmTopMenuPass(s);
+  results.settingsToggle = await runWarmSettingsTogglePass(s);
+  results.sharedStart = await runWarmSharedStartPass(s);
+  results.useTonight = await armAndStartMode(s, modeId, phase);
+  await resetToWarmBaseline(s);
+  results.baseline = await assertWarmBaseline(s, iterationIndex);
+  return results;
+}
+
+async function runWarmMatrix(iterations) {
+  const phase = 'warm-matrix';
+  const userData = path.join(ROOT_DIR, 'userdata-warm');
+  const { child, session: s } = await spawnApp(userData);
+  const allResults = [];
+  try {
+    await s.resize(1280, 720);
+    await s.waitFor('#ns-play-btn');
+    await resetToWarmBaseline(s);
+    await assertWarmBaseline(s, 'initial');
+    for (let i = 1; i <= iterations; i++) {
+      const modeId = i % 2 === 1 ? 'movie-wind-down' : 'full-shutdown';
+      const iterationResult = await runWarmIteration(s, i, modeId);
+      allResults.push({ iteration: i, modeId, ...iterationResult });
+      const realPowerActions = await getRealPowerActions(s);
+      requireGate(realPowerActions.length === 0, `warm iteration ${i} left a real power action recorded`, realPowerActions);
+    }
+    report.phases[phase] = { status: 'passed', results: allResults, processReused: true, restarts: 0 };
+  } finally {
+    await stopApp(child);
+  }
+  return allResults;
+}
+
 async function writeArtifacts() {
   report.rendererDiagnostics = runtimeSessions.map(({ label, userDataDir, port, renderer, session }) => ({
     label,
@@ -1166,12 +1357,26 @@ async function main() {
   console.log('Executable:', EXE_PATH);
   console.log('Root:', ROOT_DIR);
 
-  await runStartupGate();
-  await runTopMenuGate();
-  await runSharedStartGate();
-  await runUseTonightGate();
-  await runSettingsGate();
-  await runActiveRunGate();
+  // Mode selection: 'cold' (default) performs the full flow inventory through
+  // fresh per-scenario launches, unchanged from prior behavior. 'warm' launches
+  // the packaged app exactly once and reuses that one process across N
+  // iterations of the flow inventory, resetting only through supported visible
+  // UI (never restarting) between iterations.
+  const mode = process.env.LIGHTS_OUT_GATE_MODE === 'warm' ? 'warm' : 'cold';
+  report.mode = mode;
+  console.log('Mode:', mode);
+
+  if (mode === 'warm') {
+    const iterations = Number(process.env.LIGHTS_OUT_GATE_WARM_ITERATIONS || 5);
+    await runWarmMatrix(iterations);
+  } else {
+    await runStartupGate();
+    await runTopMenuGate();
+    await runSharedStartGate();
+    await runUseTonightGate();
+    await runSettingsGate();
+    await runActiveRunGate();
+  }
 
   const uncaughtExceptions = runtimeSessions.flatMap(({ label, session }) => session.exceptions.map(exception => ({ label, ...exception })));
   requireGate(uncaughtExceptions.length === 0, 'uncaught renderer exceptions were captured', uncaughtExceptions);
@@ -1180,7 +1385,7 @@ async function main() {
   report.endTime = new Date().toISOString();
   await writeArtifacts();
   cleanupUserDataDirs();
-  console.log(JSON.stringify({ root: ROOT_DIR, screenshots: report.screenshots.length, phases: Object.keys(report.phases) }, null, 2));
+  console.log(JSON.stringify({ root: ROOT_DIR, mode, screenshots: report.screenshots.length, phases: Object.keys(report.phases) }, null, 2));
 }
 
 main().catch(async err => {
