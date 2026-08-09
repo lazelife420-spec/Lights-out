@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { decideRitualStepAction } = require('../scripts/ritual-step-progression');
+const { decideRitualStepAction, decideWorkareaControlAction } = require('../scripts/ritual-step-progression');
 
 function baseObservation(overrides = {}) {
   return {
@@ -61,7 +61,7 @@ test('three or more distinct steps: each processed once, within the configured b
   assert.equal(clicked.size, 5);
 });
 
-test('stuck step: fingerprint unchanged after its click fails bounded, with no second click issued', () => {
+test('immediate repeat A -> A: fingerprint unchanged after its click fails with no duplicate activation', () => {
   const clicked = new Set();
   const firstAttempt = decideRitualStepAction(baseObservation({ currentStep: 3, currentStepId: 'timer', clickedFingerprints: clicked, attempt: 0 }));
   assert.equal(firstAttempt.action, 'click');
@@ -73,7 +73,7 @@ test('stuck step: fingerprint unchanged after its click fails bounded, with no s
   assert.match(secondAttempt.reason, /reappeared after already being activated/);
 });
 
-test('repeated/cyclic fingerprint: a previously clicked step reappearing later fails without retry', () => {
+test('non-adjacent cycle A -> B -> A: a previously clicked step fails without reactivation', () => {
   const clicked = new Set();
   const stepZero = decideRitualStepAction(baseObservation({ currentStep: 0, currentStepId: 'breathe', clickedFingerprints: clicked, attempt: 0 }));
   assert.equal(stepZero.action, 'click');
@@ -136,4 +136,102 @@ test('bounded step limit is derived from totalSteps plus a small margin, not unb
   const decision = decideRitualStepAction(baseObservation({ totalSteps: 2, currentStep: 9, currentStepId: 'never-seen', clickedFingerprints: clicked, attempt: 4 }));
   assert.equal(decision.action, 'fail');
   assert.match(decision.reason, /exceeded bounded step limit/);
+});
+
+function workareaObservation(overrides = {}) {
+  return baseObservation({
+    pauseCoveredByActiveOverlay: true,
+    pauseTargetExists: true,
+    pauseTargetVisible: true,
+    pauseTargetHitTestOk: false,
+    ...overrides
+  });
+}
+
+test('workarea overlay inactive: Pause is the one permitted native action', () => {
+  const decision = decideWorkareaControlAction(workareaObservation({
+    ritualActive: false,
+    overlayActive: false,
+    pauseCoveredByActiveOverlay: false,
+    pauseTargetHitTestOk: true
+  }));
+  assert.deepEqual(decision, { action: 'pause', target: 'pause' });
+});
+
+test('workarea one remaining step: one ritual activation precedes one Pause action', () => {
+  const clicked = new Set();
+  let ritualActivations = 0;
+  let pauseActivations = 0;
+  const step = decideWorkareaControlAction(workareaObservation({ totalSteps: 1, currentStepId: 'breathe', clickedFingerprints: clicked }));
+  assert.equal(step.action, 'ritual-click');
+  clicked.add(step.fingerprint);
+  ritualActivations++;
+  const pause = decideWorkareaControlAction(workareaObservation({ ritualActive: false, overlayActive: false, clickedFingerprints: clicked, attempt: 1, pauseCoveredByActiveOverlay: false, pauseTargetHitTestOk: true }));
+  assert.equal(pause.action, 'pause');
+  pauseActivations++;
+  assert.equal(ritualActivations, 1);
+  assert.equal(pauseActivations, 1);
+});
+
+test('workarea multiple remaining steps: every distinct fingerprint precedes Pause', () => {
+  const clicked = new Set();
+  const ids = ['breathe', 'block', 'dim'];
+  ids.forEach((id, index) => {
+    const decision = decideWorkareaControlAction(workareaObservation({ totalSteps: ids.length, currentStep: index, currentStepId: id, controlLabel: index === 0 ? 'Next' : 'Done', clickedFingerprints: clicked, attempt: index }));
+    assert.equal(decision.action, 'ritual-click');
+    clicked.add(decision.fingerprint);
+  });
+  const pause = decideWorkareaControlAction(workareaObservation({ ritualActive: false, overlayActive: false, clickedFingerprints: clicked, attempt: ids.length, pauseCoveredByActiveOverlay: false, pauseTargetHitTestOk: true }));
+  assert.equal(pause.action, 'pause');
+  assert.equal(clicked.size, ids.length);
+});
+
+test('workarea Pause covered by active overlay: only ritual progression is permitted', () => {
+  const decision = decideWorkareaControlAction(workareaObservation());
+  assert.equal(decision.action, 'ritual-click');
+  assert.equal(decision.target, 'ritual');
+  assert.notEqual(decision.action, 'pause');
+});
+
+test('workarea stuck ritual step: fail boundedly with no Pause action', () => {
+  const clicked = new Set(['0:breathe']);
+  const decision = decideWorkareaControlAction(workareaObservation({ clickedFingerprints: clicked, attempt: 1 }));
+  assert.equal(decision.action, 'fail');
+  assert.match(decision.reason, /reappeared/);
+  assert.notEqual(decision.action, 'pause');
+});
+
+test('workarea cyclic fingerprint: fail with no duplicate ritual activation and no Pause', () => {
+  const clicked = new Set(['0:breathe', '1:block']);
+  const decision = decideWorkareaControlAction(workareaObservation({ currentStep: 0, currentStepId: 'breathe', clickedFingerprints: clicked, attempt: 2 }));
+  assert.equal(decision.action, 'fail');
+  assert.match(decision.reason, /reappeared/);
+  assert.equal(clicked.size, 2);
+  assert.notEqual(decision.action, 'pause');
+});
+
+test('workarea real-power ledger change: fail immediately even after overlay dismissal', () => {
+  const decision = decideWorkareaControlAction(workareaObservation({
+    ritualActive: false,
+    overlayActive: false,
+    realPowerActionsCount: 1,
+    pauseCoveredByActiveOverlay: false,
+    pauseTargetHitTestOk: true
+  }));
+  assert.equal(decision.action, 'fail');
+  assert.match(decision.reason, /real power action/);
+  assert.notEqual(decision.action, 'pause');
+});
+
+test('workarea full-shutdown Dry Run: five distinct steps complete before safe Pause', () => {
+  const clicked = new Set();
+  const ids = ['breathe', 'block', 'dim', 'timer', 'lights'];
+  ids.forEach((id, index) => {
+    const decision = decideWorkareaControlAction(workareaObservation({ totalSteps: 5, currentStep: index, currentStepId: id, controlLabel: index === 0 ? 'Next' : 'Done', clickedFingerprints: clicked, attempt: index, realPowerActionsCount: 0 }));
+    assert.equal(decision.action, 'ritual-click');
+    clicked.add(decision.fingerprint);
+  });
+  const pause = decideWorkareaControlAction(workareaObservation({ ritualActive: false, overlayActive: false, clickedFingerprints: clicked, attempt: 5, realPowerActionsCount: 0, pauseCoveredByActiveOverlay: false, pauseTargetHitTestOk: true }));
+  assert.equal(pause.action, 'pause');
+  assert.equal(clicked.size, 5);
 });

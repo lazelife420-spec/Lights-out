@@ -27,12 +27,12 @@ function decideRitualStepAction({
   attempt,
   realPowerActionsCount
 }) {
-  if (!ritualActive && !overlayActive) {
-    return { action: 'done' };
-  }
-
   if (realPowerActionsCount > 0) {
     return { action: 'fail', reason: 'real power action recorded during ritual progression' };
+  }
+
+  if (!ritualActive && !overlayActive) {
+    return { action: 'done' };
   }
 
   const maxAttempts = (totalSteps || 5) + 2;
@@ -60,4 +60,26 @@ function decideRitualStepAction({
   return { action: 'click', fingerprint };
 }
 
-module.exports = { decideRitualStepAction, stepFingerprint };
+function decideWorkareaControlAction(observation) {
+  const ritualDecision = decideRitualStepAction(observation);
+  if (ritualDecision.action === 'click') {
+    return { action: 'ritual-click', fingerprint: ritualDecision.fingerprint, target: 'ritual' };
+  }
+  if (ritualDecision.action === 'fail') {
+    return { ...ritualDecision, target: 'ritual' };
+  }
+
+  if (observation.pauseCoveredByActiveOverlay) {
+    return { action: 'fail', reason: 'Pause remains covered by an active modal after ritual completion', target: 'pause' };
+  }
+  if (!observation.pauseTargetExists || !observation.pauseTargetVisible) {
+    return { action: 'fail', reason: 'Pause has no visible native target after ritual completion', target: 'pause' };
+  }
+  if (!observation.pauseTargetHitTestOk) {
+    return { action: 'fail', reason: 'Pause center failed hit-test after ritual completion', target: 'pause' };
+  }
+
+  return { action: 'pause', target: 'pause' };
+}
+
+module.exports = { decideRitualStepAction, decideWorkareaControlAction, stepFingerprint };

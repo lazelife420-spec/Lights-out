@@ -11,7 +11,7 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const WebSocket = require('ws');
-const { decideRitualStepAction } = require('./ritual-step-progression');
+const { decideRitualStepAction, decideWorkareaControlAction } = require('./ritual-step-progression');
 
 const ELECTRON_ROOT = path.resolve(__dirname, '..');
 const SOURCE_ELECTRON_EXE = path.join(ELECTRON_ROOT, 'node_modules', 'electron', 'dist', 'electron.exe');
@@ -825,6 +825,89 @@ async function runSharedStartGate() {
   }
 }
 
+async function progressVisibleRitualOverlay(s, { modeId, phase, screenshotPrefix }) {
+  let receipt = null;
+  const ritualTrace = [];
+  const ritualStepLog = [];
+  const clickedStepFingerprints = new Set();
+  let overlayDismissed = false;
+  for (let attempt = 0; ; attempt++) {
+    const currentReceipt = await s.eval(`window.electronAPI.getLatestReceipt()`);
+    if (currentReceipt && currentReceipt.result === 'running') receipt = currentReceipt;
+
+    const ritualState = await s.eval(`window.electronAPI.ritualState()`);
+    ritualTrace.push(ritualState);
+    const overlayActive = await s.eval(`(() => {
+      const overlay = document.getElementById('ritual-overlay');
+      return Boolean(overlay && getComputedStyle(overlay).display !== 'none' && overlay.classList.contains('active'));
+    })()`);
+
+    const realPowerActionsDuringRitual = await getRealPowerActions(s);
+    const control = await s.eval(`(() => {
+      const next = document.getElementById('btn-ritual-next');
+      if (!next) return { exists: false };
+      const r = next.getBoundingClientRect();
+      const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+      const hit = document.elementFromPoint(cx, cy);
+      return {
+        exists: true,
+        visible: r.width > 0 && r.height > 0,
+        label: next.textContent || '',
+        hitTestOk: Boolean(hit && (hit === next || next.contains(hit) || hit.closest?.('#btn-ritual-next') === next))
+      };
+    })()`);
+
+    const decision = decideRitualStepAction({
+      ritualActive: Boolean(ritualState?.active),
+      overlayActive,
+      totalSteps: ritualState?.totalSteps,
+      currentStep: ritualState?.currentStep,
+      currentStepId: ritualState?.currentStepInfo?.id,
+      controlExists: Boolean(control.exists),
+      controlVisible: Boolean(control.visible),
+      controlLabel: control.label,
+      controlHitTestOk: Boolean(control.hitTestOk),
+      clickedFingerprints: clickedStepFingerprints,
+      attempt,
+      realPowerActionsCount: realPowerActionsDuringRitual.length
+    });
+
+    if (decision.action === 'done') { overlayDismissed = true; break; }
+    requireGate(decision.action === 'click', `${modeId} ${decision.reason || 'ritual progression failed'}`, { decision, control, ritualTrace, ritualStepLog });
+
+    const fingerprint = decision.fingerprint;
+    const fileFingerprint = fingerprint.replace(':', '-');
+    const before = addShot(phase, await s.screenshot(`${screenshotPrefix}-ritual-${fileFingerprint}-before.png`));
+    const stepBeforeChange = { currentStep: ritualState?.currentStep, stepId: ritualState?.currentStepInfo?.id };
+    const { native } = await s.click('#btn-ritual-next');
+    clickedStepFingerprints.add(fingerprint);
+
+    const transitionStartedAt = Date.now();
+    let transition;
+    try {
+      await s.condition(`(() => {
+        const overlay = document.getElementById('ritual-overlay');
+        const overlayStillActive = Boolean(overlay && getComputedStyle(overlay).display !== 'none' && overlay.classList.contains('active'));
+        if (!overlayStillActive) return true;
+        return window.electronAPI.ritualState().then(rs =>
+          rs?.currentStep !== ${JSON.stringify(stepBeforeChange.currentStep)} ||
+          rs?.currentStepInfo?.id !== ${JSON.stringify(stepBeforeChange.stepId)}
+        );
+      })()`, 3000, `${modeId} ritual step ${fingerprint} transitions (overlay dismissed or step changed)`);
+      transition = { success: true, elapsedMs: Date.now() - transitionStartedAt };
+    } catch (err) {
+      transition = { success: false, elapsedMs: Date.now() - transitionStartedAt, error: err.message };
+    }
+    requireGate(transition.success, `${modeId} ritual step ${fingerprint} did not transition after its one native click`, { transition, ritualTrace, ritualStepLog });
+    const after = addShot(phase, await s.screenshot(`${screenshotPrefix}-ritual-${fileFingerprint}-after.png`));
+
+    ritualStepLog.push({ fingerprint, label: control.label, native, before: before.name, after: after.name, transitionElapsedMs: transition.elapsedMs });
+  }
+
+  requireGate(overlayDismissed, `${modeId} ritual overlay did not dismiss through the visible progression control`, { ritualTrace, ritualStepLog });
+  return { receipt, ritualTrace, ritualStepLog, overlayDismissed };
+}
+
 async function armAndStartMode(s, modeId, phase) {
   const expected = {
     'movie-wind-down': { title: 'Movie Wind-Down', durationSeconds: 5400, action: 'sleep', ritualId: 'standard' },
@@ -891,86 +974,11 @@ async function armAndStartMode(s, modeId, phase) {
   // step is never clicked twice, and bound the loop by the ritual's own
   // reported step count (ritualState().totalSteps) plus a small safety
   // margin, not an arbitrary large number.
-  let receipt = null;
-  const ritualTrace = [];
-  const ritualStepLog = [];
-  const clickedStepFingerprints = new Set();
-  let overlayDismissed = false;
-  for (let attempt = 0; ; attempt++) {
-    const currentReceipt = await s.eval(`window.electronAPI.getLatestReceipt()`);
-    if (currentReceipt && currentReceipt.result === 'running') receipt = currentReceipt;
-
-    const ritualState = await s.eval(`window.electronAPI.ritualState()`);
-    ritualTrace.push(ritualState);
-    const overlayActive = await s.eval(`(() => {
-      const overlay = document.getElementById('ritual-overlay');
-      return Boolean(overlay && getComputedStyle(overlay).display !== 'none' && overlay.classList.contains('active'));
-    })()`);
-
-    const realPowerActionsDuringRitual = await getRealPowerActions(s);
-    const control = await s.eval(`(() => {
-      const next = document.getElementById('btn-ritual-next');
-      if (!next) return { exists: false };
-      const r = next.getBoundingClientRect();
-      const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
-      const hit = document.elementFromPoint(cx, cy);
-      return {
-        exists: true,
-        visible: r.width > 0 && r.height > 0,
-        label: next.textContent || '',
-        hitTestOk: Boolean(hit && (hit === next || next.contains(hit) || hit.closest?.('#btn-ritual-next') === next))
-      };
-    })()`);
-
-    const decision = decideRitualStepAction({
-      ritualActive: Boolean(ritualState?.active),
-      overlayActive,
-      totalSteps: ritualState?.totalSteps,
-      currentStep: ritualState?.currentStep,
-      currentStepId: ritualState?.currentStepInfo?.id,
-      controlExists: Boolean(control.exists),
-      controlVisible: Boolean(control.visible),
-      controlLabel: control.label,
-      controlHitTestOk: Boolean(control.hitTestOk),
-      clickedFingerprints: clickedStepFingerprints,
-      attempt,
-      realPowerActionsCount: realPowerActionsDuringRitual.length
-    });
-
-    if (decision.action === 'done') { overlayDismissed = true; break; }
-    requireGate(decision.action === 'click', `${modeId} ${decision.reason || 'ritual progression failed'}`, { decision, control, ritualTrace, ritualStepLog });
-
-    const fingerprint = decision.fingerprint;
-    const before = addShot(phase, await s.screenshot(`${phase}-${modeId}-ritual-${fingerprint.replace(':', '-')}-before.png`));
-    const stepBeforeChange = { currentStep: ritualState?.currentStep, stepId: ritualState?.currentStepInfo?.id };
-    const { native } = await s.click('#btn-ritual-next');
-    clickedStepFingerprints.add(fingerprint);
-
-    const transitionStartedAt = Date.now();
-    let transition;
-    try {
-      await s.condition(`(() => {
-        const overlay = document.getElementById('ritual-overlay');
-        const overlayStillActive = Boolean(overlay && getComputedStyle(overlay).display !== 'none' && overlay.classList.contains('active'));
-        if (!overlayStillActive) return true;
-        return window.electronAPI.ritualState().then(rs =>
-          rs?.currentStep !== ${JSON.stringify(stepBeforeChange.currentStep)} ||
-          rs?.currentStepInfo?.id !== ${JSON.stringify(stepBeforeChange.stepId)}
-        );
-      })()`, 3000, `${modeId} ritual step ${fingerprint} transitions (overlay dismissed or step changed)`);
-      transition = { success: true, elapsedMs: Date.now() - transitionStartedAt };
-    } catch (err) {
-      transition = { success: false, elapsedMs: Date.now() - transitionStartedAt, error: err.message };
-    }
-    requireGate(transition.success, `${modeId} ritual step ${fingerprint} did not transition after its one native click`, { transition, ritualTrace, ritualStepLog });
-    const after = addShot(phase, await s.screenshot(`${phase}-${modeId}-ritual-${fingerprint.replace(':', '-')}-after.png`));
-
-    ritualStepLog.push({ fingerprint, label: control.label, native, before: before.name, after: after.name, transitionElapsedMs: transition.elapsedMs });
-  }
-  results.ritualTrace = ritualTrace;
-  results.ritualStepLog = ritualStepLog;
-  requireGate(overlayDismissed, `${modeId} ritual overlay did not dismiss through the visible progression control`, { ritualTrace, ritualStepLog });
-  requireGate(receipt && receipt.result === 'running', `${modeId} did not create a running receipt at the ritual timer step`, ritualTrace);
+  const progression = await progressVisibleRitualOverlay(s, { modeId, phase, screenshotPrefix: `${phase}-${modeId}` });
+  let receipt = progression.receipt;
+  results.ritualTrace = progression.ritualTrace;
+  results.ritualStepLog = progression.ritualStepLog;
+  requireGate(receipt && receipt.result === 'running', `${modeId} did not create a running receipt at the ritual timer step`, progression.ritualTrace);
   await s.click('#btn-stop');
   await s.condition(`!state.running && !state.paused`, 3000, `${modeId} native Cancel stops active run`);
   receipt = await s.eval(`window.electronAPI.getLatestReceipt()`);
@@ -1134,6 +1142,58 @@ async function runActiveRunGate() {
       requireGate(focused.pauseVisible && focused.snoozeVisible && focused.cancelVisible, `active controls are incomplete at ${label}`, focused);
       results.push({ label, metrics: m, focused });
     }
+
+    const activeRitual = await progressVisibleRitualOverlay(s, {
+      modeId: 'active-run-movie-wind-down',
+      phase,
+      screenshotPrefix: 'active-run-workarea'
+    });
+    results.push({
+      state: 'ritual-completed-before-controls',
+      ritualTrace: activeRitual.ritualTrace,
+      ritualStepLog: activeRitual.ritualStepLog
+    });
+
+    const ritualStateBeforePause = await s.eval(`window.electronAPI.ritualState()`);
+    const realPowerActionsBeforePause = await getRealPowerActions(s);
+    const pauseTarget = await s.eval(`(() => {
+      const overlay = document.getElementById('ritual-overlay');
+      const pause = document.getElementById('btn-pause');
+      if (!pause) return { exists: false };
+      const r = pause.getBoundingClientRect();
+      const x = r.x + r.width / 2, y = r.y + r.height / 2;
+      const hit = document.elementFromPoint(x, y);
+      const overlayActive = Boolean(overlay && getComputedStyle(overlay).display !== 'none' && overlay.classList.contains('active'));
+      return {
+        exists: true,
+        visible: r.width > 0 && r.height > 0,
+        hitTestOk: Boolean(hit && (hit === pause || pause.contains(hit) || hit.closest?.('#btn-pause') === pause)),
+        overlayActive,
+        coveredByActiveOverlay: Boolean(overlayActive && hit && (hit === overlay || overlay.contains(hit))),
+        bounds: { x: r.x, y: r.y, width: r.width, height: r.height },
+        hit: { id: hit?.id || null, className: typeof hit?.className === 'string' ? hit.className : null }
+      };
+    })()`);
+    const pauseDecision = decideWorkareaControlAction({
+      ritualActive: Boolean(ritualStateBeforePause?.active),
+      overlayActive: Boolean(pauseTarget.overlayActive),
+      totalSteps: ritualStateBeforePause?.totalSteps,
+      currentStep: ritualStateBeforePause?.currentStep,
+      currentStepId: ritualStateBeforePause?.currentStepInfo?.id,
+      controlExists: false,
+      controlVisible: false,
+      controlLabel: '',
+      controlHitTestOk: false,
+      clickedFingerprints: new Set(activeRitual.ritualStepLog.map(step => step.fingerprint)),
+      attempt: activeRitual.ritualStepLog.length,
+      realPowerActionsCount: realPowerActionsBeforePause.length,
+      pauseCoveredByActiveOverlay: pauseTarget.coveredByActiveOverlay,
+      pauseTargetExists: pauseTarget.exists,
+      pauseTargetVisible: pauseTarget.visible,
+      pauseTargetHitTestOk: pauseTarget.hitTestOk
+    });
+    requireGate(pauseDecision.action === 'pause', pauseDecision.reason || 'Pause is not safely targetable after ritual completion', { pauseDecision, pauseTarget, ritualStateBeforePause, realPowerActionsBeforePause });
+    results.push({ state: 'pause-target-verified', pauseTarget, realPowerActions: realPowerActionsBeforePause.length });
 
     await s.click('#btn-pause');
     await s.condition(`state.paused`, 3000);
