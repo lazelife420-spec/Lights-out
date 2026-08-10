@@ -3,15 +3,17 @@
 // Use Tonight (two Night Modes with restart), and active-run visual focus.
 'use strict';
 
-const { spawn, execSync, execFileSync } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const fs = require('fs');
 const http = require('http');
 const net = require('net');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
+const readline = require('readline');
 const WebSocket = require('ws');
 const { decideRitualStepAction, decideWorkareaControlAction } = require('./ritual-step-progression');
+const { assertInputAllowed, reconcileTarget, strictInteriorPoint, validateHit } = require('./native-input-targeting');
 
 const ELECTRON_ROOT = path.resolve(__dirname, '..');
 const SOURCE_ELECTRON_EXE = path.join(ELECTRON_ROOT, 'node_modules', 'electron', 'dist', 'electron.exe');
@@ -26,129 +28,69 @@ fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
 const WAIT = ms => new Promise(r => setTimeout(r, ms));
 const runtimeSessions = [];
 
-const NATIVE_INPUT_POWERSHELL = String.raw`
-$ErrorActionPreference = 'Stop'
-$PayloadBase64 = $env:LIGHTS_OUT_NATIVE_INPUT_PAYLOAD
-if ([string]::IsNullOrWhiteSpace($PayloadBase64)) { throw 'native input payload is missing' }
-$payload = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($PayloadBase64)) | ConvertFrom-Json
-Add-Type @'
-using System;
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
-using System.Text;
-public static class LightsOutNativeInput {
-  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-  [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X; public int Y; }
-  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
-  [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr hWnd, out RECT rect);
-  [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr hWnd, ref POINT point);
-  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
-  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
-  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int command);
-  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
-  [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extraInfo);
-  [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extraInfo);
-  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
-  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
-  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
-  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
-  public static IntPtr FindVisibleWindowForProcessIds(int[] processIds) {
-    var expected = new HashSet<uint>();
-    foreach (var processId in processIds) expected.Add((uint)processId);
-    var found = IntPtr.Zero;
-    long largestArea = 0;
-    EnumWindows((hWnd, lParam) => {
-      uint processId;
-      RECT rect;
-      GetWindowThreadProcessId(hWnd, out processId);
-      if (expected.Contains(processId) && IsWindowVisible(hWnd) && GetClientRect(hWnd, out rect) && rect.Right > rect.Left && rect.Bottom > rect.Top) {
-        long area = (long)(rect.Right - rect.Left) * (rect.Bottom - rect.Top);
-        if (area > largestArea) {
-          largestArea = area;
-          found = hWnd;
+class NativeInputWorker {
+  constructor(scriptPath) {
+    this.scriptPath = scriptPath;
+    this.process = null;
+    this.pending = new Map();
+    this.requestId = 0;
+    this.readyPromise = null;
+  }
+  async start() {
+    if (this.readyPromise) return this.readyPromise;
+    this.readyPromise = new Promise((resolve, reject) => {
+      const child = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', this.scriptPath], {
+        windowsHide: true,
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+      this.process = child;
+      const lines = readline.createInterface({ input: child.stdout });
+      lines.on('line', line => {
+        let message;
+        try { message = JSON.parse(line); } catch (error) { reject(new Error(`native worker emitted invalid JSON: ${error.message}`)); return; }
+        if (message.type === 'ready') { resolve(message); return; }
+        const pending = this.pending.get(message.requestId);
+        if (!pending) return;
+        this.pending.delete(message.requestId);
+        message.ok ? pending.resolve(message.value) : pending.reject(new Error(message.error || 'native worker request failed'));
+      });
+      let stderr = '';
+      child.stderr.on('data', data => { stderr += data; });
+      child.once('error', reject);
+      child.once('exit', code => {
+        if (code !== 0 && this.pending.size) {
+          const error = new Error(`native worker exited ${code}: ${stderr}`);
+          for (const pending of this.pending.values()) pending.reject(error);
+          this.pending.clear();
         }
-      }
-      return true;
-    }, IntPtr.Zero);
-    return found;
+      });
+    });
+    return Promise.race([
+      this.readyPromise,
+      WAIT(10000).then(() => { throw new Error('native input worker ready timeout'); })
+    ]);
   }
-  public static uint GetProcessId(IntPtr hWnd) {
-    uint processId;
-    GetWindowThreadProcessId(hWnd, out processId);
-    return processId;
+  async request(payload) {
+    await this.start();
+    if (!this.process || this.process.killed) throw new Error('native input worker is unavailable');
+    const requestId = ++this.requestId;
+    const response = new Promise((resolve, reject) => this.pending.set(requestId, { resolve, reject }));
+    this.process.stdin.write(`${JSON.stringify({ ...payload, requestId })}\n`);
+    return response;
   }
-  public static string GetTitle(IntPtr hWnd) {
-    var text = new StringBuilder(512);
-    GetWindowText(hWnd, text, text.Capacity);
-    return text.ToString();
+  async stop() {
+    if (!this.process || this.process.killed) return;
+    const child = this.process;
+    try { child.stdin.write(`${JSON.stringify({ type: 'stop', requestId: ++this.requestId })}\n`); } catch {}
+    await Promise.race([new Promise(resolve => child.once('exit', resolve)), WAIT(2000)]);
+    if (child.exitCode === null) child.kill();
   }
 }
-'@
-$expectedExecutable = [IO.Path]::GetFullPath([string]$payload.executable)
-$executableProcesses = @(Get-Process | Where-Object {
-  try { return [IO.Path]::GetFullPath($_.Path) -eq $expectedExecutable } catch { return $false }
-})
-$hwnd = [LightsOutNativeInput]::FindVisibleWindowForProcessIds([int[]]@($executableProcesses.Id))
-if ($hwnd -eq [IntPtr]::Zero) {
-  $candidates = $executableProcesses | Select-Object Id, ProcessName, MainWindowHandle, MainWindowTitle, Path | ConvertTo-Json -Compress
-  throw "Lights Out native window was not found for exact executable $expectedExecutable; candidates=$candidates"
-}
-$process = Get-Process -Id ([int][LightsOutNativeInput]::GetProcessId($hwnd))
-$client = New-Object LightsOutNativeInput+RECT
-$window = New-Object LightsOutNativeInput+RECT
-$origin = New-Object LightsOutNativeInput+POINT
-if (-not [LightsOutNativeInput]::GetClientRect($hwnd, [ref]$client)) { throw 'GetClientRect failed' }
-if (-not [LightsOutNativeInput]::ClientToScreen($hwnd, [ref]$origin)) { throw 'ClientToScreen failed' }
-if (-not [LightsOutNativeInput]::GetWindowRect($hwnd, [ref]$window)) { throw 'GetWindowRect failed' }
-[void][LightsOutNativeInput]::ShowWindow($hwnd, 9)
-[void][LightsOutNativeInput]::SetForegroundWindow($hwnd)
-Start-Sleep -Milliseconds 40
-$screenX = $null
-$screenY = $null
-if ($payload.kind -eq 'pointer') {
-  $scaleX = ($client.Right - $client.Left) / [double]$payload.innerWidth
-  $scaleY = ($client.Bottom - $client.Top) / [double]$payload.innerHeight
-  $screenX = [Math]::Round($origin.X + ([double]$payload.clientX * $scaleX))
-  $screenY = [Math]::Round($origin.Y + ([double]$payload.clientY * $scaleY))
-  if (-not [LightsOutNativeInput]::SetCursorPos($screenX, $screenY)) { throw 'SetCursorPos failed' }
-  if ($payload.action -eq 'click') {
-    [LightsOutNativeInput]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)
-    Start-Sleep -Milliseconds 50
-    [LightsOutNativeInput]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
-  }
-} elseif ($payload.kind -eq 'key') {
-  $vk = [byte]$payload.virtualKey
-  $modifiers = @($payload.modifiers)
-  foreach ($modifier in $modifiers) { [LightsOutNativeInput]::keybd_event([byte]$modifier, 0, 0, [UIntPtr]::Zero) }
-  [LightsOutNativeInput]::keybd_event($vk, 0, 0, [UIntPtr]::Zero)
-  Start-Sleep -Milliseconds 35
-  [LightsOutNativeInput]::keybd_event($vk, 0, 2, [UIntPtr]::Zero)
-  [array]::Reverse($modifiers)
-  foreach ($modifier in $modifiers) { [LightsOutNativeInput]::keybd_event([byte]$modifier, 0, 2, [UIntPtr]::Zero) }
-} else {
-  throw "Unknown native input kind: $($payload.kind)"
-}
-[pscustomobject]@{
-  processId = $process.Id
-  windowHandle = $hwnd.ToInt64()
-  windowTitle = [LightsOutNativeInput]::GetTitle($hwnd)
-  windowBounds = @{ left = $window.Left; top = $window.Top; right = $window.Right; bottom = $window.Bottom }
-  clientBounds = @{ left = $origin.X; top = $origin.Y; width = $client.Right - $client.Left; height = $client.Bottom - $client.Top }
-  screenPoint = if ($null -ne $screenX) { @{ x = $screenX; y = $screenY } } else { $null }
-} | ConvertTo-Json -Depth 5 -Compress
-`;
 
-function invokeNativeInput(payload) {
-  const encoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64');
-  const output = execFileSync('powershell.exe', [
-    '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-    '-Command', NATIVE_INPUT_POWERSHELL
-  ], {
-    encoding: 'utf8',
-    windowsHide: true,
-    env: { ...process.env, LIGHTS_OUT_NATIVE_INPUT_PAYLOAD: encoded }
-  });
-  return JSON.parse(output.trim());
+const nativeInputWorker = new NativeInputWorker(path.join(__dirname, 'native-input-worker.ps1'));
+
+async function invokeNativeInput(payload) {
+  return nativeInputWorker.request(payload);
 }
 
 function redactArtifactValue(value) {
@@ -207,9 +149,11 @@ function cdpList(port) {
 }
 
 class CdpSession {
-  constructor(wsUrl, port) {
+  constructor(wsUrl, port, targetId) {
     this.ws = new WebSocket(wsUrl);
     this.port = port;
+    this.targetId = targetId;
+    this.sessionId = crypto.randomUUID();
     this.pending = new Map();
     this.id = 1;
     this.consoleMessages = [];
@@ -253,34 +197,61 @@ class CdpSession {
     });
   }
   eval(expr) { return this.send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }).then(r => r.result.value); }
+  async measureNativeTarget(sel) {
+    const ownerSel = /^#menu-(power|settings|help) > span$/.test(sel) ? sel.split(' > ')[0] : sel;
+    const measured = await this.eval(`(() => {
+      const requested = document.querySelector(${JSON.stringify(sel)});
+      const owner = document.querySelector(${JSON.stringify(ownerSel)});
+      if (!requested || !owner) return false;
+      owner.scrollIntoView({ block: 'center', inline: 'center' });
+      const rect = owner.getBoundingClientRect();
+      const requestedRect = requested.getBoundingClientRect();
+      const point = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+      const hit = document.elementFromPoint(point.x, point.y);
+      return {
+        rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+        requestedRect: { x: requestedRect.x, y: requestedRect.y, width: requestedRect.width, height: requestedRect.height },
+        point,
+        hitAccepted: Boolean(hit && (hit === owner || owner.contains(hit))),
+        hit: { tag: hit?.tagName || null, id: hit?.id || null, classes: hit?.className || null },
+        ownerSelector: ${JSON.stringify(ownerSel)},
+        requestedSelector: ${JSON.stringify(sel)},
+        innerWidth: window.innerWidth,
+        innerHeight: window.innerHeight,
+        dpr: window.devicePixelRatio,
+        identity: { href: location.href, timeOrigin: performance.timeOrigin }
+      };
+    })()`);
+    if (!measured) return false;
+    measured.identity.targetId = this.targetId;
+    measured.identity.sessionId = this.sessionId;
+    measured.point = strictInteriorPoint(measured.rect);
+    validateHit(measured);
+    return measured;
+  }
   async click(sel) {
-    const q = JSON.stringify(sel);
-    const rect = await this.condition(`(() => {
-      const el = document.querySelector(${q});
-      if (!el) return false;
-      el.scrollIntoView({ block: 'center', inline: 'center' });
-      const r = el.getBoundingClientRect();
-      const x = r.x + r.width / 2;
-      const y = r.y + r.height / 2;
-      return r.width > 0 && r.height > 0 && document.elementFromPoint(x, y)?.closest(${q}) === el
-        ? { x, y, width: r.width, height: r.height, innerWidth: window.innerWidth, innerHeight: window.innerHeight, dpr: window.devicePixelRatio }
-        : false;
-    })()`, 3000, `native target ${sel}`);
-    const native = invokeNativeInput({ kind: 'pointer', action: 'click', executable: EXE_PATH, clientX: rect.x, clientY: rect.y, innerWidth: rect.innerWidth, innerHeight: rect.innerHeight });
-    report.nativeInputs.push({ timestamp: new Date().toISOString(), method: 'win32-mouse', selector: sel, measured: rect, native, retryCount: 0 });
+    const measured = await this.condition(`Boolean(document.querySelector(${JSON.stringify(sel)}))`, 3000, `native target ${sel}`);
+    if (!measured) throw new Error(`native target ${sel} was not found`);
+    const initial = await this.measureNativeTarget(sel);
+    const current = await this.measureNativeTarget(sel);
+    const prepared = reconcileTarget(initial, current);
+    assertInputAllowed({ clickIssued: false, target: prepared.target });
+    const target = prepared.target;
+    const native = await invokeNativeInput({ kind: 'pointer', action: 'click', executable: EXE_PATH, clientX: target.point.x, clientY: target.point.y, targetRect: target.rect, innerWidth: target.innerWidth, innerHeight: target.innerHeight });
+    report.nativeInputs.push({ timestamp: new Date().toISOString(), method: 'win32-mouse', selector: sel, measured: initial, current: target, targetReacquired: prepared.reacquired, native, retryCount: 0 });
     await WAIT(120);
-    return { rect, native };
+    return { rect: target, native };
   }
   async clickXY(x, y) {
     const viewport = await this.eval(`({ innerWidth: window.innerWidth, innerHeight: window.innerHeight, dpr: window.devicePixelRatio })`);
-    const native = invokeNativeInput({ kind: 'pointer', action: 'click', executable: EXE_PATH, clientX: x, clientY: y, innerWidth: viewport.innerWidth, innerHeight: viewport.innerHeight });
+    const native = await invokeNativeInput({ kind: 'pointer', action: 'click', executable: EXE_PATH, clientX: x, clientY: y, innerWidth: viewport.innerWidth, innerHeight: viewport.innerHeight });
     report.nativeInputs.push({ timestamp: new Date().toISOString(), method: 'win32-mouse', selector: null, measured: { x, y, ...viewport }, native, retryCount: 0 });
     await WAIT(120);
     return { point: { x, y }, native };
   }
   async movePointer(x, y) {
     const viewport = await this.eval(`({ innerWidth: window.innerWidth, innerHeight: window.innerHeight, dpr: window.devicePixelRatio })`);
-    const native = invokeNativeInput({ kind: 'pointer', action: 'move', executable: EXE_PATH, clientX: x, clientY: y, innerWidth: viewport.innerWidth, innerHeight: viewport.innerHeight });
+    const native = await invokeNativeInput({ kind: 'pointer', action: 'move', executable: EXE_PATH, clientX: x, clientY: y, innerWidth: viewport.innerWidth, innerHeight: viewport.innerHeight });
     report.nativeInputs.push({ timestamp: new Date().toISOString(), method: 'win32-mouse-move', measured: { x, y, ...viewport }, native, retryCount: 0 });
     await WAIT(80);
     return { point: { x, y }, native };
@@ -289,7 +260,7 @@ class CdpSession {
     const map = { Escape: 0x1B, Enter: 0x0D, ' ': 0x20, ArrowDown: 0x28, ArrowUp: 0x26, ArrowLeft: 0x25, ArrowRight: 0x27, Tab: 0x09, Backspace: 0x08 };
     const virtualKey = map[k] || (k.length === 1 ? k.toUpperCase().charCodeAt(0) : null);
     if (virtualKey === null) throw new Error(`unsupported native key ${k}`);
-    const native = invokeNativeInput({ kind: 'key', executable: EXE_PATH, virtualKey, modifiers: [] });
+    const native = await invokeNativeInput({ kind: 'key', executable: EXE_PATH, virtualKey, modifiers: [] });
     report.nativeInputs.push({ timestamp: new Date().toISOString(), method: 'win32-keyboard', keySequence: [k], native, retryCount: 0 });
     await WAIT(150);
     return native;
@@ -300,7 +271,7 @@ class CdpSession {
     const virtualKey = keyMap[k] || (k.length === 1 ? k.toUpperCase().charCodeAt(0) : null);
     const modifierKeys = modifiers.map(modifier => modifierMap[modifier]);
     if (virtualKey === null || modifierKeys.some(key => !key)) throw new Error(`unsupported native chord ${modifiers.join('+')}+${k}`);
-    const native = invokeNativeInput({ kind: 'key', executable: EXE_PATH, virtualKey, modifiers: modifierKeys });
+    const native = await invokeNativeInput({ kind: 'key', executable: EXE_PATH, virtualKey, modifiers: modifierKeys });
     report.nativeInputs.push({ timestamp: new Date().toISOString(), method: 'win32-keyboard', keySequence: [...modifiers, k], native, retryCount: 0 });
     await WAIT(150);
     return native;
@@ -460,7 +431,7 @@ async function spawnApp(userDataDir, seed = {}, { preserveSettings = false } = {
   }
   if (!list.length) { try { child.kill(); } catch {} throw new Error('Electron did not expose CDP'); }
   const page = list.find(x => x.type === 'page' || x.title === 'Lights Out') || list[0];
-  const session = new CdpSession(page.webSocketDebuggerUrl, port);
+  const session = new CdpSession(page.webSocketDebuggerUrl, port, page.id);
   await session.connect();
   const renderer = await session.waitForRendererReady();
   child.cdpSession = session;
@@ -1460,6 +1431,8 @@ function cleanupUserDataDirs() {
 
 async function main() {
   if (!fs.existsSync(EXE_PATH)) throw new Error(`Desktop runtime executable missing: ${EXE_PATH}`);
+  const workerReady = await nativeInputWorker.start();
+  report.nativeInputWorker = { script: path.join(__dirname, 'native-input-worker.ps1'), ready: workerReady };
   console.log('Desktop UX Functional Gate');
   console.log('Runtime:', SOURCE_RUNTIME ? 'source Electron' : 'packaged');
   console.log('Executable:', EXE_PATH);
@@ -1506,4 +1479,6 @@ main().catch(async err => {
   cleanupUserDataDirs();
   console.error('Gate fatal:', err);
   process.exitCode = 1;
+}).finally(async () => {
+  await nativeInputWorker.stop();
 });
