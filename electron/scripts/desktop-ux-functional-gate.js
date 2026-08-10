@@ -246,7 +246,7 @@ class CdpSession {
     const gestureId = topMenuOwner ? crypto.randomUUID() : null;
     if (gestureId) await this.eval(`window.__desktopUxBeginNativeGesture?.(${JSON.stringify(gestureId)}, ${JSON.stringify(topMenuOwner)})`);
     const native = await invokeNativeInput({ kind: 'pointer', action: 'click', executable: EXE_PATH, clientX: target.point.x, clientY: target.point.y, targetRect: target.rect, innerWidth: target.innerWidth, innerHeight: target.innerHeight });
-    assertCursorCustody(native.screenPoint, native.actualCursor);
+    assertCursorCustody(native.screenPoint, native.actualCursor, native.translatedTarget);
     assertSendInputComplete(native.gesture);
     await WAIT(120);
     const browserGesture = gestureId ? await this.eval(`window.__desktopUxEndNativeGesture?.(${JSON.stringify(gestureId)})`) : null;
@@ -1519,7 +1519,11 @@ async function main() {
 
 main().catch(async err => {
   report.status = 'failed';
-  report.failure = { message: err.message, stack: err.stack };
+  // Preserve the native worker's rich pre-gesture diagnostics (timeline, dx/dy,
+  // translatedTarget, strict-interior results, ...) in the persisted report
+  // artifact instead of relying solely on the console.error dump, which
+  // depth-truncates nested objects and is lost once the process exits.
+  report.failure = { message: err.message, stack: err.stack, nativeInput: err.nativeInput || null };
   report.endTime = new Date().toISOString();
   try { await writeArtifacts(); } catch (artifactError) {
     console.error('Failed to write failure artifacts:', artifactError);

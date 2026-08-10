@@ -104,9 +104,31 @@ function atomicClickContract() {
   });
 }
 
-function assertCursorCustody(intended, actual) {
-  if (!intended || !actual || intended.x !== actual.x || intended.y !== actual.y) {
+const MAX_CURSOR_READBACK_PIXELS = 1;
+
+function rectFromBounds(bounds) {
+  return { x: bounds.left, y: bounds.top, width: bounds.right - bounds.left, height: bounds.bottom - bounds.top };
+}
+
+// Custody invariant: the physical cursor must still be safely inside the current
+// verified activation target, not bit-for-bit equal to the requested integer pair.
+// A readback within MAX_CURSOR_READBACK_PIXELS is accepted only when the actual
+// point itself remains strictly interior of targetBounds (when supplied). This is
+// a redundant, defense-in-depth check: native-input-worker.ps1 is the authoritative
+// gate and only returns a successful response after applying the same contract
+// before SendInput. See COLD-04 (P1: safe one-pixel quantization/readback
+// difference, not a custody loss).
+function assertCursorCustody(intended, actual, targetBounds = null) {
+  if (!intended || !actual || !Number.isFinite(intended.x) || !Number.isFinite(intended.y) || !Number.isFinite(actual.x) || !Number.isFinite(actual.y)) {
     throw new Error('cursor custody was not established before the native gesture');
+  }
+  const dx = actual.x - intended.x;
+  const dy = actual.y - intended.y;
+  if (Math.abs(dx) > MAX_CURSOR_READBACK_PIXELS || Math.abs(dy) > MAX_CURSOR_READBACK_PIXELS) {
+    throw new Error('cursor custody was not established before the native gesture');
+  }
+  if (targetBounds && !isStrictInterior(rectFromBounds(targetBounds), actual, 0)) {
+    throw new Error('actual cursor position left the strict interior of the current activation target');
   }
   return true;
 }
@@ -140,7 +162,9 @@ module.exports = {
   assertSendInputComplete,
   atomicClickContract,
   isStrictInterior,
+  MAX_CURSOR_READBACK_PIXELS,
   reconcileTarget,
+  rectFromBounds,
   sameIdentity,
   strictInteriorPoint,
   translateClientToScreen,

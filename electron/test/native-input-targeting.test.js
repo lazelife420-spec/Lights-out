@@ -83,8 +83,118 @@ test('valid current target and current cursor allow one two-event gesture', () =
   assert.deepEqual(atomicClickContract().inputRecords, ['LEFTDOWN', 'LEFTUP']);
 });
 
-test('cursor mismatch prevents any native gesture', () => {
-  assert.throws(() => assertCursorCustody({ x: 100, y: 200 }, { x: 101, y: 200 }), /custody was not established/);
+// COLD-04 / P1: readback exceeding the one-pixel bound still prevents the
+// gesture. This replaces the pre-correction exact-equality expectation
+// (a 1px delta used to throw here; see the bounded-custody suite below for
+// why that was stricter than the actual target-custody requirement).
+test('cursor readback beyond the one-pixel bound prevents any native gesture', () => {
+  assert.throws(() => assertCursorCustody({ x: 100, y: 200 }, { x: 102, y: 200 }), /custody was not established/);
+  assert.throws(() => assertCursorCustody({ x: 100, y: 200 }, { x: 100, y: 202 }), /custody was not established/);
+});
+
+test('non-finite or missing cursor points prevent the native gesture', () => {
+  assert.throws(() => assertCursorCustody(null, { x: 100, y: 200 }), /custody was not established/);
+  assert.throws(() => assertCursorCustody({ x: 100, y: 200 }, { x: NaN, y: 200 }), /custody was not established/);
+});
+
+// COLD-04 / P1 bounded-custody suite: a readback within one physical pixel is
+// safe only when the actual point remains strictly interior of the same
+// verified activation target. Fixture rect is {x:600,y:10,width:50,height:28}
+// -> bounds {left:600,top:10,right:650,bottom:38}, deep-interior center (625,24).
+const custodyBounds = { left: 600, top: 10, right: 650, bottom: 38 };
+
+test('exact readback (delta 0,0) is accepted with target bounds supplied', () => {
+  assert.equal(assertCursorCustody({ x: 625, y: 24 }, { x: 625, y: 24 }, custodyBounds), true);
+});
+
+test('one-pixel X readback deep inside the same target is accepted', () => {
+  assert.equal(assertCursorCustody({ x: 625, y: 24 }, { x: 624, y: 24 }, custodyBounds), true);
+  assert.equal(assertCursorCustody({ x: 625, y: 24 }, { x: 626, y: 24 }, custodyBounds), true);
+});
+
+test('one-pixel Y readback deep inside the same target is accepted', () => {
+  assert.equal(assertCursorCustody({ x: 625, y: 24 }, { x: 625, y: 23 }, custodyBounds), true);
+  assert.equal(assertCursorCustody({ x: 625, y: 24 }, { x: 625, y: 25 }, custodyBounds), true);
+});
+
+test('diagonal one-pixel readback deep inside the same target is accepted', () => {
+  assert.equal(assertCursorCustody({ x: 625, y: 24 }, { x: 626, y: 25 }, custodyBounds), true);
+  assert.equal(assertCursorCustody({ x: 625, y: 24 }, { x: 624, y: 23 }, custodyBounds), true);
+});
+
+test('one-pixel readback that crosses the left boundary is rejected', () => {
+  assert.throws(
+    () => assertCursorCustody({ x: 601, y: 24 }, { x: 600, y: 24 }, custodyBounds),
+    /strict interior/
+  );
+});
+
+test('one-pixel readback that crosses the right boundary is rejected', () => {
+  assert.throws(
+    () => assertCursorCustody({ x: 649, y: 24 }, { x: 650, y: 24 }, custodyBounds),
+    /strict interior/
+  );
+});
+
+test('one-pixel readback that crosses the top or bottom boundary is rejected', () => {
+  assert.throws(
+    () => assertCursorCustody({ x: 625, y: 11 }, { x: 625, y: 10 }, custodyBounds),
+    /strict interior/
+  );
+  assert.throws(
+    () => assertCursorCustody({ x: 625, y: 37 }, { x: 625, y: 38 }, custodyBounds),
+    /strict interior/
+  );
+});
+
+test('two-pixel X readback is rejected even while still inside the target', () => {
+  assert.throws(
+    () => assertCursorCustody({ x: 625, y: 24 }, { x: 627, y: 24 }, custodyBounds),
+    /custody was not established/
+  );
+});
+
+test('two-pixel Y readback is rejected even while still inside the target', () => {
+  assert.throws(
+    () => assertCursorCustody({ x: 625, y: 24 }, { x: 625, y: 26 }, custodyBounds),
+    /custody was not established/
+  );
+});
+
+test('one-pixel readback with no target bounds supplied (deliberate outside-click) is accepted on delta alone', () => {
+  assert.equal(assertCursorCustody({ x: 40, y: 40 }, { x: 41, y: 40 }, null), true);
+});
+
+test('high-DPI fractional target: one-pixel readback accepted only when the actual point remains interior', () => {
+  const current = target({ x: 666.075, y: 9.6, width: 48.7625, height: 28 });
+  const translated = translateClientToScreen(current, { left: 1108, top: 175, width: 1280, height: 720 }, { innerWidth: 1280, innerHeight: 722 });
+  const bounds = {
+    left: translated.screenRect.x,
+    top: translated.screenRect.y,
+    right: translated.screenRect.x + translated.screenRect.width,
+    bottom: translated.screenRect.y + translated.screenRect.height
+  };
+  const nudged = { x: translated.point.x + 1, y: translated.point.y };
+  assert.equal(assertCursorCustody(translated.point, nudged, bounds), true);
+  // Same one-pixel delta, but the actual readback lands at-or-beyond the
+  // fractional right edge (ceil, so it is never < bounds.right), which must
+  // leave the strict interior even though the delta is still within bound.
+  const overEdge = { x: Math.ceil(bounds.right), y: translated.point.y };
+  const edgePoint = { x: overEdge.x - 1, y: translated.point.y };
+  assert.throws(() => assertCursorCustody(edgePoint, overEdge, bounds), /strict interior/);
+});
+
+test('1280x720 target: safe one-pixel readback is accepted', () => {
+  const current = target({ x: 640, y: 8, width: 46, height: 28 });
+  const translated = translateClientToScreen(current, { left: 10, top: 20, width: 1280, height: 720 }, { innerWidth: 1280, innerHeight: 720 });
+  const bounds = {
+    left: translated.screenRect.x,
+    top: translated.screenRect.y,
+    right: translated.screenRect.x + translated.screenRect.width,
+    bottom: translated.screenRect.y + translated.screenRect.height
+  };
+  const nudged = { x: translated.point.x - 1, y: translated.point.y };
+  assert.equal(assertCursorCustody(translated.point, nudged, bounds), true);
 });
 
 test('DOWN and UP are represented in one atomic SendInput batch', () => {

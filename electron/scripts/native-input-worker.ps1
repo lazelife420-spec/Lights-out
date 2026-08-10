@@ -84,7 +84,7 @@ while ($true) {
     $foreground=[LightsOutNativeWorker]::GetForegroundWindow()
     Mark 'foreground-custody-verified' ([ordered]@{expectedWindowHandle=$hwnd.ToInt64();actualWindowHandle=$foreground.ToInt64()})
     if ($foreground -ne $hwnd) { throw 'current app window does not own foreground custody' }
-    $screenX=$null;$screenY=$null;$actualCursor=$null;$postGestureCursor=$null;$translatedRect=$null;$gesture=$null
+    $screenX=$null;$screenY=$null;$actualCursor=$null;$postGestureCursor=$null;$translatedRect=$null;$gesture=$null;$dx=$null;$dy=$null;$actualStrictInterior=$null
     if ($payload.kind -eq 'pointer') {
       $scaleX=($client.Right-$client.Left)/[double]$payload.innerWidth
       $scaleY=($client.Bottom-$client.Top)/[double]$payload.innerHeight
@@ -98,8 +98,17 @@ while ($true) {
       $cursor = New-Object LightsOutNativeWorker+POINT
       if (-not [LightsOutNativeWorker]::GetCursorPos([ref]$cursor)) { throw 'GetCursorPos failed' }
       $actualCursor=[ordered]@{x=$cursor.X;y=$cursor.Y}
-      Mark 'cursor-verified-before-input' ([ordered]@{intended=[ordered]@{x=$screenX;y=$screenY};actual=$actualCursor;translatedTarget=$translatedRect;scaleX=$scaleX;scaleY=$scaleY})
-      if ($cursor.X -ne $screenX -or $cursor.Y -ne $screenY) { throw 'actual cursor does not match intended physical point' }
+      $dx=$cursor.X-$screenX
+      $dy=$cursor.Y-$screenY
+      $actualStrictInterior=$null
+      if ($null -ne $translatedRect) { $actualStrictInterior = [bool]($cursor.X -gt $translatedRect.left -and $cursor.X -lt $translatedRect.right -and $cursor.Y -gt $translatedRect.top -and $cursor.Y -lt $translatedRect.bottom) }
+      Mark 'cursor-verified-before-input' ([ordered]@{intended=[ordered]@{x=$screenX;y=$screenY};actual=$actualCursor;dx=$dx;dy=$dy;actualStrictInterior=$actualStrictInterior;translatedTarget=$translatedRect;scaleX=$scaleX;scaleY=$scaleY})
+      # Custody invariant: the physical cursor must still be safely on the verified
+      # activation target, not bit-for-bit equal to the requested integer pair.
+      # A readback within one physical pixel is accepted only when the actual point
+      # itself remains strictly inside the same translated target (see COLD-04, P1).
+      if ([Math]::Abs($dx) -gt 1 -or [Math]::Abs($dy) -gt 1) { throw 'actual cursor exceeded the one-pixel readback bound of the intended physical point' }
+      if ($null -ne $translatedRect -and -not $actualStrictInterior) { throw 'actual cursor position left the strict interior of the current activation target' }
       if ($payload.action -eq 'click') {
         $requestedInputCount=2
         $win32Error=0
@@ -123,6 +132,6 @@ while ($true) {
     Mark 'request-complete'
     Send-Message ([ordered]@{type='result';requestId=$payload.requestId;ok=$true;value=[ordered]@{processId=$pidValue;windowHandle=$hwnd.ToInt64();windowTitle=[LightsOutNativeWorker]::GetTitle($hwnd);windowBounds=[ordered]@{left=$window.Left;top=$window.Top;right=$window.Right;bottom=$window.Bottom};clientBounds=[ordered]@{left=$origin.X;top=$origin.Y;width=$client.Right-$client.Left;height=$client.Bottom-$client.Top};screenPoint=if($null -ne $screenX){[ordered]@{x=$screenX;y=$screenY}}else{$null};actualCursor=$actualCursor;postGestureCursor=$postGestureCursor;translatedTarget=$translatedRect;gesture=$gesture;timeline=$timeline}})
   } catch {
-    Send-Message ([ordered]@{type='result';requestId=$payload.requestId;ok=$false;error=$_.Exception.Message;errorData=[ordered]@{timeline=$timeline;gesture=$gesture;screenPoint=if($null -ne $screenX){[ordered]@{x=$screenX;y=$screenY}}else{$null};preGestureCursor=$actualCursor;postGestureCursor=$postGestureCursor;translatedTarget=$translatedRect}})
+    Send-Message ([ordered]@{type='result';requestId=$payload.requestId;ok=$false;error=$_.Exception.Message;errorData=[ordered]@{timeline=$timeline;gesture=$gesture;screenPoint=if($null -ne $screenX){[ordered]@{x=$screenX;y=$screenY}}else{$null};preGestureCursor=$actualCursor;postGestureCursor=$postGestureCursor;translatedTarget=$translatedRect;dx=$dx;dy=$dy;actualStrictInterior=$actualStrictInterior}})
   }
 }
