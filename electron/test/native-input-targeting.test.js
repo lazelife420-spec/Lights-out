@@ -7,6 +7,9 @@ const {
   assertInputAllowed,
   assertSendInputComplete,
   atomicClickContract,
+  attachDiagnostics,
+  classifyBrowserGestureFailure,
+  createGestureRequestId,
   isStrictInterior,
   reconcileTarget,
   strictInteriorPoint,
@@ -237,4 +240,137 @@ test('browser click on a different target fails', () => {
     up: { pathOwnerIds: ['menu-help'] },
     click: { targetId: 'cockpit', pathOwnerIds: [] }
   }), /browser click left/);
+});
+
+// TOPMENU-STABILITY-01 observability suite: classifyBrowserGestureFailure,
+// createGestureRequestId, and attachDiagnostics are diagnostic-only additions.
+// None of them may change what validateBrowserGesture accepts or rejects --
+// each classification case below is paired with the equivalent
+// validateBrowserGesture call to prove the throw condition is unchanged.
+const heldOwner = { pathOwnerIds: ['menu-settings'] };
+const wrongOwner = { pathOwnerIds: ['cockpit'] };
+
+test('classifyBrowserGestureFailure returns null for a fully valid gesture (H1)', () => {
+  const gesture = { ownerId: 'menu-settings', down: heldOwner, up: heldOwner, click: heldOwner };
+  assert.equal(classifyBrowserGestureFailure(gesture), null);
+  assert.equal(validateBrowserGesture(gesture), true);
+});
+
+test('DOWN missing classifies as DOWN_MISSING and still throws the original message (H2)', () => {
+  const gesture = { ownerId: 'menu-settings', down: null, up: heldOwner, click: heldOwner };
+  assert.equal(classifyBrowserGestureFailure(gesture), 'DOWN_MISSING');
+  assert.throws(() => validateBrowserGesture(gesture), /browser DOWN left the accepted activation ancestry/);
+});
+
+test('DOWN present but wrong owner classifies as DOWN_WRONG_ANCESTRY (H3)', () => {
+  const gesture = { ownerId: 'menu-settings', down: wrongOwner, up: heldOwner, click: heldOwner };
+  assert.equal(classifyBrowserGestureFailure(gesture), 'DOWN_WRONG_ANCESTRY');
+  assert.throws(() => validateBrowserGesture(gesture), /browser DOWN left the accepted activation ancestry/);
+  // The two DOWN failure modes are indistinguishable to validateBrowserGesture's
+  // own message but distinguishable via classifyBrowserGestureFailure -- this is
+  // exactly the ambiguity that made TOPMENU-STABILITY-01 UNRESOLVED.
+  assert.notEqual(classifyBrowserGestureFailure({ ownerId: 'menu-settings', down: null, up: heldOwner, click: heldOwner }), classifyBrowserGestureFailure(gesture));
+});
+
+test('UP missing classifies as UP_MISSING only when DOWN passed (H4)', () => {
+  const gesture = { ownerId: 'menu-settings', down: heldOwner, up: null, click: heldOwner };
+  assert.equal(classifyBrowserGestureFailure(gesture), 'UP_MISSING');
+  assert.throws(() => validateBrowserGesture(gesture), /browser UP left the accepted activation ancestry/);
+});
+
+test('UP wrong owner classifies as UP_WRONG_ANCESTRY (H5)', () => {
+  const gesture = { ownerId: 'menu-settings', down: heldOwner, up: wrongOwner, click: heldOwner };
+  assert.equal(classifyBrowserGestureFailure(gesture), 'UP_WRONG_ANCESTRY');
+  assert.throws(() => validateBrowserGesture(gesture), /browser UP left the accepted activation ancestry/);
+});
+
+test('CLICK missing classifies as CLICK_MISSING only when DOWN and UP passed (H6)', () => {
+  const gesture = { ownerId: 'menu-settings', down: heldOwner, up: heldOwner, click: null };
+  assert.equal(classifyBrowserGestureFailure(gesture), 'CLICK_MISSING');
+  assert.throws(() => validateBrowserGesture(gesture), /browser click left the accepted activation ancestry/);
+});
+
+test('CLICK wrong owner classifies as CLICK_WRONG_ANCESTRY (H7)', () => {
+  const gesture = { ownerId: 'menu-settings', down: heldOwner, up: heldOwner, click: wrongOwner };
+  assert.equal(classifyBrowserGestureFailure(gesture), 'CLICK_WRONG_ANCESTRY');
+  assert.throws(() => validateBrowserGesture(gesture), /browser click left the accepted activation ancestry/);
+});
+
+test('gestureRequestId is fresh per call and never derived from the selector (H8/H9)', () => {
+  const first = createGestureRequestId();
+  const second = createGestureRequestId();
+  assert.notEqual(first, second);
+  // A "preceding toggle" activation and a later "Settings reopen" activation
+  // for the identical selector must not collide merely because the selector
+  // repeats -- both ids are opaque and carry no selector-derived component.
+  assert.equal(typeof first, 'string');
+  assert.ok(first.length > 0);
+});
+
+test('nested pathOwnerIds: existing accepted-owner behavior is unchanged by the new classifier (H10)', () => {
+  const nested = { pathOwnerIds: ['submenu-item', 'menu-settings-submenu', 'menu-settings'] };
+  const gesture = { ownerId: 'menu-settings', down: nested, up: nested, click: nested };
+  assert.equal(classifyBrowserGestureFailure(gesture), null);
+  assert.equal(validateBrowserGesture(gesture), true);
+});
+
+test('a thrown validation error survives with attached browserGesture diagnostics (H11)', () => {
+  let caught = null;
+  try {
+    validateBrowserGesture({ ownerId: 'menu-settings', down: null, up: heldOwner, click: heldOwner });
+  } catch (error) {
+    attachDiagnostics(error, 'gestureRequestId', 'gr-1');
+    attachDiagnostics(error, 'browserGesture', { down: null, up: heldOwner, click: heldOwner, validationFailureStage: 'DOWN_MISSING' });
+    caught = error;
+  }
+  assert.ok(caught, 'expected validateBrowserGesture to throw');
+  assert.equal(caught.gestureRequestId, 'gr-1');
+  assert.equal(caught.browserGesture.validationFailureStage, 'DOWN_MISSING');
+  assert.equal(caught.browserGesture.down, null);
+});
+
+test('nativeInput and browserGesture diagnostics coexist on one Error without overwriting (H12)', () => {
+  const error = new Error('synthetic');
+  attachDiagnostics(error, 'nativeInput', { screenPoint: { x: 1, y: 2 } });
+  attachDiagnostics(error, 'browserGesture', { down: null });
+  assert.deepEqual(error.nativeInput, { screenPoint: { x: 1, y: 2 } });
+  assert.deepEqual(error.browserGesture, { down: null });
+  // attachDiagnostics must not clobber a value already present under the key.
+  attachDiagnostics(error, 'nativeInput', { screenPoint: { x: 99, y: 99 } });
+  assert.deepEqual(error.nativeInput, { screenPoint: { x: 1, y: 2 } });
+});
+
+test('nested browserGesture/timing objects survive JSON serialization at full depth (H13)', () => {
+  const diagnostics = {
+    gestureRequestId: 'gr-2',
+    selector: '#menu-settings > span',
+    down: null,
+    up: { pathOwnerIds: ['cockpit'] },
+    click: { pathOwnerIds: ['cockpit'] },
+    eventCounts: { pointerdown: 0, mousedown: 0, pointerup: 1, mouseup: 1, click: 1, totalMatchedThisGesture: 3, totalCapturedThisSession: 214 },
+    activeGestureMatchedAtSample: true,
+    validationFailureStage: 'DOWN_MISSING',
+    timing: {
+      gestureRequestCreatedUtc: '2026-08-10T19:53:07.000Z',
+      targetMeasuredUtc: '2026-08-10T19:53:07.050Z',
+      browserTraceArmedUtc: '2026-08-10T19:53:07.060Z',
+      nativeRequestStartUtc: '2026-08-10T19:53:07.070Z',
+      nativeRequestReturnedUtc: '2026-08-10T19:53:07.120Z',
+      browserTraceSampledUtc: '2026-08-10T19:53:07.240Z',
+      gestureValidationStartUtc: '2026-08-10T19:53:07.241Z',
+      gestureValidationEndUtc: '2026-08-10T19:53:07.242Z'
+    }
+  };
+  const roundTripped = JSON.parse(JSON.stringify(diagnostics));
+  assert.deepEqual(roundTripped, diagnostics);
+  assert.equal(roundTripped.down, null);
+  assert.equal(roundTripped.eventCounts.totalCapturedThisSession, 214);
+  assert.equal(Object.keys(roundTripped.timing).length, 8);
+});
+
+test('successful activation: existing report format remains usable alongside the new fields (H14)', () => {
+  const gesture = { ownerId: 'menu-settings', down: heldOwner, up: heldOwner, click: heldOwner, handlerEntries: [{ ownerId: 'menu-settings' }], expectedState: { openMenus: ['menu-settings'] } };
+  assert.equal(classifyBrowserGestureFailure(gesture), null);
+  assert.equal(validateBrowserGesture(gesture), true);
+  assert.equal(gesture.handlerEntries.length, 1);
 });

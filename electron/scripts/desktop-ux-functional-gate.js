@@ -13,7 +13,7 @@ const crypto = require('crypto');
 const readline = require('readline');
 const WebSocket = require('ws');
 const { decideRitualStepAction, decideWorkareaControlAction } = require('./ritual-step-progression');
-const { assertCursorCustody, assertInputAllowed, assertSendInputComplete, reconcileTarget, strictInteriorPoint, validateBrowserGesture, validateHit } = require('./native-input-targeting');
+const { assertCursorCustody, assertInputAllowed, assertSendInputComplete, attachDiagnostics, classifyBrowserGestureFailure, createGestureRequestId, reconcileTarget, strictInteriorPoint, validateBrowserGesture, validateHit } = require('./native-input-targeting');
 
 const ELECTRON_ROOT = path.resolve(__dirname, '..');
 const SOURCE_ELECTRON_EXE = path.join(ELECTRON_ROOT, 'node_modules', 'electron', 'dist', 'electron.exe');
@@ -235,34 +235,85 @@ class CdpSession {
     return measured;
   }
   async click(sel) {
+    // Observability only (TOPMENU-STABILITY-01): gestureRequestId/timing let a
+    // future failure be attributed to exactly this activation and distinguish
+    // "no event captured" from "wrong-ancestry event captured" -- neither
+    // changes what counts as PASS/FAIL below.
+    const gestureRequestId = createGestureRequestId();
+    const timing = { gestureRequestCreatedUtc: new Date().toISOString() };
     const measured = await this.condition(`Boolean(document.querySelector(${JSON.stringify(sel)}))`, 3000, `native target ${sel}`);
     if (!measured) throw new Error(`native target ${sel} was not found`);
     const initial = await this.measureNativeTarget(sel);
     const current = await this.measureNativeTarget(sel);
+    timing.targetMeasuredUtc = new Date().toISOString();
     const prepared = reconcileTarget(initial, current);
     assertInputAllowed({ clickIssued: false, target: prepared.target });
     const target = prepared.target;
     const topMenuOwner = /^#menu-(power|settings|help) > span$/.test(sel) ? target.ownerSelector.slice(1) : null;
-    const gestureId = topMenuOwner ? crypto.randomUUID() : null;
-    if (gestureId) await this.eval(`window.__desktopUxBeginNativeGesture?.(${JSON.stringify(gestureId)}, ${JSON.stringify(topMenuOwner)})`);
-    const native = await invokeNativeInput({ kind: 'pointer', action: 'click', executable: EXE_PATH, clientX: target.point.x, clientY: target.point.y, targetRect: target.rect, innerWidth: target.innerWidth, innerHeight: target.innerHeight });
-    assertCursorCustody(native.screenPoint, native.actualCursor, native.translatedTarget);
-    assertSendInputComplete(native.gesture);
-    await WAIT(120);
-    const browserGesture = gestureId ? await this.eval(`window.__desktopUxEndNativeGesture?.(${JSON.stringify(gestureId)})`) : null;
-    if (browserGesture) {
-      validateBrowserGesture(browserGesture);
-      requireGate(browserGesture.handlerEntries.length === 1, `${topMenuOwner} production handler was not entered exactly once`, browserGesture);
+    let native;
+    try {
+      if (topMenuOwner) {
+        await this.eval(`window.__desktopUxBeginNativeGesture?.(${JSON.stringify(gestureRequestId)}, ${JSON.stringify(topMenuOwner)})`);
+        timing.browserTraceArmedUtc = new Date().toISOString();
+      }
+      timing.nativeRequestStartUtc = new Date().toISOString();
+      native = await invokeNativeInput({ kind: 'pointer', action: 'click', executable: EXE_PATH, clientX: target.point.x, clientY: target.point.y, targetRect: target.rect, innerWidth: target.innerWidth, innerHeight: target.innerHeight });
+      timing.nativeRequestReturnedUtc = new Date().toISOString();
+      assertCursorCustody(native.screenPoint, native.actualCursor, native.translatedTarget);
+      assertSendInputComplete(native.gesture);
+    } catch (nativeError) {
+      attachDiagnostics(nativeError, 'gestureRequestId', gestureRequestId);
+      attachDiagnostics(nativeError, 'timing', timing);
+      throw nativeError;
     }
-    report.nativeInputs.push({ timestamp: new Date().toISOString(), method: 'win32-mouse', selector: sel, measured: initial, current: target, targetReacquired: prepared.reacquired, native, browserGesture, retryCount: 0 });
+    await WAIT(120);
+    let browserGesture = null;
+    if (topMenuOwner) {
+      timing.browserTraceSampledUtc = new Date().toISOString();
+      browserGesture = await this.eval(`window.__desktopUxEndNativeGesture?.(${JSON.stringify(gestureRequestId)})`);
+    }
+    if (browserGesture) {
+      timing.gestureValidationStartUtc = new Date().toISOString();
+      try {
+        validateBrowserGesture(browserGesture);
+        requireGate(browserGesture.handlerEntries.length === 1, `${topMenuOwner} production handler was not entered exactly once`, browserGesture);
+      } catch (gestureError) {
+        timing.gestureValidationEndUtc = new Date().toISOString();
+        attachDiagnostics(gestureError, 'gestureRequestId', gestureRequestId);
+        attachDiagnostics(gestureError, 'browserGesture', {
+          gestureRequestId,
+          selector: sel,
+          acceptedOwnerId: topMenuOwner,
+          down: browserGesture.down || null,
+          up: browserGesture.up || null,
+          click: browserGesture.click || null,
+          eventCounts: browserGesture.eventCounts || null,
+          activeGestureMatchedAtSample: browserGesture.activeGestureMatchedAtSample ?? null,
+          handlerEntries: browserGesture.handlerEntries || [],
+          expectedState: browserGesture.expectedState || null,
+          validationFailureStage: classifyBrowserGestureFailure(browserGesture),
+          timing
+        });
+        throw gestureError;
+      }
+      timing.gestureValidationEndUtc = new Date().toISOString();
+    }
+    report.nativeInputs.push({ timestamp: new Date().toISOString(), gestureRequestId, method: 'win32-mouse', selector: sel, measured: initial, current: target, targetReacquired: prepared.reacquired, native, browserGesture, timing, retryCount: 0 });
     return { rect: target, native, browserGesture };
   }
   async clickXY(x, y) {
+    const gestureRequestId = createGestureRequestId();
     const viewport = await this.eval(`({ innerWidth: window.innerWidth, innerHeight: window.innerHeight, dpr: window.devicePixelRatio })`);
-    const native = await invokeNativeInput({ kind: 'pointer', action: 'click', executable: EXE_PATH, clientX: x, clientY: y, innerWidth: viewport.innerWidth, innerHeight: viewport.innerHeight });
-    assertCursorCustody(native.screenPoint, native.actualCursor);
-    assertSendInputComplete(native.gesture);
-    report.nativeInputs.push({ timestamp: new Date().toISOString(), method: 'win32-mouse', selector: null, measured: { x, y, ...viewport }, native, retryCount: 0 });
+    let native;
+    try {
+      native = await invokeNativeInput({ kind: 'pointer', action: 'click', executable: EXE_PATH, clientX: x, clientY: y, innerWidth: viewport.innerWidth, innerHeight: viewport.innerHeight });
+      assertCursorCustody(native.screenPoint, native.actualCursor);
+      assertSendInputComplete(native.gesture);
+    } catch (nativeError) {
+      attachDiagnostics(nativeError, 'gestureRequestId', gestureRequestId);
+      throw nativeError;
+    }
+    report.nativeInputs.push({ timestamp: new Date().toISOString(), gestureRequestId, method: 'win32-mouse', selector: null, measured: { x, y, ...viewport }, native, retryCount: 0 });
     await WAIT(120);
     return { point: { x, y }, native };
   }
@@ -519,15 +570,31 @@ async function installTopMenuEventTrace(s) {
     }
     window.__desktopUxBeginNativeGesture = (id, ownerId) => { activeGesture = { id, ownerId }; return { id, ownerId, at: performance.now() }; };
     window.__desktopUxEndNativeGesture = id => {
-      const ownerId = activeGesture?.id === id ? activeGesture.ownerId : null;
+      // Additive observability only (see TOPMENU-STABILITY-01): eventCounts and
+      // activeGestureMatchedAtSample are new fields alongside the unchanged
+      // down/up/click/ownerId/handlerEntries/expectedState computation, so
+      // validateBrowserGesture's behavior is untouched by this function.
+      const activeGestureMatchedAtSample = activeGesture?.id === id;
+      const ownerId = activeGestureMatchedAtSample ? activeGesture.ownerId : null;
       const matching = events.filter(event => event.gestureId === id);
       const first = type => matching.find(event => event.type === type) || null;
+      const countType = type => matching.filter(event => event.type === type).length;
       const result = {
         gestureId: id,
         ownerId,
         down: first('pointerdown') || first('mousedown'),
         up: first('pointerup') || first('mouseup'),
         click: first('click'),
+        eventCounts: {
+          pointerdown: countType('pointerdown'),
+          mousedown: countType('mousedown'),
+          pointerup: countType('pointerup'),
+          mouseup: countType('mouseup'),
+          click: countType('click'),
+          totalMatchedThisGesture: matching.length,
+          totalCapturedThisSession: events.length
+        },
+        activeGestureMatchedAtSample,
         handlerEntries: handlerEntries.filter(entry => entry.gestureId === id),
         expectedState: {
           openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
@@ -1520,10 +1587,14 @@ async function main() {
 main().catch(async err => {
   report.status = 'failed';
   // Preserve the native worker's rich pre-gesture diagnostics (timeline, dx/dy,
-  // translatedTarget, strict-interior results, ...) in the persisted report
-  // artifact instead of relying solely on the console.error dump, which
-  // depth-truncates nested objects and is lost once the process exits.
-  report.failure = { message: err.message, stack: err.stack, nativeInput: err.nativeInput || null };
+  // translatedTarget, strict-interior results, ...) and, separately, the
+  // browser-gesture diagnostics (down/up/click, event counts, timing marks;
+  // see TOPMENU-STABILITY-01) in the persisted report artifact instead of
+  // relying solely on the console.error dump, which depth-truncates nested
+  // objects and is lost once the process exits. The two diagnostic keys are
+  // independent (attachDiagnostics never overwrites) so either, both, or
+  // neither may be present depending on which check failed.
+  report.failure = { message: err.message, stack: err.stack, gestureRequestId: err.gestureRequestId || null, nativeInput: err.nativeInput || null, browserGesture: err.browserGesture || null };
   report.endTime = new Date().toISOString();
   try { await writeArtifacts(); } catch (artifactError) {
     console.error('Failed to write failure artifacts:', artifactError);

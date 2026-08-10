@@ -1,5 +1,7 @@
 'use strict';
 
+const crypto = require('crypto');
+
 const EPSILON = 0.01;
 
 function finiteNumber(value, label) {
@@ -156,11 +158,49 @@ function validateBrowserGesture({ ownerId, down, up, click }) {
   return true;
 }
 
+// Observability only: mirrors validateBrowserGesture's own check order (down,
+// then up, then click) so a failure reason lines up with whichever check would
+// actually throw, but never throws itself and never changes what counts as
+// PASS/FAIL. Distinguishes "no event captured" from "event captured but wrong
+// ancestry" -- a distinction validateBrowserGesture's error message alone
+// cannot make (see TOPMENU-STABILITY-01: eventBelongsToOwner(null, ownerId)
+// and eventBelongsToOwner(wrongOwnerEvent, ownerId) both read as `false`).
+function classifyBrowserGestureFailure({ ownerId, down, up, click }) {
+  if (!ownerId) return 'OWNER_MISSING';
+  const check = (event, missingCode, wrongCode) => {
+    if (!event) return missingCode;
+    if (!eventBelongsToOwner(event, ownerId)) return wrongCode;
+    return null;
+  };
+  return check(down, 'DOWN_MISSING', 'DOWN_WRONG_ANCESTRY')
+    || check(up, 'UP_MISSING', 'UP_WRONG_ANCESTRY')
+    || check(click, 'CLICK_MISSING', 'CLICK_WRONG_ANCESTRY')
+    || null;
+}
+
+// A fresh, unreused identifier per native click-path invocation. Identity is
+// never derived from the selector, so repeated activations of the same
+// selector (e.g. Settings opened twice) remain distinguishable.
+function createGestureRequestId() {
+  return crypto.randomUUID();
+}
+
+// Attaches diagnostic data to an Error under `key` without clobbering a value
+// already present -- so nativeInput and browserGesture diagnostics (or two
+// layers attaching the same key) can coexist on one thrown Error.
+function attachDiagnostics(error, key, value) {
+  if (error && error[key] === undefined) error[key] = value;
+  return error;
+}
+
 module.exports = {
   assertCursorCustody,
   assertInputAllowed,
   assertSendInputComplete,
   atomicClickContract,
+  attachDiagnostics,
+  classifyBrowserGestureFailure,
+  createGestureRequestId,
   isStrictInterior,
   MAX_CURSOR_READBACK_PIXELS,
   reconcileTarget,
