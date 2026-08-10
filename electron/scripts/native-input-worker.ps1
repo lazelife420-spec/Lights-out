@@ -95,8 +95,10 @@ while ($true) {
         if (-not ($screenX -gt $translatedRect.left -and $screenX -lt $translatedRect.right -and $screenY -gt $translatedRect.top -and $screenY -lt $translatedRect.bottom)) { throw 'translated physical point is not strictly inside the current target' }
       }
       if (-not [LightsOutNativeWorker]::SetCursorPos($screenX,$screenY)) { throw 'SetCursorPos failed' }
+      Mark 'set-cursor-pos-succeeded' ([ordered]@{x=$screenX;y=$screenY})
       $cursor = New-Object LightsOutNativeWorker+POINT
       if (-not [LightsOutNativeWorker]::GetCursorPos([ref]$cursor)) { throw 'GetCursorPos failed' }
+      Mark 'get-cursor-pos-succeeded' ([ordered]@{x=$cursor.X;y=$cursor.Y})
       $actualCursor=[ordered]@{x=$cursor.X;y=$cursor.Y}
       $dx=$cursor.X-$screenX
       $dy=$cursor.Y-$screenY

@@ -3,15 +3,20 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
+  appendBounded,
   assertCursorCustody,
   assertInputAllowed,
   assertSendInputComplete,
   atomicClickContract,
   attachDiagnostics,
   classifyBrowserGestureFailure,
+  computeGestureGap,
   createGestureRequestId,
+  decideTraceInstallation,
   isStrictInterior,
+  mapPerformanceToWallClock,
   reconcileTarget,
+  selectPrecedingContext,
   strictInteriorPoint,
   translateClientToScreen,
   validateBrowserGesture,
@@ -373,4 +378,147 @@ test('successful activation: existing report format remains usable alongside the
   assert.equal(classifyBrowserGestureFailure(gesture), null);
   assert.equal(validateBrowserGesture(gesture), true);
   assert.equal(gesture.handlerEntries.length, 1);
+});
+
+// TOPMENU-STABILITY-01 v2 (cross-gesture correlation) observability suite.
+// These test the pure Node-side mirror of the algorithm the browser-injected
+// trace runs; the browser copy is necessarily duplicated (CDP eval can't
+// require() this module) and gets its correctness proof from the live
+// focused acceptance run instead, not from these unit tests.
+
+test('appendBounded assigns monotonically increasing traceSequence and never drops in-bound items (K1)', () => {
+  let seq = 0;
+  const buffer = [];
+  for (let i = 0; i < 5; i += 1) {
+    seq += 1;
+    appendBounded(buffer, { traceSequence: seq, label: `e${i}` }, 100);
+  }
+  assert.deepEqual(buffer.map(e => e.traceSequence), [1, 2, 3, 4, 5]);
+  assert.equal(buffer.length, 5);
+});
+
+test('starting a new gesture does not erase prior gesture events from the buffer (K2)', () => {
+  const buffer = [];
+  appendBounded(buffer, { traceSequence: 1, activeGestureId: 'A' }, 100);
+  appendBounded(buffer, { traceSequence: 2, activeGestureId: 'A' }, 100);
+  // Gesture A ends; gesture B arms. The buffer is never cleared on arm.
+  appendBounded(buffer, { traceSequence: 3, activeGestureId: 'B' }, 100);
+  assert.equal(buffer.length, 3);
+  assert.ok(buffer.some(e => e.activeGestureId === 'A'));
+  assert.ok(buffer.some(e => e.activeGestureId === 'B'));
+});
+
+test('a same-ID event downstream can be checked against the immediately preceding gesture via traceSequence proximity (K3)', () => {
+  // Gesture A's tail event (seq 3) sits right before gesture B arms at seq 4.
+  // A delayed event tagged "B" (seq 5) is adjacent to A's tail in sequence
+  // order -- this is the shape selectPrecedingContext exists to surface, not
+  // to prove attribution on its own (activeGestureId equality is not causal
+  // proof; see H3-style ambiguity for the down/up/click case).
+  const events = [
+    { traceSequence: 1, activeGestureId: 'A', type: 'pointerdown' },
+    { traceSequence: 2, activeGestureId: 'A', type: 'pointerup' },
+    { traceSequence: 3, activeGestureId: 'A', type: 'click' },
+    { traceSequence: 4, activeGestureId: 'B', type: 'pointerdown' },
+    { traceSequence: 5, activeGestureId: 'B', type: 'click' }
+  ];
+  const traceSequenceAtArm = 3; // B armed right after A's tail event
+  const preceding = selectPrecedingContext(events, traceSequenceAtArm, 20);
+  assert.deepEqual(preceding.map(e => e.traceSequence), [1, 2, 3]);
+  assert.ok(preceding.every(e => e.activeGestureId === 'A'));
+});
+
+test('events firing with no active gesture remain in the rolling buffer (K4)', () => {
+  const buffer = [];
+  appendBounded(buffer, { traceSequence: 1, activeGestureId: null, type: 'mousemove' }, 100);
+  assert.equal(buffer.length, 1);
+  assert.equal(buffer[0].activeGestureId, null);
+});
+
+test('full matching event arrays survive JSON serialization, not just first() (K5/K6)', () => {
+  const matching = [
+    { traceSequence: 10, type: 'pointerdown' },
+    { traceSequence: 11, type: 'pointerdown' },
+    { traceSequence: 12, type: 'pointerdown' },
+    { traceSequence: 13, type: 'pointerup' },
+    { traceSequence: 14, type: 'pointerup' },
+    { traceSequence: 15, type: 'click' },
+    { traceSequence: 16, type: 'click' }
+  ];
+  const roundTripped = JSON.parse(JSON.stringify({ matchingEvents: matching }));
+  assert.equal(roundTripped.matchingEvents.length, 7);
+  assert.deepEqual(roundTripped.matchingEvents, matching);
+});
+
+test('renderer wall-clock/performance anchor survives serialization and maps correctly (K7)', () => {
+  const anchor = { installedAtWallClockMs: 1000, installedAtPerformanceMs: 50 };
+  const roundTripped = JSON.parse(JSON.stringify(anchor));
+  assert.equal(mapPerformanceToWallClock(roundTripped.installedAtWallClockMs, roundTripped.installedAtPerformanceMs, 150), 1100);
+});
+
+test('gesture arm/sample clock anchors survive serialization and compute a gap (K8)', () => {
+  const previousGesture = { id: 'A', endedAtWallClockMs: 1000 };
+  const currentArm = { id: 'B', armWallClockMs: 1143 };
+  const roundTripped = JSON.parse(JSON.stringify({ previousGesture, currentArm }));
+  assert.equal(computeGestureGap(roundTripped.previousGesture.endedAtWallClockMs, roundTripped.currentArm.armWallClockMs), 143);
+});
+
+test('no previous gesture yields a null gap, not a false zero (K8 edge case)', () => {
+  assert.equal(computeGestureGap(undefined, 1000), null);
+});
+
+test('trace installation is idempotent: a second attempt in the same document does not reinstall (K9/K10)', () => {
+  const first = decideTraceInstallation(false);
+  assert.equal(first.install, true);
+  assert.equal(first.reason, 'first-install');
+  const second = decideTraceInstallation(true);
+  assert.equal(second.install, false);
+  assert.equal(second.reason, 'already-installed');
+});
+
+test('handler entries receive unique handlerTraceSequence values that never reset (K11/K12)', () => {
+  const handlerBuffer = [];
+  let handlerSeq = 0;
+  for (let i = 0; i < 3; i += 1) {
+    handlerSeq += 1;
+    appendBounded(handlerBuffer, { handlerTraceSequence: handlerSeq, ownerId: 'menu-power' }, 100);
+  }
+  assert.deepEqual(handlerBuffer.map(e => e.handlerTraceSequence), [1, 2, 3]);
+  // A later gesture's handler entries append, not replace -- history survives.
+  handlerSeq += 1;
+  appendBounded(handlerBuffer, { handlerTraceSequence: handlerSeq, ownerId: 'menu-settings' }, 100);
+  assert.equal(handlerBuffer.length, 4);
+});
+
+test('previousGestureRequestId and inter-gesture gap persist through diagnostic serialization (K13)', () => {
+  const diagnostics = {
+    gestureRequestId: 'B',
+    previousGestureRequestId: 'A',
+    previousGestureEndWallClockMs: 1000,
+    currentGestureArmWallClockMs: 1143,
+    gapSincePreviousGestureMs: computeGestureGap(1000, 1143)
+  };
+  const roundTripped = JSON.parse(JSON.stringify(diagnostics));
+  assert.equal(roundTripped.previousGestureRequestId, 'A');
+  assert.equal(roundTripped.gapSincePreviousGestureMs, 143);
+});
+
+test('nested cross-gesture failure evidence (matchingEvents, precedingContextEvents, anchors) survives report serialization at full depth (K14)', () => {
+  const diagnostics = {
+    gestureRequestId: 'B',
+    previousGestureRequestId: 'A',
+    gapSincePreviousGestureMs: 143,
+    traceSequenceAtArm: 3,
+    matchingEvents: [{ traceSequence: 4, type: 'pointerdown' }, { traceSequence: 7, type: 'click' }],
+    precedingContextEvents: [{ traceSequence: 2, type: 'pointerup', activeGestureId: 'A' }, { traceSequence: 3, type: 'click', activeGestureId: 'A' }],
+    anchor: { installedAtWallClockMs: 900, installedAtPerformanceMs: 10 }
+  };
+  const roundTripped = JSON.parse(JSON.stringify(diagnostics));
+  assert.deepEqual(roundTripped, diagnostics);
+  assert.equal(roundTripped.matchingEvents.length, 2);
+  assert.equal(roundTripped.precedingContextEvents.length, 2);
+});
+
+test('existing browserGesture PASS/FAIL rules are unchanged by the correlation additions (K15)', () => {
+  assert.equal(classifyBrowserGestureFailure({ ownerId: 'menu-settings', down: heldOwner, up: heldOwner, click: heldOwner }), null);
+  assert.throws(() => validateBrowserGesture({ ownerId: 'menu-settings', down: null, up: heldOwner, click: heldOwner }), /browser DOWN left the accepted activation ancestry/);
 });

@@ -251,9 +251,17 @@ class CdpSession {
     const target = prepared.target;
     const topMenuOwner = /^#menu-(power|settings|help) > span$/.test(sel) ? target.ownerSelector.slice(1) : null;
     let native;
+    let gestureBeginInfo = null;
     try {
       if (topMenuOwner) {
-        await this.eval(`window.__desktopUxBeginNativeGesture?.(${JSON.stringify(gestureRequestId)}, ${JSON.stringify(topMenuOwner)})`);
+        // Node-side Date.now() bracketing the CDP round-trip (cross-clock
+        // anchor, TOPMENU-STABILITY-01 v2 Section E): the renderer's own
+        // armWallClockMs/armPerformanceMs pair returned below is the anchor
+        // that lets any later performance.now()-relative timestamp be mapped
+        // back onto this same Node UTC timeline.
+        timing.nodeEvalBeforeArmUtc = new Date().toISOString();
+        gestureBeginInfo = await this.eval(`window.__desktopUxBeginNativeGesture?.(${JSON.stringify(gestureRequestId)}, ${JSON.stringify(topMenuOwner)})`);
+        timing.nodeEvalAfterArmUtc = new Date().toISOString();
         timing.browserTraceArmedUtc = new Date().toISOString();
       }
       timing.nativeRequestStartUtc = new Date().toISOString();
@@ -264,13 +272,16 @@ class CdpSession {
     } catch (nativeError) {
       attachDiagnostics(nativeError, 'gestureRequestId', gestureRequestId);
       attachDiagnostics(nativeError, 'timing', timing);
+      attachDiagnostics(nativeError, 'gestureBeginInfo', gestureBeginInfo);
       throw nativeError;
     }
     await WAIT(120);
     let browserGesture = null;
     if (topMenuOwner) {
-      timing.browserTraceSampledUtc = new Date().toISOString();
+      timing.nodeEvalBeforeSampleUtc = new Date().toISOString();
       browserGesture = await this.eval(`window.__desktopUxEndNativeGesture?.(${JSON.stringify(gestureRequestId)})`);
+      timing.nodeEvalAfterSampleUtc = new Date().toISOString();
+      timing.browserTraceSampledUtc = new Date().toISOString();
     }
     if (browserGesture) {
       timing.gestureValidationStartUtc = new Date().toISOString();
@@ -287,11 +298,33 @@ class CdpSession {
           down: browserGesture.down || null,
           up: browserGesture.up || null,
           click: browserGesture.click || null,
+          // Full arrays, not just first(): this is what lets the next failure
+          // be classified from evidence instead of aggregate counts alone.
+          matchingEvents: browserGesture.matchingEvents || [],
+          precedingContextEvents: browserGesture.precedingContextEvents || [],
           eventCounts: browserGesture.eventCounts || null,
           activeGestureMatchedAtSample: browserGesture.activeGestureMatchedAtSample ?? null,
           handlerEntries: browserGesture.handlerEntries || [],
           expectedState: browserGesture.expectedState || null,
           validationFailureStage: classifyBrowserGestureFailure(browserGesture),
+          // Cross-gesture correlation (TOPMENU-STABILITY-01 v2): activeGestureId
+          // equality is not causal proof on its own -- these fields exist so a
+          // later analysis can check whether a same-ID event downstream is a
+          // plausible delayed continuation of the immediately preceding gesture.
+          previousGestureRequestId: browserGesture.previousGestureRequestId ?? null,
+          previousGestureEndWallClockMs: browserGesture.previousGestureEndWallClockMs ?? null,
+          currentGestureArmWallClockMs: browserGesture.currentGestureArmWallClockMs ?? gestureBeginInfo?.armWallClockMs ?? null,
+          gapSincePreviousGestureMs: browserGesture.gapSincePreviousGestureMs ?? gestureBeginInfo?.gapSincePreviousGestureMs ?? null,
+          traceSequenceAtArm: browserGesture.traceSequenceAtArm ?? null,
+          traceSequenceAtSample: browserGesture.traceSequenceAtSample ?? null,
+          handlerSequenceAtArm: browserGesture.handlerSequenceAtArm ?? null,
+          handlerSequenceAtSample: browserGesture.handlerSequenceAtSample ?? null,
+          armWallClockMs: browserGesture.armWallClockMs ?? null,
+          armPerformanceMs: browserGesture.armPerformanceMs ?? null,
+          sampleWallClockMs: browserGesture.sampleWallClockMs ?? null,
+          samplePerformanceMs: browserGesture.samplePerformanceMs ?? null,
+          traceInstallationId: browserGesture.traceInstallationId ?? null,
+          gestureBeginInfo,
           timing
         });
         throw gestureError;
@@ -543,48 +576,133 @@ async function getTopMenuKeyboardState(s) {
 }
 
 async function installTopMenuEventTrace(s) {
+  // TOPMENU-STABILITY-01 v2 (cross-gesture correlation): activeGesture is a
+  // single mutable slot assigned to events AT FIRE TIME, so "same gestureId"
+  // was never causal proof that an event was produced by that gesture's own
+  // native SendInput -- only that it fired somewhere in that gesture's arm-
+  // to-sample window. The fix here is NOT to change what counts as a match;
+  // it's to stop discarding everything else, so a later analysis can see
+  // what came immediately before and judge plausibility for itself. This is
+  // the Node-side mirror of appendBounded/computeGestureGap/
+  // decideTraceInstallation/selectPrecedingContext/mapPerformanceToWallClock
+  // in native-input-targeting.js (duplicated of necessity: this string runs
+  // in the browser via CDP eval and cannot require() that module).
   await s.eval(`(() => {
+    window.__desktopUxGateTraceInstallAttempts = (window.__desktopUxGateTraceInstallAttempts || 0) + 1;
+    if (window.__desktopUxGateTraceInstalled) {
+      window.__desktopUxGateTraceInstallSkips = (window.__desktopUxGateTraceInstallSkips || 0) + 1;
+      return { installed: false, reason: 'already-installed', attempts: window.__desktopUxGateTraceInstallAttempts, skips: window.__desktopUxGateTraceInstallSkips };
+    }
+    window.__desktopUxGateTraceInstalled = true;
+    const traceInstallationId = (window.crypto?.randomUUID ? window.crypto.randomUUID() : String(Math.random()) + '-' + Date.now());
+    const installedAtWallClockMs = Date.now();
+    const installedAtPerformanceMs = performance.now();
+    window.__desktopUxGateTraceAnchor = { traceInstallationId, installedAtWallClockMs, installedAtPerformanceMs };
+
+    const EVENT_BUFFER_MAX = 4000; // bounded ring buffer; generous for several seconds of real interaction volume in this app
     const events = [];
     const handlerEntries = [];
+    let eventSeq = 0;
+    let handlerSeq = 0;
     let activeGesture = null;
-    const add = event => events.push({
-      gestureId: activeGesture?.id || null,
-      type: event.type,
-      target: event.target?.id || event.target?.className || event.target?.tagName || null,
-      targetId: event.target?.id || null,
-      pathOwnerIds: (event.composedPath?.() || []).map(node => node?.id).filter(Boolean),
-      activeElement: document.activeElement?.id || null,
-      openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
-      settingsAriaExpanded: document.getElementById('menu-settings')?.getAttribute('aria-expanded') || null,
-      at: performance.now()
-    });
+    let previousGesture = null;
+
+    function appendBounded(buffer, item) {
+      buffer.push(item);
+      if (buffer.length > EVENT_BUFFER_MAX) buffer.shift();
+    }
+
+    const add = event => {
+      eventSeq += 1;
+      appendBounded(events, {
+        traceSequence: eventSeq,
+        type: event.type,
+        performanceMs: performance.now(),
+        wallClockMs: Date.now(),
+        activeGestureId: activeGesture?.id || null,
+        targetTag: event.target?.tagName || null,
+        targetId: event.target?.id || null,
+        targetClass: (typeof event.target?.className === 'string' ? event.target.className : null),
+        pathOwnerIds: (event.composedPath?.() || []).map(node => node?.id).filter(Boolean),
+        clientX: event.clientX ?? null,
+        clientY: event.clientY ?? null,
+        screenX: event.screenX ?? null,
+        screenY: event.screenY ?? null,
+        button: event.button ?? null,
+        buttons: event.buttons ?? null,
+        detail: event.detail ?? null,
+        isTrusted: event.isTrusted ?? null,
+        pointerId: event.pointerId ?? null,
+        pointerType: event.pointerType ?? null,
+        eventPhase: event.eventPhase ?? null,
+        defaultPrevented: event.defaultPrevented ?? null,
+        activeElement: document.activeElement?.id || null,
+        openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
+        settingsAriaExpanded: document.getElementById('menu-settings')?.getAttribute('aria-expanded') || null
+      });
+    };
     ['blur', 'focus', 'focusin', 'focusout', 'pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click', 'mouseenter', 'mouseleave', 'mousemove'].forEach(type => window.addEventListener(type, add, true));
     for (const ownerId of ['menu-power', 'menu-settings', 'menu-help']) {
-      document.getElementById(ownerId)?.addEventListener('click', event => handlerEntries.push({
-        gestureId: activeGesture?.id || null,
-        ownerId,
-        targetId: event.target?.id || null,
-        pathOwnerIds: (event.composedPath?.() || []).map(node => node?.id).filter(Boolean),
-        at: performance.now()
-      }));
+      document.getElementById(ownerId)?.addEventListener('click', event => {
+        handlerSeq += 1;
+        appendBounded(handlerEntries, {
+          handlerTraceSequence: handlerSeq,
+          performanceMs: performance.now(),
+          wallClockMs: Date.now(),
+          activeGestureId: activeGesture?.id || null,
+          ownerId,
+          eventType: event.type,
+          targetId: event.target?.id || null,
+          targetTag: event.target?.tagName || null,
+          clientX: event.clientX ?? null,
+          clientY: event.clientY ?? null,
+          detail: event.detail ?? null,
+          isTrusted: event.isTrusted ?? null,
+          pathOwnerIds: (event.composedPath?.() || []).map(node => node?.id).filter(Boolean)
+        });
+      });
     }
-    window.__desktopUxBeginNativeGesture = (id, ownerId) => { activeGesture = { id, ownerId }; return { id, ownerId, at: performance.now() }; };
+
+    window.__desktopUxBeginNativeGesture = (id, ownerId) => {
+      const armWallClockMs = Date.now();
+      const armPerformanceMs = performance.now();
+      const gapSincePreviousGestureMs = previousGesture ? (armWallClockMs - previousGesture.endedAtWallClockMs) : null;
+      activeGesture = { id, ownerId, armWallClockMs, armPerformanceMs, traceSequenceAtArm: eventSeq, handlerSequenceAtArm: handlerSeq };
+      return {
+        id, ownerId, armWallClockMs, armPerformanceMs,
+        traceSequenceAtArm: eventSeq,
+        previousGestureRequestId: previousGesture?.id || null,
+        previousGestureEndWallClockMs: previousGesture?.endedAtWallClockMs ?? null,
+        gapSincePreviousGestureMs
+      };
+    };
     window.__desktopUxEndNativeGesture = id => {
-      // Additive observability only (see TOPMENU-STABILITY-01): eventCounts and
-      // activeGestureMatchedAtSample are new fields alongside the unchanged
-      // down/up/click/ownerId/handlerEntries/expectedState computation, so
-      // validateBrowserGesture's behavior is untouched by this function.
+      // Additive observability only (see TOPMENU-STABILITY-01): everything
+      // below down/up/click/ownerId/handlerEntries/expectedState is a new
+      // field, so validateBrowserGesture's PASS/FAIL behavior is unchanged.
       const activeGestureMatchedAtSample = activeGesture?.id === id;
-      const ownerId = activeGestureMatchedAtSample ? activeGesture.ownerId : null;
-      const matching = events.filter(event => event.gestureId === id);
+      const armInfo = activeGestureMatchedAtSample ? activeGesture : null;
+      const ownerId = armInfo ? armInfo.ownerId : null;
+      const sampleWallClockMs = Date.now();
+      const samplePerformanceMs = performance.now();
+      const matching = events.filter(event => event.activeGestureId === id);
       const first = type => matching.find(event => event.type === type) || null;
       const countType = type => matching.filter(event => event.type === type).length;
+      const traceSequenceAtArm = armInfo ? armInfo.traceSequenceAtArm : null;
+      // Context window: what fired immediately before this gesture armed,
+      // regardless of which (if any) gesture it was tagged with -- this is
+      // what lets a later analysis judge whether a same-ID event downstream
+      // is a plausible delayed continuation of what was already in flight,
+      // rather than trusting activeGestureId equality as causal proof.
+      const precedingContextEvents = traceSequenceAtArm === null ? [] : events.filter(event => event.traceSequence > traceSequenceAtArm - 20 && event.traceSequence <= traceSequenceAtArm);
       const result = {
         gestureId: id,
         ownerId,
         down: first('pointerdown') || first('mousedown'),
         up: first('pointerup') || first('mouseup'),
         click: first('click'),
+        matchingEvents: matching,
+        precedingContextEvents,
         eventCounts: {
           pointerdown: countType('pointerdown'),
           mousedown: countType('mousedown'),
@@ -595,17 +713,42 @@ async function installTopMenuEventTrace(s) {
           totalCapturedThisSession: events.length
         },
         activeGestureMatchedAtSample,
-        handlerEntries: handlerEntries.filter(entry => entry.gestureId === id),
+        handlerEntries: handlerEntries.filter(entry => entry.activeGestureId === id),
         expectedState: {
           openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
           ariaExpanded: ownerId ? document.getElementById(ownerId)?.getAttribute('aria-expanded') || null : null
-        }
+        },
+        previousGestureRequestId: previousGesture?.id || null,
+        previousGestureEndWallClockMs: previousGesture?.endedAtWallClockMs ?? null,
+        currentGestureArmWallClockMs: armInfo ? armInfo.armWallClockMs : null,
+        gapSincePreviousGestureMs: armInfo && previousGesture ? (armInfo.armWallClockMs - previousGesture.endedAtWallClockMs) : null,
+        traceSequenceAtArm,
+        traceSequenceAtSample: eventSeq,
+        handlerSequenceAtArm: armInfo ? armInfo.handlerSequenceAtArm : null,
+        handlerSequenceAtSample: handlerSeq,
+        armWallClockMs: armInfo ? armInfo.armWallClockMs : null,
+        armPerformanceMs: armInfo ? armInfo.armPerformanceMs : null,
+        sampleWallClockMs,
+        samplePerformanceMs,
+        traceInstallationId
       };
-      if (activeGesture?.id === id) activeGesture = null;
+      if (activeGesture?.id === id) {
+        previousGesture = { id, ownerId, endedAtWallClockMs: sampleWallClockMs, endedAtPerformanceMs: samplePerformanceMs };
+        activeGesture = null;
+      }
       return result;
     };
+    window.__desktopUxGateTraceState = () => ({
+      traceInstallationId,
+      installAttempts: window.__desktopUxGateTraceInstallAttempts,
+      installSkips: window.__desktopUxGateTraceInstallSkips || 0,
+      totalEventsCaptured: events.length,
+      totalHandlerEntriesCaptured: handlerEntries.length,
+      anchor: window.__desktopUxGateTraceAnchor
+    });
     window.__desktopUxGateEvents = events;
     window.__desktopUxGateHandlerEntries = handlerEntries;
+    return { installed: true, reason: 'first-install', traceInstallationId, attempts: window.__desktopUxGateTraceInstallAttempts };
   })()`);
 }
 

@@ -193,19 +193,82 @@ function attachDiagnostics(error, key, value) {
   return error;
 }
 
+// --- Cross-gesture correlation observability (TOPMENU-STABILITY-01 v2) ---
+//
+// These are pure, DOM-free mirrors of the algorithm the browser-injected
+// trace in desktop-ux-functional-gate.js's installTopMenuEventTrace() runs
+// (that script is CDP-eval'd into the page and cannot require() this module,
+// so the logic is necessarily duplicated -- the same pattern already used
+// between assertCursorCustody's JS copy here and its PowerShell copy in
+// native-input-worker.ps1). Testing the algorithm here is how its behavior
+// gets unit coverage at all.
+
+// Appends to a bounded ring buffer: never resets/clears across calls (a new
+// gesture arming must NOT erase prior history), only drops the oldest entry
+// once maxLength is exceeded. Returns the same array, mutated, for chaining.
+function appendBounded(buffer, item, maxLength) {
+  buffer.push(item);
+  if (buffer.length > maxLength) buffer.shift();
+  return buffer;
+}
+
+// Gap, in ms, between the previous gesture's end and the current gesture's
+// arm. null when there was no previous gesture (first activation of the
+// session). This is the number the TOPMENU-STABILITY-01 v2 hypothesis hinges
+// on: a short gap means a delayed event from the previous gesture has less
+// time to have already fired, but does not by itself prove attribution.
+function computeGestureGap(previousGestureEndWallClockMs, armWallClockMs) {
+  if (!Number.isFinite(previousGestureEndWallClockMs) || !Number.isFinite(armWallClockMs)) return null;
+  return armWallClockMs - previousGestureEndWallClockMs;
+}
+
+// Trace installation must be idempotent: a second install attempt in the same
+// document must not attach a second set of listeners (which would itself
+// fabricate duplicate-looking events unrelated to any real defect). Returns
+// whether to actually install, distinct from merely recording the attempt.
+function decideTraceInstallation(alreadyInstalled) {
+  return { install: !alreadyInstalled, reason: alreadyInstalled ? 'already-installed' : 'first-install' };
+}
+
+// Events captured immediately before a gesture armed, by traceSequence --
+// i.e. the tail of whatever came before, regardless of which (if any)
+// gesture they were tagged with. This is what lets a later analysis judge
+// whether a same-ID event downstream is a plausible delayed continuation of
+// what was happening right before arm, rather than trusting activeGestureId
+// equality as causal proof on its own.
+function selectPrecedingContext(events, traceSequenceAtArm, windowSize) {
+  if (!Number.isFinite(traceSequenceAtArm)) return [];
+  return events.filter(event => event.traceSequence > traceSequenceAtArm - windowSize && event.traceSequence <= traceSequenceAtArm);
+}
+
+// Maps a performance.now()-relative timestamp to approximate wall-clock time
+// using a (wallClockMs, performanceMs) anchor pair captured together. This is
+// the cross-clock bridge Section E asked for: without it, renderer
+// performance.now() timestamps and Node Date.now()/UTC timestamps cannot be
+// placed on the same timeline at all.
+function mapPerformanceToWallClock(anchorWallClockMs, anchorPerformanceMs, samplePerformanceMs) {
+  if (!Number.isFinite(anchorWallClockMs) || !Number.isFinite(anchorPerformanceMs) || !Number.isFinite(samplePerformanceMs)) return null;
+  return anchorWallClockMs + (samplePerformanceMs - anchorPerformanceMs);
+}
+
 module.exports = {
+  appendBounded,
   assertCursorCustody,
   assertInputAllowed,
   assertSendInputComplete,
   atomicClickContract,
   attachDiagnostics,
   classifyBrowserGestureFailure,
+  computeGestureGap,
   createGestureRequestId,
+  decideTraceInstallation,
   isStrictInterior,
+  mapPerformanceToWallClock,
   MAX_CURSOR_READBACK_PIXELS,
   reconcileTarget,
   rectFromBounds,
   sameIdentity,
+  selectPrecedingContext,
   strictInteriorPoint,
   translateClientToScreen,
   validateBrowserGesture,
