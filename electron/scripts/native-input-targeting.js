@@ -94,13 +94,57 @@ function assertInputAllowed({ clickIssued, target }) {
   return true;
 }
 
+function atomicClickContract() {
+  return Object.freeze({
+    api: 'SendInput',
+    inputRecords: Object.freeze(['LEFTDOWN', 'LEFTUP']),
+    requestedInputCount: 2,
+    deliberateDelayMs: 0,
+    automaticRetryCount: 0
+  });
+}
+
+function assertCursorCustody(intended, actual) {
+  if (!intended || !actual || intended.x !== actual.x || intended.y !== actual.y) {
+    throw new Error('cursor custody was not established before the native gesture');
+  }
+  return true;
+}
+
+function assertSendInputComplete({ requestedInputCount, returnedInputCount, win32Error = null }) {
+  if (requestedInputCount !== 2) throw new Error('atomic click must request exactly two INPUT records');
+  if (returnedInputCount !== requestedInputCount) {
+    const error = new Error(`SendInput inserted ${returnedInputCount} of ${requestedInputCount} INPUT records`);
+    error.code = 'NATIVE_GESTURE_PARTIAL_INSERTION';
+    error.win32Error = win32Error;
+    throw error;
+  }
+  return true;
+}
+
+function eventBelongsToOwner(event, ownerId) {
+  return Boolean(event && (event.ownerId === ownerId || event.targetId === ownerId || event.pathOwnerIds?.includes(ownerId)));
+}
+
+function validateBrowserGesture({ ownerId, down, up, click }) {
+  if (!ownerId) throw new Error('activation owner is required');
+  if (!eventBelongsToOwner(down, ownerId)) throw new Error('browser DOWN left the accepted activation ancestry');
+  if (!eventBelongsToOwner(up, ownerId)) throw new Error('browser UP left the accepted activation ancestry');
+  if (!eventBelongsToOwner(click, ownerId)) throw new Error('browser click left the accepted activation ancestry');
+  return true;
+}
+
 module.exports = {
+  assertCursorCustody,
   assertInputAllowed,
+  assertSendInputComplete,
+  atomicClickContract,
   isStrictInterior,
   reconcileTarget,
   sameIdentity,
   strictInteriorPoint,
   translateClientToScreen,
+  validateBrowserGesture,
   validateHit,
   validateRect
 };

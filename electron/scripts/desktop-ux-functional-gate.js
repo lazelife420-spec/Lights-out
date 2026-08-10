@@ -13,7 +13,7 @@ const crypto = require('crypto');
 const readline = require('readline');
 const WebSocket = require('ws');
 const { decideRitualStepAction, decideWorkareaControlAction } = require('./ritual-step-progression');
-const { assertInputAllowed, reconcileTarget, strictInteriorPoint, validateHit } = require('./native-input-targeting');
+const { assertCursorCustody, assertInputAllowed, assertSendInputComplete, reconcileTarget, strictInteriorPoint, validateBrowserGesture, validateHit } = require('./native-input-targeting');
 
 const ELECTRON_ROOT = path.resolve(__dirname, '..');
 const SOURCE_ELECTRON_EXE = path.join(ELECTRON_ROOT, 'node_modules', 'electron', 'dist', 'electron.exe');
@@ -52,7 +52,12 @@ class NativeInputWorker {
         const pending = this.pending.get(message.requestId);
         if (!pending) return;
         this.pending.delete(message.requestId);
-        message.ok ? pending.resolve(message.value) : pending.reject(new Error(message.error || 'native worker request failed'));
+        if (message.ok) pending.resolve(message.value);
+        else {
+          const error = new Error(message.error || 'native worker request failed');
+          error.nativeInput = message.errorData || null;
+          pending.reject(error);
+        }
       });
       let stderr = '';
       child.stderr.on('data', data => { stderr += data; });
@@ -237,14 +242,26 @@ class CdpSession {
     const prepared = reconcileTarget(initial, current);
     assertInputAllowed({ clickIssued: false, target: prepared.target });
     const target = prepared.target;
+    const topMenuOwner = /^#menu-(power|settings|help) > span$/.test(sel) ? target.ownerSelector.slice(1) : null;
+    const gestureId = topMenuOwner ? crypto.randomUUID() : null;
+    if (gestureId) await this.eval(`window.__desktopUxBeginNativeGesture?.(${JSON.stringify(gestureId)}, ${JSON.stringify(topMenuOwner)})`);
     const native = await invokeNativeInput({ kind: 'pointer', action: 'click', executable: EXE_PATH, clientX: target.point.x, clientY: target.point.y, targetRect: target.rect, innerWidth: target.innerWidth, innerHeight: target.innerHeight });
-    report.nativeInputs.push({ timestamp: new Date().toISOString(), method: 'win32-mouse', selector: sel, measured: initial, current: target, targetReacquired: prepared.reacquired, native, retryCount: 0 });
+    assertCursorCustody(native.screenPoint, native.actualCursor);
+    assertSendInputComplete(native.gesture);
     await WAIT(120);
-    return { rect: target, native };
+    const browserGesture = gestureId ? await this.eval(`window.__desktopUxEndNativeGesture?.(${JSON.stringify(gestureId)})`) : null;
+    if (browserGesture) {
+      validateBrowserGesture(browserGesture);
+      requireGate(browserGesture.handlerEntries.length === 1, `${topMenuOwner} production handler was not entered exactly once`, browserGesture);
+    }
+    report.nativeInputs.push({ timestamp: new Date().toISOString(), method: 'win32-mouse', selector: sel, measured: initial, current: target, targetReacquired: prepared.reacquired, native, browserGesture, retryCount: 0 });
+    return { rect: target, native, browserGesture };
   }
   async clickXY(x, y) {
     const viewport = await this.eval(`({ innerWidth: window.innerWidth, innerHeight: window.innerHeight, dpr: window.devicePixelRatio })`);
     const native = await invokeNativeInput({ kind: 'pointer', action: 'click', executable: EXE_PATH, clientX: x, clientY: y, innerWidth: viewport.innerWidth, innerHeight: viewport.innerHeight });
+    assertCursorCustody(native.screenPoint, native.actualCursor);
+    assertSendInputComplete(native.gesture);
     report.nativeInputs.push({ timestamp: new Date().toISOString(), method: 'win32-mouse', selector: null, measured: { x, y, ...viewport }, native, retryCount: 0 });
     await WAIT(120);
     return { point: { x, y }, native };
@@ -477,16 +494,51 @@ async function getTopMenuKeyboardState(s) {
 async function installTopMenuEventTrace(s) {
   await s.eval(`(() => {
     const events = [];
+    const handlerEntries = [];
+    let activeGesture = null;
     const add = event => events.push({
+      gestureId: activeGesture?.id || null,
       type: event.type,
       target: event.target?.id || event.target?.className || event.target?.tagName || null,
+      targetId: event.target?.id || null,
+      pathOwnerIds: (event.composedPath?.() || []).map(node => node?.id).filter(Boolean),
       activeElement: document.activeElement?.id || null,
       openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
       settingsAriaExpanded: document.getElementById('menu-settings')?.getAttribute('aria-expanded') || null,
       at: performance.now()
     });
-    ['blur', 'focus', 'focusin', 'focusout', 'mousedown', 'mouseup', 'click', 'mouseenter', 'mouseleave', 'mousemove'].forEach(type => window.addEventListener(type, add, true));
+    ['blur', 'focus', 'focusin', 'focusout', 'pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click', 'mouseenter', 'mouseleave', 'mousemove'].forEach(type => window.addEventListener(type, add, true));
+    for (const ownerId of ['menu-power', 'menu-settings', 'menu-help']) {
+      document.getElementById(ownerId)?.addEventListener('click', event => handlerEntries.push({
+        gestureId: activeGesture?.id || null,
+        ownerId,
+        targetId: event.target?.id || null,
+        pathOwnerIds: (event.composedPath?.() || []).map(node => node?.id).filter(Boolean),
+        at: performance.now()
+      }));
+    }
+    window.__desktopUxBeginNativeGesture = (id, ownerId) => { activeGesture = { id, ownerId }; return { id, ownerId, at: performance.now() }; };
+    window.__desktopUxEndNativeGesture = id => {
+      const ownerId = activeGesture?.id === id ? activeGesture.ownerId : null;
+      const matching = events.filter(event => event.gestureId === id);
+      const first = type => matching.find(event => event.type === type) || null;
+      const result = {
+        gestureId: id,
+        ownerId,
+        down: first('pointerdown') || first('mousedown'),
+        up: first('pointerup') || first('mouseup'),
+        click: first('click'),
+        handlerEntries: handlerEntries.filter(entry => entry.gestureId === id),
+        expectedState: {
+          openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
+          ariaExpanded: ownerId ? document.getElementById(ownerId)?.getAttribute('aria-expanded') || null : null
+        }
+      };
+      if (activeGesture?.id === id) activeGesture = null;
+      return result;
+    };
     window.__desktopUxGateEvents = events;
+    window.__desktopUxGateHandlerEntries = handlerEntries;
   })()`);
 }
 
@@ -555,12 +607,8 @@ async function runTopMenuGate() {
   const { child, session: s } = await spawnApp(userData);
   const results = { mouse: [], keyboard: [], assertions: [] };
   report.phases[phase] = { status: 'running', results };
-  // Each native click already blocks on a fresh powershell.exe + Add-Type
-  // compile before this function ever starts polling (measured floor ~2.0s,
-  // 1971-2030ms across 10 samples with the packaged app running concurrently);
-  // a 2000ms post-click assertion budget left effectively no margin for
-  // real-world scheduling variance on top of that floor. 5000ms keeps this a
-  // finite, named, diagnosed wait -- not a retry -- just with real headroom.
+  // Preserve the established finite assertion budget; this observes state
+  // after one native gesture and is not an input retry.
   const waitFor = (expression, label, timeout = 5000) => s.condition(expression, timeout, label);
   try {
     await s.resize(1280, 720);

@@ -3,11 +3,15 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
+  assertCursorCustody,
   assertInputAllowed,
+  assertSendInputComplete,
+  atomicClickContract,
   isStrictInterior,
   reconcileTarget,
   strictInteriorPoint,
   translateClientToScreen,
+  validateBrowserGesture,
   validateHit
 } = require('../scripts/native-input-targeting');
 
@@ -70,4 +74,57 @@ test('1280x720 reduced geometry remains valid without guessed coordinates', () =
 
 test('native click already issued has no retry path', () => {
   assert.throws(() => assertInputAllowed({ clickIssued: true, target: target() }), /retry is prohibited/);
+});
+
+test('valid current target and current cursor allow one two-event gesture', () => {
+  const current = target();
+  assert.equal(assertInputAllowed({ clickIssued: false, target: current }), true);
+  assert.equal(assertCursorCustody({ x: 100, y: 200 }, { x: 100, y: 200 }), true);
+  assert.deepEqual(atomicClickContract().inputRecords, ['LEFTDOWN', 'LEFTUP']);
+});
+
+test('cursor mismatch prevents any native gesture', () => {
+  assert.throws(() => assertCursorCustody({ x: 100, y: 200 }, { x: 101, y: 200 }), /custody was not established/);
+});
+
+test('DOWN and UP are represented in one atomic SendInput batch', () => {
+  const contract = atomicClickContract();
+  assert.equal(contract.api, 'SendInput');
+  assert.equal(contract.requestedInputCount, 2);
+  assert.deepEqual(contract.inputRecords, ['LEFTDOWN', 'LEFTUP']);
+});
+
+test('atomic native click has no deliberate DOWN to UP delay', () => {
+  assert.equal(atomicClickContract().deliberateDelayMs, 0);
+});
+
+test('partial SendInput insertion fails without retry', () => {
+  assert.throws(
+    () => assertSendInputComplete({ requestedInputCount: 2, returnedInputCount: 1, win32Error: 5 }),
+    error => error.code === 'NATIVE_GESTURE_PARTIAL_INSERTION' && error.win32Error === 5
+  );
+  assert.equal(atomicClickContract().automaticRetryCount, 0);
+});
+
+test('browser DOWN UP and click on the same valid activation ancestry pass', () => {
+  const event = { pathOwnerIds: ['menu-help'] };
+  assert.equal(validateBrowserGesture({ ownerId: 'menu-help', down: event, up: event, click: event }), true);
+});
+
+test('browser DOWN valid and UP on a different ancestry fails', () => {
+  assert.throws(() => validateBrowserGesture({
+    ownerId: 'menu-help',
+    down: { pathOwnerIds: ['menu-help'] },
+    up: { pathOwnerIds: [] },
+    click: { pathOwnerIds: ['menu-help'] }
+  }), /browser UP left/);
+});
+
+test('browser click on a different target fails', () => {
+  assert.throws(() => validateBrowserGesture({
+    ownerId: 'menu-help',
+    down: { pathOwnerIds: ['menu-help'] },
+    up: { pathOwnerIds: ['menu-help'] },
+    click: { targetId: 'cockpit', pathOwnerIds: [] }
+  }), /browser click left/);
 });

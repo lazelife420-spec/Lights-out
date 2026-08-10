@@ -9,14 +9,18 @@ public static class LightsOutNativeWorker {
   public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
   [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X; public int Y; }
   [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+  [StructLayout(LayoutKind.Sequential)] public struct MOUSEINPUT { public int dx; public int dy; public uint mouseData; public uint dwFlags; public uint time; public UIntPtr dwExtraInfo; }
+  [StructLayout(LayoutKind.Explicit)] public struct INPUTUNION { [FieldOffset(0)] public MOUSEINPUT mi; }
+  [StructLayout(LayoutKind.Sequential)] public struct INPUT { public uint type; public INPUTUNION union; }
   [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr hWnd, out RECT rect);
   [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr hWnd, ref POINT point);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int command);
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
   [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT point);
-  [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extraInfo);
+  [DllImport("user32.dll", SetLastError = true)] public static extern uint SendInput(uint inputCount, INPUT[] inputs, int inputSize);
   [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extraInfo);
   [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
@@ -34,6 +38,14 @@ public static class LightsOutNativeWorker {
   }
   public static uint GetProcessId(IntPtr hWnd) { uint id; GetWindowThreadProcessId(hWnd, out id); return id; }
   public static string GetTitle(IntPtr hWnd) { var s = new StringBuilder(512); GetWindowText(hWnd, s, s.Capacity); return s.ToString(); }
+  public static uint SendLeftClickBatch(out int error) {
+    var inputs = new INPUT[2];
+    inputs[0] = new INPUT { type = 0, union = new INPUTUNION { mi = new MOUSEINPUT { dwFlags = 0x0002 } } };
+    inputs[1] = new INPUT { type = 0, union = new INPUTUNION { mi = new MOUSEINPUT { dwFlags = 0x0004 } } };
+    var inserted = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(INPUT)));
+    error = Marshal.GetLastWin32Error();
+    return inserted;
+  }
 }
 '@
 
@@ -69,7 +81,10 @@ while ($true) {
     [void][LightsOutNativeWorker]::ShowWindow($hwnd,9)
     [void][LightsOutNativeWorker]::SetForegroundWindow($hwnd)
     Start-Sleep -Milliseconds 40
-    $screenX=$null;$screenY=$null;$actualCursor=$null;$translatedRect=$null
+    $foreground=[LightsOutNativeWorker]::GetForegroundWindow()
+    Mark 'foreground-custody-verified' ([ordered]@{expectedWindowHandle=$hwnd.ToInt64();actualWindowHandle=$foreground.ToInt64()})
+    if ($foreground -ne $hwnd) { throw 'current app window does not own foreground custody' }
+    $screenX=$null;$screenY=$null;$actualCursor=$null;$postGestureCursor=$null;$translatedRect=$null;$gesture=$null
     if ($payload.kind -eq 'pointer') {
       $scaleX=($client.Right-$client.Left)/[double]$payload.innerWidth
       $scaleY=($client.Bottom-$client.Top)/[double]$payload.innerHeight
@@ -86,11 +101,18 @@ while ($true) {
       Mark 'cursor-verified-before-input' ([ordered]@{intended=[ordered]@{x=$screenX;y=$screenY};actual=$actualCursor;translatedTarget=$translatedRect;scaleX=$scaleX;scaleY=$scaleY})
       if ($cursor.X -ne $screenX -or $cursor.Y -ne $screenY) { throw 'actual cursor does not match intended physical point' }
       if ($payload.action -eq 'click') {
-        Mark 'native-pointerdown-requested'
-        [LightsOutNativeWorker]::mouse_event(0x0002,0,0,0,[UIntPtr]::Zero)
-        Start-Sleep -Milliseconds 50
-        Mark 'native-pointerup-requested'
-        [LightsOutNativeWorker]::mouse_event(0x0004,0,0,0,[UIntPtr]::Zero)
+        $requestedInputCount=2
+        $win32Error=0
+        $beforeGestureUtc=(Get-Date).ToUniversalTime().ToString('o')
+        Mark 'send-input-batch-before' ([ordered]@{api='SendInput';requestedInputCount=$requestedInputCount;records=@('LEFTDOWN','LEFTUP')})
+        $returnedInputCount=[int][LightsOutNativeWorker]::SendLeftClickBatch([ref]$win32Error)
+        $afterGestureUtc=(Get-Date).ToUniversalTime().ToString('o')
+        Mark 'send-input-batch-after' ([ordered]@{api='SendInput';requestedInputCount=$requestedInputCount;returnedInputCount=$returnedInputCount;win32Error=if($returnedInputCount -eq $requestedInputCount){$null}else{$win32Error}})
+        $afterCursor = New-Object LightsOutNativeWorker+POINT
+        if (-not [LightsOutNativeWorker]::GetCursorPos([ref]$afterCursor)) { throw 'GetCursorPos after native gesture failed' }
+        $postGestureCursor=[ordered]@{x=$afterCursor.X;y=$afterCursor.Y}
+        $gesture=[ordered]@{api='SendInput';records=@('LEFTDOWN','LEFTUP');requestedInputCount=$requestedInputCount;returnedInputCount=$returnedInputCount;win32Error=if($returnedInputCount -eq $requestedInputCount){$null}else{$win32Error};beforeUtc=$beforeGestureUtc;afterUtc=$afterGestureUtc;preGestureCursor=$actualCursor;postGestureCursor=$postGestureCursor;deliberateDelayMs=0;retryCount=0}
+        if ($returnedInputCount -ne $requestedInputCount) { throw "SendInput inserted $returnedInputCount of $requestedInputCount INPUT records (Win32 error $win32Error)" }
       }
     } elseif ($payload.kind -eq 'key') {
       $vk=[byte]$payload.virtualKey;$modifiers=@($payload.modifiers)
@@ -99,8 +121,8 @@ while ($true) {
       [array]::Reverse($modifiers);foreach($modifier in $modifiers){[LightsOutNativeWorker]::keybd_event([byte]$modifier,0,2,[UIntPtr]::Zero)}
     } else { throw "Unknown native input kind: $($payload.kind)" }
     Mark 'request-complete'
-    Send-Message ([ordered]@{type='result';requestId=$payload.requestId;ok=$true;value=[ordered]@{processId=$pidValue;windowHandle=$hwnd.ToInt64();windowTitle=[LightsOutNativeWorker]::GetTitle($hwnd);windowBounds=[ordered]@{left=$window.Left;top=$window.Top;right=$window.Right;bottom=$window.Bottom};clientBounds=[ordered]@{left=$origin.X;top=$origin.Y;width=$client.Right-$client.Left;height=$client.Bottom-$client.Top};screenPoint=if($null -ne $screenX){[ordered]@{x=$screenX;y=$screenY}}else{$null};actualCursor=$actualCursor;translatedTarget=$translatedRect;timeline=$timeline}})
+    Send-Message ([ordered]@{type='result';requestId=$payload.requestId;ok=$true;value=[ordered]@{processId=$pidValue;windowHandle=$hwnd.ToInt64();windowTitle=[LightsOutNativeWorker]::GetTitle($hwnd);windowBounds=[ordered]@{left=$window.Left;top=$window.Top;right=$window.Right;bottom=$window.Bottom};clientBounds=[ordered]@{left=$origin.X;top=$origin.Y;width=$client.Right-$client.Left;height=$client.Bottom-$client.Top};screenPoint=if($null -ne $screenX){[ordered]@{x=$screenX;y=$screenY}}else{$null};actualCursor=$actualCursor;postGestureCursor=$postGestureCursor;translatedTarget=$translatedRect;gesture=$gesture;timeline=$timeline}})
   } catch {
-    Send-Message ([ordered]@{type='result';requestId=$payload.requestId;ok=$false;error=$_.Exception.Message})
+    Send-Message ([ordered]@{type='result';requestId=$payload.requestId;ok=$false;error=$_.Exception.Message;errorData=[ordered]@{timeline=$timeline;gesture=$gesture;screenPoint=if($null -ne $screenX){[ordered]@{x=$screenX;y=$screenY}}else{$null};preGestureCursor=$actualCursor;postGestureCursor=$postGestureCursor;translatedTarget=$translatedRect}})
   }
 }
