@@ -1658,6 +1658,27 @@ async function resetToWarmBaseline(s) {
   // panel this reset already returns to, so it's reachable here.
   const armed = await s.eval(`state.armedNightMode !== null`);
   if (armed) {
+    // A7/toast-occlusion: Stop/Cancel itself fires a production toast (and a
+    // ritual-completion toast may already be stacked above it) through the
+    // real #toast-container (position:fixed, z-index:9999, pointer-events:auto
+    // on .toast), which sits over #armed-mode-clear's point for up to its
+    // ~3s visible duration. The steps above are all no-ops in the common
+    // case, so this click can arrive while that toast still owns the hit
+    // test. Wait for the actual production control to become hit-testable at
+    // its own intended point -- not for toasts to disappear, not a fixed
+    // sleep -- so this stays correct regardless of toast count or duration.
+    await s.condition(`(() => {
+      const el = document.getElementById('armed-mode-clear');
+      if (!el || !el.isConnected) return false;
+      const style = getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
+      const r = el.getBoundingClientRect();
+      if (r.width <= 2 || r.height <= 2) return false;
+      const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+      if (!(cx > r.x + 1 && cx < r.x + r.width - 1 && cy > r.y + 1 && cy < r.y + r.height - 1)) return false;
+      const hit = document.elementFromPoint(cx, cy);
+      return Boolean(hit && (hit === el || el.contains(hit)));
+    })()`, 4000, 'Armed Night Mode clear control becomes actionable');
     await s.click('#armed-mode-clear');
     await s.condition(`state.armedNightMode === null`, 2000, 'warm reset disarms any Night Mode left selected through the supported Clear control');
   }
