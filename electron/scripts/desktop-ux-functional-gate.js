@@ -1540,6 +1540,18 @@ async function runWarmSettingsTogglePass(s) {
   requireGate(indicator === 'ON', 'warm Dry Run toggle did not visibly restore', indicator);
   results.push({ step: 'toggle-on-restore', indicator });
 
+  // W2 (Canonical V5 WARM-01): #toggle-dryrun is itself a .submenu-item, and
+  // every .submenu-item click handler closes all top menus as its first
+  // action (renderer.js: closeAllTopMenus()) -- so the toggle-restore click
+  // above already closed Settings. #open-options lives inside that same
+  // dropdown (.submenu { display:none } while closed), so measuring it now
+  // would return a zero-size hidden rect and correctly fail validateRect's
+  // strict-interior check. Reopen and prove it, exactly like the COLD path
+  // (runTopMenuGate) already does before its own #open-options click.
+  await s.click('#menu-settings > span');
+  await s.condition(`document.getElementById('menu-settings').classList.contains('open')`, 5000, 'warm Settings menu reopened before Advanced Options');
+  results.push({ step: 'settings-reopened-for-advanced-options', open: true });
+
   await s.click('#open-options');
   await s.condition(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none'`, 5000, 'warm Advanced Options opens Settings panel');
   const settingsVisible = await s.eval(`document.getElementById('ns-panel-set').style.display !== 'none'`);
