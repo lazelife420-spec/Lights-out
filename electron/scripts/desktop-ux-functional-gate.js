@@ -1600,7 +1600,8 @@ async function assertWarmBaseline(s, iterationLabel) {
     paused: state.paused,
     dryRun: state.dryRun,
     ritualOverlayActive: document.getElementById('ritual-overlay')?.classList.contains('active') || false,
-    heroVisible: getComputedStyle(document.getElementById('ns-hero-card')).display !== 'none'
+    heroVisible: getComputedStyle(document.getElementById('ns-hero-card')).display !== 'none',
+    armedNightMode: state.armedNightMode
   })`);
   requireGate(
     baseline.route === 'lib' &&
@@ -1612,6 +1613,18 @@ async function assertWarmBaseline(s, iterationLabel) {
     !baseline.ritualOverlayActive &&
     baseline.heroVisible,
     `warm iteration ${iterationLabel} did not reach the known reset baseline before proceeding`,
+    baseline
+  );
+  // S1/warm-baseline-state-leak: armedNightMode survives resetToWarmBaseline's
+  // stop+navigate steps (clearArmedNightMode is a distinct production action,
+  // not a side effect of Cancel or of leaving the tab). A prior iteration's
+  // armAndStartMode leaves a ritual-capable mode armed; runWarmSharedStartPass
+  // assumes the neutral/unarmed baseline this assertion now requires, so an
+  // undetected leak here would make it silently start that leftover ritual
+  // instead of the generic Start path it's meant to exercise.
+  requireGate(
+    baseline.armedNightMode === null,
+    `warm baseline retained an armed Night Mode`,
     baseline
   );
   return baseline;
@@ -1636,6 +1649,17 @@ async function resetToWarmBaseline(s) {
   if (route !== 'lib') {
     await s.click('[data-ns-tab="lib"]');
     await s.condition(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'lib'`, 2000, 'warm reset returns to the Tonight tab through the visible nav');
+  }
+  // S1/warm-baseline-state-leak: armAndStartMode's Use Tonight step leaves
+  // state.armedNightMode set after the run it armed is stopped -- Cancel and
+  // leaving the tab don't clear it. #armed-mode-clear is the same supported
+  // production control a user would click to remove that selection (wired to
+  // clearArmedNightMode() in renderer.js), and it lives on the Tonight/lib
+  // panel this reset already returns to, so it's reachable here.
+  const armed = await s.eval(`state.armedNightMode !== null`);
+  if (armed) {
+    await s.click('#armed-mode-clear');
+    await s.condition(`state.armedNightMode === null`, 2000, 'warm reset disarms any Night Mode left selected through the supported Clear control');
   }
 }
 
