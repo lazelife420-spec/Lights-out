@@ -224,3 +224,36 @@ the packaged-output/smoke artifact contract.
 This remains a review candidate. The report HEAD must pass its own clean
 validation and independent immutable-head review before any later authorized
 integration can establish a frozen source checkpoint.
+
+## Independent-review observability addendum
+
+### Independent review — first attempt
+
+- COLD completed **10/10 PASS** at report HEAD `895278057…`.
+- WARM failed before iteration 1 completed while measuring `#ns-play-btn`.
+- `validateRect` established only that width was `<= 2` and/or height was
+  `<= 2`; the exact raw geometry was not persisted.
+- The formal classification remains **UNRESOLVED**.
+- No production defect was demonstrated.
+
+That failed WARM attempt remains preserved as a failed independent review. It
+was not retroactively converted into a pass by later diagnostic evidence.
+
+### Follow-up diagnostic
+
+Diagnostic commit `bdc663a365bdc2ed08cc503c71722ebc84977f3d` added
+pre-validation geometry, style, ancestor, renderer-state, viewport, and
+failure-screenshot observability without changing production behavior or the
+`validateRect` acceptance contract. The same change was integrated onto this
+PR branch as a separate test-only commit.
+
+One custody-controlled, instrumented reused-process WARM diagnostic then
+completed **5/5 PASS** with 160 valid native-input records. Its first Start
+measurement was `234.025 x 37.600` CSS pixels; `#ns-play-btn` resolved once and
+was connected, the route was `lib`, the renderer was idle, Dry Run was true,
+and the hero was visible. Retries, numeric real-power actions, process leaks,
+and app-owned firewall-rule leaks were all zero.
+
+The original geometry failure was not reproduced. It remains acknowledged and
+formally unresolved; the diagnostic pass supplies no retroactive acceptance
+credit.
