@@ -64,7 +64,15 @@ while ($true) {
     if ($payload.type -eq 'stop') { Send-Message ([ordered]@{type='stopped';requestId=$payload.requestId}); break }
     $clock = [Diagnostics.Stopwatch]::StartNew()
     $timeline = [Collections.Generic.List[object]]::new()
+    $foregroundChronology = [Collections.Generic.List[object]]::new()
     function Mark([string]$Name,[object]$Detail=$null) { $timeline.Add([ordered]@{name=$Name;utc=(Get-Date).ToUniversalTime().ToString('o');elapsedMs=[Math]::Round($clock.Elapsed.TotalMilliseconds,3);detail=$Detail}) }
+    function Sample-Foreground([string]$Name) {
+      $sampleHwnd = [LightsOutNativeWorker]::GetForegroundWindow()
+      $samplePid = if ($sampleHwnd -ne [IntPtr]::Zero) { [int][LightsOutNativeWorker]::GetProcessId($sampleHwnd) } else { 0 }
+      $sampleName = $null
+      if ($samplePid -gt 0) { try { $sampleName = (Get-Process -Id $samplePid -ErrorAction Stop).ProcessName } catch {} }
+      $foregroundChronology.Add([ordered]@{name=$Name;utc=(Get-Date).ToUniversalTime().ToString('o');elapsedMs=[Math]::Round($clock.Elapsed.TotalMilliseconds,3);windowHandle=$sampleHwnd.ToInt64();processId=$samplePid;processName=$sampleName;windowTitle=if($sampleHwnd -ne [IntPtr]::Zero){[LightsOutNativeWorker]::GetTitle($sampleHwnd)}else{$null}})
+    }
     Mark 'request-received'
     $expectedExecutable = [IO.Path]::GetFullPath([string]$payload.executable)
     $processes = @(Get-Process | Where-Object { try { [IO.Path]::GetFullPath($_.Path) -eq $expectedExecutable } catch { $false } })
@@ -77,9 +85,12 @@ while ($true) {
     if (-not [LightsOutNativeWorker]::ClientToScreen($hwnd,[ref]$origin)) { throw 'ClientToScreen failed' }
     if (-not [LightsOutNativeWorker]::GetWindowRect($hwnd,[ref]$window)) { throw 'GetWindowRect failed' }
     $pidValue = [int][LightsOutNativeWorker]::GetProcessId($hwnd)
+    $captureMoveForeground = $payload.kind -eq 'pointer' -and $payload.action -eq 'move'
     Mark 'current-window-resolved' ([ordered]@{processId=$pidValue;windowHandle=$hwnd.ToInt64();clientLeft=$origin.X;clientTop=$origin.Y;clientWidth=$client.Right-$client.Left;clientHeight=$client.Bottom-$client.Top})
     [void][LightsOutNativeWorker]::ShowWindow($hwnd,9)
+    if ($captureMoveForeground) { Sample-Foreground 'before-set-foreground-window' }
     [void][LightsOutNativeWorker]::SetForegroundWindow($hwnd)
+    if ($captureMoveForeground) { Sample-Foreground 'after-set-foreground-window' }
     Start-Sleep -Milliseconds 40
     $foreground=[LightsOutNativeWorker]::GetForegroundWindow()
     Mark 'foreground-custody-verified' ([ordered]@{expectedWindowHandle=$hwnd.ToInt64();actualWindowHandle=$foreground.ToInt64()})
@@ -94,7 +105,9 @@ while ($true) {
         $translatedRect=[ordered]@{left=$origin.X+([double]$payload.targetRect.x*$scaleX);top=$origin.Y+([double]$payload.targetRect.y*$scaleY);right=$origin.X+(([double]$payload.targetRect.x+[double]$payload.targetRect.width)*$scaleX);bottom=$origin.Y+(([double]$payload.targetRect.y+[double]$payload.targetRect.height)*$scaleY)}
         if (-not ($screenX -gt $translatedRect.left -and $screenX -lt $translatedRect.right -and $screenY -gt $translatedRect.top -and $screenY -lt $translatedRect.bottom)) { throw 'translated physical point is not strictly inside the current target' }
       }
+      if ($captureMoveForeground) { Sample-Foreground 'before-set-cursor-pos' }
       if (-not [LightsOutNativeWorker]::SetCursorPos($screenX,$screenY)) { throw 'SetCursorPos failed' }
+      if ($captureMoveForeground) { Sample-Foreground 'after-set-cursor-pos' }
       Mark 'set-cursor-pos-succeeded' ([ordered]@{x=$screenX;y=$screenY})
       $cursor = New-Object LightsOutNativeWorker+POINT
       if (-not [LightsOutNativeWorker]::GetCursorPos([ref]$cursor)) { throw 'GetCursorPos failed' }
@@ -132,8 +145,9 @@ while ($true) {
       [array]::Reverse($modifiers);foreach($modifier in $modifiers){[LightsOutNativeWorker]::keybd_event([byte]$modifier,0,2,[UIntPtr]::Zero)}
     } else { throw "Unknown native input kind: $($payload.kind)" }
     Mark 'request-complete'
-    Send-Message ([ordered]@{type='result';requestId=$payload.requestId;ok=$true;value=[ordered]@{processId=$pidValue;windowHandle=$hwnd.ToInt64();windowTitle=[LightsOutNativeWorker]::GetTitle($hwnd);windowBounds=[ordered]@{left=$window.Left;top=$window.Top;right=$window.Right;bottom=$window.Bottom};clientBounds=[ordered]@{left=$origin.X;top=$origin.Y;width=$client.Right-$client.Left;height=$client.Bottom-$client.Top};screenPoint=if($null -ne $screenX){[ordered]@{x=$screenX;y=$screenY}}else{$null};actualCursor=$actualCursor;postGestureCursor=$postGestureCursor;translatedTarget=$translatedRect;gesture=$gesture;timeline=$timeline}})
+    if ($captureMoveForeground) { Sample-Foreground 'before-worker-response' }
+    Send-Message ([ordered]@{type='result';requestId=$payload.requestId;ok=$true;value=[ordered]@{processId=$pidValue;windowHandle=$hwnd.ToInt64();windowTitle=[LightsOutNativeWorker]::GetTitle($hwnd);windowBounds=[ordered]@{left=$window.Left;top=$window.Top;right=$window.Right;bottom=$window.Bottom};clientBounds=[ordered]@{left=$origin.X;top=$origin.Y;width=$client.Right-$client.Left;height=$client.Bottom-$client.Top};screenPoint=if($null -ne $screenX){[ordered]@{x=$screenX;y=$screenY}}else{$null};actualCursor=$actualCursor;postGestureCursor=$postGestureCursor;translatedTarget=$translatedRect;gesture=$gesture;timeline=$timeline;foregroundChronology=$foregroundChronology}})
   } catch {
-    Send-Message ([ordered]@{type='result';requestId=$payload.requestId;ok=$false;error=$_.Exception.Message;errorData=[ordered]@{timeline=$timeline;gesture=$gesture;screenPoint=if($null -ne $screenX){[ordered]@{x=$screenX;y=$screenY}}else{$null};preGestureCursor=$actualCursor;postGestureCursor=$postGestureCursor;translatedTarget=$translatedRect;dx=$dx;dy=$dy;actualStrictInterior=$actualStrictInterior}})
+    Send-Message ([ordered]@{type='result';requestId=$payload.requestId;ok=$false;error=$_.Exception.Message;errorData=[ordered]@{timeline=$timeline;foregroundChronology=$foregroundChronology;gesture=$gesture;screenPoint=if($null -ne $screenX){[ordered]@{x=$screenX;y=$screenY}}else{$null};preGestureCursor=$actualCursor;postGestureCursor=$postGestureCursor;translatedTarget=$translatedRect;dx=$dx;dy=$dy;actualStrictInterior=$actualStrictInterior}})
   }
 }

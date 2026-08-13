@@ -15,6 +15,7 @@ const { parseWarmIterations } = require('./desktop-ux-gate-config');
 const { NativeInputWorker } = require('./native-input-worker');
 const { decideRitualStepAction, decideWorkareaControlAction } = require('./ritual-step-progression');
 const { assertCursorCustody, assertInputAllowed, assertSendInputComplete, attachDiagnostics, classifyBrowserGestureFailure, createGestureRequestId, reconcileTarget, strictInteriorPoint, validateBrowserGesture, validateHit } = require('./native-input-targeting');
+const { composeMoveDiagnostics } = require('./top-menu-move-observability');
 
 const ELECTRON_ROOT = path.resolve(__dirname, '..');
 const SOURCE_ELECTRON_EXE = path.join(ELECTRON_ROOT, 'node_modules', 'electron', 'dist', 'electron.exe');
@@ -287,12 +288,73 @@ class CdpSession {
     await WAIT(120);
     return { point: { x, y }, native };
   }
-  async movePointer(x, y) {
-    const viewport = await this.eval(`({ innerWidth: window.innerWidth, innerHeight: window.innerHeight, dpr: window.devicePixelRatio })`);
+  async movePointer(x, y, { selector = null } = {}) {
+    const correlationId = createGestureRequestId();
+    const before = await this.eval(`(() => {
+      const rectOf = element => {
+        if (!element) return null;
+        const rect = element.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      };
+      const settings = document.getElementById('menu-settings');
+      const submenu = settings?.querySelector('.submenu') || null;
+      return {
+        selector: ${JSON.stringify(selector)},
+        requestedClientPoint: { x: ${JSON.stringify(x)}, y: ${JSON.stringify(y)} },
+        viewport: { innerWidth: window.innerWidth, innerHeight: window.innerHeight, dpr: window.devicePixelRatio },
+        settingsRect: rectOf(settings),
+        submenuRect: rectOf(submenu),
+        settingsOpen: settings?.classList.contains('open') || false,
+        ariaExpanded: settings?.getAttribute('aria-expanded') || null,
+        documentHasFocus: document.hasFocus(),
+        visibilityState: document.visibilityState,
+        trace: window.__desktopUxBeginPointerMove?.(${JSON.stringify(correlationId)}) || null
+      };
+    })()`);
+    const viewport = before.viewport;
     const native = await invokeNativeInput({ kind: 'pointer', action: 'move', executable: EXE_PATH, clientX: x, clientY: y, innerWidth: viewport.innerWidth, innerHeight: viewport.innerHeight });
-    report.nativeInputs.push({ timestamp: new Date().toISOString(), method: 'win32-mouse-move', measured: { x, y, ...viewport }, native, retryCount: 0 });
+    const after = await this.eval(`(() => {
+      const rectOf = element => {
+        if (!element) return null;
+        const rect = element.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      };
+      const ancestryOf = element => {
+        const ancestry = [];
+        for (let current = element; current; current = current.parentElement) {
+          ancestry.push({ tag: current.tagName || null, id: current.id || null, classes: typeof current.className === 'string' ? current.className : null });
+        }
+        return ancestry;
+      };
+      const settings = document.getElementById('menu-settings');
+      const submenu = settings?.querySelector('.submenu') || null;
+      const hit = document.elementFromPoint(${JSON.stringify(x)}, ${JSON.stringify(y)});
+      const trace = window.__desktopUxEndPointerMove?.(${JSON.stringify(correlationId)}) || null;
+      return {
+        documentHasFocus: document.hasFocus(),
+        visibilityState: document.visibilityState,
+        settingsOpen: settings?.classList.contains('open') || false,
+        ariaExpanded: settings?.getAttribute('aria-expanded') || null,
+        settingsRect: rectOf(settings),
+        submenuRect: rectOf(submenu),
+        requestedClientPoint: { x: ${JSON.stringify(x)}, y: ${JSON.stringify(y)} },
+        hit: { tag: hit?.tagName || null, id: hit?.id || null, classes: typeof hit?.className === 'string' ? hit.className : null },
+        hitAncestry: ancestryOf(hit),
+        trace
+      };
+    })()`);
+    const diagnostics = composeMoveDiagnostics({
+      correlationId,
+      selector,
+      before: { ...before, translatedScreenPoint: native.screenPoint || null },
+      native,
+      after: { ...after, actualCursor: native.actualCursor || null, currentForeground: native.foregroundChronology?.at(-1) || null },
+      browserEvents: after.trace?.events,
+      focusTrace: after.trace?.focusTrace
+    });
+    report.nativeInputs.push({ timestamp: new Date().toISOString(), correlationId, method: 'win32-mouse-move', measured: { x, y, ...viewport }, native, diagnostics, retryCount: 0 });
     await WAIT(80);
-    return { point: { x, y }, native };
+    return { point: { x, y }, native, diagnostics };
   }
   async key(k) {
     const map = { Escape: 0x1B, Enter: 0x0D, ' ': 0x20, ArrowDown: 0x28, ArrowUp: 0x26, ArrowLeft: 0x25, ArrowRight: 0x27, Tab: 0x09, Backspace: 0x08 };
@@ -538,10 +600,13 @@ async function installTopMenuEventTrace(s) {
 
     const EVENT_BUFFER_MAX = 4000; // bounded ring buffer; generous for several seconds of real interaction volume in this app
     const events = [];
+    const focusTrace = [];
     const handlerEntries = [];
     let eventSeq = 0;
+    let focusSeq = 0;
     let handlerSeq = 0;
     let activeGesture = null;
+    let activeMove = null;
     let previousGesture = null;
 
     function appendBounded(buffer, item) {
@@ -557,6 +622,7 @@ async function installTopMenuEventTrace(s) {
         performanceMs: performance.now(),
         wallClockMs: Date.now(),
         activeGestureId: activeGesture?.id || null,
+        moveCorrelationId: activeMove?.id || null,
         targetTag: event.target?.tagName || null,
         targetId: event.target?.id || null,
         targetClass: (typeof event.target?.className === 'string' ? event.target.className : null),
@@ -578,7 +644,25 @@ async function installTopMenuEventTrace(s) {
         settingsAriaExpanded: document.getElementById('menu-settings')?.getAttribute('aria-expanded') || null
       });
     };
-    ['blur', 'focus', 'focusin', 'focusout', 'pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click', 'mouseenter', 'mouseleave', 'mousemove'].forEach(type => window.addEventListener(type, add, true));
+    ['blur', 'focus', 'focusin', 'focusout', 'pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click', 'mouseenter', 'mouseleave', 'mousemove', 'pointermove', 'pointerover', 'pointerout', 'mouseover', 'mouseout', 'pointerenter', 'pointerleave'].forEach(type => window.addEventListener(type, add, true));
+    const addFocusState = event => {
+      focusSeq += 1;
+      appendBounded(focusTrace, {
+        sequence: focusSeq,
+        type: event.type,
+        wallClockMs: Date.now(),
+        performanceMs: performance.now(),
+        moveCorrelationId: activeMove?.id || null,
+        documentHasFocus: document.hasFocus(),
+        visibilityState: document.visibilityState,
+        openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
+        settingsOpen: document.getElementById('menu-settings')?.classList.contains('open') || false,
+        settingsAriaExpanded: document.getElementById('menu-settings')?.getAttribute('aria-expanded') || null
+      });
+    };
+    window.addEventListener('focus', addFocusState, true);
+    window.addEventListener('blur', addFocusState, true);
+    document.addEventListener('visibilitychange', addFocusState, true);
     for (const ownerId of ['menu-power', 'menu-settings', 'menu-help']) {
       document.getElementById(ownerId)?.addEventListener('click', event => {
         handlerSeq += 1;
@@ -675,16 +759,44 @@ async function installTopMenuEventTrace(s) {
       }
       return result;
     };
+    window.__desktopUxBeginPointerMove = id => {
+      activeMove = { id, eventSequenceAtStart: eventSeq, focusSequenceAtStart: focusSeq };
+      return { id, eventSequenceAtStart: eventSeq, focusSequenceAtStart: focusSeq, traceInstallationId };
+    };
+    window.__desktopUxEndPointerMove = id => {
+      const matched = activeMove?.id === id;
+      const eventSequenceAtStart = matched ? activeMove.eventSequenceAtStart : eventSeq;
+      const focusSequenceAtStart = matched ? activeMove.focusSequenceAtStart : focusSeq;
+      const result = {
+        correlationId: id,
+        matched,
+        traceInstallationId,
+        focusListenerInstallationId: traceInstallationId,
+        focusListenerInstallCount: 1,
+        events: events.filter(event => event.traceSequence > eventSequenceAtStart),
+        focusTrace: focusTrace.filter(event => event.sequence > focusSequenceAtStart),
+        eventSequenceAtStart,
+        eventSequenceAtEnd: eventSeq,
+        focusSequenceAtStart,
+        focusSequenceAtEnd: focusSeq
+      };
+      if (matched) activeMove = null;
+      return result;
+    };
     window.__desktopUxGateTraceState = () => ({
       traceInstallationId,
       installAttempts: window.__desktopUxGateTraceInstallAttempts,
       installSkips: window.__desktopUxGateTraceInstallSkips || 0,
       totalEventsCaptured: events.length,
       totalHandlerEntriesCaptured: handlerEntries.length,
+      totalFocusEventsCaptured: focusTrace.length,
+      focusListenerInstallationId: traceInstallationId,
+      focusListenerInstallCount: 1,
       anchor: window.__desktopUxGateTraceAnchor
     });
     window.__desktopUxGateEvents = events;
     window.__desktopUxGateHandlerEntries = handlerEntries;
+    window.__desktopUxGateFocusTrace = focusTrace;
     return { installed: true, reason: 'first-install', traceInstallationId, attempts: window.__desktopUxGateTraceInstallAttempts };
   })()`);
 }
@@ -798,7 +910,8 @@ async function runTopMenuGate() {
     await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu reopened for pointer transfer');
     const menuRect = await s.eval(`(r=document.querySelector('#menu-settings .submenu').getBoundingClientRect(),{x:r.x+r.width/2,y:r.y+10})`);
     const beforePointerTransfer = await getTopMenuKeyboardState(s);
-    await s.movePointer(menuRect.x, menuRect.y);
+    const pointerTransferMove = await s.movePointer(menuRect.x, menuRect.y, { selector: '#menu-settings .submenu' });
+    results.mouse.push({ step: 'pointer-transfer-diagnostics', menuRect, diagnostics: pointerTransferMove.diagnostics });
     await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu remains open inside submenu');
     const afterPointerTransfer = await getTopMenuKeyboardState(s);
     const stillOpen = afterPointerTransfer.settingsMenuOpen;
