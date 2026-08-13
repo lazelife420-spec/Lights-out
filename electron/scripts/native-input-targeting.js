@@ -193,6 +193,26 @@ function attachDiagnostics(error, key, value) {
   return error;
 }
 
+// Observability-only wrapper for geometry failures. The original
+// strictInteriorPoint -> validateRect path remains the sole acceptance check;
+// this only retains the raw evidence that would otherwise be lost when that
+// path throws before the caller can serialize its measurement.
+function strictInteriorPointWithDiagnostics(rect, context = {}) {
+  const geometryDiagnostic = {
+    ...context,
+    validationPredicate: {
+      widthLessThanOrEqual2: Number(rect?.width) <= 2,
+      heightLessThanOrEqual2: Number(rect?.height) <= 2
+    }
+  };
+  try {
+    return strictInteriorPoint(rect);
+  } catch (error) {
+    attachDiagnostics(error, 'geometryDiagnostic', geometryDiagnostic);
+    throw error;
+  }
+}
+
 // --- Cross-gesture correlation observability (TOPMENU-STABILITY-01 v2) ---
 //
 // These are pure, DOM-free mirrors of the algorithm the browser-injected
@@ -270,6 +290,7 @@ module.exports = {
   sameIdentity,
   selectPrecedingContext,
   strictInteriorPoint,
+  strictInteriorPointWithDiagnostics,
   translateClientToScreen,
   validateBrowserGesture,
   validateHit,

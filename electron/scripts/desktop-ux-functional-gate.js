@@ -14,7 +14,7 @@ const WebSocket = require('ws');
 const { parseWarmIterations } = require('./desktop-ux-gate-config');
 const { NativeInputWorker } = require('./native-input-worker');
 const { decideRitualStepAction, decideWorkareaControlAction } = require('./ritual-step-progression');
-const { assertCursorCustody, assertInputAllowed, assertSendInputComplete, attachDiagnostics, classifyBrowserGestureFailure, createGestureRequestId, reconcileTarget, strictInteriorPoint, validateBrowserGesture, validateHit } = require('./native-input-targeting');
+const { assertCursorCustody, assertInputAllowed, assertSendInputComplete, attachDiagnostics, classifyBrowserGestureFailure, createGestureRequestId, reconcileTarget, strictInteriorPoint, strictInteriorPointWithDiagnostics, validateBrowserGesture, validateHit } = require('./native-input-targeting');
 const { composeMoveDiagnostics } = require('./top-menu-move-observability');
 
 const ELECTRON_ROOT = path.resolve(__dirname, '..');
@@ -151,7 +151,7 @@ class CdpSession {
       const requestedRect = requested.getBoundingClientRect();
       const point = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
       const hit = document.elementFromPoint(point.x, point.y);
-      return {
+      const measurement = {
         rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
         requestedRect: { x: requestedRect.x, y: requestedRect.y, width: requestedRect.width, height: requestedRect.height },
         point,
@@ -164,11 +164,159 @@ class CdpSession {
         dpr: window.devicePixelRatio,
         identity: { href: location.href, timeOrigin: performance.timeOrigin }
       };
+      if (${sel === '#ns-play-btn'}) {
+        const rectSnapshot = element => {
+          const current = element.getBoundingClientRect();
+          return {
+            x: current.x, y: current.y, width: current.width, height: current.height,
+            top: current.top, right: current.right, bottom: current.bottom, left: current.left
+          };
+        };
+        const styleSnapshot = element => {
+          const style = getComputedStyle(element);
+          return {
+            display: style.display,
+            visibility: style.visibility,
+            opacity: style.opacity,
+            pointerEvents: style.pointerEvents,
+            position: style.position,
+            width: style.width,
+            height: style.height,
+            minWidth: style.minWidth,
+            minHeight: style.minHeight,
+            padding: style.padding,
+            margin: style.margin,
+            transform: style.transform,
+            overflow: style.overflow
+          };
+        };
+        const ancestors = [];
+        for (let element = requested; element; element = element.parentElement) {
+          const currentRect = rectSnapshot(element);
+          const currentStyle = getComputedStyle(element);
+          ancestors.push({
+            tagName: element.tagName,
+            id: element.id || null,
+            className: typeof element.className === 'string' ? element.className : null,
+            display: currentStyle.display,
+            visibility: currentStyle.visibility,
+            opacity: currentStyle.opacity,
+            rect: currentRect,
+            hidden: element.hasAttribute('hidden'),
+            ariaHidden: element.getAttribute('aria-hidden')
+          });
+        }
+        const stateSnapshot = typeof state === 'object' && state ? state : {};
+        const hero = document.getElementById('ns-hero-card');
+        const heroStyle = hero ? getComputedStyle(hero) : null;
+        const targetRect = rectSnapshot(requested);
+        const center = { x: targetRect.x + targetRect.width / 2, y: targetRect.y + targetRect.height / 2 };
+        const centerMeaningful = Number.isFinite(center.x) && Number.isFinite(center.y)
+          && targetRect.width > 0 && targetRect.height > 0
+          && center.x >= 0 && center.x < window.innerWidth
+          && center.y >= 0 && center.y < window.innerHeight;
+        const centerHit = centerMeaningful ? document.elementFromPoint(center.x, center.y) : null;
+        const visiblePanels = Array.from(document.querySelectorAll('.ns-main-panel')).filter(panel => getComputedStyle(panel).display !== 'none');
+        measurement.geometryDiagnostic = {
+          selector: ${JSON.stringify(sel)},
+          selectorMatchCount: document.querySelectorAll(${JSON.stringify(sel)}).length,
+          chosenElement: {
+            tagName: requested.tagName,
+            id: requested.id || null,
+            className: typeof requested.className === 'string' ? requested.className : null,
+            connected: requested.isConnected
+          },
+          rawRect: targetRect,
+          targetStyle: styleSnapshot(requested),
+          clientRectsLength: requested.getClientRects().length,
+          ancestors,
+          bodyClasses: document.body.className,
+          rendererState: {
+            route: document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || null,
+            currentPanels: visiblePanels.map(panel => panel.id),
+            running: stateSnapshot.running ?? null,
+            paused: stateSnapshot.paused ?? null,
+            dryRun: stateSnapshot.dryRun ?? null,
+            armedNightMode: stateSnapshot.armedNightMode ?? null,
+            ritualOverlayActive: document.getElementById('ritual-overlay')?.classList.contains('active') || false,
+            heroVisible: Boolean(heroStyle && heroStyle.display !== 'none' && heroStyle.visibility !== 'hidden' && Number(heroStyle.opacity) !== 0),
+            openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
+            activeModals: Array.from(document.querySelectorAll('.modal.active')).map(modal => modal.id),
+            selectedProfile: stateSnapshot.selectedProfile ?? stateSnapshot.activeProfile ?? stateSnapshot.profile ?? null,
+            selectedMode: stateSnapshot.selectedMode ?? stateSnapshot.activeMode ?? stateSnapshot.nightMode ?? null,
+            currentRun: {
+              startedAt: stateSnapshot.startedAt ?? stateSnapshot.startTime ?? null,
+              remainingSeconds: stateSnapshot.remainingSeconds ?? null,
+              action: stateSnapshot.action ?? null
+            },
+            morningProof: {
+              sectionVisible: document.getElementById('morning-proof-section') ? getComputedStyle(document.getElementById('morning-proof-section')).display !== 'none' : null,
+              proofCardVisible: document.getElementById('proof-card') ? getComputedStyle(document.getElementById('proof-card')).display !== 'none' : null
+            }
+          },
+          viewport: {
+            innerWidth: window.innerWidth,
+            innerHeight: window.innerHeight,
+            documentClientWidth: document.documentElement.clientWidth,
+            documentClientHeight: document.documentElement.clientHeight,
+            devicePixelRatio: window.devicePixelRatio,
+            outerWidth: window.outerWidth,
+            outerHeight: window.outerHeight,
+            screenX: window.screenX,
+            screenY: window.screenY,
+            screenWidth: window.screen.width,
+            screenHeight: window.screen.height,
+            availableScreenWidth: window.screen.availWidth,
+            availableScreenHeight: window.screen.availHeight
+          },
+          hitTest: centerMeaningful ? {
+            meaningful: true,
+            center,
+            tagName: centerHit?.tagName || null,
+            id: centerHit?.id || null,
+            className: typeof centerHit?.className === 'string' ? centerHit.className : null,
+            targetAccepted: Boolean(centerHit && (centerHit === requested || requested.contains(centerHit)))
+          } : {
+            meaningful: false,
+            center,
+            reason: 'target center is non-finite, outside the viewport, or has a non-positive dimension'
+          },
+          documentState: {
+            hasFocus: document.hasFocus(),
+            visibilityState: document.visibilityState,
+            readyState: document.readyState
+          }
+        };
+      }
+      return measurement;
     })()`);
     if (!measured) return false;
     measured.identity.targetId = this.targetId;
     measured.identity.sessionId = this.sessionId;
-    measured.point = strictInteriorPoint(measured.rect);
+    if (measured.geometryDiagnostic) {
+      try {
+        const currentWindow = await this.send('Browser.getWindowForTarget', { targetId: this.targetId });
+        measured.geometryDiagnostic.electronWindow = {
+          source: 'cdp:Browser.getWindowForTarget',
+          windowId: currentWindow.windowId,
+          bounds: currentWindow.bounds || null,
+          contentBounds: null,
+          clientBounds: null,
+          maximized: currentWindow.bounds?.windowState === 'maximized',
+          fullscreen: currentWindow.bounds?.windowState === 'fullscreen',
+          focused: measured.geometryDiagnostic.documentState.hasFocus
+        };
+      } catch (windowError) {
+        measured.geometryDiagnostic.electronWindow = {
+          source: 'cdp:Browser.getWindowForTarget',
+          unavailable: true,
+          error: windowError.message
+        };
+      }
+    }
+    measured.point = measured.geometryDiagnostic
+      ? strictInteriorPointWithDiagnostics(measured.rect, measured.geometryDiagnostic)
+      : strictInteriorPoint(measured.rect);
     validateHit(measured);
     return measured;
   }
@@ -181,8 +329,31 @@ class CdpSession {
     const timing = { gestureRequestCreatedUtc: new Date().toISOString() };
     const measured = await this.condition(`Boolean(document.querySelector(${JSON.stringify(sel)}))`, 3000, `native target ${sel}`);
     if (!measured) throw new Error(`native target ${sel} was not found`);
-    const initial = await this.measureNativeTarget(sel);
-    const current = await this.measureNativeTarget(sel);
+    let initial;
+    let current;
+    try {
+      initial = await this.measureNativeTarget(sel);
+      current = await this.measureNativeTarget(sel);
+    } catch (measurementError) {
+      if (measurementError.geometryDiagnostic) {
+        try {
+          const screenshot = await this.screenshot('independent-warm-start-geometry-failure.png');
+          report.screenshots.push({ phase: 'geometry-failure', ...screenshot });
+          measurementError.geometryDiagnostic.screenshot = {
+            captured: true,
+            name: screenshot.name,
+            size: screenshot.size,
+            sha256: screenshot.sha256
+          };
+        } catch (screenshotError) {
+          measurementError.geometryDiagnostic.screenshot = {
+            captured: false,
+            error: screenshotError.message
+          };
+        }
+      }
+      throw measurementError;
+    }
     timing.targetMeasuredUtc = new Date().toISOString();
     const prepared = reconcileTarget(initial, current);
     assertInputAllowed({ clickIssued: false, target: prepared.target });
@@ -1853,10 +2024,11 @@ main().catch(async err => {
   // browser-gesture diagnostics (down/up/click, event counts, timing marks;
   // see TOPMENU-STABILITY-01) in the persisted report artifact instead of
   // relying solely on the console.error dump, which depth-truncates nested
-  // objects and is lost once the process exits. The two diagnostic keys are
-  // independent (attachDiagnostics never overwrites) so either, both, or
-  // neither may be present depending on which check failed.
-  report.failure = { message: err.message, stack: err.stack, gestureRequestId: err.gestureRequestId || null, nativeInput: err.nativeInput || null, browserGesture: err.browserGesture || null };
+  // objects and is lost once the process exits. Native-input, browser-gesture,
+  // and pre-validation geometry diagnostics are independent
+  // (attachDiagnostics never overwrites), so each is present only when its
+  // corresponding stage supplied evidence.
+  report.failure = { message: err.message, stack: err.stack, gestureRequestId: err.gestureRequestId || null, nativeInput: err.nativeInput || null, browserGesture: err.browserGesture || null, geometryDiagnostic: err.geometryDiagnostic || null };
   report.endTime = new Date().toISOString();
   try { await writeArtifacts(); } catch (artifactError) {
     console.error('Failed to write failure artifacts:', artifactError);

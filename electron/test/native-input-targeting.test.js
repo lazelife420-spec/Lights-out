@@ -18,6 +18,7 @@ const {
   reconcileTarget,
   selectPrecedingContext,
   strictInteriorPoint,
+  strictInteriorPointWithDiagnostics,
   translateClientToScreen,
   validateBrowserGesture,
   validateHit
@@ -371,6 +372,78 @@ test('nested browserGesture/timing objects survive JSON serialization at full de
   assert.equal(roundTripped.down, null);
   assert.equal(roundTripped.eventCounts.totalCapturedThisSession, 214);
   assert.equal(Object.keys(roundTripped.timing).length, 8);
+});
+
+const geometryContext = {
+  selector: '#ns-play-btn',
+  selectorMatchCount: 1,
+  chosenElement: { id: 'ns-play-btn', connected: true },
+  rawRect: { x: 120, y: 220, width: 0, height: 37.6, top: 220, right: 120, bottom: 257.6, left: 120 },
+  targetStyle: { display: 'inline-flex', visibility: 'visible', opacity: '1' },
+  ancestors: [
+    { id: 'ns-play-btn', display: 'inline-flex', rect: { width: 0, height: 37.6 } },
+    { id: 'ns-hero-card', display: 'block', rect: { width: 900, height: 180 } }
+  ],
+  rendererState: { route: 'lib', running: false, paused: false, heroVisible: true },
+  viewport: { innerWidth: 1280, innerHeight: 722, devicePixelRatio: 1.25 }
+};
+
+test('invalid raw geometry is retained before the original validateRect error throws', () => {
+  assert.throws(
+    () => strictInteriorPointWithDiagnostics({ x: 120, y: 220, width: 0, height: 37.6 }, geometryContext),
+    error => error.message === 'target rect is too small for strict-interior input'
+      && error.geometryDiagnostic.rawRect.width === 0
+      && error.geometryDiagnostic.rawRect.height === 37.6
+  );
+});
+
+test('width and height validation flags are serialized independently', () => {
+  for (const [rect, expected] of [
+    [{ x: 0, y: 0, width: 0, height: 37.6 }, [true, false]],
+    [{ x: 0, y: 0, width: 234, height: 2 }, [false, true]],
+    [{ x: 0, y: 0, width: 1, height: 1 }, [true, true]]
+  ]) {
+    assert.throws(() => strictInteriorPointWithDiagnostics(rect, geometryContext), error => {
+      assert.deepEqual(
+        [error.geometryDiagnostic.validationPredicate.widthLessThanOrEqual2, error.geometryDiagnostic.validationPredicate.heightLessThanOrEqual2],
+        expected
+      );
+      return true;
+    });
+  }
+});
+
+test('renderer and viewport diagnostic fields survive the failure path', () => {
+  assert.throws(() => strictInteriorPointWithDiagnostics({ x: 0, y: 0, width: 0, height: 37.6 }, geometryContext), error => {
+    const serialized = JSON.parse(JSON.stringify(error.geometryDiagnostic));
+    assert.deepEqual(serialized.rendererState, geometryContext.rendererState);
+    assert.deepEqual(serialized.viewport, geometryContext.viewport);
+    return true;
+  });
+});
+
+test('ancestor visibility diagnostics survive the failure path', () => {
+  assert.throws(() => strictInteriorPointWithDiagnostics({ x: 0, y: 0, width: 234, height: 0 }, geometryContext), error => {
+    assert.deepEqual(error.geometryDiagnostic.ancestors, geometryContext.ancestors);
+    return true;
+  });
+});
+
+test('diagnostic instrumentation preserves the original validateRect error unchanged', () => {
+  let original;
+  let observed;
+  try { strictInteriorPoint({ x: 0, y: 0, width: 0, height: 37.6 }); } catch (error) { original = error; }
+  try { strictInteriorPointWithDiagnostics({ x: 0, y: 0, width: 0, height: 37.6 }, geometryContext); } catch (error) { observed = error; }
+  assert.ok(original);
+  assert.ok(observed);
+  assert.equal(observed.message, original.message);
+  assert.equal(observed.constructor, original.constructor);
+});
+
+test('diagnostic instrumentation cannot turn invalid geometry into a pass', () => {
+  assert.throws(() => strictInteriorPointWithDiagnostics({ x: 0, y: 0, width: 2, height: 37.6 }, geometryContext));
+  assert.throws(() => strictInteriorPointWithDiagnostics({ x: 0, y: 0, width: 234, height: 2 }, geometryContext));
+  assert.deepEqual(strictInteriorPointWithDiagnostics({ x: 0, y: 0, width: 234, height: 37.6 }, geometryContext), { x: 117, y: 18.8 });
 });
 
 test('successful activation: existing report format remains usable alongside the new fields (H14)', () => {
