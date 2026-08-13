@@ -10,9 +10,9 @@ const net = require('net');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
-const readline = require('readline');
 const WebSocket = require('ws');
 const { parseWarmIterations } = require('./desktop-ux-gate-config');
+const { NativeInputWorker } = require('./native-input-worker');
 const { decideRitualStepAction, decideWorkareaControlAction } = require('./ritual-step-progression');
 const { assertCursorCustody, assertInputAllowed, assertSendInputComplete, attachDiagnostics, classifyBrowserGestureFailure, createGestureRequestId, reconcileTarget, strictInteriorPoint, validateBrowserGesture, validateHit } = require('./native-input-targeting');
 
@@ -28,70 +28,6 @@ fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
 
 const WAIT = ms => new Promise(r => setTimeout(r, ms));
 const runtimeSessions = [];
-
-class NativeInputWorker {
-  constructor(scriptPath) {
-    this.scriptPath = scriptPath;
-    this.process = null;
-    this.pending = new Map();
-    this.requestId = 0;
-    this.readyPromise = null;
-  }
-  async start() {
-    if (this.readyPromise) return this.readyPromise;
-    this.readyPromise = new Promise((resolve, reject) => {
-      const child = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', this.scriptPath], {
-        windowsHide: true,
-        stdio: ['pipe', 'pipe', 'pipe']
-      });
-      this.process = child;
-      const lines = readline.createInterface({ input: child.stdout });
-      lines.on('line', line => {
-        let message;
-        try { message = JSON.parse(line); } catch (error) { reject(new Error(`native worker emitted invalid JSON: ${error.message}`)); return; }
-        if (message.type === 'ready') { resolve(message); return; }
-        const pending = this.pending.get(message.requestId);
-        if (!pending) return;
-        this.pending.delete(message.requestId);
-        if (message.ok) pending.resolve(message.value);
-        else {
-          const error = new Error(message.error || 'native worker request failed');
-          error.nativeInput = message.errorData || null;
-          pending.reject(error);
-        }
-      });
-      let stderr = '';
-      child.stderr.on('data', data => { stderr += data; });
-      child.once('error', reject);
-      child.once('exit', code => {
-        if (code !== 0 && this.pending.size) {
-          const error = new Error(`native worker exited ${code}: ${stderr}`);
-          for (const pending of this.pending.values()) pending.reject(error);
-          this.pending.clear();
-        }
-      });
-    });
-    return Promise.race([
-      this.readyPromise,
-      WAIT(10000).then(() => { throw new Error('native input worker ready timeout'); })
-    ]);
-  }
-  async request(payload) {
-    await this.start();
-    if (!this.process || this.process.killed) throw new Error('native input worker is unavailable');
-    const requestId = ++this.requestId;
-    const response = new Promise((resolve, reject) => this.pending.set(requestId, { resolve, reject }));
-    this.process.stdin.write(`${JSON.stringify({ ...payload, requestId })}\n`);
-    return response;
-  }
-  async stop() {
-    if (!this.process || this.process.killed) return;
-    const child = this.process;
-    try { child.stdin.write(`${JSON.stringify({ type: 'stop', requestId: ++this.requestId })}\n`); } catch {}
-    await Promise.race([new Promise(resolve => child.once('exit', resolve)), WAIT(2000)]);
-    if (child.exitCode === null) child.kill();
-  }
-}
 
 const nativeInputWorker = new NativeInputWorker(path.join(__dirname, 'native-input-worker.ps1'));
 
