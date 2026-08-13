@@ -8,10 +8,9 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { requirePackagedArtifact } = require('./packaged-artifact-resolver');
 
-const root = path.resolve(__dirname, '..');
-const distNative = path.join(root, '..', 'dist-native', 'win-unpacked');
-const executable = path.join(distNative, 'Lights Out.exe');
+const { executable, unpackedDir: distNative } = requirePackagedArtifact();
 const expected = {
   CompanyName: 'The Proof Foundry',
   FileDescription: 'Lights Out',
