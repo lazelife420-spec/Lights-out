@@ -12,6 +12,7 @@ const path = require('path');
 const crypto = require('crypto');
 const readline = require('readline');
 const WebSocket = require('ws');
+const { parseWarmIterations } = require('./desktop-ux-gate-config');
 const { decideRitualStepAction, decideWorkareaControlAction } = require('./ritual-step-progression');
 const { assertCursorCustody, assertInputAllowed, assertSendInputComplete, attachDiagnostics, classifyBrowserGestureFailure, createGestureRequestId, reconcileTarget, strictInteriorPoint, validateBrowserGesture, validateHit } = require('./native-input-targeting');
 
@@ -1713,7 +1714,18 @@ async function runWarmMatrix(iterations) {
       const realPowerActions = await getRealPowerActions(s);
       requireGate(realPowerActions.length === 0, `warm iteration ${i} left a real power action recorded`, realPowerActions);
     }
-    report.phases[phase] = { status: 'passed', results: allResults, processReused: true, restarts: 0 };
+    requireGate(allResults.length === iterations, 'warm matrix completed a different iteration count than requested', {
+      requestedIterations: iterations,
+      completedIterations: allResults.length
+    });
+    report.phases[phase] = {
+      status: 'passed',
+      requestedIterations: iterations,
+      completedIterations: allResults.length,
+      results: allResults,
+      processReused: true,
+      restarts: 0
+    };
   } finally {
     await stopApp(child);
   }
@@ -1763,7 +1775,8 @@ async function main() {
   console.log('Mode:', mode);
 
   if (mode === 'warm') {
-    const iterations = Number(process.env.LIGHTS_OUT_GATE_WARM_ITERATIONS || 5);
+    const iterations = parseWarmIterations(process.env.LIGHTS_OUT_GATE_WARM_ITERATIONS);
+    report.warmIterationsRequested = iterations;
     await runWarmMatrix(iterations);
   } else {
     await runStartupGate();
