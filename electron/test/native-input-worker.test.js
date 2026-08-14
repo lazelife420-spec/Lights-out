@@ -144,3 +144,63 @@ test('stop clears pending request timers and leaves the worker terminated', asyn
   assert.equal(harness.worker.pending.size, 0);
   assert.equal(harness.worker.state, 'terminated');
 });
+
+// PR43 cursor-custody environment instrumentation (native-input-worker.ps1)
+// narrow observability tests. The class under test here never inspects or
+// filters payload/errorData contents -- it is a transparent JSON relay -- so
+// these tests pin that transparency explicitly for the new fields
+// (selector, nativeEnvironment) rather than relying on it only being implied
+// by the generic tests above.
+
+test('arbitrary request payload fields (e.g. selector) are transmitted verbatim, unmodified', async () => {
+  const harness = createHarness();
+  await startReady(harness);
+  const response = harness.worker.request({ kind: 'pointer', action: 'click', selector: '#ns-play-btn', targetRect: { x: 1, y: 2, width: 3, height: 4 } });
+  const request = await waitForRequest(harness.child);
+  assert.equal(request.selector, '#ns-play-btn');
+  assert.deepEqual(request.targetRect, { x: 1, y: 2, width: 3, height: 4 });
+  harness.child.send({ type: 'result', requestId: request.requestId, ok: true, value: { accepted: true } });
+  await response;
+  await harness.worker.stop();
+});
+
+test('a failed request issues exactly one stdin write for that request -- no automatic retry', async () => {
+  const harness = createHarness();
+  await startReady(harness);
+  const response = harness.worker.request({ kind: 'pointer', action: 'click' });
+  const request = await waitForRequest(harness.child);
+  const writesBeforeResponse = harness.child.writes.length;
+  harness.child.send({ type: 'result', requestId: request.requestId, ok: false, error: 'actual cursor exceeded the one-pixel readback bound of the intended physical point', errorData: { nativeEnvironment: { selector: '#ns-play-btn' } } });
+  await assert.rejects(response, /one-pixel readback bound/);
+  await new Promise(resolve => setImmediate(resolve));
+  // No second request for the same failed gesture: exactly one write total.
+  assert.equal(harness.child.writes.length, writesBeforeResponse);
+  await harness.worker.stop();
+});
+
+test('nested errorData (nativeEnvironment, selector) survives onto the rejected Error unmodified and at full depth', async () => {
+  const harness = createHarness();
+  await startReady(harness);
+  const response = harness.worker.request({ kind: 'pointer', action: 'click' });
+  const request = await waitForRequest(harness.child);
+  const errorData = {
+    selector: '#ns-play-btn',
+    dx: -220,
+    dy: -333,
+    nativeEnvironment: {
+      selector: '#ns-play-btn',
+      cursorBeforeSetCursorPos: { x: 1377, y: 385 },
+      setCursorPos: { requested: { x: 1597, y: 718 }, win32Return: true, win32LastErrorDiagnosticOnly: 203 },
+      clipCursorBeforeSetCursorPos: { available: true, left: 0, top: 0, right: 2752, bottom: 1152 },
+      virtualScreenMetrics: { available: true, virtualWidth: 2752, virtualHeight: 1152 },
+      dpiAwareness: { available: true, rawValue: 0, label: 'unaware' }
+    }
+  };
+  harness.child.send({ type: 'result', requestId: request.requestId, ok: false, error: 'actual cursor exceeded the one-pixel readback bound of the intended physical point', errorData });
+  await assert.rejects(response, error => {
+    assert.deepEqual(error.nativeInput, errorData);
+    assert.equal(error.nativeInput.nativeEnvironment.dpiAwareness.label, 'unaware');
+    return true;
+  });
+  await harness.worker.stop();
+});

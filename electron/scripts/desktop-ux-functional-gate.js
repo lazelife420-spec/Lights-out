@@ -374,7 +374,12 @@ class CdpSession {
         timing.browserTraceArmedUtc = new Date().toISOString();
       }
       timing.nativeRequestStartUtc = new Date().toISOString();
-      native = await invokeNativeInput({ kind: 'pointer', action: 'click', executable: EXE_PATH, clientX: target.point.x, clientY: target.point.y, targetRect: target.rect, innerWidth: target.innerWidth, innerHeight: target.innerHeight });
+      // selector is passed through only for diagnostic echo (PR43
+      // cursor-custody environment instrumentation) -- native-input-worker.ps1
+      // never reads it for any targeting/custody decision, it only carries it
+      // into nativeEnvironment so a custody failure's report.json can identify
+      // which control was being activated.
+      native = await invokeNativeInput({ kind: 'pointer', action: 'click', executable: EXE_PATH, clientX: target.point.x, clientY: target.point.y, targetRect: target.rect, innerWidth: target.innerWidth, innerHeight: target.innerHeight, selector: sel });
       timing.nativeRequestReturnedUtc = new Date().toISOString();
       assertCursorCustody(native.screenPoint, native.actualCursor, native.translatedTarget);
       assertSendInputComplete(native.gesture);
@@ -382,6 +387,13 @@ class CdpSession {
       attachDiagnostics(nativeError, 'gestureRequestId', gestureRequestId);
       attachDiagnostics(nativeError, 'timing', timing);
       attachDiagnostics(nativeError, 'gestureBeginInfo', gestureBeginInfo);
+      // Diagnostic-only (PR43 cursor-custody environment instrumentation):
+      // the target this click was aiming at previously did not survive onto a
+      // native-input failure at all (report.json's failure object had no
+      // selector/target field). This does not change what counts as
+      // PASS/FAIL -- it only preserves evidence already computed above.
+      attachDiagnostics(nativeError, 'selector', sel);
+      attachDiagnostics(nativeError, 'targetSnapshot', { rect: target.rect, point: target.point, innerWidth: target.innerWidth, innerHeight: target.innerHeight });
       throw nativeError;
     }
     await WAIT(120);
@@ -2028,7 +2040,12 @@ main().catch(async err => {
   // and pre-validation geometry diagnostics are independent
   // (attachDiagnostics never overwrites), so each is present only when its
   // corresponding stage supplied evidence.
-  report.failure = { message: err.message, stack: err.stack, gestureRequestId: err.gestureRequestId || null, nativeInput: err.nativeInput || null, browserGesture: err.browserGesture || null, geometryDiagnostic: err.geometryDiagnostic || null };
+  // selector/targetSnapshot are diagnostic-only additions (PR43 cursor-custody
+  // environment instrumentation): which control a failed native click was
+  // aiming at. err.nativeInput.nativeEnvironment (set by native-input-worker.ps1
+  // when the failure occurred inside pointer handling) carries the rest of the
+  // new environment evidence and needed no new top-level field here.
+  report.failure = { message: err.message, stack: err.stack, gestureRequestId: err.gestureRequestId || null, selector: err.selector || null, targetSnapshot: err.targetSnapshot || null, nativeInput: err.nativeInput || null, browserGesture: err.browserGesture || null, geometryDiagnostic: err.geometryDiagnostic || null };
   report.endTime = new Date().toISOString();
   try { await writeArtifacts(); } catch (artifactError) {
     console.error('Failed to write failure artifacts:', artifactError);
