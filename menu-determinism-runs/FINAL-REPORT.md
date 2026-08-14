@@ -257,3 +257,130 @@ and app-owned firewall-rule leaks were all zero.
 The original geometry failure was not reproduced. It remains acknowledged and
 formally unresolved; the diagnostic pass supplies no retroactive acceptance
 credit.
+
+## Independent review — second attempt, and the cursor-settlement investigation
+
+### Final independent review attempt 1
+
+- COLD-01: **PASS**
+- COLD-02: **PASS**
+- COLD-03: **ABORT** — external foreground custody loss to Antigravity IDE.
+  Expected foreground: Lights Out. Actual foreground at the failed request:
+  Antigravity IDE. No gesture was issued, no `SendInput` occurred, cursor did
+  not move, retries were zero. This was the safety guard behaving correctly,
+  not a product, native-input, or targeting defect.
+- COLD-04 through COLD-10: not started.
+- WARM: not started.
+
+Attempt 1 was preserved as-is and not resumed.
+
+### Final independent review attempt 2
+
+- COLD-01: **FAIL**
+  - requested: `(1597,718)`
+  - immediate readback: `(1377,385)`
+  - delta: `(-220,-333)`
+  - the readback exactly equaled the previously-observed cursor position
+    (an apparent complete non-move)
+  - `actualStrictInterior`: `false`
+  - foreground custody was not implicated: `foregroundChronology` was empty
+    for this request by instrumentation design (chronology sampling was, at
+    the time, wired only for pointer `move` requests, not `click`), not
+    because no foreground evidence existed
+  - specific historical cause: **UNRESOLVED**
+- COLD-02 through COLD-10: not started.
+- WARM: not started.
+
+Attempt 2 was stopped at COLD-01 per the standing failure policy: no retry,
+no code change, evidence preserved for adjudication.
+
+### Cursor-custody environment characterization
+
+Read-only adjudication of the COLD-01 failure, using diagnostic-only
+instrumentation added to `native-input-worker.ps1`/`native-input-targeting.js`
+(cursor-before-`SetCursorPos`, `SetCursorPos` `GetLastWin32Error`,
+`GetClipCursor` before/after, virtual-screen and per-point monitor
+geometry/DPI, worker process DPI-awareness, session identity, and broadened
+foreground-chronology sampling to cover `click` requests) established:
+
+- The dx/dy sign convention (`actual − intended`) was confirmed correct from
+  source; not a diagnostic/logging defect.
+- A subsequent instrumented COLD run hit a *different* cursor-custody
+  rejection at a different control (`#modal-close`): requested `(2275,327)`,
+  readback `(2277,329)`, delta `(+2,+2)`, `actualStrictInterior: true` (the
+  miss stayed inside the real 28×28px button). Foreground, `ClipCursor`,
+  monitor, and DPI evidence were all clean for this occurrence.
+- An **external, out-of-repo, non-Electron Win32 probe**
+  (`cursor-probe.ps1`, not part of this repository) characterized raw
+  `SetCursorPos` → `GetCursorPos` behavior on this exact desktop/session
+  directly, independent of Electron or the native worker:
+  - 40 measured target moves: **39 exact, 1 large transitional readback**
+    (immediate sample landed at essentially the pre-move position, then
+    visibly migrated toward and past the requested target over the
+    following ~47ms of sampling), 0 stable ±1/±2-pixel results.
+  - A corroborating staging-move anomaly showed the same in-flight-read
+    shape on a separate occasion.
+  - This demonstrates that an immediate `GetCursorPos` right after a
+    successful `SetCursorPos` can, on this exact machine, occasionally
+    return a stale/in-flight position that only converges over the
+    following tens of milliseconds — not that Windows legitimately settles
+    a permanent multi-pixel displacement away from the requested point.
+  - This does **not** retroactively prove what caused the specific COLD-01
+    `-220,-333` event. It establishes that a demonstrated local mechanism
+    exists that is consistent with that class of event. COLD-01's specific
+    historical cause remains **UNRESOLVED**.
+
+### Settlement-gate harness correction
+
+- **Initial implementation**: `1d84abb` (cursor-environment observability,
+  cherry-picked from diagnostic commit `89a3b4c40a5ce2e06e8d4c5b10ebf0d6efa03750`),
+  `0d83abd` (bounded cursor-custody settlement gate replacing the single
+  immediate `GetCursorPos` readback with a bounded poll for a stable run of
+  samples, cherry-picked from diagnostic commit `b2c2de7c8ea638ba769d25addb763a1791c1908f`).
+- **Live proof of `0d83abd` found a real defect**: the settlement loop
+  qualified a sample by its step distance from the *previous* sample only,
+  which permitted cumulative drift away from the original `SetCursorPos`
+  target to accumulate and still be accepted — silently disagreeing with the
+  pre-existing, unchanged, redundant JS-side `assertCursorCustody` check,
+  which has always measured distance from the original requested point.
+  Classified **SG1 — SETTLEMENT-GATE ACCEPTANCE CONTRACT DEFECT**. Not a
+  reproduction of COLD-01, not foreground theft, not a production defect.
+- **Correction**: `89ede81` (cherry-picked from diagnostic commit
+  `05840fb418136bf81646ff113f4f078715670e79`). Every sample is now required
+  to independently satisfy the exact same absolute
+  `abs(sample − requestedPoint) ≤ 1px` contract `assertCursorCustody`
+  enforces (never distance from the previous sample alone), on top of the
+  existing strict-interior/foreground/consecutive-stability requirements. A
+  structural consistency test (`evaluateCursorSettlement` acceptance always
+  also passes `assertCursorCustody` unchanged) guards against the two
+  disagreeing again. `assertCursorCustody` itself was not modified. Tolerance
+  was not widened at any point (`±1px` unchanged throughout).
+
+Final corrected contract: exactly one `SetCursorPos` call; a bounded
+(250ms) poll requiring 3 consecutive samples each independently within
+±1px of the original requested point, strict-interior of the target, with
+foreground custody intact; an immediate final pre-`SendInput` re-check
+against the same criteria; fail-closed on timeout or foreground loss; no
+position retry, ever.
+
+### Corrected live diagnostic (development evidence, not independent acceptance)
+
+One controlled COLD run of the desktop UX functional gate against the
+corrected settlement gate: **PASS** — all 6 phases (`startup`, `top-menu`,
+`shared-start`, `use-tonight`, `settings`, `active-run`) completed.
+
+- native inputs: 80
+- settlement-chronology-tracked requests: 67
+- immediate settlements: 67/67
+- delayed settlements: 0
+- streak resets: 0
+- transient (>±1 from requested point) samples: 0
+- maximum observed settlement duration: ~55ms (bounded at 250ms)
+- position retries: 0
+- real power actions: 0
+- process/firewall leaks after completion: 0
+- worktree: clean
+
+This diagnostic run is development/regression evidence for the settlement
+correction. It is **not** an independent-review acceptance run and carries
+no acceptance credit toward the 15-case COLD/WARM matrix.
