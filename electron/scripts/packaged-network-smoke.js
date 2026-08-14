@@ -10,10 +10,10 @@ const path = require('node:path');
 const { promisify } = require('node:util');
 const { discoverAdapterRoles, readWindowsAdapterInventory } = require('./adapterRoles');
 const companionNetwork = require('../companionNetwork');
+const { requirePackagedArtifact } = require('./packaged-artifact-resolver');
 
 const execFileAsync = promisify(execFile);
-const root = path.resolve(__dirname, '..', '..');
-const executable = path.join(root, 'dist', 'win-unpacked', 'Lights Out.exe');
+const { executable } = requirePackagedArtifact();
 
 function freePort() {
   return new Promise((resolve, reject) => {

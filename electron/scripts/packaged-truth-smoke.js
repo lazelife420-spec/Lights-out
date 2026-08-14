@@ -22,12 +22,11 @@ const {
   sanitizeValue,
   verifyOwnedCleanup
 } = require('./proof-lifecycle');
+const { requirePackagedArtifact } = require('./packaged-artifact-resolver');
 
 const execFileAsync = promisify(execFile);
 
-const root = path.resolve(__dirname, '..', '..');
-const executable = path.join(root, 'dist', 'win-unpacked', 'Lights Out.exe');
-const proofDir = path.join(root, 'dist', 'review-proof');
+const { executable, proofDir } = requirePackagedArtifact();
 const lifecycleStartedAt = Date.now();
 const lifecycle = [];
 

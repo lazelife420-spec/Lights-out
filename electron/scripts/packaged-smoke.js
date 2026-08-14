@@ -2,6 +2,7 @@ const { spawnSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { requirePackagedArtifact } = require('./packaged-artifact-resolver');
 
 /**
  * Packaged Runtime Smoke Test (Enhanced)
@@ -19,10 +20,13 @@ const os = require('os');
  */
 
 const root = path.join(__dirname, '..');
-const distDir = process.env.LIGHTS_OUT_DIST_DIR
-  ? path.resolve(root, process.env.LIGHTS_OUT_DIST_DIR)
-  : path.join(root, '..', 'dist');
-const exePath = path.join(distDir, 'LightsOut.exe');
+let exePath;
+try {
+  ({ executable: exePath } = requirePackagedArtifact());
+} catch (error) {
+  console.error(`  ERROR: ${error.message}`);
+  process.exit(1);
+}
 
 let passed = 0;
 let failed = 0;
@@ -73,12 +77,6 @@ function waitForNoLightsOutProcesses(timeoutMs = 10000) {
 }
 
 console.log('Starting Enhanced Packaged Runtime Smoke Test...\n');
-
-if (!fs.existsSync(exePath)) {
-  console.error(`  ERROR: Executable not found at ${exePath}`);
-  console.error('  Please run "npm run build" first.');
-  process.exit(1);
-}
 
 // 1. Verify file properties
 check('package: executable exists and is reasonably sized', () => {

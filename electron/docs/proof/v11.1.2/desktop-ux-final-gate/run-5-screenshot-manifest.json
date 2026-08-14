@@ -1,0 +1,127 @@
+[
+  {
+    "name": "topmenu-power-mouse-open.png",
+    "size": 332077,
+    "sha256": "2d1b73732fc63b09c675342eb4d70c04057586d84831135eb46a5ef3c6b0e845"
+  },
+  {
+    "name": "topmenu-settings-mouse-open.png",
+    "size": 334293,
+    "sha256": "356972686d44a39b2d9f91ffd3f24045f0e2bff611dee4ec714d3fc5ef39dc8d"
+  },
+  {
+    "name": "topmenu-help-mouse-open.png",
+    "size": 338127,
+    "sha256": "7f73c1c374b44f8645aa8aa1c306184d3715c299027693474f6b24d337ab0142"
+  },
+  {
+    "name": "topmenu-settings-panel.png",
+    "size": 63108,
+    "sha256": "cd92ee6f8be32acd145c2169f05b5b5e7cf771ef1ca9e9a712b2724d5ea659d9"
+  },
+  {
+    "name": "topmenu-power-keyboard-open.png",
+    "size": 335367,
+    "sha256": "f4dfe0d434a65b655dcb2811a9b51aee693cbd99ae5e794eca2b34ea4b011dd1"
+  },
+  {
+    "name": "topmenu-settings-keyboard-open.png",
+    "size": 73576,
+    "sha256": "fca10ec063d902e6394443c1a956544c3294e759948389e5c845130c859e1d3d"
+  },
+  {
+    "name": "active-running-hero.png",
+    "size": 216139,
+    "sha256": "261f7da6d944e5624cc32f9e17e0be16938961cb43b3f2f71fc6d4950b16d366"
+  },
+  {
+    "name": "morning-proof-visible.png",
+    "size": 333074,
+    "sha256": "e46f9c709b715f6097e82a08c0eee2d1d9558044f3927713c30bb3d5f124f738"
+  },
+  {
+    "name": "use-tonight-movie-wind-down-projection.png",
+    "size": 333346,
+    "sha256": "70f7e38d617388663b71930d466672e9c68bc422de915b2736c3d8d99d48ce8c"
+  },
+  {
+    "name": "use-tonight-movie-wind-down-running.png",
+    "size": 213851,
+    "sha256": "0e7c543949ae4758c15f9cd743c70a3cda9ec0a8d662176d36ff1176d77f7fa6"
+  },
+  {
+    "name": "use-tonight-movie-wind-down-cancelled.png",
+    "size": 340085,
+    "sha256": "cb74b6fc6313dc05bd7b176468aaee61931e5e1dc38a33d84f46ec7cef74c8db"
+  },
+  {
+    "name": "use-tonight-movie-wind-down-restore.png",
+    "size": 318317,
+    "sha256": "35e8edccbe52678190159bcba3e71831f8169f103d7af3cb7faeb9e4fd00a1eb"
+  },
+  {
+    "name": "use-tonight-full-shutdown-projection.png",
+    "size": 328546,
+    "sha256": "18673932b4fd13ed4453e569da5c2964e873ed0b3b614765d46109b48b0e27fe"
+  },
+  {
+    "name": "use-tonight-full-shutdown-running.png",
+    "size": 214935,
+    "sha256": "0fbe096ed2577a297cb6fc8db5e9fe886e6162d6a7d71b6df4fc0e904666be11"
+  },
+  {
+    "name": "use-tonight-full-shutdown-cancelled.png",
+    "size": 338873,
+    "sha256": "f306db0f293f685e5ed02a35f7178d556978c04e9544f7f4e0a8734434879b94"
+  },
+  {
+    "name": "use-tonight-full-shutdown-restore.png",
+    "size": 316049,
+    "sha256": "afac4ad2af4b2fd2e8e012a50a9d6bc1dd5e2f8584cce126369c67bc915a482e"
+  },
+  {
+    "name": "settings-1280x720.png",
+    "size": 63108,
+    "sha256": "cd92ee6f8be32acd145c2169f05b5b5e7cf771ef1ca9e9a712b2724d5ea659d9"
+  },
+  {
+    "name": "settings-1920x1080.png",
+    "size": 92329,
+    "sha256": "9b03216a6621c33492ca5380164b205507543ae93df31d5e1e841a357d16afa2"
+  },
+  {
+    "name": "settings-ultrawide.png",
+    "size": 123808,
+    "sha256": "c669b24b773334e0c0b35b9f79ce54076519f126a9cbc2c4f47ba16206e4e3cd"
+  },
+  {
+    "name": "active-run-hd720.png",
+    "size": 225072,
+    "sha256": "dbfaf680d076d9091b136e375bbdea15f9e6e739ddf1cabf530396888d84ed45"
+  },
+  {
+    "name": "active-run-hd1080.png",
+    "size": 263412,
+    "sha256": "cebfa33e978339bfbf181a6809be28ce83656fb99616c53bb8158633f716f8d4"
+  },
+  {
+    "name": "active-run-workarea.png",
+    "size": 312538,
+    "sha256": "2fb05d43ecac5e6864deb42454cf2c457625d76aa2b42d99d8e461a61f73a92a"
+  },
+  {
+    "name": "active-paused-1280x720.png",
+    "size": 226537,
+    "sha256": "48a6f5359853055c08289fc3d3990a62364112736262cc7207e4b6e450010b6d"
+  },
+  {
+    "name": "active-resumed-1280x720.png",
+    "size": 229695,
+    "sha256": "d62d9a9174f5c0f51b98db285d6265b6c1b168f0617331ee8f060b2fa5abd17f"
+  },
+  {
+    "name": "active-cancelled-1280x720.png",
+    "size": 332596,
+    "sha256": "0aa8279b77d6d21f31b49968aa7875c766eae4dcba7c6dce9645022b7fbb08c6"
+  }
+]

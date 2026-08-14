@@ -1,0 +1,15 @@
+{
+  "sourceSha": "201190ff8d9fc28d1da67e40aa21846c7f65ddce",
+  "harness": "desktop-ux-functional-gate.js",
+  "retainedRunIds": [
+    "HS9uFx",
+    "j93njI",
+    "wsmq5H",
+    "V1qi90",
+    "m127Ef"
+  ],
+  "screenshots": "run-5",
+  "reports": 5,
+  "profilesRetained": false,
+  "generatedAtUtc": "2026-07-24T18:54:13.9306719Z"
+}

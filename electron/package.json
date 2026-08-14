@@ -5,20 +5,30 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder",
-    "dist": "electron-builder --win",
+    "build": "powershell -ExecutionPolicy Bypass -File scripts/package-native-windows.ps1",
+    "dist": "powershell -ExecutionPolicy Bypass -File scripts/package-native-windows.ps1",
     "icons": "node scripts/make-icons.js",
     "lint": "eslint .",
     "smoke": "node scripts/smoke.js",
     "smoke:companion": "node scripts/companion-smoke.js",
     "smoke:packaged": "node scripts/packaged-smoke.js && node scripts/packaged-truth-smoke.js",
+    "smoke:native": "node scripts/native-packaged-truth-smoke.js",
     "smoke:phone": "node scripts/packaged-phone-smoke.js",
+    "test:uninstall-matrix": "powershell -ExecutionPolicy Bypass -File scripts/uninstall-matrix.ps1",
     "smoke:network": "node scripts/packaged-network-smoke.js",
     "test:geometry": "electron scripts/window-geometry-runtime.js",
     "test:night-modes-runtime": "node scripts/night-modes-electron-proof.js",
     "test:companion-v2-runtime": "node scripts/companion-v2-electron-proof.js",
     "test:receipt-recovery-runtime": "node scripts/receipt-recovery-electron-proof.js",
+    "electron:provision": "install-electron --no",
+    "electron:verify": "node scripts/verify-electron-provisioning.js",
+    "electron:verify-provision": "npm run electron:verify",
+    "check-node": "node scripts/check-node.js",
+    "preflight": "npm run check-node && npm run electron:verify",
     "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22.13.0"
   },
   "author": "Lights Out",
   "license": "MIT",
@@ -119,11 +129,10 @@
     "sharp": "^0.35.3"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.4",
     "electron": "^43.0.0",
-    "electron-builder": "^26.0.0",
-    "eslint": "^9.39.4",
+    "eslint": "10.7.0",
     "png-to-ico": "^3.0.1",
+    "rcedit": "5.0.2",
     "ws": "^8.21.0"
   }
 }

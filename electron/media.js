@@ -39,7 +39,7 @@ async function pauseAllMedia() {
   // Send the media play/pause key via PowerShell SendKeys.
   try {
     await executePS(
-      `(New-Object -ComObject WScript.Shell).SendKeys([char]174)`  // 174 = VK_MEDIA_PLAY_PAUSE
+      `(New-Object -ComObject WScript.Shell).SendKeys([char]179)`  // 179 = VK_MEDIA_PLAY_PAUSE
     );
   } catch {
     // Fallback: send via .NET SendKey.
@@ -89,7 +89,7 @@ async function pauseAllDetectedMedia() {
 async function resumeAllMedia() {
   try {
     await executePS(
-      `(New-Object -ComObject WScript.Shell).SendKeys([char]174)`
+      `(New-Object -ComObject WScript.Shell).SendKeys([char]179)`
     );
   } catch { /* best-effort */ }
 }

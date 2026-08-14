@@ -222,7 +222,8 @@ function parseLaunchOptions(argv) {
     timerMinutes: 0,
     action: 'shutdown',
     wakeAlarm: false,
-    firstLight: false
+    firstLight: false,
+    quitAfterStart: false
   };
 
   for (const arg of argv) {
@@ -232,6 +233,9 @@ function parseLaunchOptions(argv) {
     if (lower.startsWith('--timer=')) options.timerMinutes = Number(lower.split('=')[1]) || 0;
     if (lower.startsWith('--action=')) options.action = lower.split('=')[1] || 'shutdown';
     if (lower === '--wake-alarm' || lower === '--first-light') options.firstLight = true;
+    if (lower === '--test-quit-after-start' || lower.startsWith('--test-quit-after-start=')) {
+      options.quitAfterStart = lower === '--test-quit-after-start' ? 1000 : Number(lower.split('=')[1]) || 1000;
+    }
   }
 
   return options;
@@ -1701,9 +1705,8 @@ async function executePowerAction(options = {}) {
   }
 
   try {
-    if (muteSystem) {
-      await executePowerShell('(New-Object -ComObject WScript.Shell).SendKeys([char]173)');
-    }
+    // Volume/mute manipulation is intentionally disabled; the app no longer
+    // touches the system volume during power actions.
 
     switch (action) {
       case 'shutdown':
@@ -2842,6 +2845,14 @@ app.whenReady().then(async () => {
 
   if (settingsStore.getSection('app')?.widgetVisible) {
     await createWidgetWindow();
+  }
+
+  // Test-only: clean deterministic exit for automated packaging/uninstall proofs.
+  if (launchOptions.quitAfterStart && Number.isFinite(launchOptions.quitAfterStart)) {
+    setTimeout(() => {
+      writeStartupLog(`test-quit-after-start triggered after ${launchOptions.quitAfterStart}ms`);
+      app.quit();
+    }, Math.max(1, Number(launchOptions.quitAfterStart)));
   }
 
   // If launched via --first-light, run the First Light sunrise sequence.

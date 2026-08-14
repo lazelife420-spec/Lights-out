@@ -8,6 +8,14 @@ touched.
 
 - [`source-gate.md`](source-gate.md) records the two complete pre-commit
   source-gate passes.
+- [`security-remediation.md`](security-remediation.md) records the
+  `GHSA-r292-9mhp-454m` dependency remediation, zero-audit verification,
+  packaged-runtime reachability classification, UX-gate flake root cause, and
+  cleanup disposition.
+- [`desktop-ux-final-gate/`](desktop-ux-final-gate/) retains redacted reports
+  and manifests for five consecutive clean source-Electron runs, a
+  representative screenshot set, and checksum manifests without Chromium
+  profiles, caches, settings, tokens, pairing URLs, or QR credentials.
 - [`desktop-ux-functional/report.json`](desktop-ux-functional/report.json) is
   the second-pass source Electron report.
 - [`desktop-ux-functional/screenshot-manifest.json`](desktop-ux-functional/screenshot-manifest.json)
