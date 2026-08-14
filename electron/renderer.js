@@ -1329,7 +1329,14 @@ async function saveSettingsPanel() {
   state.graceMinutes = clamp(Number(els.graceMinutes.value) || 0, 0, 10);
   state.forceShutdown = els.chkForceShutdown.checked;
   state.muteSystem = els.chkMute.checked;
-  state.dryRun = Boolean(els.chkDryRun?.checked);
+  // Dry Run is deliberately NOT re-read from the checkbox here. It's an
+  // always-live, immediately-committed value (its own 'change' listener
+  // below, and the top-menu quick toggle, both write state.dryRun and
+  // persist on the spot) -- state.dryRun is already correct by the time
+  // Save runs. Re-reading the checkbox here previously let a stale DOM
+  // value (present whenever Dry Run had just been changed through the
+  // OTHER editor while Settings stayed open) silently overwrite a newer
+  // canonical value on Save.
   state.runAtLogin = Boolean(els.chkRunLogin?.checked);
 
   // Save Smart Lights config
@@ -1711,9 +1718,19 @@ function render() {
   els.actionName.textContent = actionLabel();
   els.endTime.textContent = state.running || state.paused ? formatEndTime(state.endsAt) : 'Idle';
 
-  // Don't clobber the user's in-progress edits while the Settings panel is open.
+  // Dry Run has two independent, immediate-commit editors -- this checkbox
+  // (see its 'change' listener in wireEvents) and the top-menu quick
+  // toggle -- so unlike the fields below, there is no "in-progress unsaved
+  // edit" on it for a background render() to protect. It must stay synced
+  // to canonical state.dryRun even while the Settings panel is open, or
+  // changing it via the top-menu toggle while Settings is already open
+  // leaves this checkbox showing a stale value -- and Save used to
+  // silently re-read and persist that stale value over the newer one (see
+  // saveSettingsPanel(), which no longer re-reads this checkbox at all).
+  if (els.chkDryRun) els.chkDryRun.checked = state.dryRun;
+
+  // Don't clobber the user's other in-progress edits while the Settings panel is open.
   if (els.panelSet?.style.display === 'none') {
-    if (els.chkDryRun) els.chkDryRun.checked = state.dryRun;
     if (els.chkForceShutdown) els.chkForceShutdown.checked = state.forceShutdown;
     if (els.chkMute) els.chkMute.checked = state.muteSystem;
     if (els.chkRunLogin) els.chkRunLogin.checked = state.runAtLogin;
