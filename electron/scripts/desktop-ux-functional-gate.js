@@ -11,6 +11,11 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const WebSocket = require('ws');
+const { parseWarmIterations } = require('./desktop-ux-gate-config');
+const { NativeInputWorker } = require('./native-input-worker');
+const { decideRitualStepAction, decideWorkareaControlAction } = require('./ritual-step-progression');
+const { assertCursorCustody, assertInputAllowed, assertSendInputComplete, attachDiagnostics, classifyBrowserGestureFailure, createGestureRequestId, reconcileTarget, strictInteriorPoint, strictInteriorPointWithDiagnostics, validateBrowserGesture, validateHit } = require('./native-input-targeting');
+const { composeMoveDiagnostics } = require('./top-menu-move-observability');
 
 const ELECTRON_ROOT = path.resolve(__dirname, '..');
 const SOURCE_ELECTRON_EXE = path.join(ELECTRON_ROOT, 'node_modules', 'electron', 'dist', 'electron.exe');
@@ -24,6 +29,12 @@ fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
 
 const WAIT = ms => new Promise(r => setTimeout(r, ms));
 const runtimeSessions = [];
+
+const nativeInputWorker = new NativeInputWorker(path.join(__dirname, 'native-input-worker.ps1'));
+
+async function invokeNativeInput(payload) {
+  return nativeInputWorker.request(payload);
+}
 
 function redactArtifactValue(value) {
   if (typeof value === 'string') {
@@ -81,9 +92,11 @@ function cdpList(port) {
 }
 
 class CdpSession {
-  constructor(wsUrl, port) {
+  constructor(wsUrl, port, targetId) {
     this.ws = new WebSocket(wsUrl);
     this.port = port;
+    this.targetId = targetId;
+    this.sessionId = crypto.randomUUID();
     this.pending = new Map();
     this.id = 1;
     this.consoleMessages = [];
@@ -127,45 +140,439 @@ class CdpSession {
     });
   }
   eval(expr) { return this.send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }).then(r => r.result.value); }
-  async click(sel) {
-    let rect = null;
-    for (let attempt = 0; attempt < 20; attempt++) {
-      const current = await this.eval(`(function(){const el=document.querySelector('${sel}'); if(!el) return null; el.scrollIntoView({block:'center',inline:'center'}); const r=el.getBoundingClientRect(); const x=r.x+r.width/2; const y=r.y+r.height/2; return {x,y,w:r.width,h:r.height,hit:document.elementFromPoint(x,y)?.closest('${sel}') === el};})()`);
-      if (!current || current.w <= 0 || current.h <= 0 || !current.hit) { await WAIT(50); continue; }
-      await WAIT(50);
-      const settled = await this.eval(`(function(){const el=document.querySelector('${sel}'); if(!el) return null; const r=el.getBoundingClientRect(); const x=r.x+r.width/2; const y=r.y+r.height/2; return {x,y,w:r.width,h:r.height,hit:document.elementFromPoint(x,y)?.closest('${sel}') === el};})()`);
-      if (settled && settled.w > 0 && settled.h > 0 && settled.hit && Math.abs(settled.x - current.x) < 0.5 && Math.abs(settled.y - current.y) < 0.5) {
-        await this.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: settled.x, y: settled.y });
-        await WAIT(50);
-        const hovered = await this.eval(`(function(){const el=document.querySelector('${sel}'); if(!el) return false; const r=el.getBoundingClientRect(); const x=r.x+r.width/2; const y=r.y+r.height/2; return document.elementFromPoint(x,y)?.closest('${sel}') === el;})()`);
-        if (hovered) { rect = settled; break; }
+  async measureNativeTarget(sel) {
+    const ownerSel = /^#menu-(power|settings|help) > span$/.test(sel) ? sel.split(' > ')[0] : sel;
+    const measured = await this.eval(`(() => {
+      const requested = document.querySelector(${JSON.stringify(sel)});
+      const owner = document.querySelector(${JSON.stringify(ownerSel)});
+      if (!requested || !owner) return false;
+      owner.scrollIntoView({ block: 'center', inline: 'center' });
+      const rect = owner.getBoundingClientRect();
+      const requestedRect = requested.getBoundingClientRect();
+      const point = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+      const hit = document.elementFromPoint(point.x, point.y);
+      const measurement = {
+        rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+        requestedRect: { x: requestedRect.x, y: requestedRect.y, width: requestedRect.width, height: requestedRect.height },
+        point,
+        hitAccepted: Boolean(hit && (hit === owner || owner.contains(hit))),
+        hit: { tag: hit?.tagName || null, id: hit?.id || null, classes: hit?.className || null },
+        ownerSelector: ${JSON.stringify(ownerSel)},
+        requestedSelector: ${JSON.stringify(sel)},
+        innerWidth: window.innerWidth,
+        innerHeight: window.innerHeight,
+        dpr: window.devicePixelRatio,
+        identity: { href: location.href, timeOrigin: performance.timeOrigin }
+      };
+      if (${sel === '#ns-play-btn'}) {
+        const rectSnapshot = element => {
+          const current = element.getBoundingClientRect();
+          return {
+            x: current.x, y: current.y, width: current.width, height: current.height,
+            top: current.top, right: current.right, bottom: current.bottom, left: current.left
+          };
+        };
+        const styleSnapshot = element => {
+          const style = getComputedStyle(element);
+          return {
+            display: style.display,
+            visibility: style.visibility,
+            opacity: style.opacity,
+            pointerEvents: style.pointerEvents,
+            position: style.position,
+            width: style.width,
+            height: style.height,
+            minWidth: style.minWidth,
+            minHeight: style.minHeight,
+            padding: style.padding,
+            margin: style.margin,
+            transform: style.transform,
+            overflow: style.overflow
+          };
+        };
+        const ancestors = [];
+        for (let element = requested; element; element = element.parentElement) {
+          const currentRect = rectSnapshot(element);
+          const currentStyle = getComputedStyle(element);
+          ancestors.push({
+            tagName: element.tagName,
+            id: element.id || null,
+            className: typeof element.className === 'string' ? element.className : null,
+            display: currentStyle.display,
+            visibility: currentStyle.visibility,
+            opacity: currentStyle.opacity,
+            rect: currentRect,
+            hidden: element.hasAttribute('hidden'),
+            ariaHidden: element.getAttribute('aria-hidden')
+          });
+        }
+        const stateSnapshot = typeof state === 'object' && state ? state : {};
+        const hero = document.getElementById('ns-hero-card');
+        const heroStyle = hero ? getComputedStyle(hero) : null;
+        const targetRect = rectSnapshot(requested);
+        const center = { x: targetRect.x + targetRect.width / 2, y: targetRect.y + targetRect.height / 2 };
+        const centerMeaningful = Number.isFinite(center.x) && Number.isFinite(center.y)
+          && targetRect.width > 0 && targetRect.height > 0
+          && center.x >= 0 && center.x < window.innerWidth
+          && center.y >= 0 && center.y < window.innerHeight;
+        const centerHit = centerMeaningful ? document.elementFromPoint(center.x, center.y) : null;
+        const visiblePanels = Array.from(document.querySelectorAll('.ns-main-panel')).filter(panel => getComputedStyle(panel).display !== 'none');
+        measurement.geometryDiagnostic = {
+          selector: ${JSON.stringify(sel)},
+          selectorMatchCount: document.querySelectorAll(${JSON.stringify(sel)}).length,
+          chosenElement: {
+            tagName: requested.tagName,
+            id: requested.id || null,
+            className: typeof requested.className === 'string' ? requested.className : null,
+            connected: requested.isConnected
+          },
+          rawRect: targetRect,
+          targetStyle: styleSnapshot(requested),
+          clientRectsLength: requested.getClientRects().length,
+          ancestors,
+          bodyClasses: document.body.className,
+          rendererState: {
+            route: document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || null,
+            currentPanels: visiblePanels.map(panel => panel.id),
+            running: stateSnapshot.running ?? null,
+            paused: stateSnapshot.paused ?? null,
+            dryRun: stateSnapshot.dryRun ?? null,
+            armedNightMode: stateSnapshot.armedNightMode ?? null,
+            ritualOverlayActive: document.getElementById('ritual-overlay')?.classList.contains('active') || false,
+            heroVisible: Boolean(heroStyle && heroStyle.display !== 'none' && heroStyle.visibility !== 'hidden' && Number(heroStyle.opacity) !== 0),
+            openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
+            activeModals: Array.from(document.querySelectorAll('.modal.active')).map(modal => modal.id),
+            selectedProfile: stateSnapshot.selectedProfile ?? stateSnapshot.activeProfile ?? stateSnapshot.profile ?? null,
+            selectedMode: stateSnapshot.selectedMode ?? stateSnapshot.activeMode ?? stateSnapshot.nightMode ?? null,
+            currentRun: {
+              startedAt: stateSnapshot.startedAt ?? stateSnapshot.startTime ?? null,
+              remainingSeconds: stateSnapshot.remainingSeconds ?? null,
+              action: stateSnapshot.action ?? null
+            },
+            morningProof: {
+              sectionVisible: document.getElementById('morning-proof-section') ? getComputedStyle(document.getElementById('morning-proof-section')).display !== 'none' : null,
+              proofCardVisible: document.getElementById('proof-card') ? getComputedStyle(document.getElementById('proof-card')).display !== 'none' : null
+            }
+          },
+          viewport: {
+            innerWidth: window.innerWidth,
+            innerHeight: window.innerHeight,
+            documentClientWidth: document.documentElement.clientWidth,
+            documentClientHeight: document.documentElement.clientHeight,
+            devicePixelRatio: window.devicePixelRatio,
+            outerWidth: window.outerWidth,
+            outerHeight: window.outerHeight,
+            screenX: window.screenX,
+            screenY: window.screenY,
+            screenWidth: window.screen.width,
+            screenHeight: window.screen.height,
+            availableScreenWidth: window.screen.availWidth,
+            availableScreenHeight: window.screen.availHeight
+          },
+          hitTest: centerMeaningful ? {
+            meaningful: true,
+            center,
+            tagName: centerHit?.tagName || null,
+            id: centerHit?.id || null,
+            className: typeof centerHit?.className === 'string' ? centerHit.className : null,
+            targetAccepted: Boolean(centerHit && (centerHit === requested || requested.contains(centerHit)))
+          } : {
+            meaningful: false,
+            center,
+            reason: 'target center is non-finite, outside the viewport, or has a non-positive dimension'
+          },
+          documentState: {
+            hasFocus: document.hasFocus(),
+            visibilityState: document.visibilityState,
+            readyState: document.readyState
+          }
+        };
+      }
+      return measurement;
+    })()`);
+    if (!measured) return false;
+    measured.identity.targetId = this.targetId;
+    measured.identity.sessionId = this.sessionId;
+    if (measured.geometryDiagnostic) {
+      try {
+        const currentWindow = await this.send('Browser.getWindowForTarget', { targetId: this.targetId });
+        measured.geometryDiagnostic.electronWindow = {
+          source: 'cdp:Browser.getWindowForTarget',
+          windowId: currentWindow.windowId,
+          bounds: currentWindow.bounds || null,
+          contentBounds: null,
+          clientBounds: null,
+          maximized: currentWindow.bounds?.windowState === 'maximized',
+          fullscreen: currentWindow.bounds?.windowState === 'fullscreen',
+          focused: measured.geometryDiagnostic.documentState.hasFocus
+        };
+      } catch (windowError) {
+        measured.geometryDiagnostic.electronWindow = {
+          source: 'cdp:Browser.getWindowForTarget',
+          unavailable: true,
+          error: windowError.message
+        };
       }
     }
-    if (!rect) throw new Error(`missing or unstable ${sel}`);
-    await this.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
-    await WAIT(50);
-    await this.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
+    measured.point = measured.geometryDiagnostic
+      ? strictInteriorPointWithDiagnostics(measured.rect, measured.geometryDiagnostic)
+      : strictInteriorPoint(measured.rect);
+    validateHit(measured);
+    return measured;
+  }
+  async click(sel) {
+    // Observability only (TOPMENU-STABILITY-01): gestureRequestId/timing let a
+    // future failure be attributed to exactly this activation and distinguish
+    // "no event captured" from "wrong-ancestry event captured" -- neither
+    // changes what counts as PASS/FAIL below.
+    const gestureRequestId = createGestureRequestId();
+    const timing = { gestureRequestCreatedUtc: new Date().toISOString() };
+    const measured = await this.condition(`Boolean(document.querySelector(${JSON.stringify(sel)}))`, 3000, `native target ${sel}`);
+    if (!measured) throw new Error(`native target ${sel} was not found`);
+    let initial;
+    let current;
+    try {
+      initial = await this.measureNativeTarget(sel);
+      current = await this.measureNativeTarget(sel);
+    } catch (measurementError) {
+      if (measurementError.geometryDiagnostic) {
+        try {
+          const screenshot = await this.screenshot('independent-warm-start-geometry-failure.png');
+          report.screenshots.push({ phase: 'geometry-failure', ...screenshot });
+          measurementError.geometryDiagnostic.screenshot = {
+            captured: true,
+            name: screenshot.name,
+            size: screenshot.size,
+            sha256: screenshot.sha256
+          };
+        } catch (screenshotError) {
+          measurementError.geometryDiagnostic.screenshot = {
+            captured: false,
+            error: screenshotError.message
+          };
+        }
+      }
+      throw measurementError;
+    }
+    timing.targetMeasuredUtc = new Date().toISOString();
+    const prepared = reconcileTarget(initial, current);
+    assertInputAllowed({ clickIssued: false, target: prepared.target });
+    const target = prepared.target;
+    const topMenuOwner = /^#menu-(power|settings|help) > span$/.test(sel) ? target.ownerSelector.slice(1) : null;
+    let native;
+    let gestureBeginInfo = null;
+    try {
+      if (topMenuOwner) {
+        // Node-side Date.now() bracketing the CDP round-trip (cross-clock
+        // anchor, TOPMENU-STABILITY-01 v2 Section E): the renderer's own
+        // armWallClockMs/armPerformanceMs pair returned below is the anchor
+        // that lets any later performance.now()-relative timestamp be mapped
+        // back onto this same Node UTC timeline.
+        timing.nodeEvalBeforeArmUtc = new Date().toISOString();
+        gestureBeginInfo = await this.eval(`window.__desktopUxBeginNativeGesture?.(${JSON.stringify(gestureRequestId)}, ${JSON.stringify(topMenuOwner)})`);
+        timing.nodeEvalAfterArmUtc = new Date().toISOString();
+        timing.browserTraceArmedUtc = new Date().toISOString();
+      }
+      timing.nativeRequestStartUtc = new Date().toISOString();
+      // selector is passed through only for diagnostic echo (PR43
+      // cursor-custody environment instrumentation) -- native-input-worker.ps1
+      // never reads it for any targeting/custody decision, it only carries it
+      // into nativeEnvironment so a custody failure's report.json can identify
+      // which control was being activated.
+      native = await invokeNativeInput({ kind: 'pointer', action: 'click', executable: EXE_PATH, clientX: target.point.x, clientY: target.point.y, targetRect: target.rect, innerWidth: target.innerWidth, innerHeight: target.innerHeight, selector: sel });
+      timing.nativeRequestReturnedUtc = new Date().toISOString();
+      assertCursorCustody(native.screenPoint, native.actualCursor, native.translatedTarget);
+      assertSendInputComplete(native.gesture);
+    } catch (nativeError) {
+      attachDiagnostics(nativeError, 'gestureRequestId', gestureRequestId);
+      attachDiagnostics(nativeError, 'timing', timing);
+      attachDiagnostics(nativeError, 'gestureBeginInfo', gestureBeginInfo);
+      // Diagnostic-only (PR43 cursor-custody environment instrumentation):
+      // the target this click was aiming at previously did not survive onto a
+      // native-input failure at all (report.json's failure object had no
+      // selector/target field). This does not change what counts as
+      // PASS/FAIL -- it only preserves evidence already computed above.
+      attachDiagnostics(nativeError, 'selector', sel);
+      attachDiagnostics(nativeError, 'targetSnapshot', { rect: target.rect, point: target.point, innerWidth: target.innerWidth, innerHeight: target.innerHeight });
+      // Item L (settlement-gate observability gap, discovered by the b2c2de7
+      // live proof failure): when the worker itself rejects, nativeError
+      // already carries `.nativeInput` (set in native-input-worker.js from
+      // the worker's own errorData) and attachDiagnostics is a no-op here.
+      // But when the worker SUCCEEDS and it is the redundant JS-side
+      // assertCursorCustody/assertSendInputComplete check below that throws,
+      // `native` is a fully-populated result (including
+      // nativeEnvironment.settlementChronology, foregroundChronology,
+      // actualCursor, translatedTarget, ...) that would otherwise be
+      // silently discarded -- report.json's failure.nativeInput would be
+      // null with no way to see why the worker's own settlement disagreed
+      // with the redundant check. This only preserves that already-computed
+      // result; it does not change whether nativeError is thrown or its
+      // message/stack.
+      if (native) attachDiagnostics(nativeError, 'nativeInput', native);
+      throw nativeError;
+    }
     await WAIT(120);
+    let browserGesture = null;
+    if (topMenuOwner) {
+      timing.nodeEvalBeforeSampleUtc = new Date().toISOString();
+      browserGesture = await this.eval(`window.__desktopUxEndNativeGesture?.(${JSON.stringify(gestureRequestId)})`);
+      timing.nodeEvalAfterSampleUtc = new Date().toISOString();
+      timing.browserTraceSampledUtc = new Date().toISOString();
+    }
+    if (browserGesture) {
+      timing.gestureValidationStartUtc = new Date().toISOString();
+      try {
+        validateBrowserGesture(browserGesture);
+        requireGate(browserGesture.handlerEntries.length === 1, `${topMenuOwner} production handler was not entered exactly once`, browserGesture);
+      } catch (gestureError) {
+        timing.gestureValidationEndUtc = new Date().toISOString();
+        attachDiagnostics(gestureError, 'gestureRequestId', gestureRequestId);
+        attachDiagnostics(gestureError, 'browserGesture', {
+          gestureRequestId,
+          selector: sel,
+          acceptedOwnerId: topMenuOwner,
+          down: browserGesture.down || null,
+          up: browserGesture.up || null,
+          click: browserGesture.click || null,
+          // Full arrays, not just first(): this is what lets the next failure
+          // be classified from evidence instead of aggregate counts alone.
+          matchingEvents: browserGesture.matchingEvents || [],
+          precedingContextEvents: browserGesture.precedingContextEvents || [],
+          eventCounts: browserGesture.eventCounts || null,
+          activeGestureMatchedAtSample: browserGesture.activeGestureMatchedAtSample ?? null,
+          handlerEntries: browserGesture.handlerEntries || [],
+          expectedState: browserGesture.expectedState || null,
+          validationFailureStage: classifyBrowserGestureFailure(browserGesture),
+          // Cross-gesture correlation (TOPMENU-STABILITY-01 v2): activeGestureId
+          // equality is not causal proof on its own -- these fields exist so a
+          // later analysis can check whether a same-ID event downstream is a
+          // plausible delayed continuation of the immediately preceding gesture.
+          previousGestureRequestId: browserGesture.previousGestureRequestId ?? null,
+          previousGestureEndWallClockMs: browserGesture.previousGestureEndWallClockMs ?? null,
+          currentGestureArmWallClockMs: browserGesture.currentGestureArmWallClockMs ?? gestureBeginInfo?.armWallClockMs ?? null,
+          gapSincePreviousGestureMs: browserGesture.gapSincePreviousGestureMs ?? gestureBeginInfo?.gapSincePreviousGestureMs ?? null,
+          traceSequenceAtArm: browserGesture.traceSequenceAtArm ?? null,
+          traceSequenceAtSample: browserGesture.traceSequenceAtSample ?? null,
+          handlerSequenceAtArm: browserGesture.handlerSequenceAtArm ?? null,
+          handlerSequenceAtSample: browserGesture.handlerSequenceAtSample ?? null,
+          armWallClockMs: browserGesture.armWallClockMs ?? null,
+          armPerformanceMs: browserGesture.armPerformanceMs ?? null,
+          sampleWallClockMs: browserGesture.sampleWallClockMs ?? null,
+          samplePerformanceMs: browserGesture.samplePerformanceMs ?? null,
+          traceInstallationId: browserGesture.traceInstallationId ?? null,
+          gestureBeginInfo,
+          timing
+        });
+        throw gestureError;
+      }
+      timing.gestureValidationEndUtc = new Date().toISOString();
+    }
+    report.nativeInputs.push({ timestamp: new Date().toISOString(), gestureRequestId, method: 'win32-mouse', selector: sel, measured: initial, current: target, targetReacquired: prepared.reacquired, native, browserGesture, timing, retryCount: 0 });
+    return { rect: target, native, browserGesture };
   }
   async clickXY(x, y) {
-    await this.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
-    await WAIT(50);
-    await this.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
+    const gestureRequestId = createGestureRequestId();
+    const viewport = await this.eval(`({ innerWidth: window.innerWidth, innerHeight: window.innerHeight, dpr: window.devicePixelRatio })`);
+    let native;
+    try {
+      native = await invokeNativeInput({ kind: 'pointer', action: 'click', executable: EXE_PATH, clientX: x, clientY: y, innerWidth: viewport.innerWidth, innerHeight: viewport.innerHeight });
+      assertCursorCustody(native.screenPoint, native.actualCursor);
+      assertSendInputComplete(native.gesture);
+    } catch (nativeError) {
+      attachDiagnostics(nativeError, 'gestureRequestId', gestureRequestId);
+      throw nativeError;
+    }
+    report.nativeInputs.push({ timestamp: new Date().toISOString(), gestureRequestId, method: 'win32-mouse', selector: null, measured: { x, y, ...viewport }, native, retryCount: 0 });
     await WAIT(120);
+    return { point: { x, y }, native };
   }
-  async movePointer(x, y) {
-    await this.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+  async movePointer(x, y, { selector = null } = {}) {
+    const correlationId = createGestureRequestId();
+    const before = await this.eval(`(() => {
+      const rectOf = element => {
+        if (!element) return null;
+        const rect = element.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      };
+      const settings = document.getElementById('menu-settings');
+      const submenu = settings?.querySelector('.submenu') || null;
+      return {
+        selector: ${JSON.stringify(selector)},
+        requestedClientPoint: { x: ${JSON.stringify(x)}, y: ${JSON.stringify(y)} },
+        viewport: { innerWidth: window.innerWidth, innerHeight: window.innerHeight, dpr: window.devicePixelRatio },
+        settingsRect: rectOf(settings),
+        submenuRect: rectOf(submenu),
+        settingsOpen: settings?.classList.contains('open') || false,
+        ariaExpanded: settings?.getAttribute('aria-expanded') || null,
+        documentHasFocus: document.hasFocus(),
+        visibilityState: document.visibilityState,
+        trace: window.__desktopUxBeginPointerMove?.(${JSON.stringify(correlationId)}) || null
+      };
+    })()`);
+    const viewport = before.viewport;
+    const native = await invokeNativeInput({ kind: 'pointer', action: 'move', executable: EXE_PATH, clientX: x, clientY: y, innerWidth: viewport.innerWidth, innerHeight: viewport.innerHeight });
+    const after = await this.eval(`(() => {
+      const rectOf = element => {
+        if (!element) return null;
+        const rect = element.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      };
+      const ancestryOf = element => {
+        const ancestry = [];
+        for (let current = element; current; current = current.parentElement) {
+          ancestry.push({ tag: current.tagName || null, id: current.id || null, classes: typeof current.className === 'string' ? current.className : null });
+        }
+        return ancestry;
+      };
+      const settings = document.getElementById('menu-settings');
+      const submenu = settings?.querySelector('.submenu') || null;
+      const hit = document.elementFromPoint(${JSON.stringify(x)}, ${JSON.stringify(y)});
+      const trace = window.__desktopUxEndPointerMove?.(${JSON.stringify(correlationId)}) || null;
+      return {
+        documentHasFocus: document.hasFocus(),
+        visibilityState: document.visibilityState,
+        settingsOpen: settings?.classList.contains('open') || false,
+        ariaExpanded: settings?.getAttribute('aria-expanded') || null,
+        settingsRect: rectOf(settings),
+        submenuRect: rectOf(submenu),
+        requestedClientPoint: { x: ${JSON.stringify(x)}, y: ${JSON.stringify(y)} },
+        hit: { tag: hit?.tagName || null, id: hit?.id || null, classes: typeof hit?.className === 'string' ? hit.className : null },
+        hitAncestry: ancestryOf(hit),
+        trace
+      };
+    })()`);
+    const diagnostics = composeMoveDiagnostics({
+      correlationId,
+      selector,
+      before: { ...before, translatedScreenPoint: native.screenPoint || null },
+      native,
+      after: { ...after, actualCursor: native.actualCursor || null, currentForeground: native.foregroundChronology?.at(-1) || null },
+      browserEvents: after.trace?.events,
+      focusTrace: after.trace?.focusTrace
+    });
+    report.nativeInputs.push({ timestamp: new Date().toISOString(), correlationId, method: 'win32-mouse-move', measured: { x, y, ...viewport }, native, diagnostics, retryCount: 0 });
     await WAIT(80);
+    return { point: { x, y }, native, diagnostics };
   }
   async key(k) {
-    const map = { Escape: ['Escape', 27], Enter: ['Enter', 13], ' ': ['Space', 32], ArrowDown: ['ArrowDown', 40], ArrowUp: ['ArrowUp', 38], ArrowLeft: ['ArrowLeft', 37], ArrowRight: ['ArrowRight', 39], Tab: ['Tab', 9] };
-    const [code, keyCode] = map[k] || [k, k.charCodeAt(0)];
-    const down = { type: 'keyDown', key: k, code, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode };
-    if (k.length === 1 && k.charCodeAt(0) >= 32) down.text = k;
-    await this.send('Input.dispatchKeyEvent', down);
-    await WAIT(60);
-    await this.send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode });
+    const map = { Escape: 0x1B, Enter: 0x0D, ' ': 0x20, ArrowDown: 0x28, ArrowUp: 0x26, ArrowLeft: 0x25, ArrowRight: 0x27, Tab: 0x09, Backspace: 0x08 };
+    const virtualKey = map[k] || (k.length === 1 ? k.toUpperCase().charCodeAt(0) : null);
+    if (virtualKey === null) throw new Error(`unsupported native key ${k}`);
+    const native = await invokeNativeInput({ kind: 'key', executable: EXE_PATH, virtualKey, modifiers: [] });
+    report.nativeInputs.push({ timestamp: new Date().toISOString(), method: 'win32-keyboard', keySequence: [k], native, retryCount: 0 });
     await WAIT(150);
+    return native;
+  }
+  async chord(modifiers, k) {
+    const modifierMap = { Control: 0x11, Shift: 0x10, Alt: 0x12 };
+    const keyMap = { Escape: 0x1B, Enter: 0x0D, ' ': 0x20, ArrowDown: 0x28, ArrowUp: 0x26, ArrowLeft: 0x25, ArrowRight: 0x27, Tab: 0x09 };
+    const virtualKey = keyMap[k] || (k.length === 1 ? k.toUpperCase().charCodeAt(0) : null);
+    const modifierKeys = modifiers.map(modifier => modifierMap[modifier]);
+    if (virtualKey === null || modifierKeys.some(key => !key)) throw new Error(`unsupported native chord ${modifiers.join('+')}+${k}`);
+    const native = await invokeNativeInput({ kind: 'key', executable: EXE_PATH, virtualKey, modifiers: modifierKeys });
+    report.nativeInputs.push({ timestamp: new Date().toISOString(), method: 'win32-keyboard', keySequence: [...modifiers, k], native, retryCount: 0 });
+    await WAIT(150);
+    return native;
   }
   async screenshot(name) {
     const r = await this.send('Page.captureScreenshot', { format: 'png' });
@@ -182,21 +589,32 @@ class CdpSession {
     await this.eval(`window.resizeTo(${w}, ${h})`);
     await WAIT(300);
   }
-  async waitFor(sel, timeout = 5000) {
+  async waitFor(sel, timeout = 5000, label = `selector ${sel} exists`) {
     const t = Date.now();
     while (Date.now() - t < timeout) {
       if (await this.eval(`!!document.querySelector('${sel}')`)) return true;
       await WAIT(100);
     }
-    throw new Error(`timeout waiting for ${sel}`);
+    const diagnostic = await this.captureTimeout(label);
+    throw new Error(`timeout waiting for ${label}: ${JSON.stringify(diagnostic)}`);
   }
-  async condition(fnExpr, timeout = 5000) {
+  async condition(fnExpr, timeout = 5000, label = fnExpr) {
     const t = Date.now();
     while (Date.now() - t < timeout) {
-      if (await this.eval(fnExpr)) return true;
+      const result = await this.eval(fnExpr);
+      if (result) return result;
       await WAIT(100);
     }
-    throw new Error(`timeout condition ${fnExpr}`);
+    const diagnostic = await this.captureTimeout(label);
+    throw new Error(`timeout waiting for ${label}: ${JSON.stringify(diagnostic)}`);
+  }
+  async captureTimeout(label) {
+    const safe = String(label).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').slice(0, 80) || 'state';
+    let screenshot = null;
+    try { screenshot = await this.screenshot(`timeout-${Date.now()}-${safe}.png`); } catch (error) { screenshot = { error: error.message }; }
+    let renderer = null;
+    try { renderer = await this.rendererDiagnostics(); } catch (error) { renderer = { error: error.message }; }
+    return { label, timeoutScreenshot: screenshot, renderer };
   }
   async rendererDiagnostics() {
     let state = null;
@@ -257,26 +675,32 @@ class CdpSession {
 }
 
 async function stopApp(child) {
-  if (!child) return;
+  if (!child) return true;
+  const userDataDir = child.userDataDir;
   try { child.cdpSession?.ws?.terminate(); } catch {}
-  const exited = await new Promise(resolve => {
-    let settled = false;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      resolve(true);
-    };
-    child.once('exit', finish);
-    try { child.kill(); } catch { finish(); }
-    setTimeout(() => {
-      if (settled) return;
-      const killer = spawn('taskkill', ['/F', '/T', '/PID', String(child.pid)], { windowsHide: true });
-      killer.once('error', finish);
-      killer.once('close', finish);
-    }, 1000);
-    setTimeout(finish, 3000);
+  const runTaskkill = args => new Promise(resolve => {
+    const process = spawn('taskkill', args, { windowsHide: true });
+    process.once('error', () => resolve(false));
+    process.once('close', code => resolve(code === 0));
   });
-  return exited;
+  const hasLightsOutProcess = () => new Promise(resolve => {
+    let stdout = '';
+    const process = spawn('tasklist', ['/FI', 'IMAGENAME eq Lights Out.exe', '/NH'], { windowsHide: true });
+    process.stdout.on('data', data => { stdout += data; });
+    process.once('error', () => resolve(false));
+    process.once('close', () => resolve(stdout.includes('Lights Out.exe')));
+  });
+
+  try { child.kill(); } catch {}
+  await WAIT(500);
+  await runTaskkill(['/F', '/T', '/PID', String(child.pid)]);
+  await WAIT(500);
+  await runTaskkill(['/F', '/IM', 'Lights Out.exe']);
+  for (let check = 0; check < 10; check++) {
+    if (!(await hasLightsOutProcess())) return true;
+    await WAIT(500);
+  }
+  throw new Error(`Lights Out process tree for ${userDataDir} did not terminate`);
 }
 
 async function spawnApp(userDataDir, seed = {}, { preserveSettings = false } = {}) {
@@ -296,7 +720,8 @@ async function spawnApp(userDataDir, seed = {}, { preserveSettings = false } = {
   ];
   if (SOURCE_RUNTIME) launchArgs.push(ELECTRON_ROOT);
   launchArgs.push('--desktop-ux-proof');
-  const child = spawn(EXE_PATH, launchArgs, { detached: true, windowsHide: true, env: { ...process.env, LIGHTS_OUT_DESKTOP_UX_GATE: '1' } });
+  const child = spawn(EXE_PATH, launchArgs, { detached: true, windowsHide: false, env: { ...process.env, LIGHTS_OUT_DESKTOP_UX_GATE: '1' } });
+  child.unref();
   let list = [];
   for (let i = 0; i < 40; i++) {
     try { list = await cdpList(port); if (list.length) break; } catch {}
@@ -304,10 +729,11 @@ async function spawnApp(userDataDir, seed = {}, { preserveSettings = false } = {
   }
   if (!list.length) { try { child.kill(); } catch {} throw new Error('Electron did not expose CDP'); }
   const page = list.find(x => x.type === 'page' || x.title === 'Lights Out') || list[0];
-  const session = new CdpSession(page.webSocketDebuggerUrl, port);
+  const session = new CdpSession(page.webSocketDebuggerUrl, port, page.id);
   await session.connect();
   const renderer = await session.waitForRendererReady();
   child.cdpSession = session;
+  child.userDataDir = userDataDir;
   runtimeSessions.push({ label: path.basename(userDataDir), userDataDir, port, renderer, session });
   return { child, session, userDataDir, port, renderer };
 }
@@ -320,7 +746,9 @@ const report = {
   exe: EXE_PATH,
   exeSha256: sha256(EXE_PATH),
   phases: {},
-  screenshots: []
+  screenshots: [],
+  nativeInputs: [],
+  retryCount: 0
 };
 
 function addShot(phase, s) {
@@ -331,7 +759,6 @@ function addShot(phase, s) {
 async function clearStarts(s) { await s.eval('window.__desktopUxProof?.clearStartInvocations()'); }
 async function getStarts(s) { return s.eval('window.__desktopUxProof?.getStartInvocations()'); }
 async function getRealPowerActions(s) { return s.eval('window.__desktopUxProof?.getRealPowerActions()'); }
-async function getDebug(s) { return s.eval(`({ running: state.running, paused: state.paused, action: state.action, dryRun: state.dryRun, input: document.getElementById('timer-input').value, invocations: window.__desktopUxProof?.getStartInvocations() })`); }
 async function getTopMenuKeyboardState(s) {
   return s.eval(`({
     focusedElement: { id: document.activeElement?.id || null, text: document.activeElement?.textContent?.trim() || null, role: document.activeElement?.getAttribute('role') || null },
@@ -346,18 +773,229 @@ async function getTopMenuKeyboardState(s) {
 }
 
 async function installTopMenuEventTrace(s) {
+  // TOPMENU-STABILITY-01 v2 (cross-gesture correlation): activeGesture is a
+  // single mutable slot assigned to events AT FIRE TIME, so "same gestureId"
+  // was never causal proof that an event was produced by that gesture's own
+  // native SendInput -- only that it fired somewhere in that gesture's arm-
+  // to-sample window. The fix here is NOT to change what counts as a match;
+  // it's to stop discarding everything else, so a later analysis can see
+  // what came immediately before and judge plausibility for itself. This is
+  // the Node-side mirror of appendBounded/computeGestureGap/
+  // decideTraceInstallation/selectPrecedingContext/mapPerformanceToWallClock
+  // in native-input-targeting.js (duplicated of necessity: this string runs
+  // in the browser via CDP eval and cannot require() that module).
   await s.eval(`(() => {
+    window.__desktopUxGateTraceInstallAttempts = (window.__desktopUxGateTraceInstallAttempts || 0) + 1;
+    if (window.__desktopUxGateTraceInstalled) {
+      window.__desktopUxGateTraceInstallSkips = (window.__desktopUxGateTraceInstallSkips || 0) + 1;
+      return { installed: false, reason: 'already-installed', attempts: window.__desktopUxGateTraceInstallAttempts, skips: window.__desktopUxGateTraceInstallSkips };
+    }
+    window.__desktopUxGateTraceInstalled = true;
+    const traceInstallationId = (window.crypto?.randomUUID ? window.crypto.randomUUID() : String(Math.random()) + '-' + Date.now());
+    const installedAtWallClockMs = Date.now();
+    const installedAtPerformanceMs = performance.now();
+    window.__desktopUxGateTraceAnchor = { traceInstallationId, installedAtWallClockMs, installedAtPerformanceMs };
+
+    const EVENT_BUFFER_MAX = 4000; // bounded ring buffer; generous for several seconds of real interaction volume in this app
     const events = [];
-    const add = event => events.push({
-      type: event.type,
-      target: event.target?.id || event.target?.className || event.target?.tagName || null,
-      activeElement: document.activeElement?.id || null,
-      openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
-      settingsAriaExpanded: document.getElementById('menu-settings')?.getAttribute('aria-expanded') || null,
-      at: performance.now()
+    const focusTrace = [];
+    const handlerEntries = [];
+    let eventSeq = 0;
+    let focusSeq = 0;
+    let handlerSeq = 0;
+    let activeGesture = null;
+    let activeMove = null;
+    let previousGesture = null;
+
+    function appendBounded(buffer, item) {
+      buffer.push(item);
+      if (buffer.length > EVENT_BUFFER_MAX) buffer.shift();
+    }
+
+    const add = event => {
+      eventSeq += 1;
+      appendBounded(events, {
+        traceSequence: eventSeq,
+        type: event.type,
+        performanceMs: performance.now(),
+        wallClockMs: Date.now(),
+        activeGestureId: activeGesture?.id || null,
+        moveCorrelationId: activeMove?.id || null,
+        targetTag: event.target?.tagName || null,
+        targetId: event.target?.id || null,
+        targetClass: (typeof event.target?.className === 'string' ? event.target.className : null),
+        pathOwnerIds: (event.composedPath?.() || []).map(node => node?.id).filter(Boolean),
+        clientX: event.clientX ?? null,
+        clientY: event.clientY ?? null,
+        screenX: event.screenX ?? null,
+        screenY: event.screenY ?? null,
+        button: event.button ?? null,
+        buttons: event.buttons ?? null,
+        detail: event.detail ?? null,
+        isTrusted: event.isTrusted ?? null,
+        pointerId: event.pointerId ?? null,
+        pointerType: event.pointerType ?? null,
+        eventPhase: event.eventPhase ?? null,
+        defaultPrevented: event.defaultPrevented ?? null,
+        activeElement: document.activeElement?.id || null,
+        openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
+        settingsAriaExpanded: document.getElementById('menu-settings')?.getAttribute('aria-expanded') || null
+      });
+    };
+    ['blur', 'focus', 'focusin', 'focusout', 'pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click', 'mouseenter', 'mouseleave', 'mousemove', 'pointermove', 'pointerover', 'pointerout', 'mouseover', 'mouseout', 'pointerenter', 'pointerleave'].forEach(type => window.addEventListener(type, add, true));
+    const addFocusState = event => {
+      focusSeq += 1;
+      appendBounded(focusTrace, {
+        sequence: focusSeq,
+        type: event.type,
+        wallClockMs: Date.now(),
+        performanceMs: performance.now(),
+        moveCorrelationId: activeMove?.id || null,
+        documentHasFocus: document.hasFocus(),
+        visibilityState: document.visibilityState,
+        openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
+        settingsOpen: document.getElementById('menu-settings')?.classList.contains('open') || false,
+        settingsAriaExpanded: document.getElementById('menu-settings')?.getAttribute('aria-expanded') || null
+      });
+    };
+    window.addEventListener('focus', addFocusState, true);
+    window.addEventListener('blur', addFocusState, true);
+    document.addEventListener('visibilitychange', addFocusState, true);
+    for (const ownerId of ['menu-power', 'menu-settings', 'menu-help']) {
+      document.getElementById(ownerId)?.addEventListener('click', event => {
+        handlerSeq += 1;
+        appendBounded(handlerEntries, {
+          handlerTraceSequence: handlerSeq,
+          performanceMs: performance.now(),
+          wallClockMs: Date.now(),
+          activeGestureId: activeGesture?.id || null,
+          ownerId,
+          eventType: event.type,
+          targetId: event.target?.id || null,
+          targetTag: event.target?.tagName || null,
+          clientX: event.clientX ?? null,
+          clientY: event.clientY ?? null,
+          detail: event.detail ?? null,
+          isTrusted: event.isTrusted ?? null,
+          pathOwnerIds: (event.composedPath?.() || []).map(node => node?.id).filter(Boolean)
+        });
+      });
+    }
+
+    window.__desktopUxBeginNativeGesture = (id, ownerId) => {
+      const armWallClockMs = Date.now();
+      const armPerformanceMs = performance.now();
+      const gapSincePreviousGestureMs = previousGesture ? (armWallClockMs - previousGesture.endedAtWallClockMs) : null;
+      activeGesture = { id, ownerId, armWallClockMs, armPerformanceMs, traceSequenceAtArm: eventSeq, handlerSequenceAtArm: handlerSeq };
+      return {
+        id, ownerId, armWallClockMs, armPerformanceMs,
+        traceSequenceAtArm: eventSeq,
+        previousGestureRequestId: previousGesture?.id || null,
+        previousGestureEndWallClockMs: previousGesture?.endedAtWallClockMs ?? null,
+        gapSincePreviousGestureMs
+      };
+    };
+    window.__desktopUxEndNativeGesture = id => {
+      // Additive observability only (see TOPMENU-STABILITY-01): everything
+      // below down/up/click/ownerId/handlerEntries/expectedState is a new
+      // field, so validateBrowserGesture's PASS/FAIL behavior is unchanged.
+      const activeGestureMatchedAtSample = activeGesture?.id === id;
+      const armInfo = activeGestureMatchedAtSample ? activeGesture : null;
+      const ownerId = armInfo ? armInfo.ownerId : null;
+      const sampleWallClockMs = Date.now();
+      const samplePerformanceMs = performance.now();
+      const matching = events.filter(event => event.activeGestureId === id);
+      const first = type => matching.find(event => event.type === type) || null;
+      const countType = type => matching.filter(event => event.type === type).length;
+      const traceSequenceAtArm = armInfo ? armInfo.traceSequenceAtArm : null;
+      // Context window: what fired immediately before this gesture armed,
+      // regardless of which (if any) gesture it was tagged with -- this is
+      // what lets a later analysis judge whether a same-ID event downstream
+      // is a plausible delayed continuation of what was already in flight,
+      // rather than trusting activeGestureId equality as causal proof.
+      const precedingContextEvents = traceSequenceAtArm === null ? [] : events.filter(event => event.traceSequence > traceSequenceAtArm - 20 && event.traceSequence <= traceSequenceAtArm);
+      const result = {
+        gestureId: id,
+        ownerId,
+        down: first('pointerdown') || first('mousedown'),
+        up: first('pointerup') || first('mouseup'),
+        click: first('click'),
+        matchingEvents: matching,
+        precedingContextEvents,
+        eventCounts: {
+          pointerdown: countType('pointerdown'),
+          mousedown: countType('mousedown'),
+          pointerup: countType('pointerup'),
+          mouseup: countType('mouseup'),
+          click: countType('click'),
+          totalMatchedThisGesture: matching.length,
+          totalCapturedThisSession: events.length
+        },
+        activeGestureMatchedAtSample,
+        handlerEntries: handlerEntries.filter(entry => entry.activeGestureId === id),
+        expectedState: {
+          openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
+          ariaExpanded: ownerId ? document.getElementById(ownerId)?.getAttribute('aria-expanded') || null : null
+        },
+        previousGestureRequestId: previousGesture?.id || null,
+        previousGestureEndWallClockMs: previousGesture?.endedAtWallClockMs ?? null,
+        currentGestureArmWallClockMs: armInfo ? armInfo.armWallClockMs : null,
+        gapSincePreviousGestureMs: armInfo && previousGesture ? (armInfo.armWallClockMs - previousGesture.endedAtWallClockMs) : null,
+        traceSequenceAtArm,
+        traceSequenceAtSample: eventSeq,
+        handlerSequenceAtArm: armInfo ? armInfo.handlerSequenceAtArm : null,
+        handlerSequenceAtSample: handlerSeq,
+        armWallClockMs: armInfo ? armInfo.armWallClockMs : null,
+        armPerformanceMs: armInfo ? armInfo.armPerformanceMs : null,
+        sampleWallClockMs,
+        samplePerformanceMs,
+        traceInstallationId
+      };
+      if (activeGesture?.id === id) {
+        previousGesture = { id, ownerId, endedAtWallClockMs: sampleWallClockMs, endedAtPerformanceMs: samplePerformanceMs };
+        activeGesture = null;
+      }
+      return result;
+    };
+    window.__desktopUxBeginPointerMove = id => {
+      activeMove = { id, eventSequenceAtStart: eventSeq, focusSequenceAtStart: focusSeq };
+      return { id, eventSequenceAtStart: eventSeq, focusSequenceAtStart: focusSeq, traceInstallationId };
+    };
+    window.__desktopUxEndPointerMove = id => {
+      const matched = activeMove?.id === id;
+      const eventSequenceAtStart = matched ? activeMove.eventSequenceAtStart : eventSeq;
+      const focusSequenceAtStart = matched ? activeMove.focusSequenceAtStart : focusSeq;
+      const result = {
+        correlationId: id,
+        matched,
+        traceInstallationId,
+        focusListenerInstallationId: traceInstallationId,
+        focusListenerInstallCount: 1,
+        events: events.filter(event => event.traceSequence > eventSequenceAtStart),
+        focusTrace: focusTrace.filter(event => event.sequence > focusSequenceAtStart),
+        eventSequenceAtStart,
+        eventSequenceAtEnd: eventSeq,
+        focusSequenceAtStart,
+        focusSequenceAtEnd: focusSeq
+      };
+      if (matched) activeMove = null;
+      return result;
+    };
+    window.__desktopUxGateTraceState = () => ({
+      traceInstallationId,
+      installAttempts: window.__desktopUxGateTraceInstallAttempts,
+      installSkips: window.__desktopUxGateTraceInstallSkips || 0,
+      totalEventsCaptured: events.length,
+      totalHandlerEntriesCaptured: handlerEntries.length,
+      totalFocusEventsCaptured: focusTrace.length,
+      focusListenerInstallationId: traceInstallationId,
+      focusListenerInstallCount: 1,
+      anchor: window.__desktopUxGateTraceAnchor
     });
-    ['blur', 'focus', 'focusin', 'focusout', 'mousedown', 'mouseup', 'click', 'mouseenter', 'mouseleave', 'mousemove'].forEach(type => window.addEventListener(type, add, true));
     window.__desktopUxGateEvents = events;
+    window.__desktopUxGateHandlerEntries = handlerEntries;
+    window.__desktopUxGateFocusTrace = focusTrace;
+    return { installed: true, reason: 'first-install', traceInstallationId, attempts: window.__desktopUxGateTraceInstallAttempts };
   })()`);
 }
 
@@ -426,14 +1064,16 @@ async function runTopMenuGate() {
   const { child, session: s } = await spawnApp(userData);
   const results = { mouse: [], keyboard: [], assertions: [] };
   report.phases[phase] = { status: 'running', results };
+  // Preserve the established finite assertion budget; this observes state
+  // after one native gesture and is not an input retry.
+  const waitFor = (expression, label, timeout = 5000) => s.condition(expression, timeout, label);
   try {
     await s.resize(1280, 720);
     await s.waitFor('#menu-power');
-    await WAIT(400);
     await installTopMenuEventTrace(s);
 
     await s.click('#menu-power > span');
-    await WAIT(200);
+    await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'Power menu open after native click');
     const powerAfterClick = await s.eval(`({
       open: document.getElementById('menu-power').classList.contains('open'),
       ariaExpanded: document.getElementById('menu-power').getAttribute('aria-expanded'),
@@ -446,20 +1086,18 @@ async function runTopMenuGate() {
     addShot(phase, await s.screenshot('topmenu-power-mouse-open.png'));
 
     await s.click('#menu-power > span');
-    await WAIT(200);
-    open = await s.eval(`!document.querySelector('.menu-item.open')`);
+    open = await waitFor(`!document.querySelector('.menu-item.open')`, 'Power menu closed after second native click');
     results.mouse.push({ step: 'click-power-again', closed: open });
     requireGate(open, 'Power trigger did not toggle closed');
 
     await s.click('#menu-settings > span');
-    await WAIT(200);
-    open = await s.eval(`document.getElementById('menu-settings').classList.contains('open')`);
+    open = await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu open after native click');
     addShot(phase, await s.screenshot('topmenu-settings-mouse-open.png'));
     results.mouse.push({ step: 'click-settings', open });
     requireGate(open, 'Settings menu did not open on click');
 
     await s.click('#menu-help > span');
-    await WAIT(200);
+    await waitFor(`!document.getElementById('menu-settings').classList.contains('open') && document.getElementById('menu-help').classList.contains('open')`, 'Help open and Settings closed');
     const settingsClosed = await s.eval(`!document.getElementById('menu-settings').classList.contains('open')`);
     const helpOpen = await s.eval(`document.getElementById('menu-help').classList.contains('open')`);
     results.mouse.push({ step: 'click-help-closes-settings', settingsClosed, helpOpen });
@@ -467,55 +1105,60 @@ async function runTopMenuGate() {
     addShot(phase, await s.screenshot('topmenu-help-mouse-open.png'));
 
     await s.click('#menu-settings > span');
-    await s.condition(`document.getElementById('menu-settings').classList.contains('open')`);
+    await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu reopened for pointer transfer');
     const menuRect = await s.eval(`(r=document.querySelector('#menu-settings .submenu').getBoundingClientRect(),{x:r.x+r.width/2,y:r.y+10})`);
     const beforePointerTransfer = await getTopMenuKeyboardState(s);
-    await s.movePointer(menuRect.x, menuRect.y);
-    await WAIT(200);
+    const pointerTransferMove = await s.movePointer(menuRect.x, menuRect.y, { selector: '#menu-settings .submenu' });
+    results.mouse.push({ step: 'pointer-transfer-diagnostics', menuRect, diagnostics: pointerTransferMove.diagnostics });
+    await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu remains open inside submenu');
     const afterPointerTransfer = await getTopMenuKeyboardState(s);
     const stillOpen = afterPointerTransfer.settingsMenuOpen;
     results.mouse.push({ step: 'pointer-transfer-stays-open', menuRect, beforePointerTransfer, afterPointerTransfer, stillOpen });
     requireGate(stillOpen, 'menu closed while pointer entered its submenu', afterPointerTransfer);
     await s.movePointer(20, 20);
-    await WAIT(200);
+    await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu remains open until dismissal click');
     const afterPointerAway = await getTopMenuKeyboardState(s);
     const stillOpen2 = afterPointerAway.settingsMenuOpen;
     results.mouse.push({ step: 'pointer-away-stays-open', afterPointerAway, stillOpen2 });
     requireGate(stillOpen2, 'menu closed before an outside click', afterPointerAway);
 
     await s.click('#open-options');
-    await WAIT(300);
+    await waitFor(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none'`, 'Advanced Options opens Settings panel');
     const settingsVisible = await s.eval(`document.getElementById('ns-panel-set').style.display !== 'none'`);
     results.mouse.push({ step: 'advanced-options-opens-settings', settingsVisible });
     requireGate(settingsVisible, 'Advanced Options did not open the Settings workspace');
     addShot(phase, await s.screenshot('topmenu-settings-panel.png'));
-    await s.eval(`document.getElementById('modal-close').click()`);
-    await WAIT(300);
+    await s.click('#modal-close');
+    await waitFor(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'lib'`, 'native Settings close restores Tonight');
     const restored = await s.eval(`document.querySelector('.ns-nav-item.active')?.dataset.nsTab`);
     results.mouse.push({ step: 'close-restores-route', restored });
     requireGate(restored === 'lib', 'closing Settings did not restore Tonight', restored);
 
     await s.click('#menu-settings > span');
+    await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu open for Dry Run toggle');
     await s.click('#toggle-dryrun');
-    await WAIT(200);
+    await waitFor(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent === 'OFF'`, 'Dry Run toggle visibly disabled');
     const dryRunIndicator = await s.eval(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent`);
     results.mouse.push({ step: 'toggle-dryrun', dryRunIndicator });
     requireGate(dryRunIndicator === 'OFF', 'enabled Settings toggle did not activate', dryRunIndicator);
     await s.click('#menu-settings > span');
+    await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu reopened to restore Dry Run');
     await s.click('#toggle-dryrun');
-    await s.condition(`state.dryRun === true`);
+    await waitFor(`state.dryRun === true`, 'Dry Run restored');
 
     await s.click('#menu-power > span');
+    await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'Power menu open for outside dismissal');
     const outside = await s.eval(`(r=document.getElementById('ns-hero-card').getBoundingClientRect(), {x:r.x+r.width/2, y:r.y+r.height/2})`);
     await s.clickXY(outside.x, outside.y);
-    await WAIT(200);
-    const allClosed = await s.eval(`!document.querySelector('.menu-item.open')`);
+    const allClosed = await waitFor(`!document.querySelector('.menu-item.open')`, 'outside native click closes every top menu');
     results.mouse.push({ step: 'outside-click-closes', allClosed });
     requireGate(allClosed, 'outside click did not close top menu');
 
     await clearStarts(s);
     await s.click('#menu-power > span');
+    await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'Power menu open for plan selection');
     await s.click('#menu-power [data-action="shutdown"]');
+    await waitFor(`state.action === 'shutdown' && state.dryRun === true`, 'Shutdown plan selected without leaving Dry Run');
     const powerSelection = await s.eval(`({ action: state.action, dryRun: state.dryRun, warningOpen: document.getElementById('warning-modal')?.classList.contains('active') || false })`);
     const startsAfterPowerSelection = await getStarts(s);
     const realPowerActions = await getRealPowerActions(s);
@@ -524,41 +1167,49 @@ async function runTopMenuGate() {
     results.mouse.push({ step: 'power-selects-plan-without-execution', powerSelection, starts: startsAfterPowerSelection.length, realPowerActions: realPowerActions.length });
 
     await s.click('#menu-help > span');
+    await waitFor(`document.getElementById('menu-help').classList.contains('open')`, 'Help menu open');
     await s.click('#open-about');
+    await waitFor(`document.getElementById('about-modal')?.classList.contains('active') || false`, 'About modal open from native menu selection');
     const aboutOpen = await s.eval(`document.getElementById('about-modal')?.classList.contains('active') || false`);
     requireGate(aboutOpen, 'enabled Help item did not activate');
-    await s.eval(`document.getElementById('about-modal')?.classList.remove('active')`);
+    await s.key('Escape');
+    await waitFor(`!document.getElementById('about-modal')?.classList.contains('active')`, 'Escape closes About modal');
     results.mouse.push({ step: 'help-item-activates', aboutOpen });
 
     // Keyboard navigation
-    await s.eval(`document.getElementById('menu-power').focus()`);
+    await s.click('#menu-power > span');
+    await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'Power menu primed for keyboard path');
+    await s.key('Escape');
+    await waitFor(`!document.querySelector('.menu-item.open') && document.activeElement?.id === 'menu-power'`, 'Power trigger focused after Escape');
     await s.key('Enter');
-    await WAIT(200);
+    await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'Enter opens Power menu');
     const powerOpen = await s.eval(`document.getElementById('menu-power').classList.contains('open')`);
     addShot(phase, await s.screenshot('topmenu-power-keyboard-open.png'));
     results.keyboard.push({ step: 'enter-opens-power', powerOpen });
     requireGate(powerOpen, 'Enter did not open Power');
 
     await s.key('ArrowDown');
-    await WAIT(200);
+    await waitFor(`document.activeElement?.dataset?.action === 'restart'`, 'ArrowDown focuses Restart');
     const focusedItem = await s.eval(`({ text: document.activeElement?.textContent?.trim(), action: document.activeElement?.dataset?.action || null })`);
     results.keyboard.push({ step: 'arrow-down-to-item', focusedItem });
     requireGate(focusedItem.action === 'restart', 'ArrowDown did not move to the next Power item', focusedItem);
     await s.key('ArrowUp');
-    await WAIT(200);
+    await waitFor(`document.activeElement?.dataset?.action === 'shutdown'`, 'ArrowUp focuses Shutdown');
     const focusedAfterUp = await s.eval(`({ text: document.activeElement?.textContent?.trim(), action: document.activeElement?.dataset?.action || null })`);
     results.keyboard.push({ step: 'arrow-up', focusedItem: focusedAfterUp });
     requireGate(focusedAfterUp.action === 'shutdown', 'ArrowUp did not move to the previous Power item', focusedAfterUp);
     await s.key('Escape');
-    await WAIT(200);
-    const closedByEscape = await s.eval(`!document.querySelector('.menu-item.open') && document.activeElement?.id === 'menu-power'`);
+    const closedByEscape = await waitFor(`!document.querySelector('.menu-item.open') && document.activeElement?.id === 'menu-power'`, 'Escape closes Power and returns focus');
     results.keyboard.push({ step: 'escape-closes-and-focuses-trigger', closedByEscape });
     requireGate(closedByEscape, 'Escape did not close Power and return focus');
 
     await clearStarts(s);
-    await s.eval(`document.getElementById('menu-settings').focus()`);
+    await s.click('#menu-settings > span');
+    await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu primed for keyboard path');
+    await s.key('Escape');
+    await waitFor(`document.activeElement?.id === 'menu-settings'`, 'Settings trigger focused after Escape');
     await s.key('ArrowDown');
-    await s.condition(`document.getElementById('menu-settings').classList.contains('open') && document.activeElement?.id === 'toggle-dryrun'`);
+    await waitFor(`document.getElementById('menu-settings').classList.contains('open') && document.activeElement?.id === 'toggle-dryrun'`, 'ArrowDown opens Settings and focuses first item');
     const settingsOpen = await getTopMenuKeyboardState(s);
     results.keyboard.push({ step: 'arrow-down-opens-settings', ...settingsOpen });
     requireGate(settingsOpen.settingsMenuOpen && settingsOpen.settingsAriaExpanded === 'true' && settingsOpen.selectedMenuItem === 'toggle-dryrun', 'ArrowDown did not open Settings and focus the first menu item', settingsOpen);
@@ -567,7 +1218,7 @@ async function runTopMenuGate() {
     results.keyboard.push({ step: 'before-enter-on-open-options', ...beforeEnter });
     requireGate(beforeEnter.settingsMenuOpen && beforeEnter.settingsAriaExpanded === 'true' && beforeEnter.selectedMenuItem === 'open-options', 'Advanced Options was not focused before Enter', beforeEnter);
     await s.key('Enter');
-    await s.condition(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none' && document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'set'`);
+    await waitFor(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none' && document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'set'`, 'Enter activates Advanced Options');
     const afterEnter = await getTopMenuKeyboardState(s);
     const startsAfterKeyboard = await getStarts(s);
     const realPowerActionsAfterKeyboard = await getRealPowerActions(s);
@@ -593,17 +1244,13 @@ async function runSharedStartGate() {
     await WAIT(400);
     const results = [];
 
-    await s.eval(`document.getElementById('timer-input').value = '2'; document.getElementById('timer-input').dispatchEvent(new Event('input'));`);
-    await WAIT(200);
+    await s.click('#timer-input');
+    await s.chord(['Control'], 'A');
+    await s.key('2');
+    await s.condition(`document.getElementById('timer-input').value === '2'`, 2000, 'native timer input contains 2 minutes');
     await clearStarts(s);
     await s.click('#ns-play-btn');
-    let running = false;
-    for (let i = 0; i < 30; i++) { await WAIT(200); running = await s.eval('state.running'); if (running) break; }
-    if (!running) {
-      const debug = await getDebug(s);
-      console.error('hero click did not start:', JSON.stringify(debug, null, 2));
-      throw new Error('ns-play-btn did not start timer: ' + JSON.stringify(debug));
-    }
+    await s.condition(`state.running`, 6000, 'hero Start enters running state');
     const heroInvocations = await getStarts(s);
     requireGate(heroInvocations.length === 1, 'hero Start dispatched a duplicate or missing payload', heroInvocations);
     requireGate(heroInvocations[0]?.options?.startOrigin === 'play' && heroInvocations[0]?.options?.dryRun === true, 'hero Start payload violated shared Start/Dry Run contract', heroInvocations[0]);
@@ -611,26 +1258,20 @@ async function runSharedStartGate() {
     try { heroReceipt = await s.eval('window.electronAPI.getLatestReceipt()'); } catch {}
     results.push({ control: 'ns-play-btn', invocations: heroInvocations.length, payload: heroInvocations[0], receipt: heroReceipt });
     addShot(phase, await s.screenshot('active-running-hero.png'));
-    await s.eval(`window.electronAPI.cancelTimer()`);
-    await WAIT(800);
+    await s.click('#btn-stop');
+    await s.condition(`!state.running && !state.paused`, 3000, 'native Cancel stops hero-started session');
 
     await clearStarts(s);
     await s.key(' ');
-    running = false;
-    for (let i = 0; i < 30; i++) { await WAIT(200); running = await s.eval('state.running'); if (running) break; }
-    if (!running) {
-      const debug = await getDebug(s);
-      console.error('space did not start:', JSON.stringify(debug, null, 2));
-      throw new Error('space did not start timer: ' + JSON.stringify(debug));
-    }
+    await s.condition(`state.running`, 6000, 'Space enters running state');
     const spaceInvocations = await getStarts(s);
     requireGate(spaceInvocations.length === 1, 'Space Start dispatched a duplicate or missing payload', spaceInvocations);
     requireGate(spaceInvocations[0]?.options?.startOrigin === 'play' && spaceInvocations[0]?.options?.dryRun === true, 'Space payload diverged from shared Start contract', spaceInvocations[0]);
     let spaceReceipt = null;
     try { spaceReceipt = await s.eval('window.electronAPI.getLatestReceipt()'); } catch {}
     results.push({ control: 'space-key', invocations: spaceInvocations.length, payload: spaceInvocations[0], receipt: spaceReceipt });
-    await s.eval(`window.electronAPI.cancelTimer()`);
-    await WAIT(800);
+    await s.click('#btn-stop');
+    await s.condition(`!state.running && !state.paused`, 3000, 'native Cancel stops Space-started session');
 
     // Restart to load morning proof (receipt) so proof-again appears
     await stopApp(child);
@@ -645,13 +1286,7 @@ async function runSharedStartGate() {
       addShot(phase, await s2.screenshot('morning-proof-visible.png'));
       await clearStarts(s2);
       await s2.click('#btn-proof-again');
-      let running2 = false;
-      for (let i = 0; i < 30; i++) { await WAIT(200); running2 = await s2.eval('state.running'); if (running2) break; }
-      if (!running2) {
-        const debug = await s2.eval(`({ running: state.running, paused: state.paused, action: state.action, dryRun: state.dryRun, input: document.getElementById('timer-input').value, invocations: window.__startInvocations, proofDisplay: document.getElementById('morning-proof-section')?.style.display })`);
-        console.error('proof-again did not start:', JSON.stringify(debug, null, 2));
-        throw new Error('proof-again did not start timer: ' + JSON.stringify(debug));
-      }
+      await s2.condition(`state.running`, 6000, 'Morning Proof replay enters running state');
       const againInvocations = await getStarts(s2);
       requireGate(againInvocations.length === 1, 'proof replay dispatched a duplicate or missing payload', againInvocations);
       requireGate(againInvocations[0]?.options?.startOrigin === 'play' && againInvocations[0]?.options?.dryRun === true, 'proof replay payload diverged from shared Start contract', againInvocations[0]);
@@ -667,18 +1302,101 @@ async function runSharedStartGate() {
   }
 }
 
+async function progressVisibleRitualOverlay(s, { modeId, phase, screenshotPrefix }) {
+  let receipt = null;
+  const ritualTrace = [];
+  const ritualStepLog = [];
+  const clickedStepFingerprints = new Set();
+  let overlayDismissed = false;
+  for (let attempt = 0; ; attempt++) {
+    const currentReceipt = await s.eval(`window.electronAPI.getLatestReceipt()`);
+    if (currentReceipt && currentReceipt.result === 'running') receipt = currentReceipt;
+
+    const ritualState = await s.eval(`window.electronAPI.ritualState()`);
+    ritualTrace.push(ritualState);
+    const overlayActive = await s.eval(`(() => {
+      const overlay = document.getElementById('ritual-overlay');
+      return Boolean(overlay && getComputedStyle(overlay).display !== 'none' && overlay.classList.contains('active'));
+    })()`);
+
+    const realPowerActionsDuringRitual = await getRealPowerActions(s);
+    const control = await s.eval(`(() => {
+      const next = document.getElementById('btn-ritual-next');
+      if (!next) return { exists: false };
+      const r = next.getBoundingClientRect();
+      const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+      const hit = document.elementFromPoint(cx, cy);
+      return {
+        exists: true,
+        visible: r.width > 0 && r.height > 0,
+        label: next.textContent || '',
+        hitTestOk: Boolean(hit && (hit === next || next.contains(hit) || hit.closest?.('#btn-ritual-next') === next))
+      };
+    })()`);
+
+    const decision = decideRitualStepAction({
+      ritualActive: Boolean(ritualState?.active),
+      overlayActive,
+      totalSteps: ritualState?.totalSteps,
+      currentStep: ritualState?.currentStep,
+      currentStepId: ritualState?.currentStepInfo?.id,
+      controlExists: Boolean(control.exists),
+      controlVisible: Boolean(control.visible),
+      controlLabel: control.label,
+      controlHitTestOk: Boolean(control.hitTestOk),
+      clickedFingerprints: clickedStepFingerprints,
+      attempt,
+      realPowerActionsCount: realPowerActionsDuringRitual.length
+    });
+
+    if (decision.action === 'done') { overlayDismissed = true; break; }
+    requireGate(decision.action === 'click', `${modeId} ${decision.reason || 'ritual progression failed'}`, { decision, control, ritualTrace, ritualStepLog });
+
+    const fingerprint = decision.fingerprint;
+    const fileFingerprint = fingerprint.replace(':', '-');
+    const before = addShot(phase, await s.screenshot(`${screenshotPrefix}-ritual-${fileFingerprint}-before.png`));
+    const stepBeforeChange = { currentStep: ritualState?.currentStep, stepId: ritualState?.currentStepInfo?.id };
+    const { native } = await s.click('#btn-ritual-next');
+    clickedStepFingerprints.add(fingerprint);
+
+    const transitionStartedAt = Date.now();
+    let transition;
+    try {
+      await s.condition(`(() => {
+        const overlay = document.getElementById('ritual-overlay');
+        const overlayStillActive = Boolean(overlay && getComputedStyle(overlay).display !== 'none' && overlay.classList.contains('active'));
+        if (!overlayStillActive) return true;
+        return window.electronAPI.ritualState().then(rs =>
+          rs?.currentStep !== ${JSON.stringify(stepBeforeChange.currentStep)} ||
+          rs?.currentStepInfo?.id !== ${JSON.stringify(stepBeforeChange.stepId)}
+        );
+      })()`, 3000, `${modeId} ritual step ${fingerprint} transitions (overlay dismissed or step changed)`);
+      transition = { success: true, elapsedMs: Date.now() - transitionStartedAt };
+    } catch (err) {
+      transition = { success: false, elapsedMs: Date.now() - transitionStartedAt, error: err.message };
+    }
+    requireGate(transition.success, `${modeId} ritual step ${fingerprint} did not transition after its one native click`, { transition, ritualTrace, ritualStepLog });
+    const after = addShot(phase, await s.screenshot(`${screenshotPrefix}-ritual-${fileFingerprint}-after.png`));
+
+    ritualStepLog.push({ fingerprint, label: control.label, native, before: before.name, after: after.name, transitionElapsedMs: transition.elapsedMs });
+  }
+
+  requireGate(overlayDismissed, `${modeId} ritual overlay did not dismiss through the visible progression control`, { ritualTrace, ritualStepLog });
+  return { receipt, ritualTrace, ritualStepLog, overlayDismissed };
+}
+
 async function armAndStartMode(s, modeId, phase) {
   const expected = {
     'movie-wind-down': { title: 'Movie Wind-Down', durationSeconds: 5400, action: 'sleep', ritualId: 'standard' },
     'full-shutdown': { title: 'Full Shutdown', durationSeconds: 3600, action: 'shutdown', ritualId: 'standard' }
   }[modeId];
   const results = { modeId };
-  await s.eval(`document.querySelector('[data-ns-tab="modes"]').click()`);
+  await s.click('[data-ns-tab="modes"]');
   await s.waitFor('#nm-cards-grid .nm-card');
-  await s.eval(`document.querySelector('.nm-card[data-mode-id="${modeId}"]').click()`);
-  await s.condition(`document.getElementById('nm-detail-panel').style.display !== 'none' && !document.getElementById('nm-btn-use-tonight').disabled`, 3000);
-  await s.eval(`document.getElementById('nm-btn-use-tonight').click()`);
-  await s.condition(`state.armedNightMode !== null && state.armedNightMode.nightModeId === '${modeId}'`, 3000);
+  await s.click(`.nm-card[data-mode-id="${modeId}"]`);
+  await s.condition(`document.getElementById('nm-detail-panel').style.display !== 'none' && !document.getElementById('nm-btn-use-tonight').disabled`, 3000, `${modeId} detail panel ready`);
+  await s.click('#nm-btn-use-tonight');
+  await s.condition(`state.armedNightMode !== null && state.armedNightMode.nightModeId === '${modeId}'`, 3000, `${modeId} armed through native Use Tonight`);
   results.armed = await s.eval(`state.armedNightMode ? { id: state.armedNightMode.nightModeId, title: state.armedNightMode.nightModeTitle, durationSeconds: state.armedNightMode.durationSeconds, action: state.armedNightMode.action } : null`);
   results.hero = await s.eval(`({
     title: document.getElementById('ns-hero-title').textContent,
@@ -703,7 +1421,7 @@ async function armAndStartMode(s, modeId, phase) {
   addShot(phase, await s.screenshot(`${phase}-${modeId}-projection.png`));
   await clearStarts(s);
   await s.click('#ns-play-btn');
-  await s.condition(`state.running`, 3000);
+  await s.condition(`state.running`, 3000, `${modeId} enters running ritual state`);
   const invocations = await getStarts(s);
   results.startCount = invocations.length;
   results.startPayload = invocations[0] || null;
@@ -724,23 +1442,22 @@ async function armAndStartMode(s, modeId, phase) {
   requireGate(results.active.modeTitle === expected.title && results.active.dryRun === true, `${modeId} active-run title/safety state drifted`, results.active);
   requireGate(results.active.controls.pause !== 'none' && !results.active.controls.snoozeDisabled && results.active.controls.cancel !== 'none', `${modeId} active-run controls are not visible`, results.active);
   addShot(phase, await s.screenshot(`${phase}-${modeId}-running.png`));
-  // Standard-ritual modes must reach the 'timer' step before beginValidatedCountdown
-  // creates a receipt. Advance the ritual until a running receipt appears.
-  let receipt = null;
-  const ritualTrace = [];
-  for (let i = 0; i < 10; i++) {
-    receipt = await s.eval(`window.electronAPI.getLatestReceipt()`);
-    if (receipt && receipt.result === 'running') break;
-    const ritualState = await s.eval(`window.electronAPI.ritualState()`);
-    ritualTrace.push(ritualState);
-    if (!ritualState?.active) break;
-    await s.eval(`window.electronAPI.ritualAdvance()`);
-    await WAIT(500);
-  }
-  results.ritualTrace = ritualTrace;
-  requireGate(receipt && receipt.result === 'running', `${modeId} did not create a running receipt at the ritual timer step`, ritualTrace);
-  await s.eval(`window.electronAPI.cancelTimer()`);
-  await WAIT(800);
+  // Standard-ritual modes must reach the timer step before a receipt exists,
+  // and the overlay itself only closes once every distinct visible step has
+  // been acknowledged through its own native click -- `auto` steps only
+  // relabel the same #btn-ritual-next control ("Done" vs "Next"), they don't
+  // auto-advance, and the backend receipt can go 'running' one step before
+  // the ritual's actual last step. Track a fingerprint per step so the same
+  // step is never clicked twice, and bound the loop by the ritual's own
+  // reported step count (ritualState().totalSteps) plus a small safety
+  // margin, not an arbitrary large number.
+  const progression = await progressVisibleRitualOverlay(s, { modeId, phase, screenshotPrefix: `${phase}-${modeId}` });
+  let receipt = progression.receipt;
+  results.ritualTrace = progression.ritualTrace;
+  results.ritualStepLog = progression.ritualStepLog;
+  requireGate(receipt && receipt.result === 'running', `${modeId} did not create a running receipt at the ritual timer step`, progression.ritualTrace);
+  await s.click('#btn-stop');
+  await s.condition(`!state.running && !state.paused`, 3000, `${modeId} native Cancel stops active run`);
   receipt = await s.eval(`window.electronAPI.getLatestReceipt()`);
   results.receipt = receipt ? {
     receiptId: receipt.id,
@@ -903,6 +1620,58 @@ async function runActiveRunGate() {
       results.push({ label, metrics: m, focused });
     }
 
+    const activeRitual = await progressVisibleRitualOverlay(s, {
+      modeId: 'active-run-movie-wind-down',
+      phase,
+      screenshotPrefix: 'active-run-workarea'
+    });
+    results.push({
+      state: 'ritual-completed-before-controls',
+      ritualTrace: activeRitual.ritualTrace,
+      ritualStepLog: activeRitual.ritualStepLog
+    });
+
+    const ritualStateBeforePause = await s.eval(`window.electronAPI.ritualState()`);
+    const realPowerActionsBeforePause = await getRealPowerActions(s);
+    const pauseTarget = await s.eval(`(() => {
+      const overlay = document.getElementById('ritual-overlay');
+      const pause = document.getElementById('btn-pause');
+      if (!pause) return { exists: false };
+      const r = pause.getBoundingClientRect();
+      const x = r.x + r.width / 2, y = r.y + r.height / 2;
+      const hit = document.elementFromPoint(x, y);
+      const overlayActive = Boolean(overlay && getComputedStyle(overlay).display !== 'none' && overlay.classList.contains('active'));
+      return {
+        exists: true,
+        visible: r.width > 0 && r.height > 0,
+        hitTestOk: Boolean(hit && (hit === pause || pause.contains(hit) || hit.closest?.('#btn-pause') === pause)),
+        overlayActive,
+        coveredByActiveOverlay: Boolean(overlayActive && hit && (hit === overlay || overlay.contains(hit))),
+        bounds: { x: r.x, y: r.y, width: r.width, height: r.height },
+        hit: { id: hit?.id || null, className: typeof hit?.className === 'string' ? hit.className : null }
+      };
+    })()`);
+    const pauseDecision = decideWorkareaControlAction({
+      ritualActive: Boolean(ritualStateBeforePause?.active),
+      overlayActive: Boolean(pauseTarget.overlayActive),
+      totalSteps: ritualStateBeforePause?.totalSteps,
+      currentStep: ritualStateBeforePause?.currentStep,
+      currentStepId: ritualStateBeforePause?.currentStepInfo?.id,
+      controlExists: false,
+      controlVisible: false,
+      controlLabel: '',
+      controlHitTestOk: false,
+      clickedFingerprints: new Set(activeRitual.ritualStepLog.map(step => step.fingerprint)),
+      attempt: activeRitual.ritualStepLog.length,
+      realPowerActionsCount: realPowerActionsBeforePause.length,
+      pauseCoveredByActiveOverlay: pauseTarget.coveredByActiveOverlay,
+      pauseTargetExists: pauseTarget.exists,
+      pauseTargetVisible: pauseTarget.visible,
+      pauseTargetHitTestOk: pauseTarget.hitTestOk
+    });
+    requireGate(pauseDecision.action === 'pause', pauseDecision.reason || 'Pause is not safely targetable after ritual completion', { pauseDecision, pauseTarget, ritualStateBeforePause, realPowerActionsBeforePause });
+    results.push({ state: 'pause-target-verified', pauseTarget, realPowerActions: realPowerActionsBeforePause.length });
+
     await s.click('#btn-pause');
     await s.condition(`state.paused`, 3000);
     await s.resize(1280, 720);
@@ -947,6 +1716,269 @@ async function runActiveRunGate() {
   }
 }
 
+// --- Warm-mode: one continuing packaged process reused across N iterations,
+// reset only through supported visible UI between iterations (no restart).
+async function runWarmTopMenuPass(s) {
+  const results = { mouse: [], keyboard: [] };
+  // Same measured-overhead basis as runTopMenuGate's waitFor: see the comment there.
+  const waitFor = (expression, label, timeout = 5000) => s.condition(expression, timeout, label);
+
+  await s.click('#menu-power > span');
+  let open = await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'warm Power menu open after native click');
+  requireGate(open, 'warm Power menu did not open on click');
+  results.mouse.push({ step: 'click-power-open', open });
+
+  await s.click('#menu-power > span');
+  open = await waitFor(`!document.querySelector('.menu-item.open')`, 'warm Power menu closed after second native click');
+  requireGate(open, 'warm Power trigger did not toggle closed');
+  results.mouse.push({ step: 'click-power-close', closed: open });
+
+  await s.click('#menu-settings > span');
+  open = await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'warm Settings menu open after native click');
+  requireGate(open, 'warm Settings menu did not open on click');
+  results.mouse.push({ step: 'click-settings-open', open });
+
+  await s.click('#menu-help > span');
+  await waitFor(`!document.getElementById('menu-settings').classList.contains('open') && document.getElementById('menu-help').classList.contains('open')`, 'warm Help open and Settings closed');
+  results.mouse.push({ step: 'click-help-closes-settings' });
+
+  const outside = await s.eval(`(r=document.getElementById('ns-hero-card').getBoundingClientRect(), {x:r.x+r.width/2, y:r.y+r.height/2})`);
+  await s.clickXY(outside.x, outside.y);
+  const allClosed = await waitFor(`!document.querySelector('.menu-item.open')`, 'warm outside native click closes every top menu');
+  requireGate(allClosed, 'warm outside click did not close top menu');
+  results.mouse.push({ step: 'outside-click-closes', allClosed });
+
+  await s.click('#menu-power > span');
+  await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'warm Power menu primed for keyboard path');
+  await s.key('Escape');
+  await waitFor(`!document.querySelector('.menu-item.open') && document.activeElement?.id === 'menu-power'`, 'warm Power trigger focused after Escape');
+  await s.key('Enter');
+  const powerOpen = await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'warm Enter opens Power menu');
+  requireGate(powerOpen, 'warm Enter did not open Power');
+  results.keyboard.push({ step: 'enter-opens-power', powerOpen });
+  await s.key('ArrowDown');
+  await waitFor(`document.activeElement?.dataset?.action === 'restart'`, 'warm ArrowDown focuses Restart');
+  results.keyboard.push({ step: 'arrow-down-focuses-restart' });
+  await s.key('Escape');
+  const closedByEscape = await waitFor(`!document.querySelector('.menu-item.open') && document.activeElement?.id === 'menu-power'`, 'warm Escape closes Power and returns focus');
+  requireGate(closedByEscape, 'warm Escape did not close Power and return focus');
+  results.keyboard.push({ step: 'escape-closes', closedByEscape });
+
+  return results;
+}
+
+async function runWarmSettingsTogglePass(s) {
+  const results = [];
+  // Same measured-overhead basis as runTopMenuGate's waitFor (~2.0s floor per
+  // native click): these post-click assertions follow the identical top-menu
+  // click pattern, so they carry the same widened, finite budget.
+  await s.click('#menu-settings > span');
+  await s.condition(`document.getElementById('menu-settings').classList.contains('open')`, 5000, 'warm Settings menu open for Dry Run toggle');
+  await s.click('#toggle-dryrun');
+  await s.condition(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent === 'OFF'`, 5000, 'warm Dry Run toggle visibly disabled');
+  let indicator = await s.eval(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent`);
+  requireGate(indicator === 'OFF', 'warm Dry Run toggle did not visibly disable', indicator);
+  results.push({ step: 'toggle-off', indicator });
+
+  await s.click('#menu-settings > span');
+  await s.condition(`document.getElementById('menu-settings').classList.contains('open')`, 5000, 'warm Settings menu reopened to restore Dry Run');
+  await s.click('#toggle-dryrun');
+  await s.condition(`state.dryRun === true`, 5000, 'warm Dry Run restored');
+  indicator = await s.eval(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent`);
+  requireGate(indicator === 'ON', 'warm Dry Run toggle did not visibly restore', indicator);
+  results.push({ step: 'toggle-on-restore', indicator });
+
+  // W2 (Canonical V5 WARM-01): #toggle-dryrun is itself a .submenu-item, and
+  // every .submenu-item click handler closes all top menus as its first
+  // action (renderer.js: closeAllTopMenus()) -- so the toggle-restore click
+  // above already closed Settings. #open-options lives inside that same
+  // dropdown (.submenu { display:none } while closed), so measuring it now
+  // would return a zero-size hidden rect and correctly fail validateRect's
+  // strict-interior check. Reopen and prove it, exactly like the COLD path
+  // (runTopMenuGate) already does before its own #open-options click.
+  await s.click('#menu-settings > span');
+  await s.condition(`document.getElementById('menu-settings').classList.contains('open')`, 5000, 'warm Settings menu reopened before Advanced Options');
+  results.push({ step: 'settings-reopened-for-advanced-options', open: true });
+
+  await s.click('#open-options');
+  await s.condition(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none'`, 5000, 'warm Advanced Options opens Settings panel');
+  const settingsVisible = await s.eval(`document.getElementById('ns-panel-set').style.display !== 'none'`);
+  requireGate(settingsVisible, 'warm Advanced Options did not open the Settings workspace');
+  results.push({ step: 'advanced-options-opens-settings', settingsVisible });
+
+  await s.click('#modal-close');
+  await s.condition(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'lib'`, 5000, 'warm native Settings close restores Tonight');
+  const restored = await s.eval(`document.querySelector('.ns-nav-item.active')?.dataset.nsTab`);
+  requireGate(restored === 'lib', 'warm closing Settings did not restore Tonight', restored);
+  results.push({ step: 'close-restores-route', restored });
+  return results;
+}
+
+async function runWarmSharedStartPass(s) {
+  const results = [];
+  await clearStarts(s);
+  await s.click('#ns-play-btn');
+  await s.condition(`state.running`, 6000, 'warm hero Start enters running state');
+  let invocations = await getStarts(s);
+  requireGate(invocations.length === 1 && invocations[0]?.options?.startOrigin === 'play' && invocations[0]?.options?.dryRun === true, 'warm hero Start payload violated shared Start/Dry Run contract', invocations);
+  results.push({ control: 'ns-play-btn', invocations: invocations.length });
+  await s.click('#btn-stop');
+  await s.condition(`!state.running && !state.paused`, 3000, 'warm native Cancel stops hero-started session');
+
+  await clearStarts(s);
+  await s.key(' ');
+  await s.condition(`state.running`, 6000, 'warm Space enters running state');
+  invocations = await getStarts(s);
+  requireGate(invocations.length === 1 && invocations[0]?.options?.startOrigin === 'play' && invocations[0]?.options?.dryRun === true, 'warm Space Start payload diverged from shared Start contract', invocations);
+  results.push({ control: 'space-key', invocations: invocations.length });
+  await s.click('#btn-stop');
+  await s.condition(`!state.running && !state.paused`, 3000, 'warm native Cancel stops Space-started session');
+
+  const realPowerActions = await getRealPowerActions(s);
+  requireGate(realPowerActions.length === 0, 'warm shared-start pass attempted a real power action', realPowerActions);
+  return results;
+}
+
+async function assertWarmBaseline(s, iterationLabel) {
+  const baseline = await s.eval(`({
+    route: document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || null,
+    openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
+    activeModals: Array.from(document.querySelectorAll('.modal.active')).map(modal => modal.id),
+    running: state.running,
+    paused: state.paused,
+    dryRun: state.dryRun,
+    ritualOverlayActive: document.getElementById('ritual-overlay')?.classList.contains('active') || false,
+    heroVisible: getComputedStyle(document.getElementById('ns-hero-card')).display !== 'none',
+    armedNightMode: state.armedNightMode
+  })`);
+  requireGate(
+    baseline.route === 'lib' &&
+    baseline.openMenus.length === 0 &&
+    baseline.activeModals.length === 0 &&
+    baseline.running === false &&
+    baseline.paused === false &&
+    baseline.dryRun === true &&
+    !baseline.ritualOverlayActive &&
+    baseline.heroVisible,
+    `warm iteration ${iterationLabel} did not reach the known reset baseline before proceeding`,
+    baseline
+  );
+  // S1/warm-baseline-state-leak: armedNightMode survives resetToWarmBaseline's
+  // stop+navigate steps (clearArmedNightMode is a distinct production action,
+  // not a side effect of Cancel or of leaving the tab). A prior iteration's
+  // armAndStartMode leaves a ritual-capable mode armed; runWarmSharedStartPass
+  // assumes the neutral/unarmed baseline this assertion now requires, so an
+  // undetected leak here would make it silently start that leftover ritual
+  // instead of the generic Start path it's meant to exercise.
+  requireGate(
+    baseline.armedNightMode === null,
+    `warm baseline retained an armed Night Mode`,
+    baseline
+  );
+  return baseline;
+}
+
+async function resetToWarmBaseline(s) {
+  for (let i = 0; i < 3; i++) {
+    const openState = await s.eval(`({
+      openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
+      activeModals: Array.from(document.querySelectorAll('.modal.active')).map(modal => modal.id)
+    })`);
+    if (openState.openMenus.length === 0 && openState.activeModals.length === 0) break;
+    await s.key('Escape');
+    await WAIT(150);
+  }
+  const active = await s.eval(`state.running || state.paused`);
+  if (active) {
+    await s.click('#btn-stop');
+    await s.condition(`!state.running && !state.paused`, 3000, 'warm reset stops any active run through the supported Cancel control');
+  }
+  const route = await s.eval(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || null`);
+  if (route !== 'lib') {
+    await s.click('[data-ns-tab="lib"]');
+    await s.condition(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'lib'`, 2000, 'warm reset returns to the Tonight tab through the visible nav');
+  }
+  // S1/warm-baseline-state-leak: armAndStartMode's Use Tonight step leaves
+  // state.armedNightMode set after the run it armed is stopped -- Cancel and
+  // leaving the tab don't clear it. #armed-mode-clear is the same supported
+  // production control a user would click to remove that selection (wired to
+  // clearArmedNightMode() in renderer.js), and it lives on the Tonight/lib
+  // panel this reset already returns to, so it's reachable here.
+  const armed = await s.eval(`state.armedNightMode !== null`);
+  if (armed) {
+    // A7/toast-occlusion: Stop/Cancel itself fires a production toast (and a
+    // ritual-completion toast may already be stacked above it) through the
+    // real #toast-container (position:fixed, z-index:9999, pointer-events:auto
+    // on .toast), which sits over #armed-mode-clear's point for up to its
+    // ~3s visible duration. The steps above are all no-ops in the common
+    // case, so this click can arrive while that toast still owns the hit
+    // test. Wait for the actual production control to become hit-testable at
+    // its own intended point -- not for toasts to disappear, not a fixed
+    // sleep -- so this stays correct regardless of toast count or duration.
+    await s.condition(`(() => {
+      const el = document.getElementById('armed-mode-clear');
+      if (!el || !el.isConnected) return false;
+      const style = getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
+      const r = el.getBoundingClientRect();
+      if (r.width <= 2 || r.height <= 2) return false;
+      const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+      if (!(cx > r.x + 1 && cx < r.x + r.width - 1 && cy > r.y + 1 && cy < r.y + r.height - 1)) return false;
+      const hit = document.elementFromPoint(cx, cy);
+      return Boolean(hit && (hit === el || el.contains(hit)));
+    })()`, 4000, 'Armed Night Mode clear control becomes actionable');
+    await s.click('#armed-mode-clear');
+    await s.condition(`state.armedNightMode === null`, 2000, 'warm reset disarms any Night Mode left selected through the supported Clear control');
+  }
+}
+
+async function runWarmIteration(s, iterationIndex, modeId) {
+  const phase = `warm-${iterationIndex}`;
+  const results = {};
+  results.topMenu = await runWarmTopMenuPass(s);
+  results.settingsToggle = await runWarmSettingsTogglePass(s);
+  results.sharedStart = await runWarmSharedStartPass(s);
+  results.useTonight = await armAndStartMode(s, modeId, phase);
+  await resetToWarmBaseline(s);
+  results.baseline = await assertWarmBaseline(s, iterationIndex);
+  return results;
+}
+
+async function runWarmMatrix(iterations) {
+  const phase = 'warm-matrix';
+  const userData = path.join(ROOT_DIR, 'userdata-warm');
+  const { child, session: s } = await spawnApp(userData);
+  const allResults = [];
+  try {
+    await s.resize(1280, 720);
+    await s.waitFor('#ns-play-btn');
+    await resetToWarmBaseline(s);
+    await assertWarmBaseline(s, 'initial');
+    for (let i = 1; i <= iterations; i++) {
+      const modeId = i % 2 === 1 ? 'movie-wind-down' : 'full-shutdown';
+      const iterationResult = await runWarmIteration(s, i, modeId);
+      allResults.push({ iteration: i, modeId, ...iterationResult });
+      const realPowerActions = await getRealPowerActions(s);
+      requireGate(realPowerActions.length === 0, `warm iteration ${i} left a real power action recorded`, realPowerActions);
+    }
+    requireGate(allResults.length === iterations, 'warm matrix completed a different iteration count than requested', {
+      requestedIterations: iterations,
+      completedIterations: allResults.length
+    });
+    report.phases[phase] = {
+      status: 'passed',
+      requestedIterations: iterations,
+      completedIterations: allResults.length,
+      results: allResults,
+      processReused: true,
+      restarts: 0
+    };
+  } finally {
+    await stopApp(child);
+  }
+  return allResults;
+}
+
 async function writeArtifacts() {
   report.rendererDiagnostics = runtimeSessions.map(({ label, userDataDir, port, renderer, session }) => ({
     label,
@@ -963,19 +1995,44 @@ async function writeArtifacts() {
   fs.writeFileSync(path.join(ROOT_DIR, 'SHA256SUMS.txt'), sums + '\n');
 }
 
+function cleanupUserDataDirs() {
+  try {
+    for (const entry of fs.readdirSync(ROOT_DIR)) {
+      if (entry.startsWith('userdata-')) fs.rmSync(path.join(ROOT_DIR, entry), { recursive: true, force: true });
+    }
+  } catch {}
+}
+
 async function main() {
   if (!fs.existsSync(EXE_PATH)) throw new Error(`Desktop runtime executable missing: ${EXE_PATH}`);
+  const workerReady = await nativeInputWorker.start();
+  report.nativeInputWorker = { script: path.join(__dirname, 'native-input-worker.ps1'), ready: workerReady };
   console.log('Desktop UX Functional Gate');
   console.log('Runtime:', SOURCE_RUNTIME ? 'source Electron' : 'packaged');
   console.log('Executable:', EXE_PATH);
   console.log('Root:', ROOT_DIR);
 
-  await runStartupGate();
-  await runTopMenuGate();
-  await runSharedStartGate();
-  await runUseTonightGate();
-  await runSettingsGate();
-  await runActiveRunGate();
+  // Mode selection: 'cold' (default) performs the full flow inventory through
+  // fresh per-scenario launches, unchanged from prior behavior. 'warm' launches
+  // the packaged app exactly once and reuses that one process across N
+  // iterations of the flow inventory, resetting only through supported visible
+  // UI (never restarting) between iterations.
+  const mode = process.env.LIGHTS_OUT_GATE_MODE === 'warm' ? 'warm' : 'cold';
+  report.mode = mode;
+  console.log('Mode:', mode);
+
+  if (mode === 'warm') {
+    const iterations = parseWarmIterations(process.env.LIGHTS_OUT_GATE_WARM_ITERATIONS);
+    report.warmIterationsRequested = iterations;
+    await runWarmMatrix(iterations);
+  } else {
+    await runStartupGate();
+    await runTopMenuGate();
+    await runSharedStartGate();
+    await runUseTonightGate();
+    await runSettingsGate();
+    await runActiveRunGate();
+  }
 
   const uncaughtExceptions = runtimeSessions.flatMap(({ label, session }) => session.exceptions.map(exception => ({ label, ...exception })));
   requireGate(uncaughtExceptions.length === 0, 'uncaught renderer exceptions were captured', uncaughtExceptions);
@@ -983,16 +2040,34 @@ async function main() {
   report.realPowerActions = 0;
   report.endTime = new Date().toISOString();
   await writeArtifacts();
-  console.log(JSON.stringify({ root: ROOT_DIR, screenshots: report.screenshots.length, phases: Object.keys(report.phases) }, null, 2));
+  cleanupUserDataDirs();
+  console.log(JSON.stringify({ root: ROOT_DIR, mode, screenshots: report.screenshots.length, phases: Object.keys(report.phases) }, null, 2));
 }
 
 main().catch(async err => {
   report.status = 'failed';
-  report.failure = { message: err.message, stack: err.stack };
+  // Preserve the native worker's rich pre-gesture diagnostics (timeline, dx/dy,
+  // translatedTarget, strict-interior results, ...) and, separately, the
+  // browser-gesture diagnostics (down/up/click, event counts, timing marks;
+  // see TOPMENU-STABILITY-01) in the persisted report artifact instead of
+  // relying solely on the console.error dump, which depth-truncates nested
+  // objects and is lost once the process exits. Native-input, browser-gesture,
+  // and pre-validation geometry diagnostics are independent
+  // (attachDiagnostics never overwrites), so each is present only when its
+  // corresponding stage supplied evidence.
+  // selector/targetSnapshot are diagnostic-only additions (PR43 cursor-custody
+  // environment instrumentation): which control a failed native click was
+  // aiming at. err.nativeInput.nativeEnvironment (set by native-input-worker.ps1
+  // when the failure occurred inside pointer handling) carries the rest of the
+  // new environment evidence and needed no new top-level field here.
+  report.failure = { message: err.message, stack: err.stack, gestureRequestId: err.gestureRequestId || null, selector: err.selector || null, targetSnapshot: err.targetSnapshot || null, nativeInput: err.nativeInput || null, browserGesture: err.browserGesture || null, geometryDiagnostic: err.geometryDiagnostic || null };
   report.endTime = new Date().toISOString();
   try { await writeArtifacts(); } catch (artifactError) {
     console.error('Failed to write failure artifacts:', artifactError);
   }
+  cleanupUserDataDirs();
   console.error('Gate fatal:', err);
-  process.exit(1);
+  process.exitCode = 1;
+}).finally(async () => {
+  await nativeInputWorker.stop();
 });

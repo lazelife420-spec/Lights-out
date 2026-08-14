@@ -7,12 +7,15 @@ const { spawnSync, spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { requirePackagedArtifact } = require('./packaged-artifact-resolver');
 
-const root = path.resolve(__dirname, '..');
-const distDir = process.env.LIGHTS_OUT_DIST_DIR
-  ? path.resolve(root, process.env.LIGHTS_OUT_DIST_DIR)
-  : path.join(root, '..', 'dist-native', 'win-unpacked');
-const exePath = path.join(distDir, 'Lights Out.exe');
+let exePath;
+try {
+  ({ executable: exePath } = requirePackagedArtifact());
+} catch (error) {
+  console.error(`  ERROR: ${error.message}`);
+  process.exit(1);
+}
 
 let passed = 0;
 let failed = 0;
@@ -59,12 +62,6 @@ function waitForNoLightsOutProcesses(timeoutMs = 10000) {
 }
 
 console.log('Starting Native Packaged Runtime Smoke Test...\n');
-
-if (!fs.existsSync(exePath)) {
-  console.error(`  ERROR: Executable not found at ${exePath}`);
-  console.error('  Please run "npm run build" first.');
-  process.exit(1);
-}
 
 check('package: executable exists and is reasonably sized', () => {
   const stats = fs.statSync(exePath);
