@@ -227,7 +227,7 @@ while ($true) {
       if ($captureForegroundChronology) { Sample-Foreground 'after-set-cursor-pos' }
       Mark 'set-cursor-pos-succeeded' ([ordered]@{x=$screenX;y=$screenY})
 
-      # --- Cursor-custody SETTLEMENT GATE (PR43 harness correction) ---
+      # --- Cursor-custody SETTLEMENT GATE (PR43 harness correction, SG1-corrected) ---
       # Exactly one SetCursorPos call happens above -- nothing below ever
       # calls it again. An external out-of-repo probe on this exact
       # desktop/session demonstrated that an immediate GetCursorPos right
@@ -239,6 +239,18 @@ while ($true) {
       # bounded poll for a stable run of samples, mirrored for unit testing
       # by evaluateCursorSettlement/evaluateFinalPreSendCheck in
       # native-input-targeting.js.
+      #
+      # SG1 correction: the first version of this loop qualified a sample by
+      # its step distance from the *previous* sample only, which allowed
+      # cumulative drift away from ($screenX,$screenY) to settle -- silently
+      # disagreeing with the JS-side assertCursorCustody redundant check,
+      # which has always measured distance from the original requested
+      # point. Every sample below is now independently required to be within
+      # $maxSettlementStepPixels of ($screenX,$screenY) itself (never of the
+      # previous sample) before it can extend the streak at all; the
+      # previous-sample step check is additionally required on top of that,
+      # so two samples that each independently qualify but sit at opposite
+      # edges of the tolerance band still cannot both count.
       $requiredStableCount = 3
       $maxSettlementStepPixels = 1
       $settlementTimeoutMs = 250
@@ -254,6 +266,9 @@ while ($true) {
         if ($null -eq $Rect) { return $true }
         ($X -gt $Rect.left -and $X -lt $Rect.right -and $Y -gt $Rect.top -and $Y -lt $Rect.bottom)
       }
+      function Test-WithinAbsoluteCustodyBound([int]$X,[int]$Y) {
+        ([Math]::Abs($X-$screenX) -le $maxSettlementStepPixels) -and ([Math]::Abs($Y-$screenY) -le $maxSettlementStepPixels)
+      }
 
       while (-not $settled -and $null -eq $settlementFailureReason -and $settlementClock.Elapsed.TotalMilliseconds -lt $settlementTimeoutMs) {
         # Cheap per-iteration safety check: raw HWND comparison only, not the
@@ -264,10 +279,12 @@ while ($true) {
         $c = New-Object LightsOutNativeWorker+POINT
         if (-not [LightsOutNativeWorker]::GetCursorPos([ref]$c)) { throw 'GetCursorPos failed during cursor-custody settlement' }
         $sampleElapsedMs = [Math]::Round($settlementClock.Elapsed.TotalMilliseconds,3)
+        $withinAbsoluteBound = Test-WithinAbsoluteCustodyBound $c.X $c.Y
         $interior = Test-StrictInteriorOfTarget $c.X $c.Y $translatedRect
-        $entry = [ordered]@{ x=$c.X; y=$c.Y; elapsedMs=$sampleElapsedMs; strictInterior=$interior }
+        $qualifies = $withinAbsoluteBound -and $interior
+        $entry = [ordered]@{ x=$c.X; y=$c.Y; elapsedMs=$sampleElapsedMs; withinAbsoluteBound=$withinAbsoluteBound; strictInterior=$interior; qualifies=$qualifies }
         $settlementSamples.Add($entry)
-        if ($interior) {
+        if ($qualifies) {
           if ($stableRun.Count -gt 0) {
             $prev = $stableRun[$stableRun.Count-1]
             if ([Math]::Abs($c.X-$prev.x) -gt $maxSettlementStepPixels -or [Math]::Abs($c.Y-$prev.y) -gt $maxSettlementStepPixels) { $stableRun.Clear() }
@@ -275,20 +292,22 @@ while ($true) {
           $stableRun.Add($entry)
           if ($stableRun.Count -ge $requiredStableCount) {
             # Final immediate pre-SendInput re-check -- no added delay between
-            # this and the SendInput call below if it passes.
+            # this and the SendInput call below if it passes. Measured
+            # against ($screenX,$screenY) directly, same as every other
+            # sample, never against the previously accepted sample.
             $fgFinal = [LightsOutNativeWorker]::GetForegroundWindow()
             if ($fgFinal -ne $hwnd) { $settlementFailureReason = 'foreground-lost-at-final-check'; break }
             $cFinal = New-Object LightsOutNativeWorker+POINT
             if (-not [LightsOutNativeWorker]::GetCursorPos([ref]$cFinal)) { throw 'GetCursorPos failed at final pre-send check' }
+            $finalWithinBound = Test-WithinAbsoluteCustodyBound $cFinal.X $cFinal.Y
             $finalInterior = Test-StrictInteriorOfTarget $cFinal.X $cFinal.Y $translatedRect
-            $finalStepOk = ([Math]::Abs($cFinal.X-$entry.x) -le $maxSettlementStepPixels) -and ([Math]::Abs($cFinal.Y-$entry.y) -le $maxSettlementStepPixels)
-            $finalEntry = [ordered]@{ x=$cFinal.X; y=$cFinal.Y; elapsedMs=[Math]::Round($settlementClock.Elapsed.TotalMilliseconds,3); strictInterior=$finalInterior; isFinalPreSendCheck=$true }
+            $finalEntry = [ordered]@{ x=$cFinal.X; y=$cFinal.Y; elapsedMs=[Math]::Round($settlementClock.Elapsed.TotalMilliseconds,3); withinAbsoluteBound=$finalWithinBound; strictInterior=$finalInterior; isFinalPreSendCheck=$true }
             $settlementSamples.Add($finalEntry)
-            if ($finalInterior -and $finalStepOk) {
+            if ($finalWithinBound -and $finalInterior) {
               $settled = $true
               $acceptedCursor = [ordered]@{ x=$cFinal.X; y=$cFinal.Y }
             } else {
-              $settlementFailureReason = 'final-pre-send-check-left-target'
+              $settlementFailureReason = if (-not $finalWithinBound) { 'final-pre-send-check-outside-absolute-bound' } else { 'final-pre-send-check-left-target' }
             }
           }
         } else {

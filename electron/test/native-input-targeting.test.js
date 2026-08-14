@@ -598,13 +598,14 @@ test('existing browserGesture PASS/FAIL rules are unchanged by the correlation a
   assert.throws(() => validateBrowserGesture({ ownerId: 'menu-settings', down: null, up: heldOwner, click: heldOwner }), /browser DOWN left the accepted activation ancestry/);
 });
 
-// PR43 cursor-custody settlement gate. evaluateCursorSettlement/
+// PR43 cursor-custody settlement gate (SG1-corrected). evaluateCursorSettlement/
 // evaluateFinalPreSendCheck are the pure mirror of native-input-worker.ps1's
 // live polling loop (which calls real Win32 GetCursorPos/GetForegroundWindow
 // in a real time-bounded loop and so can't be unit-tested directly -- same
 // duplication pattern as assertCursorCustody's JS copy vs. its PowerShell
-// copy). Target for all cases below is the existing custodyBounds fixture
-// -> bounds {left:600,top:10,right:650,bottom:38}, deep-interior center (625,24).
+// copy). requestedPoint for all cases below is (625,24), the center of the
+// existing custodyBounds fixture -> bounds {left:600,top:10,right:650,bottom:38}.
+const settlementTarget = { x: 625, y: 24 };
 
 test('A. exact immediate: requested point returned immediately and remains stable settles on the third sample', () => {
   const samples = [
@@ -612,78 +613,91 @@ test('A. exact immediate: requested point returned immediately and remains stabl
     { x: 625, y: 24, elapsedMs: 10 },
     { x: 625, y: 24, elapsedMs: 15 }
   ];
-  const result = evaluateCursorSettlement(samples, custodyBounds);
+  const result = evaluateCursorSettlement(samples, settlementTarget, custodyBounds);
   assert.equal(result.settled, true);
   assert.deepEqual(result.acceptedSample, { x: 625, y: 24 });
   assert.equal(result.stableRunLength, 3);
 });
 
-test('B. old ±1-safe readback: differs by <=1 and stable/strict-interior settles', () => {
+test('B. ±1 absolute-stable readback: differs from the requested point by <=1 and is stable/strict-interior settles', () => {
   const samples = [
-    { x: 624, y: 24, elapsedMs: 5 },
-    { x: 625, y: 24, elapsedMs: 10 },
-    { x: 624, y: 25, elapsedMs: 15 }
+    { x: 626, y: 24, elapsedMs: 5 },
+    { x: 626, y: 24, elapsedMs: 10 },
+    { x: 626, y: 24, elapsedMs: 15 }
   ];
-  const result = evaluateCursorSettlement(samples, custodyBounds);
+  const result = evaluateCursorSettlement(samples, settlementTarget, custodyBounds);
   assert.equal(result.settled, true);
-  assert.deepEqual(result.acceptedSample, { x: 624, y: 25 });
-});
-
-test('C. stale previous position then converges: old -> intermediate -> target -> stable -> stable settles only after settlement, not on first arrival', () => {
-  const samples = [
-    { x: 40, y: 40, elapsedMs: 2 },     // old/previous position, not interior
-    { x: 300, y: 200, elapsedMs: 6 },   // intermediate, still not interior
-    { x: 625, y: 24, elapsedMs: 10 },   // first arrival inside target -- run starts here, not yet accepted
-    { x: 625, y: 24, elapsedMs: 15 },
-    { x: 626, y: 24, elapsedMs: 20 }
-  ];
-  const result = evaluateCursorSettlement(samples, custodyBounds);
-  assert.equal(result.settled, true);
-  assert.equal(result.stableRunLength, 3);
   assert.deepEqual(result.acceptedSample, { x: 626, y: 24 });
-  // Confirms first arrival alone was not sufficient: settling required all 3.
-  assert.notDeepEqual(result.acceptedSample, samples[2]);
 });
 
-test('D. transient +2-inside-target sample followed by continued substantial movement must not settle on the first sample', () => {
+// C. SG1 REGRESSION TEST -- this is exactly the shape the first settlement-gate
+// commit (b2c2de7) accepted incorrectly: each sample is only <=1px from the
+// PREVIOUS sample, so it "looked" step-stable, but each is progressively
+// farther from the original requested point. None of these samples is even
+// individually qualifying once measured against the absolute requested
+// point (delta 1, 2, 3, 4) -- only the first (delta 1) qualifies at all, and
+// it alone can never reach the required streak of 3.
+test('C. cumulative drift away from the requested point must not settle (SG1 regression)', () => {
   const samples = [
-    { x: 627, y: 26, elapsedMs: 5 },  // interior (+2/+2-shaped offset), run count 1
-    { x: 635, y: 30, elapsedMs: 10 }  // still interior but a step >1px -- resets the run, never reaches 3
+    { x: 626, y: 24, elapsedMs: 5 },  // +1, qualifies alone
+    { x: 627, y: 24, elapsedMs: 60 }, // +2, does not qualify -- resets streak
+    { x: 628, y: 24, elapsedMs: 120 }, // +3, does not qualify
+    { x: 629, y: 24, elapsedMs: 180 }  // +4, does not qualify
   ];
-  const result = evaluateCursorSettlement(samples, custodyBounds);
+  const result = evaluateCursorSettlement(samples, settlementTarget, custodyBounds);
   assert.equal(result.settled, false);
   assert.equal(result.acceptedSample, null);
 });
 
-test('E. cursor enters the target then leaves before settling is rejected', () => {
+test('D. stale previous position then converges to the requested point settles only after three absolute-custody samples, not on first arrival', () => {
   const samples = [
-    { x: 625, y: 24, elapsedMs: 5 },   // interior, run count 1
-    { x: 700, y: 24, elapsedMs: 10 }   // outside the target -- run cleared, no push
+    { x: 40, y: 40, elapsedMs: 2 },     // old/previous position, not interior, not within bound
+    { x: 300, y: 200, elapsedMs: 6 },   // intermediate, still not qualifying
+    { x: 625, y: 24, elapsedMs: 10 },   // first arrival at the exact requested point -- streak starts here
+    { x: 625, y: 24, elapsedMs: 15 },
+    { x: 625, y: 24, elapsedMs: 20 }
   ];
-  const result = evaluateCursorSettlement(samples, custodyBounds);
-  assert.equal(result.settled, false);
+  const result = evaluateCursorSettlement(samples, settlementTarget, custodyBounds);
+  assert.equal(result.settled, true);
+  assert.equal(result.stableRunLength, 3);
+  assert.deepEqual(result.acceptedSample, { x: 625, y: 24 });
 });
 
-test('F. cursor never settles within the bounded timeout fails closed', () => {
+test('E. transient +2/+3-from-requested-point samples inside the button do not qualify even though strict-interior, only the later exact samples settle', () => {
   const samples = [
-    { x: 625, y: 24, elapsedMs: 100 },
-    { x: 635, y: 24, elapsedMs: 200 },
-    { x: 625, y: 24, elapsedMs: 300 } // exceeds DEFAULT_SETTLEMENT_TIMEOUT_MS (250)
+    { x: 627, y: 24, elapsedMs: 5 },  // +2 from requested point -- does not qualify, even though well inside custodyBounds
+    { x: 628, y: 24, elapsedMs: 10 }, // +3 -- does not qualify
+    { x: 625, y: 24, elapsedMs: 15 }, // exact -- streak starts here
+    { x: 625, y: 24, elapsedMs: 20 },
+    { x: 625, y: 24, elapsedMs: 25 }
   ];
-  const result = evaluateCursorSettlement(samples, custodyBounds);
+  const result = evaluateCursorSettlement(samples, settlementTarget, custodyBounds);
+  assert.equal(result.settled, true);
+  assert.equal(result.stableRunLength, 3);
+  // The accepted sample cannot be either of the two +2/+3 transients.
+  assert.notDeepEqual(result.acceptedSample, { x: 627, y: 24 });
+  assert.notDeepEqual(result.acceptedSample, { x: 628, y: 24 });
+});
+
+test('F. stable +2-from-requested-point the whole time never qualifies and times out (no permanent multi-pixel displacement is accepted)', () => {
+  const samples = [
+    { x: 627, y: 24, elapsedMs: 50 },
+    { x: 627, y: 24, elapsedMs: 150 },
+    { x: 627, y: 24, elapsedMs: 260 } // exceeds DEFAULT_SETTLEMENT_TIMEOUT_MS (250)
+  ];
+  const result = evaluateCursorSettlement(samples, settlementTarget, custodyBounds);
   assert.equal(result.settled, false);
   assert.equal(result.reason, 'timeout');
 });
 
-test('G. cursor settles (stops moving) but outside the target is rejected, not accepted as "stable"', () => {
+test('G. enters the absolute-custody range then leaves before settling: streak resets, must not click', () => {
   const samples = [
-    { x: 40, y: 40, elapsedMs: 50 },
-    { x: 40, y: 40, elapsedMs: 150 },
-    { x: 40, y: 40, elapsedMs: 260 } // stable the whole time, but never interior; times out
+    { x: 625, y: 24, elapsedMs: 5 },
+    { x: 625, y: 24, elapsedMs: 10 },
+    { x: 700, y: 24, elapsedMs: 15 } // leaves both the bound and the target on the 3rd sample
   ];
-  const result = evaluateCursorSettlement(samples, custodyBounds);
+  const result = evaluateCursorSettlement(samples, settlementTarget, custodyBounds);
   assert.equal(result.settled, false);
-  assert.equal(result.reason, 'timeout');
 });
 
 test('H. foreground loss while waiting fails immediately, not after further polling', () => {
@@ -692,63 +706,89 @@ test('H. foreground loss while waiting fails immediately, not after further poll
     { x: 625, y: 24, elapsedMs: 10, foregroundOk: false },
     { x: 625, y: 24, elapsedMs: 15, foregroundOk: true } // must never be reached
   ];
-  const result = evaluateCursorSettlement(samples, custodyBounds);
+  const result = evaluateCursorSettlement(samples, settlementTarget, custodyBounds);
   assert.equal(result.settled, false);
   assert.equal(result.reason, 'foreground-lost-during-settlement');
   assert.equal(result.stableRunLength, 1);
 });
 
-test('I. settles, then the final pre-SendInput check sample has left the target: rejected, no click', () => {
+test('I. settles, then the final pre-SendInput sample is outside the absolute ±1 bound: rejected, no click', () => {
   const settlement = evaluateCursorSettlement([
     { x: 625, y: 24, elapsedMs: 5 },
     { x: 625, y: 24, elapsedMs: 10 },
     { x: 625, y: 24, elapsedMs: 15 }
-  ], custodyBounds);
+  ], settlementTarget, custodyBounds);
   assert.equal(settlement.settled, true);
-  const finalCheck = evaluateFinalPreSendCheck(settlement.acceptedSample, { x: 700, y: 24 }, custodyBounds);
+  const finalCheck = evaluateFinalPreSendCheck(settlementTarget, { x: 627, y: 24 }, custodyBounds);
+  assert.equal(finalCheck.ok, false);
+  assert.equal(finalCheck.reason, 'final-pre-send-check-outside-absolute-bound');
+});
+
+test('final pre-send check rejects a sample that is within the absolute bound but has left the target rect', () => {
+  // Constructed only to isolate the interior branch: within ±1 of some
+  // requested point yet outside custodyBounds by using a requestedPoint
+  // right at the target's edge.
+  const edgeRequested = { x: 601, y: 24 };
+  const finalCheck = evaluateFinalPreSendCheck(edgeRequested, { x: 600, y: 24 }, custodyBounds);
   assert.equal(finalCheck.ok, false);
   assert.equal(finalCheck.reason, 'final-pre-send-check-left-target');
 });
 
-test('final pre-send check accepts a stable, in-target confirmation sample', () => {
-  const settlement = evaluateCursorSettlement([
-    { x: 625, y: 24, elapsedMs: 5 },
-    { x: 625, y: 24, elapsedMs: 10 },
-    { x: 625, y: 24, elapsedMs: 15 }
-  ], custodyBounds);
-  const finalCheck = evaluateFinalPreSendCheck(settlement.acceptedSample, { x: 625, y: 24 }, custodyBounds);
+test('final pre-send check accepts a stable, in-target, absolute-custody confirmation sample', () => {
+  const finalCheck = evaluateFinalPreSendCheck(settlementTarget, { x: 625, y: 24 }, custodyBounds);
   assert.equal(finalCheck.ok, true);
 });
 
-test('final pre-send check rejects on foreground loss even if the point is still interior', () => {
-  const finalCheck = evaluateFinalPreSendCheck({ x: 625, y: 24 }, { x: 625, y: 24, foregroundOk: false }, custodyBounds);
+test('final pre-send check rejects on foreground loss even if the point is still within the absolute bound', () => {
+  const finalCheck = evaluateFinalPreSendCheck(settlementTarget, { x: 625, y: 24, foregroundOk: false }, custodyBounds);
   assert.equal(finalCheck.ok, false);
   assert.equal(finalCheck.reason, 'foreground-lost-at-final-check');
 });
 
-test('a plain move with no target bounds only requires consecutive-step stability, not target interior', () => {
+test('a plain move with no target bounds only requires absolute-point stability, not target interior', () => {
   const samples = [
     { x: 10, y: 10, elapsedMs: 5 },
     { x: 10, y: 10, elapsedMs: 10 },
     { x: 11, y: 10, elapsedMs: 15 }
   ];
-  const result = evaluateCursorSettlement(samples, null);
+  const result = evaluateCursorSettlement(samples, { x: 10, y: 10 }, null);
   assert.equal(result.settled, true);
 });
 
 // J. call count: SetCursorPos-exactly-once is a property of the live
 // native-input-worker.ps1 loop (it calls SetCursorPos once before any of
-// this), not of these pure functions -- verified there, not here. What is
-// verifiable here is that evaluating settlement is side-effect-free: it
-// never mutates the caller's sample objects (i.e. it cannot itself be
-// mistaken for a positioning action).
+// this), not of these pure functions -- verified there, not here.
 test('evaluateCursorSettlement and evaluateFinalPreSendCheck do not mutate their inputs (purity, no hidden repositioning)', () => {
   const samples = [{ x: 625, y: 24, elapsedMs: 5 }, { x: 625, y: 24, elapsedMs: 10 }, { x: 625, y: 24, elapsedMs: 15 }];
   const snapshot = JSON.parse(JSON.stringify(samples));
-  const settlement = evaluateCursorSettlement(samples, custodyBounds);
+  evaluateCursorSettlement(samples, settlementTarget, custodyBounds);
   assert.deepEqual(samples, snapshot);
   const finalSample = { x: 625, y: 24 };
   const finalSnapshot = JSON.parse(JSON.stringify(finalSample));
-  evaluateFinalPreSendCheck(settlement.acceptedSample, finalSample, custodyBounds);
+  evaluateFinalPreSendCheck(settlementTarget, finalSample, custodyBounds);
   assert.deepEqual(finalSample, finalSnapshot);
 });
+
+// K. JS DEFENSE-IN-DEPTH CONSISTENCY -- the actual SG1 regression guard:
+// whatever evaluateCursorSettlement accepts must always also pass
+// assertCursorCustody's independent, unchanged check against the same
+// requestedPoint. This is what makes it structurally impossible for the
+// worker's settlement gate and the JS redundant check to disagree again,
+// rather than merely coincidentally agreeing on today's test fixtures.
+test('K. every settlement evaluateCursorSettlement accepts also passes assertCursorCustody unchanged (worker/JS agreement)', () => {
+  const acceptingCases = [
+    { samples: [{ x: 625, y: 24, elapsedMs: 5 }, { x: 625, y: 24, elapsedMs: 10 }, { x: 625, y: 24, elapsedMs: 15 }] },
+    { samples: [{ x: 626, y: 24, elapsedMs: 5 }, { x: 626, y: 24, elapsedMs: 10 }, { x: 626, y: 24, elapsedMs: 15 }] },
+    { samples: [{ x: 624, y: 23, elapsedMs: 5 }, { x: 624, y: 23, elapsedMs: 10 }, { x: 624, y: 23, elapsedMs: 15 }] }
+  ];
+  for (const { samples } of acceptingCases) {
+    const settlement = evaluateCursorSettlement(samples, settlementTarget, custodyBounds);
+    assert.equal(settlement.settled, true);
+    assert.doesNotThrow(() => assertCursorCustody(settlementTarget, settlement.acceptedSample, custodyBounds));
+  }
+});
+
+// L. FAILURE OBSERVABILITY -- verified at the desktop-ux-functional-gate.js
+// level (native error diagnostics attachment), not here; see
+// native-input-worker.test.js / the gate script's click() catch block for
+// the corresponding fix.

@@ -135,7 +135,7 @@ function assertCursorCustody(intended, actual, targetBounds = null) {
   return true;
 }
 
-// --- Cursor-custody settlement gate (PR43 harness correction) ---
+// --- Cursor-custody settlement gate (PR43 harness correction, SG1-corrected) ---
 //
 // A pure, DOM/Win32-free mirror of the polling loop native-input-worker.ps1
 // runs after its single SetCursorPos call -- same duplication pattern as
@@ -150,66 +150,99 @@ function assertCursorCustody(intended, actual, targetBounds = null) {
 // is the fix for evaluating custody too early, not a retry of positioning:
 // exactly one SetCursorPos is issued (by the caller, before any of this),
 // and this function/its ps1 counterpart never re-call it.
+//
+// SG1 correction: the first version of this gate (settlement-gate commit
+// b2c2de7) accepted a "qualifying" sample based only on its step distance
+// from the *previous* sample, which allowed cumulative drift (e.g.
+// target+1 -> target+2 -> target+3) to settle several pixels away from the
+// original requested point -- silently disagreeing with assertCursorCustody
+// above, which has always measured distance from the original intended
+// point. That was a settlement-gate defect, not evidence that Windows
+// legitimately settles away from the requested point (the external probe
+// showed delayed convergence, not stable multi-pixel displacement). This
+// version requires every accepted sample to independently satisfy the exact
+// same absolute ±MAX_CURSOR_READBACK_PIXELS-from-requestedPoint contract
+// assertCursorCustody enforces, so the two can never disagree again (see
+// the consistency test below).
 const DEFAULT_SETTLEMENT_STABLE_COUNT = 3;
 const DEFAULT_SETTLEMENT_TIMEOUT_MS = 250;
 
 // samples: ordered array of { x, y, elapsedMs, foregroundOk }. foregroundOk
 // is only ever explicitly false when the expected window lost foreground at
 // that sample; undefined/true means it still owned foreground.
+// requestedPoint: the original SetCursorPos target -- {x, y} -- the fixed
+// reference every sample is measured against (never the previous sample).
 // targetBounds: {left,top,right,bottom} or null/undefined (no target
 // constraint -- e.g. a plain diagnostic move with no click target -- only
-// consecutive-stability is required, mirroring assertCursorCustody's own
+// absolute-point stability is required, mirroring assertCursorCustody's own
 // "no targetBounds supplied" behavior).
-function evaluateCursorSettlement(samples, targetBounds = null, options = {}) {
+function evaluateCursorSettlement(samples, requestedPoint, targetBounds = null, options = {}) {
+  if (!requestedPoint || !Number.isFinite(requestedPoint.x) || !Number.isFinite(requestedPoint.y)) {
+    throw new Error('evaluateCursorSettlement requires a finite requestedPoint');
+  }
   const requiredStableCount = options.requiredStableCount ?? DEFAULT_SETTLEMENT_STABLE_COUNT;
   const maxStepPixels = options.maxStepPixels ?? MAX_CURSOR_READBACK_PIXELS;
   const timeoutMs = options.timeoutMs ?? DEFAULT_SETTLEMENT_TIMEOUT_MS;
   const rect = targetBounds ? rectFromBounds(targetBounds) : null;
-  let stableRun = [];
+  let streak = [];
   for (const sample of samples || []) {
     if (Number.isFinite(sample.elapsedMs) && sample.elapsedMs > timeoutMs) {
-      return { settled: false, reason: 'timeout', acceptedSample: null, stableRunLength: stableRun.length };
+      return { settled: false, reason: 'timeout', acceptedSample: null, stableRunLength: streak.length };
     }
     if (sample.foregroundOk === false) {
-      return { settled: false, reason: 'foreground-lost-during-settlement', acceptedSample: null, stableRunLength: stableRun.length };
+      return { settled: false, reason: 'foreground-lost-during-settlement', acceptedSample: null, stableRunLength: streak.length };
     }
+    // Qualifying = independently within the absolute custody bound of the
+    // ORIGINAL requested point (never the previous sample) AND, when a
+    // target is supplied, strict-interior of it. A sample that fails this
+    // does not qualify at all -- it cannot start or extend a streak.
+    const withinAbsoluteBound = Math.abs(sample.x - requestedPoint.x) <= maxStepPixels && Math.abs(sample.y - requestedPoint.y) <= maxStepPixels;
     const interior = rect ? isStrictInterior(rect, sample, 0) : true;
-    if (!interior) {
-      stableRun = [];
+    if (!withinAbsoluteBound || !interior) {
+      streak = [];
       continue;
     }
-    if (stableRun.length > 0) {
-      const prev = stableRun[stableRun.length - 1];
+    // Two qualifying samples may each individually sit within the bound yet
+    // still be up to 2*maxStepPixels apart from each other (opposite edges
+    // of the band) -- require adjacent qualifying samples to also be close
+    // to each other, not just each independently close to the target.
+    if (streak.length > 0) {
+      const prev = streak[streak.length - 1];
       if (Math.abs(sample.x - prev.x) > maxStepPixels || Math.abs(sample.y - prev.y) > maxStepPixels) {
-        stableRun = [];
+        streak = [];
       }
     }
-    stableRun.push(sample);
-    if (stableRun.length >= requiredStableCount) {
-      return { settled: true, reason: null, acceptedSample: { x: sample.x, y: sample.y }, stableRunLength: stableRun.length };
+    streak.push(sample);
+    if (streak.length >= requiredStableCount) {
+      return { settled: true, reason: null, acceptedSample: { x: sample.x, y: sample.y }, stableRunLength: streak.length };
     }
   }
-  return { settled: false, reason: 'exhausted-without-settlement', acceptedSample: null, stableRunLength: stableRun.length };
+  return { settled: false, reason: 'exhausted-without-settlement', acceptedSample: null, stableRunLength: streak.length };
 }
 
 // The immediate, no-added-delay re-check taken right before SendInput, after
-// evaluateCursorSettlement has already accepted a stable run. This is what
-// stops a click on a target the cursor is only transiently passing through
-// (see COLD-04/P1's settlement addendum, scenario I): settling once is not
-// itself permission to click if the very next sample would already show it
-// leaving again.
-function evaluateFinalPreSendCheck(acceptedSample, finalSample, targetBounds = null, maxStepPixels = MAX_CURSOR_READBACK_PIXELS) {
+// evaluateCursorSettlement has already accepted a streak. Measured against
+// the same fixed requestedPoint as every other sample (not against the
+// previously accepted sample) so this can never be a looser check than the
+// streak itself. This is what stops a click on a target the cursor is only
+// transiently passing through (see COLD-04/P1's settlement addendum,
+// scenario I): settling once is not itself permission to click if the very
+// next sample would already show it leaving again.
+function evaluateFinalPreSendCheck(requestedPoint, finalSample, targetBounds = null, maxStepPixels = MAX_CURSOR_READBACK_PIXELS) {
+  if (!requestedPoint || !Number.isFinite(requestedPoint.x) || !Number.isFinite(requestedPoint.y)) {
+    throw new Error('evaluateFinalPreSendCheck requires a finite requestedPoint');
+  }
   if (!finalSample || !Number.isFinite(finalSample.x) || !Number.isFinite(finalSample.y)) {
     return { ok: false, reason: 'final-check-sample-unavailable' };
   }
   if (finalSample.foregroundOk === false) {
     return { ok: false, reason: 'foreground-lost-at-final-check' };
   }
+  if (Math.abs(finalSample.x - requestedPoint.x) > maxStepPixels || Math.abs(finalSample.y - requestedPoint.y) > maxStepPixels) {
+    return { ok: false, reason: 'final-pre-send-check-outside-absolute-bound' };
+  }
   if (targetBounds && !isStrictInterior(rectFromBounds(targetBounds), finalSample, 0)) {
     return { ok: false, reason: 'final-pre-send-check-left-target' };
-  }
-  if (Math.abs(finalSample.x - acceptedSample.x) > maxStepPixels || Math.abs(finalSample.y - acceptedSample.y) > maxStepPixels) {
-    return { ok: false, reason: 'final-pre-send-check-drifted' };
   }
   return { ok: true, reason: null };
 }

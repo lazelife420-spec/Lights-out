@@ -394,6 +394,21 @@ class CdpSession {
       // PASS/FAIL -- it only preserves evidence already computed above.
       attachDiagnostics(nativeError, 'selector', sel);
       attachDiagnostics(nativeError, 'targetSnapshot', { rect: target.rect, point: target.point, innerWidth: target.innerWidth, innerHeight: target.innerHeight });
+      // Item L (settlement-gate observability gap, discovered by the b2c2de7
+      // live proof failure): when the worker itself rejects, nativeError
+      // already carries `.nativeInput` (set in native-input-worker.js from
+      // the worker's own errorData) and attachDiagnostics is a no-op here.
+      // But when the worker SUCCEEDS and it is the redundant JS-side
+      // assertCursorCustody/assertSendInputComplete check below that throws,
+      // `native` is a fully-populated result (including
+      // nativeEnvironment.settlementChronology, foregroundChronology,
+      // actualCursor, translatedTarget, ...) that would otherwise be
+      // silently discarded -- report.json's failure.nativeInput would be
+      // null with no way to see why the worker's own settlement disagreed
+      // with the redundant check. This only preserves that already-computed
+      // result; it does not change whether nativeError is thrown or its
+      // message/stack.
+      if (native) attachDiagnostics(nativeError, 'nativeInput', native);
       throw nativeError;
     }
     await WAIT(120);
