@@ -1149,6 +1149,7 @@ function formatAction(action) {
     restart: 'Restart',
     sleep: 'Sleep',
     hibernate: 'Hibernate',
+    lock: 'Lock',
     logout: 'Log out'
   };
   return labels[action] || 'Power action';
@@ -1720,6 +1721,9 @@ async function executePowerAction(options = {}) {
         break;
       case 'hibernate':
         spawn('rundll32.exe', ['powrprof.dll,SetSuspendState', '1,1,0'], { detached: true, stdio: 'ignore' }).unref();
+        break;
+      case 'lock':
+        spawn('rundll32.exe', ['user32.dll,LockWorkStation'], { detached: true, stdio: 'ignore' }).unref();
         break;
       case 'logout':
         spawn('shutdown.exe', ['/l'], { detached: true, stdio: 'ignore' }).unref();

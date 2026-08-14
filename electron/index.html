@@ -253,6 +253,7 @@
           <div class="ns-hero-left">
             <div class="ns-hero-label">TONIGHT'S PLAN</div>
             <div class="ns-hero-title" id="ns-hero-title">Weeknight &middot; 28 min &middot; Shutdown</div>
+            <div class="ns-hero-source" id="ns-hero-source" style="display:none">From: <span class="ns-meta-accent" id="ns-hero-source-name"></span></div>
             <div class="ns-hero-meta">
               <span class="ns-hero-meta-item">Clearance: <span class="ns-meta-accent" id="ns-meta-clearance">Clear</span></span>
               <span class="ns-hero-meta-sep">&middot;</span>
@@ -372,6 +373,19 @@
             <button class="chip" data-min="45">45m</button>
             <button class="chip" data-min="60">1h</button>
             <button class="chip" data-min="120">2h</button>
+          </div>
+          <!-- v11.2 Tonight's Plan: explicit manual action selection. Writes
+               directly to the same canonical state.action Start already
+               reads -- not a parallel manual-only field -- via setAction(),
+               which also keeps the Tonight's Plan summary and any loaded
+               profile/Night Mode identity in sync (see checkArmedModeMatch/
+               checkProfileMatch in renderer.js). -->
+          <div class="action-chips-row" id="action-chips-row" role="group" aria-label="Action">
+            <button class="action-chip" data-action="sleep" aria-pressed="false">&#x1F634; Sleep</button>
+            <button class="action-chip" data-action="shutdown" aria-pressed="false">&#x1F50C; Shutdown</button>
+            <button class="action-chip" data-action="restart" aria-pressed="false">&#x1F504; Restart</button>
+            <button class="action-chip" data-action="hibernate" aria-pressed="false">&#x1F319; Hibernate</button>
+            <button class="action-chip" data-action="lock" aria-pressed="false">&#x1F512; Lock</button>
           </div>
           <button class="btn-secondary" id="btn-ritual" style="margin-top:8px;font-size:11px;padding:6px 14px;border-radius:8px;opacity:0.85" title="Guided bedtime ritual: breathing → block → timer → lights">&#x1F319; Begin Ritual</button>
         </div>

@@ -1072,6 +1072,7 @@ function actionLabel(action = state.action) {
     restart: 'Restart',
     sleep: 'Sleep',
     hibernate: 'Hibernate',
+    lock: 'Lock',
     logout: 'Log out'
   }[action] || 'Power action';
 }
@@ -1134,6 +1135,7 @@ function setAction(action) {
     item.classList.toggle('selected', item.dataset.action === action);
   });
   checkArmedModeMatch();
+  checkProfileMatch();
   render();
 }
 
@@ -1876,21 +1878,55 @@ function armNightMode(mode) { // eslint-disable-line no-unused-vars -- called fr
 // hardcoded in index.html -- two contradictory plans on screen at once.
 // Called from render() so it always stays in the same single pass as
 // every other lobby surface.
+//
+// v11.2 Tonight's Plan: this is now the single authoritative "this is what
+// will happen" surface regardless of source -- manual setup, a saved
+// profile, or a Night Mode. A loaded profile credits itself in both the
+// title (e.g. "Hard Stop · 15 min · Shutdown", the same pattern Night Modes
+// already used) and the separate ns-hero-source line ("From: Hard Stop"),
+// so the source is never ambiguous. checkProfileMatch() (below) is what
+// keeps that credit honest: the moment the lobby no longer matches the
+// loaded profile's saved values, the profile identity is cleared before
+// this function ever runs again.
 function renderTonightHero() {
   const titleEl = document.getElementById('ns-hero-title');
   const previewEl = document.getElementById('ns-preview-time');
   const playLabelEl = document.getElementById('ns-play-label');
-  if (!titleEl && !previewEl && !playLabelEl) return;
+  const sourceEl = document.getElementById('ns-hero-source');
+  const sourceNameEl = document.getElementById('ns-hero-source-name');
+  if (!titleEl && !previewEl && !playLabelEl && !sourceEl) return;
 
   const armed = state.armedNightMode;
-  const planTitle = armed ? armed.nightModeTitle : 'Custom Timer';
+  const profile = (!armed && state.currentProfileId) ? state.profiles.find(p => p.id === state.currentProfileId) : null;
+  const planTitle = armed ? armed.nightModeTitle : (profile ? profile.name : 'Custom Timer');
   const durationSeconds = armed ? armed.durationSeconds : inputSeconds();
   const durationMin = Math.max(1, Math.round(durationSeconds / 60));
-  const planActionLabel = armed ? actionLabel(armed.action) : actionLabel();
+  const effectiveAction = armed ? armed.action : state.action;
+  const planActionLabel = actionLabel(effectiveAction);
 
   if (titleEl) titleEl.textContent = `${planTitle} · ${durationMin} min · ${planActionLabel}`;
   if (previewEl) previewEl.textContent = formatTime(durationSeconds);
   if (playLabelEl) playLabelEl.textContent = `Start ${planTitle}`;
+  if (sourceEl) {
+    if (profile) {
+      if (sourceNameEl) sourceNameEl.textContent = profile.name;
+      sourceEl.style.display = '';
+    } else {
+      sourceEl.style.display = 'none';
+    }
+  }
+
+  // Manual action selector: reflects whichever action is actually in effect
+  // right now (a Night Mode's fixed action while one is armed, otherwise
+  // state.action), independent of whether every code path that can arm a
+  // Night Mode also happens to call setAction() itself.
+  // aria-pressed is derived from the exact same isSelected value as the
+  // visual .selected class, in the same pass, so the two can never diverge.
+  document.querySelectorAll('#action-chips-row [data-action]').forEach(btn => {
+    const isSelected = btn.dataset.action === effectiveAction;
+    btn.classList.toggle('selected', isSelected);
+    btn.setAttribute('aria-pressed', String(isSelected));
+  });
 }
 
 function renderArmedModeBanner() {
@@ -1920,6 +1956,51 @@ function checkArmedModeMatch() {
   if (currentSeconds !== armed.durationSeconds || state.action !== armed.action) {
     clearArmedNightMode();
   }
+}
+
+// v11.2 Tonight's Plan: the loaded-profile analog of checkArmedModeMatch
+// above. A profile stays credited ("From: <name>" on the hero, .active on
+// its card) only while the lobby's action/duration still match what that
+// profile actually saved. The moment either is edited manually, the profile
+// identity is cleared so the displayed source can never claim a profile is
+// active when its values no longer match it -- the same contract Night
+// Modes already have, extended to profiles.
+//
+// durationEdited: true only when this call follows an actual manual
+// duration mutation (+/-, typed value, or a unit change) -- every other
+// call site (action edits, and plain re-renders) passes the default false.
+//
+// Clock-mode profiles specify a time-of-day ("end at 23:00"), not a fixed
+// countdown. The duration shown right after loading one is a one-time
+// snapshot -- "seconds until 23:00 as of the moment it was applied" -- not
+// a value the profile itself stores or that stays meaningful as real time
+// passes. So this deliberately does NOT compare inputSeconds() against
+// profile.seconds for clock-mode profiles (that field isn't the profile's
+// duration and drifting further from a stale snapshot every tick, with no
+// user action at all, would clear it spuriously). Instead: a manual
+// duration edit on a clock-mode profile always clears it, unconditionally,
+// even if the edited value happens to numerically coincide with the
+// original snapshot -- editing duration changes what kind of plan this is
+// ("end at 23:00" -> "run for N minutes"), regardless of the numbers.
+// Passive calls (durationEdited left false) never touch clock-mode
+// profiles, so simply loading one and re-rendering can't clear it.
+function checkProfileMatch(durationEdited = false) {
+  if (!state.currentProfileId) return;
+  const profile = state.profiles.find(p => p.id === state.currentProfileId);
+  if (!profile) { clearCurrentProfile(); return; }
+  if (state.action !== profile.action) { clearCurrentProfile(); return; }
+  if (profile.mode === 'clock') {
+    if (durationEdited) clearCurrentProfile();
+    return;
+  }
+  if (inputSeconds() !== profile.seconds) clearCurrentProfile();
+}
+
+function clearCurrentProfile() {
+  if (!state.currentProfileId) return;
+  state.currentProfileId = null;
+  persistSelectedProfile(null);
+  renderProfiles();
 }
 
 // Single shared entry point for "start whatever is currently on Tonight" --
@@ -3055,12 +3136,16 @@ if (els.btnClearReceipts) {
     els.timerInput.value = inputValue() + 1;
     setInputFromSeconds(inputSeconds());
     checkArmedModeMatch();
+    checkProfileMatch(true);
+    render();
   });
 
   els.btnMinus.addEventListener('click', () => {
     els.timerInput.value = Math.max(1, inputValue() - 1);
     setInputFromSeconds(inputSeconds());
     checkArmedModeMatch();
+    checkProfileMatch(true);
+    render();
   });
 
   els.timerInput.addEventListener('input', () => {
@@ -3068,6 +3153,7 @@ if (els.btnClearReceipts) {
       state.remainingSeconds = inputSeconds();
       state.totalSeconds = state.remainingSeconds;
       checkArmedModeMatch();
+      checkProfileMatch(true);
       render();
     }
   });
@@ -3078,6 +3164,11 @@ if (els.btnClearReceipts) {
       const seconds = inputSeconds();
       state.unit = btn.dataset.unit;
       setInputFromSeconds(seconds);
+      // A unit change (min <-> sec) is a manual duration mutation just like
+      // +/-/typing -- same clearing semantics apply.
+      checkArmedModeMatch();
+      checkProfileMatch(true);
+      render();
     });
   });
 
@@ -3096,6 +3187,7 @@ if (els.btnClearReceipts) {
         state.unit = 'min';
         setInputFromSeconds(Number(item.dataset.minutes) * 60);
         clearArmedNightMode();
+        clearCurrentProfile();
         startTimer(Number(item.dataset.minutes) * 60);
         return;
       }
@@ -3136,12 +3228,17 @@ if (els.btnClearReceipts) {
     });
   });
 
+  document.querySelectorAll('#action-chips-row [data-action]').forEach(btn => {
+    btn.addEventListener('click', () => setAction(btn.dataset.action));
+  });
+
   document.querySelectorAll('.chip').forEach(chip => {
     chip.addEventListener('click', () => {
       const minutes = Number(chip.dataset.min);
       state.unit = 'min';
       setInputFromSeconds(minutes * 60);
       clearArmedNightMode();
+      clearCurrentProfile();
       startTimer(minutes * 60);
     });
   });
@@ -3459,6 +3556,7 @@ if (els.btnClearReceipts) {
       state.unit = 'min';
       setInputFromSeconds(presets[event.key] * 60);
       clearArmedNightMode();
+      clearCurrentProfile();
       startTimer(presets[event.key] * 60);
       return;
     }
