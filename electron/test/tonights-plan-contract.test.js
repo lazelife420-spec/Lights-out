@@ -1,0 +1,421 @@
+'use strict';
+
+// v11.2 explicit Tonight's Plan UX slice. renderer.js is a single shared-scope
+// browser script (no modules), so -- same approach as
+// ritual-overlay-visibility-contract.test.js for renderer-ritual-focus.js --
+// this extracts the specific functions under test by source text and
+// evaluates them in a minimal sandboxed context with mocked DOM/state,
+// rather than attempting to execute the whole file (which bootstraps a real
+// window/document on load).
+
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const test = require('node:test');
+const vm = require('node:vm');
+
+const rendererPath = path.join(__dirname, '..', 'renderer.js');
+const rendererSource = fs.readFileSync(rendererPath, 'utf8');
+const indexHtmlSource = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+
+// The canonical action vocabulary, per profiles.js's validActions / nightModes.js
+// -- not every action main.js's executePowerAction currently implements (lock
+// is validated/storable but not yet executable; see the completion-pass note
+// in v11.2-explicit-tonights-plan-ux-slice memory). This slice's job is
+// "every valid state.action has a visible selection", independent of whether
+// every action is fully wired end to end in main.js.
+const CANONICAL_ACTIONS = ['sleep', 'shutdown', 'restart', 'hibernate', 'lock'];
+
+// Balanced extraction of a top-level `function name(...) { ... }`
+// declaration's exact source text. Two-stage balanced matching (parameter
+// parens, then body braces) because parameter default values can themselves
+// contain parens (e.g. `function startTimer(seconds = inputSeconds(), ...)`),
+// which a single non-nested regex can't skip over correctly.
+function extractFunction(source, name) {
+  const headerMatch = source.match(new RegExp(`(?:async\\s+)?function ${name}\\s*\\(`));
+  if (!headerMatch) throw new Error(`function ${name} not found in renderer.js`);
+  const start = headerMatch.index;
+  let i = start + headerMatch[0].length;
+  let parenDepth = 1;
+  while (parenDepth > 0 && i < source.length) {
+    if (source[i] === '(') parenDepth++;
+    else if (source[i] === ')') parenDepth--;
+    i++;
+  }
+  while (i < source.length && source[i] !== '{') i++;
+  if (source[i] !== '{') throw new Error(`function ${name}: no body found after parameter list`);
+  i++;
+  let braceDepth = 1;
+  while (braceDepth > 0 && i < source.length) {
+    if (source[i] === '{') braceDepth++;
+    else if (source[i] === '}') braceDepth--;
+    i++;
+  }
+  return source.slice(start, i);
+}
+
+function createClassList() {
+  const values = new Set();
+  return {
+    add: (...names) => names.forEach(n => values.add(n)),
+    remove: (...names) => names.forEach(n => values.delete(n)),
+    toggle: (name, force) => {
+      const shouldHave = force === undefined ? !values.has(name) : Boolean(force);
+      if (shouldHave) values.add(name); else values.delete(name);
+      return shouldHave;
+    },
+    contains: name => values.has(name)
+  };
+}
+
+function createElement(overrides = {}) {
+  const attributes = new Map();
+  return {
+    style: { display: overrides.display ?? '' },
+    classList: createClassList(),
+    textContent: '',
+    value: overrides.value,
+    dataset: overrides.dataset || {},
+    setAttribute: (n, v) => attributes.set(n, String(v)),
+    getAttribute: n => attributes.get(n) ?? null
+  };
+}
+
+// Builds a sandbox containing the real setAction/checkArmedModeMatch/
+// checkProfileMatch/clearCurrentProfile/clearArmedNightMode/renderTonightHero/
+// actionLabel/inputValue/inputSeconds/formatTime bodies from renderer.js,
+// plus the minimal state/DOM/collaborator mocks they call out to. Every
+// collaborator NOT under test (render, persistSelectedProfile, renderProfiles,
+// persistArmedNightMode, renderArmedModeBanner, clamp) is a tracked no-op
+// stub, so assertions can confirm they were (or weren't) called without
+// depending on their real implementations.
+function createTonightsPlanSandbox({ state, elsOverrides = {}, actionButtons = [] } = {}) {
+  const calls = { render: 0, persistSelectedProfile: [], renderProfiles: 0, persistArmedNightMode: 0, renderArmedModeBanner: 0 };
+
+  const elements = {
+    'ns-hero-title': createElement(),
+    'ns-preview-time': createElement(),
+    'ns-play-label': createElement(),
+    'ns-hero-source': createElement({ display: 'none' }),
+    'ns-hero-source-name': createElement(),
+    ...(elsOverrides.elements || {})
+  };
+
+  const document = {
+    getElementById: id => elements[id] || null,
+    querySelectorAll: selector => {
+      if (selector === '[data-action]' || selector === '#action-chips-row [data-action]') return actionButtons;
+      return [];
+    }
+  };
+
+  const els = {
+    selAction: null,
+    timerInput: createElement({ value: '28' }),
+    scheduleCheck: null,
+    scheduleTime: null,
+    ...elsOverrides.els
+  };
+
+  const sandbox = {
+    state,
+    els,
+    document,
+    console,
+    clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
+    render: () => { calls.render++; },
+    persistSelectedProfile: id => { calls.persistSelectedProfile.push(id); },
+    renderProfiles: () => { calls.renderProfiles++; },
+    persistArmedNightMode: () => { calls.persistArmedNightMode++; },
+    renderArmedModeBanner: () => { calls.renderArmedModeBanner++; }
+  };
+
+  const context = vm.createContext(sandbox);
+  const source = [
+    extractFunction(rendererSource, 'formatTime'),
+    extractFunction(rendererSource, 'inputValue'),
+    extractFunction(rendererSource, 'inputSeconds'),
+    extractFunction(rendererSource, 'actionLabel'),
+    extractFunction(rendererSource, 'setAction'),
+    extractFunction(rendererSource, 'clearArmedNightMode'),
+    extractFunction(rendererSource, 'checkArmedModeMatch'),
+    extractFunction(rendererSource, 'checkProfileMatch'),
+    extractFunction(rendererSource, 'clearCurrentProfile'),
+    extractFunction(rendererSource, 'renderTonightHero')
+  ].join('\n');
+  vm.runInContext(
+    `${source}\nthis.__contract = { setAction, checkArmedModeMatch, checkProfileMatch, clearCurrentProfile, renderTonightHero, actionLabel, inputSeconds };`,
+    context
+  );
+
+  return { elements, els, calls, ...context.__contract };
+}
+
+function baseState(overrides = {}) {
+  return {
+    action: 'shutdown',
+    unit: 'min',
+    armedNightMode: null,
+    currentProfileId: null,
+    profiles: [],
+    ...overrides
+  };
+}
+
+function actionButton(action) {
+  const btn = createElement({ dataset: { action } });
+  return btn;
+}
+
+test('manual action selection updates the canonical action state (not a parallel field)', () => {
+  const state = baseState({ action: 'shutdown' });
+  const sleepBtn = actionButton('sleep');
+  const shutdownBtn = actionButton('shutdown');
+  const { setAction } = createTonightsPlanSandbox({ state, actionButtons: [sleepBtn, shutdownBtn] });
+
+  setAction('sleep');
+
+  assert.equal(state.action, 'sleep');
+  assert.equal(sleepBtn.classList.contains('selected'), true);
+  assert.equal(shutdownBtn.classList.contains('selected'), false);
+});
+
+test('Tonight\'s Plan summary reflects a manual timer\'s duration and action', () => {
+  const state = baseState({ action: 'sleep', unit: 'min' });
+  const { elements, els, renderTonightHero } = createTonightsPlanSandbox({ state });
+  els.timerInput.value = '45';
+
+  renderTonightHero();
+
+  assert.equal(elements['ns-hero-title'].textContent, 'Custom Timer · 45 min · Sleep');
+  assert.equal(elements['ns-preview-time'].textContent, '45:00');
+  assert.equal(elements['ns-play-label'].textContent, 'Start Custom Timer');
+  assert.equal(elements['ns-hero-source'].style.display, 'none');
+});
+
+test('loading a profile shows its name as the plan source ("From: <name>")', () => {
+  const profile = { id: 'p1', name: 'Hard Stop', action: 'shutdown', mode: 'duration', seconds: 900 };
+  const state = baseState({ action: 'shutdown', currentProfileId: 'p1', profiles: [profile] });
+  const { elements, els, renderTonightHero } = createTonightsPlanSandbox({ state });
+  els.timerInput.value = '15';
+
+  renderTonightHero();
+
+  assert.equal(elements['ns-hero-title'].textContent, 'Hard Stop · 15 min · Shutdown');
+  assert.equal(elements['ns-hero-source'].style.display, '');
+  assert.equal(elements['ns-hero-source-name'].textContent, 'Hard Stop');
+});
+
+test('manually editing action after a profile load clears the profile identity and reverts the plan to Custom', () => {
+  const profile = { id: 'p1', name: 'Hard Stop', action: 'shutdown', mode: 'duration', seconds: 900 };
+  const state = baseState({ action: 'shutdown', currentProfileId: 'p1', profiles: [profile] });
+  const { elements, els, calls, setAction, renderTonightHero } = createTonightsPlanSandbox({
+    state,
+    actionButtons: [actionButton('sleep'), actionButton('shutdown')]
+  });
+  els.timerInput.value = '15';
+
+  // Sanity: profile is credited before any edit.
+  renderTonightHero();
+  assert.equal(elements['ns-hero-source'].style.display, '');
+
+  // setAction is the manual-action-selector's own entry point -- exercising
+  // it here proves the selector's edit path, not just checkProfileMatch in
+  // isolation.
+  setAction('sleep');
+
+  assert.equal(state.currentProfileId, null, 'profile identity must be cleared once action no longer matches');
+  assert.deepEqual(calls.persistSelectedProfile, [null]);
+  assert.equal(calls.renderProfiles, 1);
+
+  renderTonightHero();
+  assert.equal(elements['ns-hero-title'].textContent, 'Custom Timer · 15 min · Sleep');
+  assert.equal(elements['ns-hero-source'].style.display, 'none');
+});
+
+test('manually editing duration after a profile load also clears the profile identity', () => {
+  const profile = { id: 'p1', name: 'Movie Night', action: 'sleep', mode: 'duration', seconds: 7200 };
+  const state = baseState({ action: 'sleep', currentProfileId: 'p1', profiles: [profile] });
+  const { els, checkProfileMatch, calls } = createTonightsPlanSandbox({ state });
+  // Profile saved 7200s (120 min); simulate the user changing the lobby to 30 min.
+  els.timerInput.value = '30';
+
+  checkProfileMatch();
+
+  assert.equal(state.currentProfileId, null, 'profile identity must be cleared once duration no longer matches');
+  assert.equal(calls.renderProfiles, 1);
+  assert.deepEqual(calls.persistSelectedProfile, [null]);
+});
+
+test('a matching, unedited profile is not cleared', () => {
+  const profile = { id: 'p1', name: 'Hard Stop', action: 'shutdown', mode: 'duration', seconds: 900 };
+  const state = baseState({ action: 'shutdown', currentProfileId: 'p1', profiles: [profile] });
+  const { els, checkProfileMatch, calls } = createTonightsPlanSandbox({ state });
+  els.timerInput.value = '15'; // 15 * 60 === profile.seconds
+
+  checkProfileMatch();
+
+  assert.equal(state.currentProfileId, 'p1');
+  assert.equal(calls.renderProfiles, 0);
+  assert.equal(calls.persistSelectedProfile.length, 0);
+});
+
+test('clock-mode profiles are compared by action only, never by a fixed duration', () => {
+  const profile = { id: 'p1', name: 'Bedtime', action: 'sleep', mode: 'clock', clock: '23:00' };
+  const state = baseState({ action: 'sleep', currentProfileId: 'p1', profiles: [profile] });
+  const { checkProfileMatch, calls } = createTonightsPlanSandbox({ state });
+
+  checkProfileMatch();
+
+  assert.equal(state.currentProfileId, 'p1', 'clock-mode profile must not be cleared by an unrelated duration comparison');
+  assert.equal(calls.renderProfiles, 0);
+});
+
+test('Night Modes continue showing their own correct plan, unaffected by profile-source logic', () => {
+  const state = baseState({
+    action: 'shutdown',
+    armedNightMode: { nightModeId: 'movie', nightModeTitle: 'Movie Wind-Down', durationSeconds: 5400, action: 'sleep', ritualId: 'standard' },
+    currentProfileId: 'p1', // even if a profile id lingers, armed Night Mode takes precedence
+    profiles: [{ id: 'p1', name: 'Hard Stop', action: 'shutdown', mode: 'duration', seconds: 900 }]
+  });
+  const { elements, renderTonightHero } = createTonightsPlanSandbox({ state });
+
+  renderTonightHero();
+
+  assert.equal(elements['ns-hero-title'].textContent, 'Movie Wind-Down · 90 min · Sleep');
+  assert.equal(elements['ns-preview-time'].textContent, '1:30:00');
+  assert.equal(elements['ns-play-label'].textContent, 'Start Movie Wind-Down');
+  // Night Modes are credited by the existing armed-mode banner, not the
+  // profile-source line -- showing both would be two competing labels.
+  assert.equal(elements['ns-hero-source'].style.display, 'none');
+});
+
+test('editing the action while a Night Mode is armed and it no longer matches clears the armed mode (existing contract, unchanged)', () => {
+  const state = baseState({
+    action: 'sleep',
+    armedNightMode: { nightModeId: 'movie', nightModeTitle: 'Movie Wind-Down', durationSeconds: 5400, action: 'sleep', ritualId: 'standard' }
+  });
+  const { setAction, calls } = createTonightsPlanSandbox({ state, actionButtons: [actionButton('shutdown')] });
+
+  setAction('shutdown');
+
+  assert.equal(state.armedNightMode, null);
+  assert.equal(calls.renderArmedModeBanner, 1);
+  assert.equal(calls.persistArmedNightMode, 1);
+});
+
+test('no regression to Dry Run / power-safety fields: the new functions never read or write them', () => {
+  const contractSource = [
+    extractFunction(rendererSource, 'setAction'),
+    extractFunction(rendererSource, 'checkProfileMatch'),
+    extractFunction(rendererSource, 'clearCurrentProfile'),
+    extractFunction(rendererSource, 'renderTonightHero')
+  ].join('\n');
+  assert.doesNotMatch(contractSource, /dryRun|forceShutdown|muteSystem/);
+});
+
+test('Start reads exactly the same state.action / inputSeconds() the visible plan is built from -- no competing state model', () => {
+  const startTimerSource = extractFunction(rendererSource, 'startTimer');
+  assert.match(startTimerSource, /action:\s*state\.action/);
+  assert.match(startTimerSource, /dryRun:\s*state\.dryRun/, 'dry run must still be sent unchanged');
+  assert.match(startTimerSource, /forceShutdown:\s*state\.forceShutdown/, 'force-shutdown must still be sent unchanged');
+  // startTonightPlan (the hero CTA / Space-key / "play again" shared entry
+  // point) must call startTimer with inputSeconds() -- the exact value
+  // renderTonightHero() uses to build the visible plan -- not a second,
+  // independently-tracked duration.
+  const startTonightPlanSource = extractFunction(rendererSource, 'startTonightPlan');
+  assert.match(startTonightPlanSource, /startTimer\(inputSeconds\(\)/);
+});
+
+// --- Action-parity completion pass: Lock must be a first-class citizen of
+// the manual action selector, not a silently-executable-but-unpickable
+// canonical action. ---------------------------------------------------------
+
+test('every canonical action has a visible manual selector chip, and a real (non-fallback) label', () => {
+  const chipsRowMatch = indexHtmlSource.match(/<div class="action-chips-row"[\s\S]*?<\/div>/);
+  assert.ok(chipsRowMatch, 'action-chips-row markup must exist in index.html');
+  const chipsRowHtml = chipsRowMatch[0];
+
+  for (const action of CANONICAL_ACTIONS) {
+    assert.match(
+      chipsRowHtml,
+      new RegExp(`data-action="${action}"`),
+      `manual action selector is missing a chip for canonical action "${action}"`
+    );
+  }
+
+  const { actionLabel } = createTonightsPlanSandbox({ state: baseState() });
+  for (const action of CANONICAL_ACTIONS) {
+    assert.notEqual(
+      actionLabel(action),
+      'Power action',
+      `actionLabel() has no real label for canonical action "${action}" -- it would render the generic fallback`
+    );
+  }
+});
+
+test('selecting Lock updates the canonical action state exactly like any other action', () => {
+  const state = baseState({ action: 'shutdown' });
+  const lockBtn = actionButton('lock');
+  const shutdownBtn = actionButton('shutdown');
+  const { setAction } = createTonightsPlanSandbox({ state, actionButtons: [lockBtn, shutdownBtn] });
+
+  setAction('lock');
+
+  assert.equal(state.action, 'lock');
+  assert.equal(lockBtn.classList.contains('selected'), true);
+  assert.equal(shutdownBtn.classList.contains('selected'), false);
+});
+
+test('manual Lock plan summary renders in Tonight\'s Plan exactly like any other action', () => {
+  const state = baseState({ action: 'lock', unit: 'min' });
+  const { elements, els, renderTonightHero } = createTonightsPlanSandbox({ state });
+  els.timerInput.value = '20';
+
+  renderTonightHero();
+
+  assert.equal(elements['ns-hero-title'].textContent, 'Custom Timer · 20 min · Lock');
+  assert.equal(elements['ns-play-label'].textContent, 'Start Custom Timer');
+});
+
+test('a Lock profile shows its source, and manually editing away from it clears to Custom -- same matching rules as any other action', () => {
+  const profile = { id: 'p1', name: 'Quick Lock', action: 'lock', mode: 'duration', seconds: 300 };
+  const state = baseState({ action: 'lock', currentProfileId: 'p1', profiles: [profile] });
+  const { elements, els, calls, setAction, renderTonightHero } = createTonightsPlanSandbox({
+    state,
+    actionButtons: [actionButton('lock'), actionButton('shutdown')]
+  });
+  els.timerInput.value = '5';
+
+  renderTonightHero();
+  assert.equal(elements['ns-hero-source'].style.display, '');
+  assert.equal(elements['ns-hero-source-name'].textContent, 'Quick Lock');
+  assert.equal(elements['ns-hero-title'].textContent, 'Quick Lock · 5 min · Lock');
+
+  setAction('shutdown');
+
+  assert.equal(state.currentProfileId, null, 'profile identity must clear once the action no longer matches the loaded Lock profile');
+  assert.deepEqual(calls.persistSelectedProfile, [null]);
+
+  renderTonightHero();
+  assert.equal(elements['ns-hero-title'].textContent, 'Custom Timer · 5 min · Shutdown');
+  assert.equal(elements['ns-hero-source'].style.display, 'none');
+});
+
+test('Start executes the same canonical action Tonight\'s Plan displays when Lock is selected -- no hidden mismatch', () => {
+  const state = baseState({ action: 'lock', unit: 'min' });
+  const { elements, els, renderTonightHero } = createTonightsPlanSandbox({ state });
+  els.timerInput.value = '10';
+
+  renderTonightHero();
+  assert.equal(elements['ns-hero-title'].textContent, 'Custom Timer · 10 min · Lock');
+
+  // startTimer (Start's shared entry point, generic across every action)
+  // sends `action: state.action` verbatim -- with state.action === 'lock'
+  // here, that's exactly the action the hero just displayed. Re-asserted
+  // per-action (rather than relying solely on the generic contract test
+  // above) because this is the literal claim the parity pass exists to
+  // guarantee: whatever Tonight's Plan shows is what Start executes.
+  const startTimerSource = extractFunction(rendererSource, 'startTimer');
+  assert.match(startTimerSource, /action:\s*state\.action/);
+});

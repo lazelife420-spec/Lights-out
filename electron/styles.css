@@ -928,6 +928,47 @@ input:disabled {
   box-shadow: 0 4px 12px rgba(118, 201, 255, 0.2);
 }
 
+.action-chips-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+/* Deliberately not .chip -- that class already has a generic click handler
+   (quick-duration chips, keyed off data-min) that these buttons must never
+   be caught by. Same visual language, separate selector. */
+.action-chip {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.action-chip:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--accent-cyan);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(118, 201, 255, 0.2);
+}
+
+/* Persistent "this is what will happen" state -- toggled by setAction() on
+   every [data-action] element, same mechanism as the existing Power submenu
+   items (.submenu-item.selected), so a manual action choice is never a
+   separate visual language from the rest of the app. */
+.action-chip.selected {
+  background: rgba(118, 201, 255, 0.12);
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+}
+
 /* Glass morphism for cards */
 .status-card {
   flex: 1;
@@ -4462,6 +4503,17 @@ body.ns-lobby .ns-header-wordmark {
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1.2;
+}
+
+/* v11.2 Tonight's Plan: which saved profile (if any) the current plan came
+   from. Only shown when a profile is actually loaded and its values still
+   match (see checkProfileMatch in renderer.js) -- never shown for Night
+   Modes (the armed-mode banner already credits those) or manual timers
+   (the title itself already reads "Custom Timer"). */
+.ns-hero-source {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
 }
 
 .ns-hero-meta {
