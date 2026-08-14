@@ -1301,6 +1301,11 @@ function switchSettingsCategory(categoryId) {
   });
 }
 
+// Display names for the Back button's accessible name -- must match
+// settingsReturnTab's possible values (lib/modes/sch/stats), not just
+// assume "Tonight".
+const NS_TAB_DISPLAY_NAME = { lib: 'Tonight', modes: 'Night Modes', sch: 'Schedule', stats: 'Stats' };
+
 function openSettingsPanel() {
   const activeTab = document.querySelector('.ns-nav-item.active')?.dataset?.nsTab;
   if (activeTab && !['set', 'help'].includes(activeTab)) settingsReturnTab = activeTab;
@@ -1310,6 +1315,11 @@ function openSettingsPanel() {
   setSidebarSelection('set');
   switchSettingsCategory('general');
   applyMainPanelVisibility('set');
+  // The Back button always returns to settingsReturnTab (see
+  // closeSettingsPanel()), which is not always Tonight -- keep its
+  // accessible name honest about the actual destination.
+  const returnLabel = NS_TAB_DISPLAY_NAME[settingsReturnTab] || 'Tonight';
+  els.modalClose?.setAttribute('aria-label', `Back to ${returnLabel}`);
 }
 
 // Returns to whichever primary view (Tonight/Modes/Schedule/Stats) was
@@ -1500,7 +1510,78 @@ async function renderStatusPanel() {
   }
 }
 
+// v11.2 Navigation Foundation: the set of modal/drawer overlays that a
+// top-level navigation request may close deterministically before
+// switching the underlying screen. Each entry is safe to dismiss with no
+// side effect beyond hiding it (or, for the LAN warning, clicking its own
+// Cancel/decline button -- the same non-destructive outcome Escape
+// already gives it).
+//
+// Deliberately EXCLUDED, and left untouched by navigation: warning-modal
+// (an active, time-sensitive countdown toward a real power action),
+// override-modal and snooze-tax-modal (consequence-acknowledgment flows
+// tied to that same real countdown), and ritual-overlay (an in-progress
+// guided ritual that Escape only ever dismisses via an explicit, awaited
+// api.ritualCancel() call). Navigating to a different sidebar tab must
+// never silently discard any of those -- so it doesn't touch them at
+// all; they keep their pre-existing Escape-only handling, unchanged, and
+// (as before) can end up visually stacked over the newly-selected screen
+// if the user navigates while one is open. That is a known, intentional
+// gap, not fixed in this slice -- fixing it means deciding real
+// power-safety UX (what should navigating away from an imminent-shutdown
+// warning actually do?), which belongs to a dedicated review, not a
+// structural navigation pass.
+const NAV_DISMISSIBLE_MODALS = [
+  { get: () => els.profilesModal, close: el => el.classList.remove('active') },
+  { get: () => els.receiptsModal, close: el => el.classList.remove('active') },
+  { get: () => els.aboutModal, close: el => el.classList.remove('active') },
+  {
+    get: () => document.getElementById('notif-drawer'),
+    close: el => {
+      el.classList.remove('active');
+      document.getElementById('btn-notif')?.setAttribute('aria-expanded', 'false');
+    }
+  },
+  { get: () => document.getElementById('streak-celebration-modal'), close: el => el.classList.remove('active') },
+  // Matches Escape's existing lan-warning-modal handling: decline, don't
+  // just hide -- clicking Cancel is the safe, non-destructive outcome
+  // (it never enables the LAN-exposed companion server).
+  { get: () => document.getElementById('lan-warning-modal'), close: () => document.getElementById('btn-lan-warning-cancel')?.click() }
+];
+
+// Closes every currently-open dismissible modal/drawer (see
+// NAV_DISMISSIBLE_MODALS above), and if keyboard focus was inside one of
+// them, moves it off the now-hidden element so it doesn't stay trapped on
+// something no longer visible. Returns the list of ids actually closed
+// (empty if nothing was open) -- used by tests and available for callers
+// that want to know whether anything happened.
+//
+// This is the ONE place navigation-triggered modal dismissal is
+// implemented -- handleSidebarNavigation() below calls it once, rather
+// than every individual nav control independently deciding to close
+// modals itself.
+function closeAnyDismissibleModal() {
+  const closed = [];
+  for (const modal of NAV_DISMISSIBLE_MODALS) {
+    const el = modal.get();
+    if (!el || !el.classList.contains('active')) continue;
+    const hadFocusInside = typeof el.contains === 'function' && document.activeElement && el.contains(document.activeElement);
+    modal.close(el);
+    if (hadFocusInside && typeof document.activeElement.blur === 'function') document.activeElement.blur();
+    closed.push(el.id || null);
+  }
+  return closed;
+}
+
 async function handleSidebarNavigation(tab, { persist = true } = {}) {
+  // Required navigation invariant: before a page-level transition
+  // completes, any dismissible blocking modal/drawer left open from
+  // wherever the user was is cleared first -- deterministically, from
+  // this one central path, not by scattering modal-close calls across
+  // every nav control. See NAV_DISMISSIBLE_MODALS above for exactly what
+  // this does and does not close.
+  closeAnyDismissibleModal();
+
   let handled = false;
 
   if (tab === 'lib') {
@@ -1538,6 +1619,11 @@ async function handleSidebarNavigation(tab, { persist = true } = {}) {
   if (persist && ['lib', 'modes', 'sch', 'stats'].includes(tab)) {
     try { api.saveAppSettings({ app: { nsActiveTab: tab } }); } catch (_) {}
   }
+  // Land focus on the now-current nav item -- covers the case where
+  // closeAnyDismissibleModal() above just blurred focus off a closed
+  // modal (or navigation was triggered some other way than a direct
+  // mouse click, which would already have focused this button itself).
+  document.querySelector(`.ns-nav-item[data-ns-tab="${tab}"]`)?.focus();
   return true;
 }
 
