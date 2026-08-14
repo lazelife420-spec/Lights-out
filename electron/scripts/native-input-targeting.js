@@ -135,6 +135,85 @@ function assertCursorCustody(intended, actual, targetBounds = null) {
   return true;
 }
 
+// --- Cursor-custody settlement gate (PR43 harness correction) ---
+//
+// A pure, DOM/Win32-free mirror of the polling loop native-input-worker.ps1
+// runs after its single SetCursorPos call -- same duplication pattern as
+// assertCursorCustody's JS copy vs. its PowerShell copy: the live loop can't
+// be unit-tested directly (it calls real Win32 GetCursorPos/GetForegroundWindow
+// in a real time-bounded loop), so this pure state machine over a supplied
+// sample sequence is how its acceptance/rejection behavior gets unit
+// coverage. An external out-of-repo probe on the target desktop/session
+// demonstrated that an immediate GetCursorPos right after a successful
+// SetCursorPos can return a stale/in-flight position that only converges to
+// the requested point over the following tens of milliseconds -- this gate
+// is the fix for evaluating custody too early, not a retry of positioning:
+// exactly one SetCursorPos is issued (by the caller, before any of this),
+// and this function/its ps1 counterpart never re-call it.
+const DEFAULT_SETTLEMENT_STABLE_COUNT = 3;
+const DEFAULT_SETTLEMENT_TIMEOUT_MS = 250;
+
+// samples: ordered array of { x, y, elapsedMs, foregroundOk }. foregroundOk
+// is only ever explicitly false when the expected window lost foreground at
+// that sample; undefined/true means it still owned foreground.
+// targetBounds: {left,top,right,bottom} or null/undefined (no target
+// constraint -- e.g. a plain diagnostic move with no click target -- only
+// consecutive-stability is required, mirroring assertCursorCustody's own
+// "no targetBounds supplied" behavior).
+function evaluateCursorSettlement(samples, targetBounds = null, options = {}) {
+  const requiredStableCount = options.requiredStableCount ?? DEFAULT_SETTLEMENT_STABLE_COUNT;
+  const maxStepPixels = options.maxStepPixels ?? MAX_CURSOR_READBACK_PIXELS;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_SETTLEMENT_TIMEOUT_MS;
+  const rect = targetBounds ? rectFromBounds(targetBounds) : null;
+  let stableRun = [];
+  for (const sample of samples || []) {
+    if (Number.isFinite(sample.elapsedMs) && sample.elapsedMs > timeoutMs) {
+      return { settled: false, reason: 'timeout', acceptedSample: null, stableRunLength: stableRun.length };
+    }
+    if (sample.foregroundOk === false) {
+      return { settled: false, reason: 'foreground-lost-during-settlement', acceptedSample: null, stableRunLength: stableRun.length };
+    }
+    const interior = rect ? isStrictInterior(rect, sample, 0) : true;
+    if (!interior) {
+      stableRun = [];
+      continue;
+    }
+    if (stableRun.length > 0) {
+      const prev = stableRun[stableRun.length - 1];
+      if (Math.abs(sample.x - prev.x) > maxStepPixels || Math.abs(sample.y - prev.y) > maxStepPixels) {
+        stableRun = [];
+      }
+    }
+    stableRun.push(sample);
+    if (stableRun.length >= requiredStableCount) {
+      return { settled: true, reason: null, acceptedSample: { x: sample.x, y: sample.y }, stableRunLength: stableRun.length };
+    }
+  }
+  return { settled: false, reason: 'exhausted-without-settlement', acceptedSample: null, stableRunLength: stableRun.length };
+}
+
+// The immediate, no-added-delay re-check taken right before SendInput, after
+// evaluateCursorSettlement has already accepted a stable run. This is what
+// stops a click on a target the cursor is only transiently passing through
+// (see COLD-04/P1's settlement addendum, scenario I): settling once is not
+// itself permission to click if the very next sample would already show it
+// leaving again.
+function evaluateFinalPreSendCheck(acceptedSample, finalSample, targetBounds = null, maxStepPixels = MAX_CURSOR_READBACK_PIXELS) {
+  if (!finalSample || !Number.isFinite(finalSample.x) || !Number.isFinite(finalSample.y)) {
+    return { ok: false, reason: 'final-check-sample-unavailable' };
+  }
+  if (finalSample.foregroundOk === false) {
+    return { ok: false, reason: 'foreground-lost-at-final-check' };
+  }
+  if (targetBounds && !isStrictInterior(rectFromBounds(targetBounds), finalSample, 0)) {
+    return { ok: false, reason: 'final-pre-send-check-left-target' };
+  }
+  if (Math.abs(finalSample.x - acceptedSample.x) > maxStepPixels || Math.abs(finalSample.y - acceptedSample.y) > maxStepPixels) {
+    return { ok: false, reason: 'final-pre-send-check-drifted' };
+  }
+  return { ok: true, reason: null };
+}
+
 function assertSendInputComplete({ requestedInputCount, returnedInputCount, win32Error = null }) {
   if (requestedInputCount !== 2) throw new Error('atomic click must request exactly two INPUT records');
   if (returnedInputCount !== requestedInputCount) {
@@ -282,6 +361,10 @@ module.exports = {
   computeGestureGap,
   createGestureRequestId,
   decideTraceInstallation,
+  DEFAULT_SETTLEMENT_STABLE_COUNT,
+  DEFAULT_SETTLEMENT_TIMEOUT_MS,
+  evaluateCursorSettlement,
+  evaluateFinalPreSendCheck,
   isStrictInterior,
   mapPerformanceToWallClock,
   MAX_CURSOR_READBACK_PIXELS,

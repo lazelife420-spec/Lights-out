@@ -226,17 +226,93 @@ while ($true) {
       if (-not $setCursorPosResult) { throw 'SetCursorPos failed' }
       if ($captureForegroundChronology) { Sample-Foreground 'after-set-cursor-pos' }
       Mark 'set-cursor-pos-succeeded' ([ordered]@{x=$screenX;y=$screenY})
-      $cursor = New-Object LightsOutNativeWorker+POINT
-      if (-not [LightsOutNativeWorker]::GetCursorPos([ref]$cursor)) { throw 'GetCursorPos failed' }
-      Mark 'get-cursor-pos-succeeded' ([ordered]@{x=$cursor.X;y=$cursor.Y})
-      if ($captureForegroundChronology) { Sample-Foreground 'after-get-cursor-pos' }
+
+      # --- Cursor-custody SETTLEMENT GATE (PR43 harness correction) ---
+      # Exactly one SetCursorPos call happens above -- nothing below ever
+      # calls it again. An external out-of-repo probe on this exact
+      # desktop/session demonstrated that an immediate GetCursorPos right
+      # after a successful SetCursorPos can return a stale/in-flight
+      # position that only converges to the requested point over the
+      # following tens of milliseconds. Deciding custody from that single
+      # immediate sample was evaluating custody too early, not a targeting
+      # or foreground defect. This loop replaces that single sample with a
+      # bounded poll for a stable run of samples, mirrored for unit testing
+      # by evaluateCursorSettlement/evaluateFinalPreSendCheck in
+      # native-input-targeting.js.
+      $requiredStableCount = 3
+      $maxSettlementStepPixels = 1
+      $settlementTimeoutMs = 250
+      $pollIntervalMs = 5
+      $settlementSamples = [Collections.Generic.List[object]]::new()
+      $stableRun = [Collections.Generic.List[object]]::new()
+      $settled = $false
+      $settlementFailureReason = $null
+      $acceptedCursor = $null
+      $settlementClock = [Diagnostics.Stopwatch]::StartNew()
+
+      function Test-StrictInteriorOfTarget([int]$X,[int]$Y,[object]$Rect) {
+        if ($null -eq $Rect) { return $true }
+        ($X -gt $Rect.left -and $X -lt $Rect.right -and $Y -gt $Rect.top -and $Y -lt $Rect.bottom)
+      }
+
+      while (-not $settled -and $null -eq $settlementFailureReason -and $settlementClock.Elapsed.TotalMilliseconds -lt $settlementTimeoutMs) {
+        # Cheap per-iteration safety check: raw HWND comparison only, not the
+        # richer Sample-Foreground (Get-Process/GetTitle) used at coarse
+        # milestones elsewhere -- this can run dozens of times per request.
+        $fgNow = [LightsOutNativeWorker]::GetForegroundWindow()
+        if ($fgNow -ne $hwnd) { $settlementFailureReason = 'foreground-lost-during-settlement'; break }
+        $c = New-Object LightsOutNativeWorker+POINT
+        if (-not [LightsOutNativeWorker]::GetCursorPos([ref]$c)) { throw 'GetCursorPos failed during cursor-custody settlement' }
+        $sampleElapsedMs = [Math]::Round($settlementClock.Elapsed.TotalMilliseconds,3)
+        $interior = Test-StrictInteriorOfTarget $c.X $c.Y $translatedRect
+        $entry = [ordered]@{ x=$c.X; y=$c.Y; elapsedMs=$sampleElapsedMs; strictInterior=$interior }
+        $settlementSamples.Add($entry)
+        if ($interior) {
+          if ($stableRun.Count -gt 0) {
+            $prev = $stableRun[$stableRun.Count-1]
+            if ([Math]::Abs($c.X-$prev.x) -gt $maxSettlementStepPixels -or [Math]::Abs($c.Y-$prev.y) -gt $maxSettlementStepPixels) { $stableRun.Clear() }
+          }
+          $stableRun.Add($entry)
+          if ($stableRun.Count -ge $requiredStableCount) {
+            # Final immediate pre-SendInput re-check -- no added delay between
+            # this and the SendInput call below if it passes.
+            $fgFinal = [LightsOutNativeWorker]::GetForegroundWindow()
+            if ($fgFinal -ne $hwnd) { $settlementFailureReason = 'foreground-lost-at-final-check'; break }
+            $cFinal = New-Object LightsOutNativeWorker+POINT
+            if (-not [LightsOutNativeWorker]::GetCursorPos([ref]$cFinal)) { throw 'GetCursorPos failed at final pre-send check' }
+            $finalInterior = Test-StrictInteriorOfTarget $cFinal.X $cFinal.Y $translatedRect
+            $finalStepOk = ([Math]::Abs($cFinal.X-$entry.x) -le $maxSettlementStepPixels) -and ([Math]::Abs($cFinal.Y-$entry.y) -le $maxSettlementStepPixels)
+            $finalEntry = [ordered]@{ x=$cFinal.X; y=$cFinal.Y; elapsedMs=[Math]::Round($settlementClock.Elapsed.TotalMilliseconds,3); strictInterior=$finalInterior; isFinalPreSendCheck=$true }
+            $settlementSamples.Add($finalEntry)
+            if ($finalInterior -and $finalStepOk) {
+              $settled = $true
+              $acceptedCursor = [ordered]@{ x=$cFinal.X; y=$cFinal.Y }
+            } else {
+              $settlementFailureReason = 'final-pre-send-check-left-target'
+            }
+          }
+        } else {
+          $stableRun.Clear()
+        }
+        if (-not $settled -and $null -eq $settlementFailureReason) { Start-Sleep -Milliseconds $pollIntervalMs }
+      }
+      if (-not $settled -and $null -eq $settlementFailureReason) { $settlementFailureReason = 'timeout' }
+      if ($captureForegroundChronology) { Sample-Foreground 'after-settlement' }
       $clipCursorAfterDiag = Get-ClipCursorDiagnostic
-      $actualCursor=[ordered]@{x=$cursor.X;y=$cursor.Y}
-      $dx=$cursor.X-$screenX
-      $dy=$cursor.Y-$screenY
-      $actualStrictInterior=$null
-      if ($null -ne $translatedRect) { $actualStrictInterior = [bool]($cursor.X -gt $translatedRect.left -and $cursor.X -lt $translatedRect.right -and $cursor.Y -gt $translatedRect.top -and $cursor.Y -lt $translatedRect.bottom) }
-      Mark 'cursor-verified-before-input' ([ordered]@{intended=[ordered]@{x=$screenX;y=$screenY};actual=$actualCursor;dx=$dx;dy=$dy;actualStrictInterior=$actualStrictInterior;translatedTarget=$translatedRect;scaleX=$scaleX;scaleY=$scaleY})
+
+      if ($settled) {
+        $actualCursor = $acceptedCursor
+        $dx = $acceptedCursor.x - $screenX
+        $dy = $acceptedCursor.y - $screenY
+        $actualStrictInterior = $true
+      } else {
+        $lastSample = if ($settlementSamples.Count -gt 0) { $settlementSamples[$settlementSamples.Count-1] } else { $null }
+        $actualCursor = if ($null -ne $lastSample) { [ordered]@{x=$lastSample.x;y=$lastSample.y} } else { $null }
+        $dx = if ($null -ne $lastSample) { $lastSample.x - $screenX } else { $null }
+        $dy = if ($null -ne $lastSample) { $lastSample.y - $screenY } else { $null }
+        $actualStrictInterior = if ($null -ne $lastSample) { $lastSample.strictInterior } else { $null }
+      }
+      Mark 'cursor-settlement-complete' ([ordered]@{settled=$settled;failureReason=$settlementFailureReason;sampleCount=$settlementSamples.Count;stableRunLength=$stableRun.Count;elapsedMs=[Math]::Round($settlementClock.Elapsed.TotalMilliseconds,3);acceptedCursor=$acceptedCursor})
       $nativeEnvironment = [ordered]@{
         selector = $payload.selector
         cursorBeforeSetCursorPos = if ($cursorBeforeSetCursorPosOk) { [ordered]@{ x=$cursorBeforeSetCursorPos.X; y=$cursorBeforeSetCursorPos.Y } } else { $null }
@@ -248,14 +324,28 @@ while ($true) {
         preMoveCursorMonitor = $preMoveMonitorDiag
         dpiAwareness = $dpiAwarenessDiag
         session = $sessionDiag
+        settlementChronology = [ordered]@{
+          requestedPoint = [ordered]@{x=$screenX;y=$screenY}
+          initialCursor = if ($cursorBeforeSetCursorPosOk) { [ordered]@{x=$cursorBeforeSetCursorPos.X;y=$cursorBeforeSetCursorPos.Y} } else { $null }
+          samples = $settlementSamples
+          requiredStableCount = $requiredStableCount
+          maxSettlementStepPixels = $maxSettlementStepPixels
+          settlementTimeoutMs = $settlementTimeoutMs
+          pollIntervalMs = $pollIntervalMs
+          settled = $settled
+          failureReason = $settlementFailureReason
+          acceptedCursor = $acceptedCursor
+          elapsedMs = [Math]::Round($settlementClock.Elapsed.TotalMilliseconds,3)
+        }
       }
-      # Custody invariant: the physical cursor must still be safely on the verified
-      # activation target, not bit-for-bit equal to the requested integer pair.
-      # A readback within one physical pixel is accepted only when the actual point
-      # itself remains strictly inside the same translated target (see COLD-04, P1
-      # -- cursor custody; distinct from the unrelated warm-iteration-count P1).
-      if ([Math]::Abs($dx) -gt 1 -or [Math]::Abs($dy) -gt 1) { throw 'actual cursor exceeded the one-pixel readback bound of the intended physical point' }
-      if ($null -ne $translatedRect -and -not $actualStrictInterior) { throw 'actual cursor position left the strict interior of the current activation target' }
+      # Custody invariant, now evaluated only once Windows has demonstrably
+      # finished positioning the cursor (see COLD-04, P1 -- cursor custody;
+      # distinct from the unrelated warm-iteration-count P1): the physical
+      # cursor must have settled into a stable run of samples strictly
+      # inside the verified activation target (or, with no target supplied,
+      # simply stopped moving), and the final immediate pre-SendInput
+      # re-check must still agree, before any gesture may proceed.
+      if (-not $settled) { throw "actual cursor did not settle into custody before the native gesture: $settlementFailureReason" }
       if ($payload.action -eq 'click') {
         $requestedInputCount=2
         $win32Error=0

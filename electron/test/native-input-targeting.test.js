@@ -13,6 +13,8 @@ const {
   computeGestureGap,
   createGestureRequestId,
   decideTraceInstallation,
+  evaluateCursorSettlement,
+  evaluateFinalPreSendCheck,
   isStrictInterior,
   mapPerformanceToWallClock,
   reconcileTarget,
@@ -594,4 +596,159 @@ test('nested cross-gesture failure evidence (matchingEvents, precedingContextEve
 test('existing browserGesture PASS/FAIL rules are unchanged by the correlation additions (K15)', () => {
   assert.equal(classifyBrowserGestureFailure({ ownerId: 'menu-settings', down: heldOwner, up: heldOwner, click: heldOwner }), null);
   assert.throws(() => validateBrowserGesture({ ownerId: 'menu-settings', down: null, up: heldOwner, click: heldOwner }), /browser DOWN left the accepted activation ancestry/);
+});
+
+// PR43 cursor-custody settlement gate. evaluateCursorSettlement/
+// evaluateFinalPreSendCheck are the pure mirror of native-input-worker.ps1's
+// live polling loop (which calls real Win32 GetCursorPos/GetForegroundWindow
+// in a real time-bounded loop and so can't be unit-tested directly -- same
+// duplication pattern as assertCursorCustody's JS copy vs. its PowerShell
+// copy). Target for all cases below is the existing custodyBounds fixture
+// -> bounds {left:600,top:10,right:650,bottom:38}, deep-interior center (625,24).
+
+test('A. exact immediate: requested point returned immediately and remains stable settles on the third sample', () => {
+  const samples = [
+    { x: 625, y: 24, elapsedMs: 5 },
+    { x: 625, y: 24, elapsedMs: 10 },
+    { x: 625, y: 24, elapsedMs: 15 }
+  ];
+  const result = evaluateCursorSettlement(samples, custodyBounds);
+  assert.equal(result.settled, true);
+  assert.deepEqual(result.acceptedSample, { x: 625, y: 24 });
+  assert.equal(result.stableRunLength, 3);
+});
+
+test('B. old ±1-safe readback: differs by <=1 and stable/strict-interior settles', () => {
+  const samples = [
+    { x: 624, y: 24, elapsedMs: 5 },
+    { x: 625, y: 24, elapsedMs: 10 },
+    { x: 624, y: 25, elapsedMs: 15 }
+  ];
+  const result = evaluateCursorSettlement(samples, custodyBounds);
+  assert.equal(result.settled, true);
+  assert.deepEqual(result.acceptedSample, { x: 624, y: 25 });
+});
+
+test('C. stale previous position then converges: old -> intermediate -> target -> stable -> stable settles only after settlement, not on first arrival', () => {
+  const samples = [
+    { x: 40, y: 40, elapsedMs: 2 },     // old/previous position, not interior
+    { x: 300, y: 200, elapsedMs: 6 },   // intermediate, still not interior
+    { x: 625, y: 24, elapsedMs: 10 },   // first arrival inside target -- run starts here, not yet accepted
+    { x: 625, y: 24, elapsedMs: 15 },
+    { x: 626, y: 24, elapsedMs: 20 }
+  ];
+  const result = evaluateCursorSettlement(samples, custodyBounds);
+  assert.equal(result.settled, true);
+  assert.equal(result.stableRunLength, 3);
+  assert.deepEqual(result.acceptedSample, { x: 626, y: 24 });
+  // Confirms first arrival alone was not sufficient: settling required all 3.
+  assert.notDeepEqual(result.acceptedSample, samples[2]);
+});
+
+test('D. transient +2-inside-target sample followed by continued substantial movement must not settle on the first sample', () => {
+  const samples = [
+    { x: 627, y: 26, elapsedMs: 5 },  // interior (+2/+2-shaped offset), run count 1
+    { x: 635, y: 30, elapsedMs: 10 }  // still interior but a step >1px -- resets the run, never reaches 3
+  ];
+  const result = evaluateCursorSettlement(samples, custodyBounds);
+  assert.equal(result.settled, false);
+  assert.equal(result.acceptedSample, null);
+});
+
+test('E. cursor enters the target then leaves before settling is rejected', () => {
+  const samples = [
+    { x: 625, y: 24, elapsedMs: 5 },   // interior, run count 1
+    { x: 700, y: 24, elapsedMs: 10 }   // outside the target -- run cleared, no push
+  ];
+  const result = evaluateCursorSettlement(samples, custodyBounds);
+  assert.equal(result.settled, false);
+});
+
+test('F. cursor never settles within the bounded timeout fails closed', () => {
+  const samples = [
+    { x: 625, y: 24, elapsedMs: 100 },
+    { x: 635, y: 24, elapsedMs: 200 },
+    { x: 625, y: 24, elapsedMs: 300 } // exceeds DEFAULT_SETTLEMENT_TIMEOUT_MS (250)
+  ];
+  const result = evaluateCursorSettlement(samples, custodyBounds);
+  assert.equal(result.settled, false);
+  assert.equal(result.reason, 'timeout');
+});
+
+test('G. cursor settles (stops moving) but outside the target is rejected, not accepted as "stable"', () => {
+  const samples = [
+    { x: 40, y: 40, elapsedMs: 50 },
+    { x: 40, y: 40, elapsedMs: 150 },
+    { x: 40, y: 40, elapsedMs: 260 } // stable the whole time, but never interior; times out
+  ];
+  const result = evaluateCursorSettlement(samples, custodyBounds);
+  assert.equal(result.settled, false);
+  assert.equal(result.reason, 'timeout');
+});
+
+test('H. foreground loss while waiting fails immediately, not after further polling', () => {
+  const samples = [
+    { x: 625, y: 24, elapsedMs: 5, foregroundOk: true },
+    { x: 625, y: 24, elapsedMs: 10, foregroundOk: false },
+    { x: 625, y: 24, elapsedMs: 15, foregroundOk: true } // must never be reached
+  ];
+  const result = evaluateCursorSettlement(samples, custodyBounds);
+  assert.equal(result.settled, false);
+  assert.equal(result.reason, 'foreground-lost-during-settlement');
+  assert.equal(result.stableRunLength, 1);
+});
+
+test('I. settles, then the final pre-SendInput check sample has left the target: rejected, no click', () => {
+  const settlement = evaluateCursorSettlement([
+    { x: 625, y: 24, elapsedMs: 5 },
+    { x: 625, y: 24, elapsedMs: 10 },
+    { x: 625, y: 24, elapsedMs: 15 }
+  ], custodyBounds);
+  assert.equal(settlement.settled, true);
+  const finalCheck = evaluateFinalPreSendCheck(settlement.acceptedSample, { x: 700, y: 24 }, custodyBounds);
+  assert.equal(finalCheck.ok, false);
+  assert.equal(finalCheck.reason, 'final-pre-send-check-left-target');
+});
+
+test('final pre-send check accepts a stable, in-target confirmation sample', () => {
+  const settlement = evaluateCursorSettlement([
+    { x: 625, y: 24, elapsedMs: 5 },
+    { x: 625, y: 24, elapsedMs: 10 },
+    { x: 625, y: 24, elapsedMs: 15 }
+  ], custodyBounds);
+  const finalCheck = evaluateFinalPreSendCheck(settlement.acceptedSample, { x: 625, y: 24 }, custodyBounds);
+  assert.equal(finalCheck.ok, true);
+});
+
+test('final pre-send check rejects on foreground loss even if the point is still interior', () => {
+  const finalCheck = evaluateFinalPreSendCheck({ x: 625, y: 24 }, { x: 625, y: 24, foregroundOk: false }, custodyBounds);
+  assert.equal(finalCheck.ok, false);
+  assert.equal(finalCheck.reason, 'foreground-lost-at-final-check');
+});
+
+test('a plain move with no target bounds only requires consecutive-step stability, not target interior', () => {
+  const samples = [
+    { x: 10, y: 10, elapsedMs: 5 },
+    { x: 10, y: 10, elapsedMs: 10 },
+    { x: 11, y: 10, elapsedMs: 15 }
+  ];
+  const result = evaluateCursorSettlement(samples, null);
+  assert.equal(result.settled, true);
+});
+
+// J. call count: SetCursorPos-exactly-once is a property of the live
+// native-input-worker.ps1 loop (it calls SetCursorPos once before any of
+// this), not of these pure functions -- verified there, not here. What is
+// verifiable here is that evaluating settlement is side-effect-free: it
+// never mutates the caller's sample objects (i.e. it cannot itself be
+// mistaken for a positioning action).
+test('evaluateCursorSettlement and evaluateFinalPreSendCheck do not mutate their inputs (purity, no hidden repositioning)', () => {
+  const samples = [{ x: 625, y: 24, elapsedMs: 5 }, { x: 625, y: 24, elapsedMs: 10 }, { x: 625, y: 24, elapsedMs: 15 }];
+  const snapshot = JSON.parse(JSON.stringify(samples));
+  const settlement = evaluateCursorSettlement(samples, custodyBounds);
+  assert.deepEqual(samples, snapshot);
+  const finalSample = { x: 625, y: 24 };
+  const finalSnapshot = JSON.parse(JSON.stringify(finalSample));
+  evaluateFinalPreSendCheck(settlement.acceptedSample, finalSample, custodyBounds);
+  assert.deepEqual(finalSample, finalSnapshot);
 });
