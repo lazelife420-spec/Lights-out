@@ -419,3 +419,194 @@ test('Start executes the same canonical action Tonight\'s Plan displays when Loc
   const startTimerSource = extractFunction(rendererSource, 'startTimer');
   assert.match(startTimerSource, /action:\s*state\.action/);
 });
+
+// --- Remediation pass: clock-mode profile attribution must be truthful --
+// it survives passive re-renders untouched, but a manual duration edit
+// always clears it (never by recomputing/comparing a clock target; see
+// checkProfileMatch's durationEdited parameter and its comment in
+// renderer.js). ------------------------------------------------------------
+
+function clockProfile(overrides = {}) {
+  return { id: 'clock-1', name: 'Bedtime Lock', action: 'lock', mode: 'clock', clock: '23:00', seconds: 1800, ...overrides };
+}
+
+test('a loaded clock-mode profile stays attributed across passive re-renders (no user edit)', () => {
+  const profile = clockProfile();
+  const state = baseState({ action: 'lock', currentProfileId: 'clock-1', profiles: [profile] });
+  const { elements, checkProfileMatch, renderTonightHero } = createTonightsPlanSandbox({ state });
+
+  // Simulate several passive passes -- none represent a user edit, so none
+  // pass durationEdited=true. Loading + rendering alone must never clear it.
+  checkProfileMatch();
+  renderTonightHero();
+  checkProfileMatch();
+  renderTonightHero();
+
+  assert.equal(state.currentProfileId, 'clock-1', 'passively re-rendering must never clear a clock-mode profile the user has not touched');
+  assert.equal(elements['ns-hero-source'].style.display, '');
+  assert.equal(elements['ns-hero-source-name'].textContent, 'Bedtime Lock');
+});
+
+test('a typed duration edit clears a loaded clock-mode profile', () => {
+  const profile = clockProfile();
+  const state = baseState({ action: 'lock', currentProfileId: 'clock-1', profiles: [profile] });
+  const { els, calls, checkProfileMatch, elements, renderTonightHero } = createTonightsPlanSandbox({ state });
+  renderTonightHero();
+  assert.equal(elements['ns-hero-source'].style.display, '', 'sanity: profile credited before the edit');
+
+  // Mirrors renderer.js's timerInput 'input' handler, which now calls
+  // checkProfileMatch(true) after a typed edit.
+  els.timerInput.value = '5';
+  checkProfileMatch(true);
+
+  assert.equal(state.currentProfileId, null, 'a manual duration edit must clear a clock-mode profile even though it has no comparable stored duration');
+  assert.deepEqual(calls.persistSelectedProfile, [null]);
+});
+
+test('a +/- duration edit clears a loaded clock-mode profile', () => {
+  const profile = clockProfile();
+  const state = baseState({ action: 'lock', currentProfileId: 'clock-1', profiles: [profile] });
+  const { checkProfileMatch } = createTonightsPlanSandbox({ state });
+
+  checkProfileMatch(true); // mirrors btnPlus/btnMinus's checkProfileMatch(true) call
+
+  assert.equal(state.currentProfileId, null);
+});
+
+test('a unit change (min <-> sec) clears a loaded clock-mode profile, same as any other duration mutation', () => {
+  const profile = clockProfile();
+  const state = baseState({ action: 'lock', currentProfileId: 'clock-1', profiles: [profile], unit: 'min' });
+  const { checkProfileMatch } = createTonightsPlanSandbox({ state });
+
+  state.unit = 'sec'; // mirrors the .unit-btn click handler mutating state.unit
+  checkProfileMatch(true); // mirrors that handler's new checkProfileMatch(true) call
+
+  assert.equal(state.currentProfileId, null, 'unit changes are a manual duration mutation and must clear clock-mode profiles too');
+});
+
+test('a manual duration edit clears a clock-mode profile even if the new value numerically coincides with profile.seconds', () => {
+  // The specific failure mode being guarded against: comparing against a
+  // recomputed/stored duration would let a coincidental numeric match save
+  // a profile the user has explicitly left. A manual edit always clears a
+  // clock-mode profile, regardless of the resulting number.
+  const profile = clockProfile({ seconds: 1800 });
+  const state = baseState({ action: 'lock', currentProfileId: 'clock-1', profiles: [profile] });
+  const { els, checkProfileMatch } = createTonightsPlanSandbox({ state });
+  els.timerInput.value = '30'; // 30 min === 1800s == profile.seconds
+
+  checkProfileMatch(true);
+
+  assert.equal(state.currentProfileId, null, 'a manual duration edit must clear a clock-mode profile regardless of any numeric coincidence with profile.seconds');
+});
+
+test('action mismatch still clears a clock-mode profile (unaffected by the durationEdited parameter)', () => {
+  const profile = clockProfile({ action: 'lock' });
+  const state = baseState({ action: 'sleep', currentProfileId: 'clock-1', profiles: [profile] }); // action already diverged from the profile
+  const { checkProfileMatch } = createTonightsPlanSandbox({ state });
+
+  checkProfileMatch(); // default false -- action mismatch must still be caught up front, before the clock-mode branch
+
+  assert.equal(state.currentProfileId, null);
+});
+
+test('duration-mode profile matching is unchanged: durationEdited=true does not force-clear a still-matching duration-mode profile', () => {
+  const profile = { id: 'p1', name: 'Hard Stop', action: 'shutdown', mode: 'duration', seconds: 900 };
+  const state = baseState({ action: 'shutdown', currentProfileId: 'p1', profiles: [profile] });
+  const { els, checkProfileMatch } = createTonightsPlanSandbox({ state });
+  els.timerInput.value = '15'; // 15 * 60 === profile.seconds -- genuinely unchanged
+
+  checkProfileMatch(true); // even flagged as a duration edit, an unchanged duration-mode profile must not be force-cleared
+
+  assert.equal(state.currentProfileId, 'p1', 'durationEdited must only affect clock-mode profiles -- duration-mode profiles keep their existing numeric comparison');
+});
+
+test('the manual duration-edit event handlers (+, -, typed input, unit toggle) all call checkProfileMatch(true) in renderer.js', () => {
+  // Structural check, not a full DOM harness: extractFunction only pulls
+  // named top-level functions, and these are anonymous click/input
+  // listeners registered inline. The live CDP walkthrough exercises the
+  // real wiring end to end; this locks down that each handler actually
+  // passes durationEdited=true, matching the semantic checkProfileMatch()
+  // itself expects for a genuine manual duration mutation.
+  const plusHandler = rendererSource.match(/els\.btnPlus\.addEventListener\('click', \(\) => \{[\s\S]*?\}\);/);
+  assert.ok(plusHandler, 'els.btnPlus click handler not found');
+  assert.match(plusHandler[0], /checkProfileMatch\(true\)/, 'btnPlus click handler must call checkProfileMatch(true)');
+
+  const minusHandler = rendererSource.match(/els\.btnMinus\.addEventListener\('click', \(\) => \{[\s\S]*?\}\);/);
+  assert.ok(minusHandler, 'els.btnMinus click handler not found');
+  assert.match(minusHandler[0], /checkProfileMatch\(true\)/, 'btnMinus click handler must call checkProfileMatch(true)');
+
+  const timerInputHandler = rendererSource.match(/els\.timerInput\.addEventListener\('input', \(\) => \{[\s\S]*?\}\);/);
+  assert.ok(timerInputHandler, 'timerInput input handler not found');
+  assert.match(timerInputHandler[0], /checkProfileMatch\(true\)/, 'timerInput input handler must call checkProfileMatch(true)');
+
+  // There are two '.unit-btn' querySelectorAll blocks in renderer.js: a
+  // display-sync loop inside render() (toggles .active, no listener) and
+  // the actual click-handler wiring below it -- anchor on
+  // addEventListener('click' to match the latter specifically.
+  const unitBtnHandler = rendererSource.match(/document\.querySelectorAll\('\.unit-btn'\)\.forEach\(btn => \{\s*btn\.addEventListener\('click', \(\) => \{[\s\S]*?\}\);\s*\}\);/);
+  assert.ok(unitBtnHandler, 'unit-btn click handler not found');
+  assert.match(unitBtnHandler[0], /checkProfileMatch\(true\)/, 'unit-btn click handler must call checkProfileMatch(true)');
+});
+
+// --- Remediation pass: action-chip accessibility. aria-pressed must be
+// derived from the exact same isSelected value as the visual .selected
+// class, in the same pass, so the two can never diverge. -------------------
+
+test('exactly one action chip has aria-pressed="true" for each canonical action', () => {
+  for (const action of CANONICAL_ACTIONS) {
+    const state = baseState({ action });
+    const buttons = CANONICAL_ACTIONS.map(a => actionButton(a));
+    const { renderTonightHero } = createTonightsPlanSandbox({ state, actionButtons: buttons });
+
+    renderTonightHero();
+
+    const pressed = buttons.filter(b => b.getAttribute('aria-pressed') === 'true');
+    assert.equal(pressed.length, 1, `exactly one chip should be aria-pressed="true" for action "${action}"`);
+    assert.equal(pressed[0].dataset.action, action);
+    for (const btn of buttons) {
+      const shouldBePressed = btn.dataset.action === action;
+      assert.equal(btn.getAttribute('aria-pressed'), String(shouldBePressed), 'aria-pressed must be an explicit "true"/"false" string, never absent');
+      assert.equal(btn.classList.contains('selected'), shouldBePressed, 'aria-pressed and .selected must never diverge');
+    }
+  }
+});
+
+test('state changes update both the visual .selected class and aria-pressed together', () => {
+  const state = baseState({ action: 'shutdown' });
+  const sleepBtn = actionButton('sleep');
+  const shutdownBtn = actionButton('shutdown');
+  const { setAction, renderTonightHero } = createTonightsPlanSandbox({ state, actionButtons: [sleepBtn, shutdownBtn] });
+
+  // renderTonightHero() is called explicitly here because this sandbox's
+  // render() is a call-counting stub (not the real render()), same as
+  // every other test in this file that exercises setAction() -- it mirrors
+  // setAction()'s own render() call, which in the real app is what chains
+  // into renderTonightHero() and sets aria-pressed.
+  setAction('sleep');
+  renderTonightHero();
+  assert.equal(sleepBtn.classList.contains('selected'), true);
+  assert.equal(sleepBtn.getAttribute('aria-pressed'), 'true');
+  assert.equal(shutdownBtn.classList.contains('selected'), false);
+  assert.equal(shutdownBtn.getAttribute('aria-pressed'), 'false');
+
+  setAction('shutdown');
+  renderTonightHero();
+  assert.equal(sleepBtn.classList.contains('selected'), false);
+  assert.equal(sleepBtn.getAttribute('aria-pressed'), 'false');
+  assert.equal(shutdownBtn.classList.contains('selected'), true);
+  assert.equal(shutdownBtn.getAttribute('aria-pressed'), 'true');
+});
+
+test('Lock behaves identically to the other four actions for aria-pressed', () => {
+  const state = baseState({ action: 'lock' });
+  const lockBtn = actionButton('lock');
+  const otherButtons = ['sleep', 'shutdown', 'restart', 'hibernate'].map(a => actionButton(a));
+  const { renderTonightHero } = createTonightsPlanSandbox({ state, actionButtons: [lockBtn, ...otherButtons] });
+
+  renderTonightHero();
+
+  assert.equal(lockBtn.getAttribute('aria-pressed'), 'true');
+  for (const btn of otherButtons) {
+    assert.equal(btn.getAttribute('aria-pressed'), 'false');
+  }
+});

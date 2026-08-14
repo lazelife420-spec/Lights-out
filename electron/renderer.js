@@ -1920,8 +1920,12 @@ function renderTonightHero() {
   // right now (a Night Mode's fixed action while one is armed, otherwise
   // state.action), independent of whether every code path that can arm a
   // Night Mode also happens to call setAction() itself.
+  // aria-pressed is derived from the exact same isSelected value as the
+  // visual .selected class, in the same pass, so the two can never diverge.
   document.querySelectorAll('#action-chips-row [data-action]').forEach(btn => {
-    btn.classList.toggle('selected', btn.dataset.action === effectiveAction);
+    const isSelected = btn.dataset.action === effectiveAction;
+    btn.classList.toggle('selected', isSelected);
+    btn.setAttribute('aria-pressed', String(isSelected));
   });
 }
 
@@ -1961,14 +1965,34 @@ function checkArmedModeMatch() {
 // identity is cleared so the displayed source can never claim a profile is
 // active when its values no longer match it -- the same contract Night
 // Modes already have, extended to profiles.
-function checkProfileMatch() {
+//
+// durationEdited: true only when this call follows an actual manual
+// duration mutation (+/-, typed value, or a unit change) -- every other
+// call site (action edits, and plain re-renders) passes the default false.
+//
+// Clock-mode profiles specify a time-of-day ("end at 23:00"), not a fixed
+// countdown. The duration shown right after loading one is a one-time
+// snapshot -- "seconds until 23:00 as of the moment it was applied" -- not
+// a value the profile itself stores or that stays meaningful as real time
+// passes. So this deliberately does NOT compare inputSeconds() against
+// profile.seconds for clock-mode profiles (that field isn't the profile's
+// duration and drifting further from a stale snapshot every tick, with no
+// user action at all, would clear it spuriously). Instead: a manual
+// duration edit on a clock-mode profile always clears it, unconditionally,
+// even if the edited value happens to numerically coincide with the
+// original snapshot -- editing duration changes what kind of plan this is
+// ("end at 23:00" -> "run for N minutes"), regardless of the numbers.
+// Passive calls (durationEdited left false) never touch clock-mode
+// profiles, so simply loading one and re-rendering can't clear it.
+function checkProfileMatch(durationEdited = false) {
   if (!state.currentProfileId) return;
   const profile = state.profiles.find(p => p.id === state.currentProfileId);
   if (!profile) { clearCurrentProfile(); return; }
   if (state.action !== profile.action) { clearCurrentProfile(); return; }
-  // Clock-mode profiles target a time-of-day, not a fixed countdown duration;
-  // inputSeconds() is a duration, so it isn't a meaningful comparison for them.
-  if (profile.mode === 'clock') return;
+  if (profile.mode === 'clock') {
+    if (durationEdited) clearCurrentProfile();
+    return;
+  }
   if (inputSeconds() !== profile.seconds) clearCurrentProfile();
 }
 
@@ -3112,7 +3136,7 @@ if (els.btnClearReceipts) {
     els.timerInput.value = inputValue() + 1;
     setInputFromSeconds(inputSeconds());
     checkArmedModeMatch();
-    checkProfileMatch();
+    checkProfileMatch(true);
     render();
   });
 
@@ -3120,7 +3144,7 @@ if (els.btnClearReceipts) {
     els.timerInput.value = Math.max(1, inputValue() - 1);
     setInputFromSeconds(inputSeconds());
     checkArmedModeMatch();
-    checkProfileMatch();
+    checkProfileMatch(true);
     render();
   });
 
@@ -3129,7 +3153,7 @@ if (els.btnClearReceipts) {
       state.remainingSeconds = inputSeconds();
       state.totalSeconds = state.remainingSeconds;
       checkArmedModeMatch();
-      checkProfileMatch();
+      checkProfileMatch(true);
       render();
     }
   });
@@ -3140,6 +3164,11 @@ if (els.btnClearReceipts) {
       const seconds = inputSeconds();
       state.unit = btn.dataset.unit;
       setInputFromSeconds(seconds);
+      // A unit change (min <-> sec) is a manual duration mutation just like
+      // +/-/typing -- same clearing semantics apply.
+      checkArmedModeMatch();
+      checkProfileMatch(true);
+      render();
     });
   });
 
