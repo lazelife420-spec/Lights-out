@@ -3364,14 +3364,24 @@ if (els.btnClearReceipts) {
       }
 
       if (item.id === 'open-options') {
-        openSettingsPanel();
-        setSidebarSelection('set');
+        // Routed through the same central navigation entry point the
+        // sidebar Settings destination uses -- not a duplicated
+        // openSettingsPanel()+setSidebarSelection() call -- so this
+        // top-menu action gets the exact same blocking-modal refusal,
+        // dismissible-modal cleanup, and settingsReturnTab bookkeeping,
+        // instead of silently bypassing all of it.
+        handleSidebarNavigation('set');
         return;
       }
 
       if (item.id === 'open-about') {
-        openHelpPanel();
-        setSidebarSelection('help');
+        // Same reasoning as 'open-options' above: routed through the
+        // central entry point so this shares Help's corrected semantics
+        // (never claims page-current state) and the blocking-modal check,
+        // rather than duplicating -- and previously incorrectly
+        // reintroducing -- the old setSidebarSelection('help') bug via a
+        // second, always-visible trigger.
+        handleSidebarNavigation('help');
         return;
       }
 
@@ -3407,9 +3417,22 @@ if (els.btnClearReceipts) {
       document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById(`tab-${btn.dataset.tab}`)?.classList.add('active');
-      if (btn.dataset.tab === 'library') setSidebarSelection('lib');
-      if (btn.dataset.tab === 'schedule') setSidebarSelection('sch');
-      if (btn.dataset.tab === 'streaks') setSidebarSelection('stats');
+      // These six buttons are sub-tabs entirely inside the Schedule panel
+      // (#ns-panel-sch) -- applyMainPanelVisibility() is never called
+      // here, so #ns-panel-sch is the only thing actually visible
+      // regardless of which one is selected, even though a couple of them
+      // are labeled/keyed to resemble other destinations ("Quick Setup" =
+      // data-tab="library", "Streaks" = data-tab="streaks"). The sidebar's
+      // current-destination indicator must always read Schedule while any
+      // of them is active -- previously two of the six instead claimed
+      // Tonight or Stats as current via setSidebarSelection('lib'/'stats')
+      // even though Schedule was the only panel genuinely on screen, a
+      // real navigation-truth violation (and it corrupted
+      // settingsReturnTab too: opening Settings from "Quick Setup" would
+      // have recorded 'lib' as the return destination instead of the
+      // Schedule the user was actually looking at). Fixed narrowly here --
+      // this does not touch what content these sub-tabs show.
+      setSidebarSelection('sch');
       if (btn.dataset.tab === 'streaks') loadStreaks();
       if (btn.dataset.tab === 'focus') loadSleepDebt();
     });

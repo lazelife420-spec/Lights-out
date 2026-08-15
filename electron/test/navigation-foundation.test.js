@@ -85,6 +85,26 @@ function extractMainEscapeBranch(source) {
   return source.slice(ifStart, i);
 }
 
+// Extracts a top-level `if (<condition>) { ... }` block by exact source
+// text (condition given without the surrounding `if (...)`), via balanced
+// brace matching. Used for the top-menu submenu branches, which are small
+// standalone if-blocks inside a much larger click handler not otherwise
+// practical to extract whole.
+function extractIfBlock(source, condition) {
+  const marker = `if (${condition}) {`;
+  const ifStart = source.indexOf(marker);
+  if (ifStart === -1) throw new Error(`${marker} not found in renderer.js`);
+  const braceStart = source.indexOf('{', ifStart);
+  let i = braceStart + 1;
+  let depth = 1;
+  while (depth > 0 && i < source.length) {
+    if (source[i] === '{') depth++;
+    else if (source[i] === '}') depth--;
+    i++;
+  }
+  return source.slice(ifStart, i);
+}
+
 function createClassList(initial = []) {
   const values = new Set(initial);
   return {
@@ -284,7 +304,13 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab } = {}) 
     extractFunction(rendererSource, 'openSettingsPanel'),
     extractFunction(rendererSource, 'closeSettingsPanel'),
     extractFunction(rendererSource, 'handleSidebarNavigation'),
-    `this.__nav = { closeAnyDismissibleModal, findActiveBlockingModal, handleSidebarNavigation, setSidebarSelection, applyMainPanelVisibility, openSettingsPanel, closeSettingsPanel, openHelpPanel, closeHelpPanel, getSettingsReturnTab: () => settingsReturnTab, getHelpOpenerElement: () => helpOpenerElement };`
+    // The actual top-menu submenu branches, wrapped as standalone
+    // functions -- real source, not a re-implementation -- so tests
+    // exercise the literal code path a real click runs, delegating into
+    // the SAME extracted handleSidebarNavigation() above.
+    `function triggerTopMenuSettings(item) {\n${extractIfBlock(rendererSource, "item.id === 'open-options'")}\n}`,
+    `function triggerTopMenuAbout(item) {\n${extractIfBlock(rendererSource, "item.id === 'open-about'")}\n}`,
+    `this.__nav = { closeAnyDismissibleModal, findActiveBlockingModal, handleSidebarNavigation, setSidebarSelection, applyMainPanelVisibility, openSettingsPanel, closeSettingsPanel, openHelpPanel, closeHelpPanel, triggerTopMenuSettings, triggerTopMenuAbout, getSettingsReturnTab: () => settingsReturnTab, getHelpOpenerElement: () => helpOpenerElement };`
   ].join('\n');
   vm.runInContext(source, context);
   // Initialize .active/aria-current via the real setSidebarSelection(),
@@ -659,6 +685,221 @@ test('ordinary dismissible modals (About, profiles, receipts, etc.) still dismis
   assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), false);
   assert.equal(sandbox.modalEls['receipts-modal'].classList.contains('active'), false);
   assert.equal(sandbox.panels.panelModes.style.display, '');
+});
+
+// --- Chrome (top-menu) actions routed through the navigation contract
+// (second corrective pass, REQUIRED) ----------------------------------------
+//
+// The always-visible top chrome menu ("Settings" -> "Advanced Options...",
+// "Help" -> "About") had its own independent openSettingsPanel()/
+// openHelpPanel() + setSidebarSelection() calls, completely bypassing
+// handleSidebarNavigation() -- silently reintroducing the exact
+// current-view-truth defect the prior corrective pass fixed for the
+// sidebar, and skipping the blocking-modal/dismissible-modal checks
+// entirely. Both branches now just call handleSidebarNavigation() with
+// the same tab id the sidebar uses. These tests exercise the ACTUAL
+// top-menu branch source (via triggerTopMenuSettings/triggerTopMenuAbout,
+// extracted from renderer.js) delegating into the real
+// handleSidebarNavigation(), not just the sidebar path a second time.
+
+test('top-menu Settings ("Advanced Options...") from Tonight follows normal navigation', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+
+  await sandbox.triggerTopMenuSettings({ id: 'open-options' });
+
+  const setItem = sandbox.navItems.find(i => i.dataset.nsTab === 'set');
+  assert.equal(setItem.classList.contains('active'), true);
+  assert.equal(setItem.getAttribute('aria-current'), 'page');
+  assert.equal(sandbox.panels.panelSet.style.display, '');
+  assert.equal(sandbox.getSettingsReturnTab(), 'lib');
+});
+
+test('top-menu Settings from Modes/Schedule records the correct return destination', async () => {
+  for (const fromTab of ['modes', 'sch']) {
+    const sandbox = createNavigationSandbox({ activeTab: fromTab });
+    await sandbox.triggerTopMenuSettings({ id: 'open-options' });
+    assert.equal(sandbox.getSettingsReturnTab(), fromTab, `opening Settings from the top menu while on ${fromTab} must record ${fromTab} as the return destination`);
+  }
+});
+
+test('top-menu Settings with an ordinary dismissible modal open closes it first, then opens Settings', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+  sandbox.modalEls['about-modal'].classList.add('active');
+
+  await sandbox.triggerTopMenuSettings({ id: 'open-options' });
+
+  assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), false, 'the stray modal must be dismissed');
+  assert.equal(sandbox.panels.panelSet.style.display, '', 'Settings must still open');
+});
+
+test('top-menu Settings is refused while each of the four blocking modals is active', async () => {
+  for (const id of NON_DISMISSIBLE_MODAL_IDS) {
+    const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+    sandbox.modalEls[id].classList.add('active');
+
+    // The submenu branch itself is fire-and-forget (matches the real
+    // click-handler pattern -- it never returns a value the caller
+    // observes), so "refused" is asserted via side effects, not a
+    // returned boolean.
+    await sandbox.triggerTopMenuSettings({ id: 'open-options' });
+
+    assert.equal(sandbox.panels.panelSet.style.display, 'none', `${id}: Settings must not open`);
+    assert.equal(sandbox.panels.panelLib.style.display, '', `${id}: the underlying page must not change`);
+    const libItem = sandbox.navItems.find(i => i.dataset.nsTab === 'lib');
+    assert.equal(libItem.classList.contains('active'), true, `${id}: the nav indicator must not move`);
+    assert.equal(sandbox.modalEls[id].classList.contains('active'), true, `${id}: the blocking modal must remain active`);
+  }
+});
+
+test('blocked top-menu Settings leaves destination and nav state completely unchanged', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'modes' });
+  sandbox.modalEls['override-modal'].classList.add('active');
+  const snapshot = { ...sandbox.state };
+
+  await sandbox.triggerTopMenuSettings({ id: 'open-options' });
+
+  assert.equal(sandbox.state.action, snapshot.action);
+  assert.equal(sandbox.state.dryRun, snapshot.dryRun);
+  assert.equal(sandbox.calls.discardSettingsPanelChanges, 0);
+  assert.equal(sandbox.calls.render, 0);
+  assert.equal(sandbox.getSettingsReturnTab(), 'lib', 'a refused Settings request must not touch settingsReturnTab at all');
+});
+
+test('top-menu About ("Help" -> "About") from Tonight leaves Tonight current', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+
+  await sandbox.triggerTopMenuAbout({ id: 'open-about' });
+
+  assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), true);
+  const libItem = sandbox.navItems.find(i => i.dataset.nsTab === 'lib');
+  const helpItem = sandbox.navItems.find(i => i.dataset.nsTab === 'help');
+  assert.equal(libItem.classList.contains('active'), true, 'Tonight must remain current');
+  assert.equal(libItem.getAttribute('aria-current'), 'page');
+  assert.equal(helpItem.classList.contains('active'), false, 'top-menu About must never assign Help as current, same as the sidebar path');
+  assert.equal(helpItem.getAttribute('aria-current'), null);
+});
+
+test('top-menu About from Settings leaves Settings current', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'sch' });
+  await sandbox.openSettingsPanel();
+
+  await sandbox.triggerTopMenuAbout({ id: 'open-about' });
+
+  assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), true);
+  const setItem = sandbox.navItems.find(i => i.dataset.nsTab === 'set');
+  assert.equal(setItem.classList.contains('active'), true, 'Settings must remain current underneath top-menu About');
+  assert.equal(setItem.getAttribute('aria-current'), 'page');
+  assert.equal(sandbox.panels.panelSet.style.display, '', 'Settings must still actually be the visible panel');
+});
+
+test('top-menu About never assigns Help aria-current under any starting tab', async () => {
+  for (const tab of NAV_TABS) {
+    const sandbox = createNavigationSandbox({ activeTab: tab });
+    await sandbox.triggerTopMenuAbout({ id: 'open-about' });
+    const helpItem = sandbox.navItems.find(i => i.dataset.nsTab === 'help');
+    assert.equal(helpItem.getAttribute('aria-current'), null, `starting from ${tab}, top-menu About must not assign Help aria-current`);
+    assert.equal(helpItem.classList.contains('active'), false);
+  }
+});
+
+test('top-menu About is refused while a blocking safety modal is active -- does not stack on top of it', async () => {
+  for (const id of NON_DISMISSIBLE_MODAL_IDS) {
+    const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+    sandbox.modalEls[id].classList.add('active');
+
+    // Same fire-and-forget note as the top-menu Settings test above.
+    await sandbox.triggerTopMenuAbout({ id: 'open-about' });
+
+    assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), false, `${id}: About must not open on top of it`);
+    assert.equal(sandbox.modalEls[id].classList.contains('active'), true, `${id}: the safety modal must remain untouched`);
+  }
+});
+
+test('Settings unsaved state survives top-menu About', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'sch' });
+  await sandbox.openSettingsPanel();
+
+  await sandbox.triggerTopMenuAbout({ id: 'open-about' });
+  await sandbox.closeHelpPanel();
+
+  assert.equal(sandbox.calls.discardSettingsPanelChanges, 0, 'top-menu About must never discard Settings state');
+  assert.equal((sandbox.calls.saveSettingsPanel || 0), 0, 'top-menu About must never save Settings state');
+  assert.equal(sandbox.panels.panelSet.style.display, '', 'Settings must still be open exactly as the user left it');
+});
+
+test('closing About restores focus appropriately when opened via the top menu', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+  const helpMenuItem = createElement({ id: 'open-about' });
+  sandbox.fakeDocument.__setActive(helpMenuItem);
+
+  await sandbox.triggerTopMenuAbout(helpMenuItem);
+  assert.equal(sandbox.getHelpOpenerElement(), helpMenuItem);
+
+  sandbox.closeHelpPanel();
+
+  assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), false);
+  assert.equal(helpMenuItem.__focused, true, 'focus must return to whatever triggered top-menu About');
+});
+
+test('sidebar navigation behavior is unaffected by the top-menu routing change', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+
+  const result = await sandbox.handleSidebarNavigation('modes');
+
+  assert.equal(result, true);
+  const modesItem = sandbox.navItems.find(i => i.dataset.nsTab === 'modes');
+  assert.equal(modesItem.classList.contains('active'), true);
+  assert.equal(sandbox.panels.panelModes.style.display, '');
+});
+
+test('Back (settingsReturnTab) behavior is unaffected by the top-menu routing change', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'sch' });
+
+  await sandbox.triggerTopMenuSettings({ id: 'open-options' });
+  sandbox.closeSettingsPanel();
+
+  assert.equal(sandbox.panels.panelSch.style.display, '', 'Back must still return to Schedule via the top-menu-opened Settings, exactly as the sidebar path does');
+});
+
+// Strips `// ...` line comments before running "must not contain" regex
+// checks -- the explanatory comments on these exact branches legitimately
+// mention the old function names/calls in prose (documenting what they
+// used to do), which would otherwise false-positive a naive substring/regex
+// check against the comment text itself, not the executable code.
+function stripLineComments(text) {
+  return text.split('\n').map(line => line.replace(/\/\/.*$/, '')).join('\n');
+}
+
+test('the top-menu branches delegate to handleSidebarNavigation() rather than duplicating its checks (structural)', () => {
+  const optionsBlock = stripLineComments(extractIfBlock(rendererSource, "item.id === 'open-options'"));
+  assert.match(optionsBlock, /handleSidebarNavigation\('set'\)/);
+  assert.doesNotMatch(optionsBlock, /openSettingsPanel\(\)/, 'must not call openSettingsPanel() directly -- that would skip the blocking-modal check');
+  assert.doesNotMatch(optionsBlock, /setSidebarSelection\(/, 'must not call setSidebarSelection() directly -- handleSidebarNavigation() already does this correctly');
+
+  const aboutBlock = stripLineComments(extractIfBlock(rendererSource, "item.id === 'open-about'"));
+  assert.match(aboutBlock, /handleSidebarNavigation\('help'\)/);
+  assert.doesNotMatch(aboutBlock, /openHelpPanel\(\)/, 'must not call openHelpPanel() directly -- that would skip the blocking-modal check');
+  assert.doesNotMatch(aboutBlock, /setSidebarSelection\(/, 'must not reintroduce the setSidebarSelection(\'help\') bug');
+});
+
+// --- .tab-btn internal sub-tab audit (read-only finding, narrowly fixed) ---
+//
+// These six buttons are sub-tabs entirely inside the Schedule panel
+// (#ns-panel-sch never has applyMainPanelVisibility() called on its
+// behalf by this handler) -- not a competing top-level navigation path.
+// Two of the six previously called setSidebarSelection('lib'/'stats')
+// even though Schedule was the only panel genuinely visible, corrupting
+// both the nav indicator and settingsReturnTab. Fixed to always record
+// 'sch'. This does not touch what content the sub-tabs show, and does not
+// add blocking-modal checks to sub-tab clicks -- they don't change which
+// top-level panel is visible, so the page-level navigation contract does
+// not apply to them by definition (see the comment on the fix itself).
+
+test('the Schedule sub-tab bar always keeps the sidebar pointed at Schedule, never Tonight or Stats', () => {
+  const tabBtnHandler = rendererSource.match(/document\.querySelectorAll\('\.tab-btn'\)\.forEach\(btn => \{[\s\S]*?\n {2}\}\);/);
+  assert.ok(tabBtnHandler, '.tab-btn handler not found');
+  assert.match(tabBtnHandler[0], /setSidebarSelection\('sch'\)/, 'the sub-tab handler must unconditionally record Schedule as current');
+  assert.doesNotMatch(tabBtnHandler[0], /setSidebarSelection\('lib'\)|setSidebarSelection\('stats'\)/, 'no sub-tab click may claim Tonight or Stats as current -- #ns-panel-sch is the only thing ever actually visible here');
 });
 
 // --- Settings Save/Cancel semantics unchanged (structural regression guard) ---
