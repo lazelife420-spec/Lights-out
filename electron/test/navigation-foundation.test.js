@@ -105,6 +105,29 @@ function extractIfBlock(source, condition) {
   return source.slice(ifStart, i);
 }
 
+// Extracts just the `{ ... }` body introduced by arbitrary literal text
+// ending in an opening `{` (e.g. an addEventListener/api.on... callback
+// signature), via balanced brace matching -- same technique as
+// extractIfBlock() above, generalized to any such marker rather than
+// specifically an `if (...) {` header, and returning only the brace body
+// (not the marker prefix) so it can be attached directly to a new
+// function signature. Used for the Companion-setup button and the
+// tray/global-shortcut IPC handler, which are anonymous callbacks, not
+// named functions or if-blocks.
+function extractBlockAfter(source, marker) {
+  const markerStart = source.indexOf(marker);
+  if (markerStart === -1) throw new Error(`marker not found in renderer.js: ${marker}`);
+  const braceStart = markerStart + marker.length - 1; // marker's own trailing '{'
+  let i = braceStart + 1;
+  let depth = 1;
+  while (depth > 0 && i < source.length) {
+    if (source[i] === '{') depth++;
+    else if (source[i] === '}') depth--;
+    i++;
+  }
+  return source.slice(braceStart, i);
+}
+
 function createClassList(initial = []) {
   const values = new Set(initial);
   return {
@@ -119,7 +142,7 @@ function createClassList(initial = []) {
   };
 }
 
-function createElement({ id = null, classes = [], dataset = {}, style = {} } = {}) {
+function createElement({ id = null, classes = [], dataset = {}, style = {}, visible = true } = {}) {
   const attributes = new Map();
   const children = [];
   const el = {
@@ -135,7 +158,17 @@ function createElement({ id = null, classes = [], dataset = {}, style = {} } = {
     blur: () => { el.__focused = false; },
     contains: other => children.includes(other),
     addEventListener: () => {},
-    click: () => { el.__clicked = (el.__clicked || 0) + 1; }
+    click: () => { el.__clicked = (el.__clicked || 0) + 1; },
+    // Settable like __focused/__clicked above -- tests flip this directly
+    // (e.g. sandbox.menuHelp.__visible = false) to simulate an ancestor
+    // hiding the element (body.mini-mode hiding .chrome-header/
+    // .ns-sidebar), which is exactly what isRendered()'s real
+    // checkVisibility() call has to detect and an inline-style read alone
+    // could not. Still honors style.display for the existing
+    // inline-hidden fixtures, matching what a real checkVisibility() call
+    // would answer regardless of which one caused the hiding.
+    __visible: visible,
+    checkVisibility: () => el.__visible && el.style.display !== 'none'
   };
   return el;
 }
@@ -210,7 +243,7 @@ function buildModalElements() {
   return els;
 }
 
-function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab } = {}) {
+function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab, remoteControlState = { ready: false } } = {}) {
   const navItems = buildNavItems();
 
   const modalEls = buildModalElements();
@@ -258,7 +291,9 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab } = {}) 
     exitFullscreenClock: 0,
     cancelTimer: 0,
     discardSettingsPanelChanges: 0,
-    activateTopTab: []
+    activateTopTab: [],
+    getRemoteControl: 0,
+    openExternal: []
   };
 
   const els = {
@@ -301,7 +336,9 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab } = {}) 
     cancelTimer: () => { calls.cancelTimer++; state.running = false; state.paused = false; },
     api: {
       saveAppSettings: async payload => { calls.saveAppSettings.push(payload); return {}; },
-      ritualCancel: async () => { calls.ritualCancel++; }
+      ritualCancel: async () => { calls.ritualCancel++; },
+      getRemoteControl: async () => { calls.getRemoteControl++; return remoteControlState; },
+      openExternal: async url => { calls.openExternal.push(url); }
     },
     hideRitualOverlay: () => { calls.hideRitualOverlay++; modalEls['ritual-overlay'].classList.remove('active'); }
   };
@@ -314,6 +351,7 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab } = {}) 
     extractFunction(rendererSource, 'setSidebarSelection'),
     extractFunction(rendererSource, 'applyMainPanelVisibility'),
     'let helpOpenerElement = null;',
+    extractFunction(rendererSource, 'isRendered'),
     extractFunction(rendererSource, 'isSensibleFocusTarget'),
     extractFunction(rendererSource, 'openHelpPanel'),
     extractFunction(rendererSource, 'closeHelpPanel'),
@@ -328,7 +366,15 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab } = {}) 
     // the SAME extracted handleSidebarNavigation() above.
     `function triggerTopMenuSettings(item) {\n${extractIfBlock(rendererSource, "item.id === 'open-options'")}\n}`,
     `function triggerTopMenuAbout(item) {\n${extractIfBlock(rendererSource, "item.id === 'open-about'")}\n}`,
-    `this.__nav = { closeAnyDismissibleModal, findActiveBlockingModal, handleSidebarNavigation, setSidebarSelection, applyMainPanelVisibility, openSettingsPanel, closeSettingsPanel, openHelpPanel, closeHelpPanel, isSensibleFocusTarget, triggerTopMenuSettings, triggerTopMenuAbout, getSettingsReturnTab: () => settingsReturnTab, getHelpOpenerElement: () => helpOpenerElement };`
+    // The Companion-setup button and the tray/global-shortcut IPC
+    // handler, wrapped as standalone functions -- real callback bodies,
+    // not a re-implementation -- so tests exercise the literal code path
+    // each real trigger runs, delegating into the SAME extracted
+    // handleSidebarNavigation() above rather than a duplicated
+    // openSettingsPanel() bypass.
+    `async function triggerCompanionSettingsClick() ${extractBlockAfter(rendererSource, "els.btnCompanion?.addEventListener('click', async () => {")}`,
+    `function triggerOnOpenSettingsIpc() ${extractBlockAfter(rendererSource, 'api.onOpenSettings(() => {')}`,
+    `this.__nav = { closeAnyDismissibleModal, findActiveBlockingModal, handleSidebarNavigation, setSidebarSelection, applyMainPanelVisibility, openSettingsPanel, closeSettingsPanel, openHelpPanel, closeHelpPanel, isSensibleFocusTarget, triggerTopMenuSettings, triggerTopMenuAbout, triggerCompanionSettingsClick, triggerOnOpenSettingsIpc, getSettingsReturnTab: () => settingsReturnTab, getHelpOpenerElement: () => helpOpenerElement };`
   ].join('\n');
   vm.runInContext(source, context);
   // Initialize .active/aria-current via the real setSidebarSelection(),
@@ -1207,5 +1253,281 @@ test('Settings Save/Cancel/discard wiring is untouched by this slice', () => {
   assert.match(rendererSource, /els\.btnSaveOpt\.addEventListener\('click', async \(\) => \{\s*await saveSettingsPanel\(\);\s*closeSettingsPanel\(\);/, 'Save must still persist via the existing path');
   const closeSettingsSource = extractFunction(rendererSource, 'closeSettingsPanel');
   assert.doesNotMatch(closeSettingsSource, /discardSettingsPanelChanges|saveSettingsPanel/, 'closeSettingsPanel() itself must remain a pure panel-visibility switch -- Save/Cancel decisions stay with the callers, not folded into navigation');
+});
+
+// --- Settings close focus restoration (Navigation Foundation final
+// contract completion) ------------------------------------------------
+//
+// Back, Cancel, and Save all close Settings through the same
+// closeSettingsPanel() (see the structural test below) -- but
+// applyMainPanelVisibility() hides #ns-panel-set (containing whichever
+// button was just clicked) out from under it, and losing a hidden
+// element's focus lands the browser on BODY -- the exact class of bug
+// fixed for Help/About. closeSettingsPanel() now lands focus on the
+// return destination's own sidebar control instead.
+
+test('closeSettingsPanel() restores focus to the return destination\'s sidebar control, for every possible return tab', () => {
+  for (const returnTab of NAV_TABS.filter(t => t !== 'set')) {
+    const sandbox = createNavigationSandbox({ activeTab: 'lib', settingsReturnTab: returnTab });
+
+    sandbox.closeSettingsPanel();
+
+    const destinationItem = sandbox.navItems.find(i => i.dataset.nsTab === returnTab);
+    assert.equal(destinationItem.__focused, true, `closing Settings when returnTab is ${returnTab} must land focus there`);
+  }
+});
+
+test('closeSettingsPanel() never focuses a control still inside the now-hidden Settings panel, and never focuses BODY', () => {
+  // Deliberately does NOT pre-focus els.modalClose (unlike a real
+  // Back/Cancel/Save click) -- the mock's focus()/blur() are independent
+  // per-element flags, not a single global activeElement, so pre-setting
+  // it true would prove nothing (nothing here would ever flip it back).
+  // Instead this checks the one thing that IS meaningful: modalClose's
+  // flag staying at its untouched default proves closeSettingsPanel()
+  // itself never calls focus() on it.
+  const sandbox = createNavigationSandbox({ activeTab: 'lib', settingsReturnTab: 'sch' });
+
+  sandbox.closeSettingsPanel();
+
+  assert.notEqual(sandbox.fakeDocument.body.__focused, true, 'BODY must never be the successful target');
+  assert.notEqual(sandbox.els.modalClose.__focused, true, 'closeSettingsPanel() must never call focus() on a control still inside #ns-panel-set');
+});
+
+test('closeSettingsPanel() falls back to Tonight, not BODY, when the destination\'s own sidebar control is unavailable', () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib', settingsReturnTab: 'sch' });
+  const schItem = sandbox.navItems.find(i => i.dataset.nsTab === 'sch');
+  schItem.__visible = false; // simulates it becoming ancestor-hidden (e.g. mini-mode)
+
+  sandbox.closeSettingsPanel();
+
+  const libItem = sandbox.navItems.find(i => i.dataset.nsTab === 'lib');
+  assert.equal(libItem.__focused, true, 'must fall back to the Tonight sidebar control');
+  assert.notEqual(schItem.__focused, true);
+});
+
+test('closeSettingsPanel() forces focus nowhere -- never BODY as a last resort -- when the whole sidebar is unavailable', () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib', settingsReturnTab: 'sch' });
+  sandbox.navItems.forEach(item => { item.__visible = false; }); // simulates body.mini-mode hiding .ns-sidebar wholesale
+
+  sandbox.closeSettingsPanel();
+
+  assert.ok(sandbox.navItems.every(item => item.__focused !== true), 'no nav item should be focused when none are actually visible');
+  assert.notEqual(sandbox.fakeDocument.body.__focused, true);
+});
+
+test('Back, Cancel, and Save all close Settings via the same closeSettingsPanel(), sharing its focus restoration (structural)', () => {
+  assert.match(rendererSource, /els\.modalClose\.addEventListener\('click', async \(\) => \{\s*await discardSettingsPanelChanges\(\);\s*closeSettingsPanel\(\);\s*\}\)/, 'Back must call closeSettingsPanel()');
+  assert.match(rendererSource, /els\.btnCancelOpt\.addEventListener\('click', async \(\) => \{\s*await discardSettingsPanelChanges\(\);\s*closeSettingsPanel\(\);\s*\}\)/, 'Cancel must call closeSettingsPanel()');
+  assert.match(rendererSource, /els\.btnSaveOpt\.addEventListener\('click', async \(\) => \{\s*await saveSettingsPanel\(\);\s*closeSettingsPanel\(\);\s*\}\)/, 'Save must call closeSettingsPanel()');
+});
+
+test('closeSettingsPanel() leaves settingsReturnTab itself completely untouched', () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib', settingsReturnTab: 'modes' });
+
+  sandbox.closeSettingsPanel();
+
+  assert.equal(sandbox.getSettingsReturnTab(), 'modes', 'closeSettingsPanel() must never mutate settingsReturnTab -- only openSettingsPanel() records a new one');
+});
+
+// --- Focus-target visibility hardening (Navigation Foundation final
+// contract completion) -------------------------------------------------
+//
+// isSensibleFocusTarget()'s hidden-check previously only read the
+// target's OWN inline style.display -- but CSS `display: none` set on a
+// PARENT (e.g. body.mini-mode hiding .chrome-header/.ns-sidebar
+// wholesale) never appears in the child's own style at all. isRendered()
+// now uses a real rendered-layout check (checkVisibility(), Chromium's
+// own answer) instead, so an ancestor-hidden target is rejected the same
+// way an inline-hidden one always was.
+
+test('a target hidden via an ancestor (not its own inline style) is rejected -- e.g. body.mini-mode hiding .chrome-header/.ns-sidebar', () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+  // Real body.mini-mode hides .chrome-header/.ns-sidebar via a CSS rule
+  // on an ancestor -- #menu-help's/the sidebar Help button's own inline
+  // style is never touched. __visible simulates exactly that (see
+  // createElement()'s checkVisibility() mock above).
+  sandbox.menuHelp.__visible = false;
+  const sidebarHelp = sandbox.navItems.find(i => i.dataset.nsTab === 'help');
+  sidebarHelp.__visible = false;
+
+  assert.equal(sandbox.isSensibleFocusTarget(sandbox.menuHelp), false, '#menu-help must be rejected once ancestor-hidden, even with untouched inline style');
+  assert.equal(sandbox.isSensibleFocusTarget(sidebarHelp), false, 'the sidebar Help control must be rejected once ancestor-hidden, even with untouched inline style');
+});
+
+test('a genuinely visible target is not wrongly rejected by the hardened check', () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+  assert.equal(sandbox.isSensibleFocusTarget(sandbox.menuHelp), true);
+  assert.equal(sandbox.isSensibleFocusTarget(sandbox.menuSettings), true);
+  const sidebarHelp = sandbox.navItems.find(i => i.dataset.nsTab === 'help');
+  assert.equal(sandbox.isSensibleFocusTarget(sidebarHelp), true);
+});
+
+test('BODY/disconnected/disabled rejection still holds after the visibility hardening (regression guard)', () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+  const disconnected = createElement({ id: 'disconnected-target' });
+  disconnected.isConnected = false;
+  const disabled = createElement({ id: 'disabled-target' });
+  disabled.disabled = true;
+
+  assert.equal(sandbox.isSensibleFocusTarget(sandbox.fakeDocument.body), false);
+  assert.equal(sandbox.isSensibleFocusTarget(disconnected), false);
+  assert.equal(sandbox.isSensibleFocusTarget(disabled), false);
+});
+
+test('mini-mode About close does not target the now-hidden top-menu trigger or sidebar Help control', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+  const submenuItem = createElement({ id: 'open-about', style: { display: 'none' } });
+  sandbox.fakeDocument.__setActive(sandbox.fakeDocument.body);
+
+  await sandbox.triggerTopMenuAbout(submenuItem);
+  assert.equal(sandbox.getHelpOpenerElement(), sandbox.menuHelp, 'sanity: recorded the normal-mode target as usual');
+
+  // body.mini-mode toggles on WHILE About is still open -- toggleMiniMode()
+  // has no modal-open guard, and the global Ctrl+M handler has none
+  // either -- so both #menu-help and the sidebar Help control become
+  // ancestor-hidden before About is closed.
+  sandbox.menuHelp.__visible = false;
+  const sidebarHelp = sandbox.navItems.find(i => i.dataset.nsTab === 'help');
+  sidebarHelp.__visible = false;
+
+  sandbox.closeHelpPanel();
+
+  assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), false);
+  assert.notEqual(sandbox.menuHelp.__focused, true, 'the now-hidden top-menu trigger must never receive focus');
+  assert.notEqual(sidebarHelp.__focused, true, 'the now-hidden sidebar fallback must never receive focus either');
+  assert.notEqual(sandbox.fakeDocument.body.__focused, true, 'BODY must never be the successful target either');
+});
+
+test('normal-mode top-menu About restoration continues to work unchanged after the visibility hardening (regression guard)', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+  const submenuItem = createElement({ id: 'open-about', style: { display: 'none' } });
+  sandbox.fakeDocument.__setActive(sandbox.fakeDocument.body);
+
+  await sandbox.triggerTopMenuAbout(submenuItem);
+  sandbox.closeHelpPanel();
+
+  assert.equal(sandbox.menuHelp.__focused, true);
+});
+
+// --- Blocking-modal refusal focus, normalized (Navigation Foundation
+// final contract completion) --------------------------------------------
+//
+// The redirect calls in the top-menu click handler now go through
+// isSensibleFocusTarget() like every other focus call in this file,
+// instead of calling .focus() unconditionally.
+
+test('blocking-modal refusal never focuses a hidden top-menu trigger, for both About and Settings', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+  sandbox.modalEls['override-modal'].classList.add('active');
+  sandbox.menuHelp.__visible = false;
+  sandbox.menuSettings.__visible = false;
+
+  await sandbox.triggerTopMenuAbout({ id: 'open-about' });
+  await sandbox.triggerTopMenuSettings({ id: 'open-options' });
+
+  assert.notEqual(sandbox.menuHelp.__focused, true, 'a hidden Help trigger must never receive focus, even during blocking-modal refusal');
+  assert.notEqual(sandbox.menuSettings.__focused, true, 'a hidden Settings trigger must never receive focus, even during blocking-modal refusal');
+  assert.equal(sandbox.modalEls['override-modal'].classList.contains('active'), true, 'the blocking modal itself must remain untouched regardless');
+});
+
+// --- Central Settings-entry parity: Companion button + tray/IPC
+// (Navigation Foundation final contract completion) ---------------------
+//
+// els.btnCompanion's "not ready yet" path and api.onOpenSettings (the
+// tray-menu/global-shortcut IPC bridge) used to call openSettingsPanel()
+// directly, bypassing the blocking-modal refusal, dismissible-modal
+// cleanup, and settingsReturnTab bookkeeping every other Settings opener
+// already goes through. Both now route through handleSidebarNavigation
+// ('set') instead -- these tests exercise the ACTUAL callback bodies
+// (via triggerCompanionSettingsClick/triggerOnOpenSettingsIpc, extracted
+// from renderer.js), not a re-implementation.
+
+test('Companion-triggered Settings is refused while a blocking safety modal is active, and shows no misleading follow-up message', async () => {
+  for (const id of NON_DISMISSIBLE_MODAL_IDS) {
+    const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+    sandbox.modalEls[id].classList.add('active');
+
+    await sandbox.triggerCompanionSettingsClick();
+
+    assert.equal(sandbox.panels.panelSet.style.display, 'none', `${id}: Settings must not open`);
+    assert.equal(sandbox.modalEls[id].classList.contains('active'), true, `${id}: the blocking modal must remain untouched`);
+    assert.ok(!sandbox.calls.notify.some(args => String(args[0]).includes('Enable and verify Phone Companion')), `${id}: must not show the "go to Settings" guidance when Settings never actually opened`);
+  }
+});
+
+test('Companion-triggered Settings dismisses an ordinary open modal first, then opens', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+  sandbox.modalEls['about-modal'].classList.add('active');
+
+  await sandbox.triggerCompanionSettingsClick();
+
+  assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), false, 'the stray modal must be dismissed');
+  assert.equal(sandbox.panels.panelSet.style.display, '', 'Settings must still open');
+});
+
+test('Companion-triggered Settings records the correct settingsReturnTab and shows its guidance message once Settings actually opens', async () => {
+  for (const fromTab of ['modes', 'sch']) {
+    const sandbox = createNavigationSandbox({ activeTab: fromTab });
+
+    await sandbox.triggerCompanionSettingsClick();
+
+    assert.equal(sandbox.getSettingsReturnTab(), fromTab, `opening Settings via Companion from ${fromTab} must record ${fromTab} as the return destination`);
+    assert.equal(sandbox.panels.panelSet.style.display, '');
+    assert.ok(sandbox.calls.notify.some(args => String(args[0]).includes('Enable and verify Phone Companion')), 'the guidance message must still show once Settings actually opens');
+  }
+});
+
+test('Companion-triggered Settings no longer calls openSettingsPanel() directly (structural)', () => {
+  const companionBlock = stripLineComments(extractBlockAfter(rendererSource, "els.btnCompanion?.addEventListener('click', async () => {"));
+  assert.doesNotMatch(companionBlock, /openSettingsPanel\(/, 'must not call openSettingsPanel() directly -- that would skip the blocking-modal check');
+  assert.match(companionBlock, /handleSidebarNavigation\('set'\)/, 'must route through the central navigation entry point');
+});
+
+test('IPC/tray onOpenSettings is refused while a blocking safety modal is active', async () => {
+  for (const id of NON_DISMISSIBLE_MODAL_IDS) {
+    const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+    sandbox.modalEls[id].classList.add('active');
+
+    sandbox.triggerOnOpenSettingsIpc();
+
+    assert.equal(sandbox.panels.panelSet.style.display, 'none', `${id}: Settings must not open`);
+    assert.equal(sandbox.modalEls[id].classList.contains('active'), true, `${id}: the blocking modal must remain untouched`);
+  }
+});
+
+test('IPC/tray onOpenSettings records the correct settingsReturnTab, exactly like a real click', () => {
+  for (const fromTab of ['modes', 'sch', 'stats']) {
+    const sandbox = createNavigationSandbox({ activeTab: fromTab });
+
+    sandbox.triggerOnOpenSettingsIpc();
+
+    assert.equal(sandbox.getSettingsReturnTab(), fromTab, `IPC-triggered Settings from ${fromTab} must record ${fromTab} as the return destination`);
+    assert.equal(sandbox.panels.panelSet.style.display, '');
+  }
+});
+
+test('IPC/tray onOpenSettings no longer calls openSettingsPanel() directly, and needs no DOM opener element (structural + behavioral)', () => {
+  const ipcBlock = extractBlockAfter(rendererSource, 'api.onOpenSettings(() => {');
+  assert.doesNotMatch(ipcBlock, /openSettingsPanel\(/, 'must not call openSettingsPanel() directly -- that would skip the blocking-modal check');
+  assert.match(ipcBlock, /handleSidebarNavigation\('set'\)/, 'must route through the central navigation entry point');
+
+  // Behavioral half: the trigger genuinely works with zero DOM opener
+  // context -- no click event, no activeElement setup at all.
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+  sandbox.triggerOnOpenSettingsIpc();
+  assert.equal(sandbox.panels.panelSet.style.display, '', 'Settings must open from a bare IPC call with no DOM opener');
+});
+
+test('all production openSettingsPanel() call sites are internal implementation, not a user-entry bypass (structural)', () => {
+  // The ONLY place allowed to call openSettingsPanel() directly is
+  // handleSidebarNavigation()'s own 'set' branch -- every user-reachable
+  // entry point (sidebar, top-menu, Companion, tray/IPC) must route
+  // through handleSidebarNavigation('set') instead. Matches the actual
+  // call shape `openSettingsPanel();` (trailing semicolon) specifically
+  // so the `function openSettingsPanel() {` declaration itself -- which
+  // also contains the substring "openSettingsPanel()" but is followed by
+  // ` {`, not `;` -- is never counted as a call site.
+  const callSites = rendererSource.match(/openSettingsPanel\(\);/g) || [];
+  assert.equal(callSites.length, 1, `expected exactly one openSettingsPanel() call site (inside handleSidebarNavigation), found ${callSites.length}`);
 });
 

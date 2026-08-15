@@ -760,7 +760,7 @@ check('renderer: STATS panel shows only real companion/session data, honest empt
 check('renderer: footer and ledger controls provide real feedback', () => {
   assertMatch(rendererSrc, /els\.btnWidget\?\.addEventListener\('click', async \(\) => \{[\s\S]*const result = await api\.toggleWidget\?\.\(\);[\s\S]*Desktop widget shown[\s\S]*Desktop widget hidden/s, 'widget feedback must follow an acknowledged main-process state');
   assert(!rendererSrc.includes('Desktop widget toggled'), 'fire-and-forget widget success copy must not return');
-  assertMatch(rendererSrc, /els\.btnCompanion\?\.addEventListener\('click', async \(\) => \{[\s\S]*if \(rc\?\.ready && rc\.url\)[\s\S]*Companion pairing page opened[\s\S]*openSettingsPanel\(\)/s, 'companion button must require verified readiness and avoid exposing the tokenized URL in feedback');
+  assertMatch(rendererSrc, /els\.btnCompanion\?\.addEventListener\('click', async \(\) => \{[\s\S]*if \(rc\?\.ready && rc\.url\)[\s\S]*Companion pairing page opened[\s\S]*handleSidebarNavigation\('set'\)/s, 'companion button must require verified readiness, avoid exposing the tokenized URL in feedback, and route Settings through the central navigation entry point (not a direct openSettingsPanel() bypass)');
   assertMatch(rendererSrc, /const btnNotif = document\.getElementById\('btn-notif'\);[\s\S]*notifDrawer\.classList\.toggle\('active', opening\)/s, 'notifications button must activate the modal, not only clear an inline display value');
   assertMatch(rendererSrc, /if \(els\.btnWarningLedger\) \{[\s\S]*openReceiptsLedger\(\)/s, 'warning ledger button wiring missing');
   assertMatch(rendererSrc, /if \(els\.btnProofDetails\) \{[\s\S]*openReceiptsLedger\(\)/s, 'proof ledger button wiring missing');

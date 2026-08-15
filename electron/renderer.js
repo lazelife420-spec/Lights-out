@@ -1331,6 +1331,20 @@ function closeSettingsPanel() {
   applyMainPanelVisibility(returnTab);
   setSidebarSelection(returnTab);
   render();
+  // Back/Cancel/Save all live inside #ns-panel-set, which
+  // applyMainPanelVisibility() above just hid out from under whichever
+  // one had focus -- same underlying class of bug as Help/About (see
+  // isSensibleFocusTarget()/closeHelpPanel() above): losing a hidden
+  // element's focus lands the browser on BODY. Land it on the return
+  // destination's own sidebar control instead; fall back to Tonight's if
+  // that's somehow unavailable too, and do nothing (never force BODY,
+  // never anything still inside the now-hidden Settings panel) if
+  // neither is available.
+  const destinationTarget = document.querySelector(`.ns-nav-item[data-ns-tab="${returnTab}"]`);
+  const target = isSensibleFocusTarget(destinationTarget)
+    ? destinationTarget
+    : document.querySelector('.ns-nav-item[data-ns-tab="lib"]');
+  if (isSensibleFocusTarget(target)) target.focus();
 }
 
 // Persist everything currently shown in the Settings panel to the desktop.
@@ -1475,18 +1489,37 @@ async function discardSettingsPanelChanges() {
 let helpOpenerElement = null;
 
 // Whether `el` is currently worth returning keyboard focus to. Guards
-// openHelpPanel() (don't record a target that's already useless) and
-// closeHelpPanel() (don't focus a target that went stale while About was
-// open) against landing on something disconnected, hidden, disabled, or
-// BODY itself -- BODY is what the browser falls back to on its own when a
+// openHelpPanel()/closeHelpPanel() and closeSettingsPanel() (see below)
+// against landing on something disconnected, hidden, disabled, or BODY
+// itself -- BODY is what the browser falls back to on its own when a
 // focused element disappears, never a destination worth choosing on purpose.
 function isSensibleFocusTarget(el) {
   if (!el || typeof el.focus !== 'function') return false;
   if (el === document.body) return false;
   if ('isConnected' in el && !el.isConnected) return false;
   if (el.disabled) return false;
-  if (el.style && el.style.display === 'none') return false;
+  if (!isRendered(el)) return false;
   return true;
+}
+
+// Whether `el` actually has a rendered, visible layout box right now --
+// not just whether ITS OWN inline style says so. CSS `display` set on a
+// PARENT never shows up in the child's own style (inline or computed --
+// each element's `display` is independent of its ancestors'; only the
+// element's LAYOUT reflects an ancestor being hidden), so a bare
+// style-property read can't catch e.g. body.mini-mode hiding
+// .chrome-header/.ns-sidebar wholesale while #menu-help's or the sidebar
+// Help button's own style is never touched. checkVisibility() is
+// Chromium's purpose-built answer to "is this actually visible right
+// now," including ancestor display/visibility -- called with no options
+// so it stays conservative (it does not additionally reject on
+// opacity/clip-path by default, so a dimmed-but-reachable control is
+// never wrongly rejected). Falls back to the classic no-layout-box check
+// for any environment where checkVisibility isn't available.
+function isRendered(el) {
+  if (typeof el.checkVisibility === 'function') return el.checkVisibility();
+  if (typeof el.getClientRects === 'function') return el.getClientRects().length > 0;
+  return !(el.style && el.style.display === 'none');
 }
 
 function openHelpPanel(restoreTarget) {
@@ -2820,8 +2853,19 @@ function wireEvents() {
         await api.openExternal?.(rc.url);
         notify('Companion pairing page opened', 'info');
       } else {
-        openSettingsPanel();
-        notify(rc?.failed ? 'Companion is unavailable; review the connection error in Settings' : 'Enable and verify Phone Companion in Settings first', rc?.failed ? 'error' : 'info');
+        // Routed through the central navigation entry point (see
+        // handleSidebarNavigation() above) instead of calling
+        // openSettingsPanel() directly -- that bypassed the blocking-modal
+        // refusal and dismissible-modal cleanup every other Settings
+        // opener already goes through. Only shows this button's own
+        // guidance message if Settings actually opened -- otherwise
+        // handleSidebarNavigation() has already shown its own refusal
+        // notice, and stacking a second, contradictory "go to Settings"
+        // message on top of it would be misleading.
+        const opened = await handleSidebarNavigation('set');
+        if (opened) {
+          notify(rc?.failed ? 'Companion is unavailable; review the connection error in Settings' : 'Enable and verify Phone Companion in Settings first', rc?.failed ? 'error' : 'info');
+        }
       }
     } catch {
       notify('Companion setup is unavailable right now', 'warning');
@@ -3410,8 +3454,12 @@ if (els.btnClearReceipts) {
           // request outright and touch nothing else, so nothing else will
           // claim focus afterward either. Land it back on the visible
           // Settings menu trigger instead of leaving it stranded while
-          // the blocking modal is still active.
-          document.getElementById('menu-settings')?.focus();
+          // the blocking modal is still active -- routed through the
+          // same isSensibleFocusTarget() policy as every other focus
+          // call in this file, so a trigger that's itself gone hidden
+          // (e.g. body.mini-mode) is never focused either.
+          const trigger = document.getElementById('menu-settings');
+          if (isSensibleFocusTarget(trigger)) trigger.focus();
         }
         handleSidebarNavigation('set');
         return;
@@ -3433,7 +3481,7 @@ if (els.btnClearReceipts) {
         const menuTrigger = document.getElementById('menu-help');
         if (findActiveBlockingModal()) {
           // Same reasoning as 'open-options' above.
-          menuTrigger?.focus();
+          if (isSensibleFocusTarget(menuTrigger)) menuTrigger.focus();
         }
         handleSidebarNavigation('help', { restoreTarget: menuTrigger });
         return;
@@ -4260,7 +4308,14 @@ api.onPlayLastLight(payload => {
   startGuidedBreathing();
 });
 api.onOpenSettings(() => {
-  openSettingsPanel();
+  // Routed through the central navigation entry point -- see
+  // handleSidebarNavigation() and the els.btnCompanion handler above for
+  // the same reasoning. No DOM "opener" element is needed for this path:
+  // handleSidebarNavigation('set') determines settingsReturnTab from
+  // whichever tab is *currently* active, not from whatever triggered the
+  // call, so a tray-menu/global-shortcut invocation works identically to
+  // a real click.
+  handleSidebarNavigation('set');
 });
 api.onBrowserWarning?.(data => {
   if (data?.message) notify(data.message, 'warning', 8000);
