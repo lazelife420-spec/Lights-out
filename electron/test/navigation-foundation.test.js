@@ -160,11 +160,20 @@ function elementMatchesSelector(el, selector) {
   return true;
 }
 
-function createFakeDocument({ elementsById = {}, navItems = [] } = {}) {
+// A minimal stand-in for document.body -- real BODY is always focusable in
+// the technical sense (any HTMLElement has a .focus() method), but never a
+// destination worth choosing on purpose. Exists so isSensibleFocusTarget()'s
+// `el === document.body` check has something real to compare against.
+function createFakeBody() {
+  return createElement({ id: 'body' });
+}
+
+function createFakeDocument({ elementsById = {}, navItems = [], body } = {}) {
   const byId = { ...elementsById };
   const activeElementHolder = { current: null };
   return {
     getElementById: id => byId[id] || null,
+    body: body || createFakeBody(),
     get activeElement() { return activeElementHolder.current; },
     __setActive: el => { activeElementHolder.current = el; },
     querySelectorAll: selector => {
@@ -218,6 +227,12 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab } = {}) 
   };
   const btnNotif = createElement({ id: 'btn-notif' });
   const btnLanWarningCancel = createElement({ id: 'btn-lan-warning-cancel' });
+  // The always-visible top-menu triggers themselves -- #menu-help/
+  // #menu-settings, the parents of #open-about/#open-options -- distinct
+  // from those submenu items, which the top-menu click handler no longer
+  // uses as a restoration target (see triggerTopMenuAbout tests below).
+  const menuHelp = createElement({ id: 'menu-help' });
+  const menuSettings = createElement({ id: 'menu-settings' });
 
   const elementsById = {
     'notif-drawer': modalEls['notif-drawer'],
@@ -228,7 +243,9 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab } = {}) 
     'warning-modal': modalEls['warning-modal'],
     'override-modal': modalEls['override-modal'],
     'snooze-tax-modal': modalEls['snooze-tax-modal'],
-    'ritual-overlay': modalEls['ritual-overlay']
+    'ritual-overlay': modalEls['ritual-overlay'],
+    'menu-help': menuHelp,
+    'menu-settings': menuSettings
   };
   const fakeDocument = createFakeDocument({ elementsById, navItems });
 
@@ -297,6 +314,7 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab } = {}) 
     extractFunction(rendererSource, 'setSidebarSelection'),
     extractFunction(rendererSource, 'applyMainPanelVisibility'),
     'let helpOpenerElement = null;',
+    extractFunction(rendererSource, 'isSensibleFocusTarget'),
     extractFunction(rendererSource, 'openHelpPanel'),
     extractFunction(rendererSource, 'closeHelpPanel'),
     `let settingsReturnTab = ${JSON.stringify(settingsReturnTab ?? 'lib')};`,
@@ -310,7 +328,7 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab } = {}) 
     // the SAME extracted handleSidebarNavigation() above.
     `function triggerTopMenuSettings(item) {\n${extractIfBlock(rendererSource, "item.id === 'open-options'")}\n}`,
     `function triggerTopMenuAbout(item) {\n${extractIfBlock(rendererSource, "item.id === 'open-about'")}\n}`,
-    `this.__nav = { closeAnyDismissibleModal, findActiveBlockingModal, handleSidebarNavigation, setSidebarSelection, applyMainPanelVisibility, openSettingsPanel, closeSettingsPanel, openHelpPanel, closeHelpPanel, triggerTopMenuSettings, triggerTopMenuAbout, getSettingsReturnTab: () => settingsReturnTab, getHelpOpenerElement: () => helpOpenerElement };`
+    `this.__nav = { closeAnyDismissibleModal, findActiveBlockingModal, handleSidebarNavigation, setSidebarSelection, applyMainPanelVisibility, openSettingsPanel, closeSettingsPanel, openHelpPanel, closeHelpPanel, isSensibleFocusTarget, triggerTopMenuSettings, triggerTopMenuAbout, getSettingsReturnTab: () => settingsReturnTab, getHelpOpenerElement: () => helpOpenerElement };`
   ].join('\n');
   vm.runInContext(source, context);
   // Initialize .active/aria-current via the real setSidebarSelection(),
@@ -324,6 +342,8 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab } = {}) 
     modalEls,
     panels,
     navItems,
+    menuHelp,
+    menuSettings,
     fakeDocument,
     calls,
     ...context.__nav
@@ -827,18 +847,157 @@ test('Settings unsaved state survives top-menu About', async () => {
   assert.equal(sandbox.panels.panelSet.style.display, '', 'Settings must still be open exactly as the user left it');
 });
 
-test('closing About restores focus appropriately when opened via the top menu', async () => {
+// --- Top-menu About focus restoration (Navigation Foundation final
+// corrective pass) ------------------------------------------------------
+//
+// Reproduces and fixes the reachable defect: real click order is
+// closeAllTopMenus() (hides #open-about, which moves the browser's
+// document.activeElement to BODY) THEN the 'open-about' branch runs. If
+// openHelpPanel() trusted document.activeElement at that point it would
+// record BODY, and closing About would restore focus nowhere useful.
+// triggerTopMenuAbout() below now supplies #menu-help -- the visible
+// parent Help menu trigger -- as an explicit restoreTarget instead, so
+// this is exercised regardless of what document.activeElement happens to
+// be by the time the branch runs.
+
+test('top-menu About records the visible top-level Help trigger as its restoration target, not #open-about', async () => {
   const sandbox = createNavigationSandbox({ activeTab: 'lib' });
-  const helpMenuItem = createElement({ id: 'open-about' });
-  sandbox.fakeDocument.__setActive(helpMenuItem);
+  // Simulates the real sequence as closely as the sandbox allows:
+  // #open-about is the element the user actually activated, but by the
+  // time this branch runs (after closeAllTopMenus()) it's already hidden,
+  // and activeElement has already moved to BODY -- both of which must be
+  // ignored in favor of the explicit #menu-help target.
+  const submenuItem = createElement({ id: 'open-about', style: { display: 'none' } });
+  sandbox.fakeDocument.__setActive(sandbox.fakeDocument.body);
 
-  await sandbox.triggerTopMenuAbout(helpMenuItem);
-  assert.equal(sandbox.getHelpOpenerElement(), helpMenuItem);
+  await sandbox.triggerTopMenuAbout(submenuItem);
 
+  assert.equal(sandbox.getHelpOpenerElement(), sandbox.menuHelp, 'the recorded restoration target must be the visible #menu-help trigger');
+  assert.notEqual(sandbox.getHelpOpenerElement(), submenuItem, 'the hidden #open-about submenu item must never be recorded as the restoration target');
+});
+
+test('closing top-menu About restores focus to the visible Help menu trigger, never the hidden submenu item or BODY', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+  const submenuItem = createElement({ id: 'open-about', style: { display: 'none' } });
+  sandbox.fakeDocument.__setActive(sandbox.fakeDocument.body);
+
+  await sandbox.triggerTopMenuAbout(submenuItem);
   sandbox.closeHelpPanel();
 
   assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), false);
-  assert.equal(helpMenuItem.__focused, true, 'focus must return to whatever triggered top-menu About');
+  assert.equal(sandbox.menuHelp.__focused, true, 'focus must land on the visible top-level Help menu trigger');
+  assert.notEqual(submenuItem.__focused, true, 'the hidden #open-about submenu item must never receive focus back');
+  assert.notEqual(sandbox.fakeDocument.body.__focused, true, 'BODY must never be the thing focus() is actually called on');
+});
+
+test('X, backdrop, and Escape all restore top-menu About focus the same way, through the same closeHelpPanel()', async () => {
+  // All three close mechanisms are wired to call closeHelpPanel() directly
+  // (see wireEvents(): els.aboutModalClose click, els.aboutModal backdrop
+  // click, and the Escape handler's about-modal branch) -- there is only
+  // one restoration code path for all of them to share, so exercising the
+  // real closeHelpPanel() once, after each, proves all three behave alike.
+  for (const trigger of ['x-button', 'backdrop', 'escape']) {
+    const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+    const submenuItem = createElement({ id: 'open-about', style: { display: 'none' } });
+    sandbox.fakeDocument.__setActive(sandbox.fakeDocument.body);
+
+    await sandbox.triggerTopMenuAbout(submenuItem);
+    // The X button, backdrop click, and Escape key each just invoke
+    // closeHelpPanel() -- see the structural assertions below for proof
+    // they're wired that way in the real source.
+    sandbox.closeHelpPanel();
+
+    assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), false, `${trigger}: About must close`);
+    assert.equal(sandbox.menuHelp.__focused, true, `${trigger}: focus must land on the visible Help menu trigger`);
+  }
+});
+
+test('X button and backdrop click both close About via closeHelpPanel(), not a raw classList.remove() (structural)', () => {
+  assert.match(rendererSource, /els\.aboutModalClose\.addEventListener\('click', \(\) => closeHelpPanel\(\)\)/, 'the X button must call closeHelpPanel()');
+  assert.match(rendererSource, /if \(event\.target === els\.aboutModal\) closeHelpPanel\(\);/, 'the backdrop click must call closeHelpPanel()');
+});
+
+test('sidebar About restoration is unaffected by the top-menu fix -- still restores to the sidebar Help control', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+  const helpButton = sandbox.navItems.find(i => i.dataset.nsTab === 'help');
+  sandbox.fakeDocument.__setActive(helpButton);
+
+  await sandbox.handleSidebarNavigation('help');
+  assert.equal(sandbox.getHelpOpenerElement(), helpButton, 'the sidebar path must still record its own visible opener, not #menu-help');
+
+  sandbox.closeHelpPanel();
+  assert.equal(helpButton.__focused, true, 'focus must return to the sidebar Help button, unchanged from before this fix');
+  assert.notEqual(sandbox.menuHelp.__focused, true, 'the sidebar path must never redirect focus to the top-menu trigger');
+});
+
+test('a hidden or disconnected element is never used as the final focus-restoration destination', () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+  const hidden = createElement({ id: 'hidden-target', style: { display: 'none' } });
+  const disconnected = createElement({ id: 'disconnected-target' });
+  disconnected.isConnected = false;
+  const disabled = createElement({ id: 'disabled-target' });
+  disabled.disabled = true;
+
+  assert.equal(sandbox.isSensibleFocusTarget(hidden), false, 'a display:none element must be rejected');
+  assert.equal(sandbox.isSensibleFocusTarget(disconnected), false, 'a disconnected element must be rejected');
+  assert.equal(sandbox.isSensibleFocusTarget(disabled), false, 'a disabled element must be rejected');
+
+  // openHelpPanel() must not record any of them even when explicitly
+  // supplied as restoreTarget -- it must fall back instead.
+  sandbox.openHelpPanel(hidden);
+  assert.notEqual(sandbox.getHelpOpenerElement(), hidden);
+  sandbox.closeHelpPanel();
+});
+
+test('BODY is never the successful focus-restoration target', () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+
+  assert.equal(sandbox.isSensibleFocusTarget(sandbox.fakeDocument.body), false, 'document.body must never be treated as a sensible focus target');
+
+  // With activeElement already BODY (the exact real-world state right
+  // after closeAllTopMenus() hides a focused submenu item) and no
+  // restoreTarget supplied, openHelpPanel() must not fall back to it.
+  sandbox.fakeDocument.__setActive(sandbox.fakeDocument.body);
+  sandbox.openHelpPanel();
+  assert.notEqual(sandbox.getHelpOpenerElement(), sandbox.fakeDocument.body);
+
+  sandbox.closeHelpPanel();
+  assert.notEqual(sandbox.fakeDocument.body.__focused, true, 'closeHelpPanel() must never call focus() on BODY');
+});
+
+test('top-menu About refused by a blocking safety modal still redirects focus off BODY/the hidden submenu, onto the visible Help trigger', async () => {
+  for (const id of NON_DISMISSIBLE_MODAL_IDS) {
+    const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+    sandbox.modalEls[id].classList.add('active');
+    const submenuItem = createElement({ id: 'open-about', style: { display: 'none' } });
+    sandbox.fakeDocument.__setActive(sandbox.fakeDocument.body);
+
+    await sandbox.triggerTopMenuAbout(submenuItem);
+
+    assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), false, `${id}: About must not open on top of it`);
+    assert.equal(sandbox.modalEls[id].classList.contains('active'), true, `${id}: the safety modal must remain untouched (blocking semantics unchanged)`);
+    assert.equal(sandbox.getSettingsReturnTab(), 'lib', `${id}: refusal must not touch unrelated navigation state`);
+    assert.equal(sandbox.menuHelp.__focused, true, `${id}: focus must land on the visible Help menu trigger instead of staying stranded on BODY`);
+  }
+});
+
+test('top-menu Settings refused by a blocking safety modal redirects focus onto the visible Settings trigger, not BODY', async () => {
+  for (const id of NON_DISMISSIBLE_MODAL_IDS) {
+    const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+    sandbox.modalEls[id].classList.add('active');
+
+    await sandbox.triggerTopMenuSettings({ id: 'open-options' });
+
+    assert.equal(sandbox.panels.panelSet.style.display, 'none', `${id}: Settings must not open (blocking semantics unchanged)`);
+    assert.equal(sandbox.menuSettings.__focused, true, `${id}: focus must land on the visible Settings menu trigger instead of staying stranded on BODY`);
+  }
+});
+
+test('top-menu About/Settings focus redirect only fires while a blocking modal is actually active -- the normal-case flow is untouched', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+
+  await sandbox.triggerTopMenuSettings({ id: 'open-options' });
+  assert.notEqual(sandbox.menuSettings.__focused, true, 'with nothing blocking, the eager redirect must not fire -- Settings itself opens normally');
 });
 
 test('sidebar navigation behavior is unaffected by the top-menu routing change', async () => {
@@ -877,8 +1036,11 @@ test('the top-menu branches delegate to handleSidebarNavigation() rather than du
   assert.doesNotMatch(optionsBlock, /setSidebarSelection\(/, 'must not call setSidebarSelection() directly -- handleSidebarNavigation() already does this correctly');
 
   const aboutBlock = stripLineComments(extractIfBlock(rendererSource, "item.id === 'open-about'"));
-  assert.match(aboutBlock, /handleSidebarNavigation\('help'\)/);
-  assert.doesNotMatch(aboutBlock, /openHelpPanel\(\)/, 'must not call openHelpPanel() directly -- that would skip the blocking-modal check');
+  // Takes a second arg now (an explicit focus-restoration target -- see the
+  // "records/restores the visible top-level Help trigger" tests below) but
+  // must still be the single entry point, same as 'set' above.
+  assert.match(aboutBlock, /handleSidebarNavigation\('help', \{ restoreTarget: menuTrigger \}\)/);
+  assert.doesNotMatch(aboutBlock, /openHelpPanel\(/, 'must not call openHelpPanel() directly -- that would skip the blocking-modal check');
   assert.doesNotMatch(aboutBlock, /setSidebarSelection\(/, 'must not reintroduce the setSidebarSelection(\'help\') bug');
 });
 

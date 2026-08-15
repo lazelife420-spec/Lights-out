@@ -731,11 +731,11 @@ check('renderer fallback: preview mode stays safe and idle by default', () => {
 });
 
 check('renderer: visible sidebar navigation routes to a real tab or modal', () => {
-  assertMatch(rendererSrc, /function handleSidebarNavigation\(tab, \{ persist = true \} = \{\}\) \{/, 'sidebar navigation router missing');
+  assertMatch(rendererSrc, /function handleSidebarNavigation\(tab, \{ persist = true, restoreTarget = null \} = \{\}\) \{/, 'sidebar navigation router missing');
   assertMatch(rendererSrc, /if \(tab === 'lib'\) \{[\s\S]*applyMainPanelVisibility\('lib'\);[\s\S]*handled = true;/s, 'LIB routing missing');
   assertMatch(rendererSrc, /if \(tab === 'sch'\) \{[\s\S]*applyMainPanelVisibility\('sch'\);[\s\S]*handled = true;/s, 'SCH routing missing');
   assertMatch(rendererSrc, /if \(tab === 'set'\) \{[\s\S]*openSettingsPanel\(\);[\s\S]*handled = true;/s, 'SET routing missing');
-  assertMatch(rendererSrc, /if \(tab === 'help'\) \{[\s\S]*openHelpPanel\(\);[\s\S]*handled = true;/s, 'Help routing missing');
+  assertMatch(rendererSrc, /if \(tab === 'help'\) \{[\s\S]*openHelpPanel\(restoreTarget\);[\s\S]*handled = true;/s, 'Help routing missing');
   assertMatch(rendererSrc, /if \(tab === 'stats'\) \{[\s\S]*applyMainPanelVisibility\('stats'\);[\s\S]*renderStatusPanel\(\);[\s\S]*handled = true;/s, 'STATS routing missing');
   assertMatch(rendererSrc, /document\.querySelectorAll\('\.ns-nav-item'\)\.forEach\(btn => \{[\s\S]*handleSidebarNavigation\(btn\.dataset\.nsTab\);/s, 'sidebar click handler missing');
 });

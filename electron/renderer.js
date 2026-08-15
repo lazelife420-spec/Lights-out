@@ -1462,10 +1462,36 @@ async function discardSettingsPanelChanges() {
 // for a normal sidebar click that's the Help button itself; the point is
 // closing About never needs to guess, and never touches Settings'
 // Save/Cancel state either way.
+//
+// Top-menu Help -> About is the one path that can't just trust
+// document.activeElement, though: closeAllTopMenus() (see wireTopMenus())
+// hides the #open-about submenu item the instant it runs, and losing a
+// hidden element's focus moves document.activeElement to BODY -- by the
+// time openHelpPanel() would read it, the useful target is already gone.
+// So the top-menu click handler below passes an explicit restoreTarget
+// (the still-visible parent Help menu trigger) instead of relying on
+// activeElement capture; the sidebar path keeps using activeElement, since
+// a sidebar click never hides its own button.
 let helpOpenerElement = null;
 
-function openHelpPanel() {
-  helpOpenerElement = document.activeElement || null;
+// Whether `el` is currently worth returning keyboard focus to. Guards
+// openHelpPanel() (don't record a target that's already useless) and
+// closeHelpPanel() (don't focus a target that went stale while About was
+// open) against landing on something disconnected, hidden, disabled, or
+// BODY itself -- BODY is what the browser falls back to on its own when a
+// focused element disappears, never a destination worth choosing on purpose.
+function isSensibleFocusTarget(el) {
+  if (!el || typeof el.focus !== 'function') return false;
+  if (el === document.body) return false;
+  if ('isConnected' in el && !el.isConnected) return false;
+  if (el.disabled) return false;
+  if (el.style && el.style.display === 'none') return false;
+  return true;
+}
+
+function openHelpPanel(restoreTarget) {
+  const candidate = isSensibleFocusTarget(restoreTarget) ? restoreTarget : document.activeElement;
+  helpOpenerElement = isSensibleFocusTarget(candidate) ? candidate : null;
   els.aboutModal?.classList.add('active');
   refreshUpdaterStatus();
   notify('Open Settings for controls and About for version/update details.', 'info', 4200);
@@ -1473,7 +1499,14 @@ function openHelpPanel() {
 
 function closeHelpPanel() {
   els.aboutModal?.classList.remove('active');
-  if (helpOpenerElement && typeof helpOpenerElement.focus === 'function') helpOpenerElement.focus();
+  // Re-validate right before use -- the recorded opener can go stale while
+  // About was open -- and fall back to the sidebar Help control (always
+  // present) rather than focusing something invalid or leaving focus on
+  // BODY.
+  const target = isSensibleFocusTarget(helpOpenerElement)
+    ? helpOpenerElement
+    : document.querySelector('.ns-nav-item[data-ns-tab="help"]');
+  if (isSensibleFocusTarget(target)) target.focus();
   helpOpenerElement = null;
 }
 
@@ -1608,7 +1641,7 @@ function findActiveBlockingModal() {
   return null;
 }
 
-async function handleSidebarNavigation(tab, { persist = true } = {}) {
+async function handleSidebarNavigation(tab, { persist = true, restoreTarget = null } = {}) {
   // Required navigation invariant: if a modal represents active
   // power-safety, confirmation, snooze-tax, or in-progress ritual state
   // that cannot be safely dismissed automatically (see
@@ -1656,7 +1689,7 @@ async function handleSidebarNavigation(tab, { persist = true } = {}) {
     // visually (.active) and for assistive tech (aria-current); this
     // deliberately returns before the setSidebarSelection(tab) call
     // below, which every real destination still goes through.
-    openHelpPanel();
+    openHelpPanel(restoreTarget);
     return true;
   }
   if (tab === 'stats') {
@@ -3370,6 +3403,16 @@ if (els.btnClearReceipts) {
         // top-menu action gets the exact same blocking-modal refusal,
         // dismissible-modal cleanup, and settingsReturnTab bookkeeping,
         // instead of silently bypassing all of it.
+        if (findActiveBlockingModal()) {
+          // closeAllTopMenus() above already hid this submenu item, and
+          // losing a hidden element's focus lands the browser on BODY --
+          // handleSidebarNavigation() below is about to refuse this
+          // request outright and touch nothing else, so nothing else will
+          // claim focus afterward either. Land it back on the visible
+          // Settings menu trigger instead of leaving it stranded while
+          // the blocking modal is still active.
+          document.getElementById('menu-settings')?.focus();
+        }
         handleSidebarNavigation('set');
         return;
       }
@@ -3381,7 +3424,18 @@ if (els.btnClearReceipts) {
         // rather than duplicating -- and previously incorrectly
         // reintroducing -- the old setSidebarSelection('help') bug via a
         // second, always-visible trigger.
-        handleSidebarNavigation('help');
+        //
+        // closeAllTopMenus() above already hides this submenu item, so by
+        // the time openHelpPanel() would read document.activeElement it's
+        // already BODY, not #open-about -- supply the still-visible
+        // parent Help menu trigger as the explicit restoration target
+        // instead (see isSensibleFocusTarget()/openHelpPanel() above).
+        const menuTrigger = document.getElementById('menu-help');
+        if (findActiveBlockingModal()) {
+          // Same reasoning as 'open-options' above.
+          menuTrigger?.focus();
+        }
+        handleSidebarNavigation('help', { restoreTarget: menuTrigger });
         return;
       }
 
