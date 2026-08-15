@@ -731,11 +731,11 @@ check('renderer fallback: preview mode stays safe and idle by default', () => {
 });
 
 check('renderer: visible sidebar navigation routes to a real tab or modal', () => {
-  assertMatch(rendererSrc, /function handleSidebarNavigation\(tab, \{ persist = true \} = \{\}\) \{/, 'sidebar navigation router missing');
+  assertMatch(rendererSrc, /function handleSidebarNavigation\(tab, \{ persist = true, restoreTarget = null \} = \{\}\) \{/, 'sidebar navigation router missing');
   assertMatch(rendererSrc, /if \(tab === 'lib'\) \{[\s\S]*applyMainPanelVisibility\('lib'\);[\s\S]*handled = true;/s, 'LIB routing missing');
   assertMatch(rendererSrc, /if \(tab === 'sch'\) \{[\s\S]*applyMainPanelVisibility\('sch'\);[\s\S]*handled = true;/s, 'SCH routing missing');
   assertMatch(rendererSrc, /if \(tab === 'set'\) \{[\s\S]*openSettingsPanel\(\);[\s\S]*handled = true;/s, 'SET routing missing');
-  assertMatch(rendererSrc, /if \(tab === 'help'\) \{[\s\S]*openHelpPanel\(\);[\s\S]*handled = true;/s, 'Help routing missing');
+  assertMatch(rendererSrc, /if \(tab === 'help'\) \{[\s\S]*openHelpPanel\(restoreTarget\);[\s\S]*handled = true;/s, 'Help routing missing');
   assertMatch(rendererSrc, /if \(tab === 'stats'\) \{[\s\S]*applyMainPanelVisibility\('stats'\);[\s\S]*renderStatusPanel\(\);[\s\S]*handled = true;/s, 'STATS routing missing');
   assertMatch(rendererSrc, /document\.querySelectorAll\('\.ns-nav-item'\)\.forEach\(btn => \{[\s\S]*handleSidebarNavigation\(btn\.dataset\.nsTab\);/s, 'sidebar click handler missing');
 });
@@ -760,7 +760,7 @@ check('renderer: STATS panel shows only real companion/session data, honest empt
 check('renderer: footer and ledger controls provide real feedback', () => {
   assertMatch(rendererSrc, /els\.btnWidget\?\.addEventListener\('click', async \(\) => \{[\s\S]*const result = await api\.toggleWidget\?\.\(\);[\s\S]*Desktop widget shown[\s\S]*Desktop widget hidden/s, 'widget feedback must follow an acknowledged main-process state');
   assert(!rendererSrc.includes('Desktop widget toggled'), 'fire-and-forget widget success copy must not return');
-  assertMatch(rendererSrc, /els\.btnCompanion\?\.addEventListener\('click', async \(\) => \{[\s\S]*if \(rc\?\.ready && rc\.url\)[\s\S]*Companion pairing page opened[\s\S]*openSettingsPanel\(\)/s, 'companion button must require verified readiness and avoid exposing the tokenized URL in feedback');
+  assertMatch(rendererSrc, /els\.btnCompanion\?\.addEventListener\('click', async \(\) => \{[\s\S]*if \(rc\?\.ready && rc\.url\)[\s\S]*Companion pairing page opened[\s\S]*handleSidebarNavigation\('set'\)/s, 'companion button must require verified readiness, avoid exposing the tokenized URL in feedback, and route Settings through the central navigation entry point (not a direct openSettingsPanel() bypass)');
   assertMatch(rendererSrc, /const btnNotif = document\.getElementById\('btn-notif'\);[\s\S]*notifDrawer\.classList\.toggle\('active', opening\)/s, 'notifications button must activate the modal, not only clear an inline display value');
   assertMatch(rendererSrc, /if \(els\.btnWarningLedger\) \{[\s\S]*openReceiptsLedger\(\)/s, 'warning ledger button wiring missing');
   assertMatch(rendererSrc, /if \(els\.btnProofDetails\) \{[\s\S]*openReceiptsLedger\(\)/s, 'proof ledger button wiring missing');

@@ -1301,6 +1301,11 @@ function switchSettingsCategory(categoryId) {
   });
 }
 
+// Display names for the Back button's accessible name -- must match
+// settingsReturnTab's possible values (lib/modes/sch/stats), not just
+// assume "Tonight".
+const NS_TAB_DISPLAY_NAME = { lib: 'Tonight', modes: 'Night Modes', sch: 'Schedule', stats: 'Stats' };
+
 function openSettingsPanel() {
   const activeTab = document.querySelector('.ns-nav-item.active')?.dataset?.nsTab;
   if (activeTab && !['set', 'help'].includes(activeTab)) settingsReturnTab = activeTab;
@@ -1310,6 +1315,11 @@ function openSettingsPanel() {
   setSidebarSelection('set');
   switchSettingsCategory('general');
   applyMainPanelVisibility('set');
+  // The Back button always returns to settingsReturnTab (see
+  // closeSettingsPanel()), which is not always Tonight -- keep its
+  // accessible name honest about the actual destination.
+  const returnLabel = NS_TAB_DISPLAY_NAME[settingsReturnTab] || 'Tonight';
+  els.modalClose?.setAttribute('aria-label', `Back to ${returnLabel}`);
 }
 
 // Returns to whichever primary view (Tonight/Modes/Schedule/Stats) was
@@ -1321,6 +1331,20 @@ function closeSettingsPanel() {
   applyMainPanelVisibility(returnTab);
   setSidebarSelection(returnTab);
   render();
+  // Back/Cancel/Save all live inside #ns-panel-set, which
+  // applyMainPanelVisibility() above just hid out from under whichever
+  // one had focus -- same underlying class of bug as Help/About (see
+  // isSensibleFocusTarget()/closeHelpPanel() above): losing a hidden
+  // element's focus lands the browser on BODY. Land it on the return
+  // destination's own sidebar control instead; fall back to Tonight's if
+  // that's somehow unavailable too, and do nothing (never force BODY,
+  // never anything still inside the now-hidden Settings panel) if
+  // neither is available.
+  const destinationTarget = document.querySelector(`.ns-nav-item[data-ns-tab="${returnTab}"]`);
+  const target = isSensibleFocusTarget(destinationTarget)
+    ? destinationTarget
+    : document.querySelector('.ns-nav-item[data-ns-tab="lib"]');
+  if (isSensibleFocusTarget(target)) target.focus();
 }
 
 // Persist everything currently shown in the Settings panel to the desktop.
@@ -1443,10 +1467,80 @@ async function discardSettingsPanelChanges() {
   }
 }
 
-function openHelpPanel() {
+// Help/About is a modal action, not a persistent page destination -- it
+// never replaces whatever page (Tonight/Modes/Schedule/Settings) is
+// actually current underneath it (see handleSidebarNavigation(), which
+// deliberately never calls setSidebarSelection('help')). helpOpenerElement
+// remembers what had focus right before it opened, so closing it restores
+// focus/context there instead of leaving it stranded on a hidden modal --
+// for a normal sidebar click that's the Help button itself; the point is
+// closing About never needs to guess, and never touches Settings'
+// Save/Cancel state either way.
+//
+// Top-menu Help -> About is the one path that can't just trust
+// document.activeElement, though: closeAllTopMenus() (see wireTopMenus())
+// hides the #open-about submenu item the instant it runs, and losing a
+// hidden element's focus moves document.activeElement to BODY -- by the
+// time openHelpPanel() would read it, the useful target is already gone.
+// So the top-menu click handler below passes an explicit restoreTarget
+// (the still-visible parent Help menu trigger) instead of relying on
+// activeElement capture; the sidebar path keeps using activeElement, since
+// a sidebar click never hides its own button.
+let helpOpenerElement = null;
+
+// Whether `el` is currently worth returning keyboard focus to. Guards
+// openHelpPanel()/closeHelpPanel() and closeSettingsPanel() (see below)
+// against landing on something disconnected, hidden, disabled, or BODY
+// itself -- BODY is what the browser falls back to on its own when a
+// focused element disappears, never a destination worth choosing on purpose.
+function isSensibleFocusTarget(el) {
+  if (!el || typeof el.focus !== 'function') return false;
+  if (el === document.body) return false;
+  if ('isConnected' in el && !el.isConnected) return false;
+  if (el.disabled) return false;
+  if (!isRendered(el)) return false;
+  return true;
+}
+
+// Whether `el` actually has a rendered, visible layout box right now --
+// not just whether ITS OWN inline style says so. CSS `display` set on a
+// PARENT never shows up in the child's own style (inline or computed --
+// each element's `display` is independent of its ancestors'; only the
+// element's LAYOUT reflects an ancestor being hidden), so a bare
+// style-property read can't catch e.g. body.mini-mode hiding
+// .chrome-header/.ns-sidebar wholesale while #menu-help's or the sidebar
+// Help button's own style is never touched. checkVisibility() is
+// Chromium's purpose-built answer to "is this actually visible right
+// now," including ancestor display/visibility -- called with no options
+// so it stays conservative (it does not additionally reject on
+// opacity/clip-path by default, so a dimmed-but-reachable control is
+// never wrongly rejected). Falls back to the classic no-layout-box check
+// for any environment where checkVisibility isn't available.
+function isRendered(el) {
+  if (typeof el.checkVisibility === 'function') return el.checkVisibility();
+  if (typeof el.getClientRects === 'function') return el.getClientRects().length > 0;
+  return !(el.style && el.style.display === 'none');
+}
+
+function openHelpPanel(restoreTarget) {
+  const candidate = isSensibleFocusTarget(restoreTarget) ? restoreTarget : document.activeElement;
+  helpOpenerElement = isSensibleFocusTarget(candidate) ? candidate : null;
   els.aboutModal?.classList.add('active');
   refreshUpdaterStatus();
   notify('Open Settings for controls and About for version/update details.', 'info', 4200);
+}
+
+function closeHelpPanel() {
+  els.aboutModal?.classList.remove('active');
+  // Re-validate right before use -- the recorded opener can go stale while
+  // About was open -- and fall back to the sidebar Help control (always
+  // present) rather than focusing something invalid or leaving focus on
+  // BODY.
+  const target = isSensibleFocusTarget(helpOpenerElement)
+    ? helpOpenerElement
+    : document.querySelector('.ns-nav-item[data-ns-tab="help"]');
+  if (isSensibleFocusTarget(target)) target.focus();
+  helpOpenerElement = null;
 }
 
 // Exactly one of LIB / SCH / STATS is visible at a time. Each child element's
@@ -1500,7 +1594,109 @@ async function renderStatusPanel() {
   }
 }
 
-async function handleSidebarNavigation(tab, { persist = true } = {}) {
+// v11.2 Navigation Foundation: the set of modal/drawer overlays that a
+// top-level navigation request may close deterministically before
+// switching the underlying screen. Each entry is safe to dismiss with no
+// side effect beyond hiding it (or, for the LAN warning, clicking its own
+// Cancel/decline button -- the same non-destructive outcome Escape
+// already gives it).
+//
+// Deliberately EXCLUDED, and left untouched by navigation: warning-modal
+// (an active, time-sensitive countdown toward a real power action),
+// override-modal and snooze-tax-modal (consequence-acknowledgment flows
+// tied to that same real countdown), and ritual-overlay (an in-progress
+// guided ritual that Escape only ever dismisses via an explicit, awaited
+// api.ritualCancel() call). Navigating to a different sidebar tab must
+// never silently discard any of those -- so it doesn't touch them at
+// all; they keep their pre-existing Escape-only handling, completely
+// unchanged. Unlike the modals below, though, navigation doesn't just
+// leave them alone while switching the screen underneath -- see
+// NAV_BLOCKING_MODAL_IDS and findActiveBlockingModal() further down:
+// while any of these is active, page-level navigation is refused
+// outright, so the user can never lose track of an active safety
+// decision by switching screens out from under it.
+const NAV_DISMISSIBLE_MODALS = [
+  { get: () => els.profilesModal, close: el => el.classList.remove('active') },
+  { get: () => els.receiptsModal, close: el => el.classList.remove('active') },
+  { get: () => els.aboutModal, close: el => el.classList.remove('active') },
+  {
+    get: () => document.getElementById('notif-drawer'),
+    close: el => {
+      el.classList.remove('active');
+      document.getElementById('btn-notif')?.setAttribute('aria-expanded', 'false');
+    }
+  },
+  { get: () => document.getElementById('streak-celebration-modal'), close: el => el.classList.remove('active') },
+  // Matches Escape's existing lan-warning-modal handling: decline, don't
+  // just hide -- clicking Cancel is the safe, non-destructive outcome
+  // (it never enables the LAN-exposed companion server).
+  { get: () => document.getElementById('lan-warning-modal'), close: () => document.getElementById('btn-lan-warning-cancel')?.click() }
+];
+
+// Closes every currently-open dismissible modal/drawer (see
+// NAV_DISMISSIBLE_MODALS above), and if keyboard focus was inside one of
+// them, moves it off the now-hidden element so it doesn't stay trapped on
+// something no longer visible. Returns the list of ids actually closed
+// (empty if nothing was open) -- used by tests and available for callers
+// that want to know whether anything happened.
+//
+// This is the ONE place navigation-triggered modal dismissal is
+// implemented -- handleSidebarNavigation() below calls it once, rather
+// than every individual nav control independently deciding to close
+// modals itself.
+function closeAnyDismissibleModal() {
+  const closed = [];
+  for (const modal of NAV_DISMISSIBLE_MODALS) {
+    const el = modal.get();
+    if (!el || !el.classList.contains('active')) continue;
+    const hadFocusInside = typeof el.contains === 'function' && document.activeElement && el.contains(document.activeElement);
+    modal.close(el);
+    if (hadFocusInside && typeof document.activeElement.blur === 'function') document.activeElement.blur();
+    closed.push(el.id || null);
+  }
+  return closed;
+}
+
+// The four modals representing active power-safety, confirmation,
+// snooze-tax, or in-progress ritual state (see NAV_DISMISSIBLE_MODALS'
+// comment above for why each one specifically cannot be auto-dismissed).
+// handleSidebarNavigation() refuses to navigate at all while any of these
+// is open -- see findActiveBlockingModal() below.
+const NAV_BLOCKING_MODAL_IDS = ['warning-modal', 'override-modal', 'snooze-tax-modal', 'ritual-overlay'];
+
+// Returns the first currently-active blocking modal element (see
+// NAV_BLOCKING_MODAL_IDS), or null if none is open.
+function findActiveBlockingModal() {
+  for (const id of NAV_BLOCKING_MODAL_IDS) {
+    const el = document.getElementById(id);
+    if (el?.classList.contains('active')) return el;
+  }
+  return null;
+}
+
+async function handleSidebarNavigation(tab, { persist = true, restoreTarget = null } = {}) {
+  // Required navigation invariant: if a modal represents active
+  // power-safety, confirmation, snooze-tax, or in-progress ritual state
+  // that cannot be safely dismissed automatically (see
+  // NAV_BLOCKING_MODAL_IDS below), page-level navigation is refused
+  // outright until the user resolves it through the modal's own
+  // controls -- underlying destination, nav indicator, modal, and
+  // plan/power state all stay exactly as they were. Checked before
+  // anything else runs, so a blocked request has zero side effects.
+  const blockingModal = findActiveBlockingModal();
+  if (blockingModal) {
+    notify('Finish or dismiss the current alert before navigating', 'warning');
+    return false;
+  }
+
+  // Required navigation invariant: before a page-level transition
+  // completes, any dismissible blocking modal/drawer left open from
+  // wherever the user was is cleared first -- deterministically, from
+  // this one central path, not by scattering modal-close calls across
+  // every nav control. See NAV_DISMISSIBLE_MODALS above for exactly what
+  // this does and does not close.
+  closeAnyDismissibleModal();
+
   let handled = false;
 
   if (tab === 'lib') {
@@ -1520,8 +1716,14 @@ async function handleSidebarNavigation(tab, { persist = true } = {}) {
     handled = true;
   }
   if (tab === 'help') {
-    openHelpPanel();
-    handled = true;
+    // Help/About is a modal action, not a page destination -- it must
+    // never claim current-view truth. Whatever page is actually current
+    // underneath (Tonight/Modes/Schedule/Settings) stays current, both
+    // visually (.active) and for assistive tech (aria-current); this
+    // deliberately returns before the setSidebarSelection(tab) call
+    // below, which every real destination still goes through.
+    openHelpPanel(restoreTarget);
+    return true;
   }
   if (tab === 'stats') {
     applyMainPanelVisibility('stats');
@@ -1538,6 +1740,11 @@ async function handleSidebarNavigation(tab, { persist = true } = {}) {
   if (persist && ['lib', 'modes', 'sch', 'stats'].includes(tab)) {
     try { api.saveAppSettings({ app: { nsActiveTab: tab } }); } catch (_) {}
   }
+  // Land focus on the now-current nav item -- covers the case where
+  // closeAnyDismissibleModal() above just blurred focus off a closed
+  // modal (or navigation was triggered some other way than a direct
+  // mouse click, which would already have focused this button itself).
+  document.querySelector(`.ns-nav-item[data-ns-tab="${tab}"]`)?.focus();
   return true;
 }
 
@@ -2646,8 +2853,19 @@ function wireEvents() {
         await api.openExternal?.(rc.url);
         notify('Companion pairing page opened', 'info');
       } else {
-        openSettingsPanel();
-        notify(rc?.failed ? 'Companion is unavailable; review the connection error in Settings' : 'Enable and verify Phone Companion in Settings first', rc?.failed ? 'error' : 'info');
+        // Routed through the central navigation entry point (see
+        // handleSidebarNavigation() above) instead of calling
+        // openSettingsPanel() directly -- that bypassed the blocking-modal
+        // refusal and dismissible-modal cleanup every other Settings
+        // opener already goes through. Only shows this button's own
+        // guidance message if Settings actually opened -- otherwise
+        // handleSidebarNavigation() has already shown its own refusal
+        // notice, and stacking a second, contradictory "go to Settings"
+        // message on top of it would be misleading.
+        const opened = await handleSidebarNavigation('set');
+        if (opened) {
+          notify(rc?.failed ? 'Companion is unavailable; review the connection error in Settings' : 'Enable and verify Phone Companion in Settings first', rc?.failed ? 'error' : 'info');
+        }
       }
     } catch {
       notify('Companion setup is unavailable right now', 'warning');
@@ -3223,14 +3441,49 @@ if (els.btnClearReceipts) {
       }
 
       if (item.id === 'open-options') {
-        openSettingsPanel();
-        setSidebarSelection('set');
+        // Routed through the same central navigation entry point the
+        // sidebar Settings destination uses -- not a duplicated
+        // openSettingsPanel()+setSidebarSelection() call -- so this
+        // top-menu action gets the exact same blocking-modal refusal,
+        // dismissible-modal cleanup, and settingsReturnTab bookkeeping,
+        // instead of silently bypassing all of it.
+        if (findActiveBlockingModal()) {
+          // closeAllTopMenus() above already hid this submenu item, and
+          // losing a hidden element's focus lands the browser on BODY --
+          // handleSidebarNavigation() below is about to refuse this
+          // request outright and touch nothing else, so nothing else will
+          // claim focus afterward either. Land it back on the visible
+          // Settings menu trigger instead of leaving it stranded while
+          // the blocking modal is still active -- routed through the
+          // same isSensibleFocusTarget() policy as every other focus
+          // call in this file, so a trigger that's itself gone hidden
+          // (e.g. body.mini-mode) is never focused either.
+          const trigger = document.getElementById('menu-settings');
+          if (isSensibleFocusTarget(trigger)) trigger.focus();
+        }
+        handleSidebarNavigation('set');
         return;
       }
 
       if (item.id === 'open-about') {
-        openHelpPanel();
-        setSidebarSelection('help');
+        // Same reasoning as 'open-options' above: routed through the
+        // central entry point so this shares Help's corrected semantics
+        // (never claims page-current state) and the blocking-modal check,
+        // rather than duplicating -- and previously incorrectly
+        // reintroducing -- the old setSidebarSelection('help') bug via a
+        // second, always-visible trigger.
+        //
+        // closeAllTopMenus() above already hides this submenu item, so by
+        // the time openHelpPanel() would read document.activeElement it's
+        // already BODY, not #open-about -- supply the still-visible
+        // parent Help menu trigger as the explicit restoration target
+        // instead (see isSensibleFocusTarget()/openHelpPanel() above).
+        const menuTrigger = document.getElementById('menu-help');
+        if (findActiveBlockingModal()) {
+          // Same reasoning as 'open-options' above.
+          if (isSensibleFocusTarget(menuTrigger)) menuTrigger.focus();
+        }
+        handleSidebarNavigation('help', { restoreTarget: menuTrigger });
         return;
       }
 
@@ -3266,9 +3519,22 @@ if (els.btnClearReceipts) {
       document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById(`tab-${btn.dataset.tab}`)?.classList.add('active');
-      if (btn.dataset.tab === 'library') setSidebarSelection('lib');
-      if (btn.dataset.tab === 'schedule') setSidebarSelection('sch');
-      if (btn.dataset.tab === 'streaks') setSidebarSelection('stats');
+      // These six buttons are sub-tabs entirely inside the Schedule panel
+      // (#ns-panel-sch) -- applyMainPanelVisibility() is never called
+      // here, so #ns-panel-sch is the only thing actually visible
+      // regardless of which one is selected, even though a couple of them
+      // are labeled/keyed to resemble other destinations ("Quick Setup" =
+      // data-tab="library", "Streaks" = data-tab="streaks"). The sidebar's
+      // current-destination indicator must always read Schedule while any
+      // of them is active -- previously two of the six instead claimed
+      // Tonight or Stats as current via setSidebarSelection('lib'/'stats')
+      // even though Schedule was the only panel genuinely on screen, a
+      // real navigation-truth violation (and it corrupted
+      // settingsReturnTab too: opening Settings from "Quick Setup" would
+      // have recorded 'lib' as the return destination instead of the
+      // Schedule the user was actually looking at). Fixed narrowly here --
+      // this does not touch what content these sub-tabs show.
+      setSidebarSelection('sch');
       if (btn.dataset.tab === 'streaks') loadStreaks();
       if (btn.dataset.tab === 'focus') loadSleepDebt();
     });
@@ -3353,11 +3619,11 @@ if (els.btnClearReceipts) {
   // so clicking its own background is just clicking the page.
 
   if (els.aboutModalClose) {
-    els.aboutModalClose.addEventListener('click', () => els.aboutModal.classList.remove('active'));
+    els.aboutModalClose.addEventListener('click', () => closeHelpPanel());
   }
   if (els.aboutModal) {
     els.aboutModal.addEventListener('click', event => {
-      if (event.target === els.aboutModal) els.aboutModal.classList.remove('active');
+      if (event.target === els.aboutModal) closeHelpPanel();
     });
   }
 
@@ -3544,7 +3810,7 @@ if (els.btnClearReceipts) {
       } else if (els.receiptsModal?.classList.contains('active')) {
         els.receiptsModal.classList.remove('active');
       } else if (els.aboutModal?.classList.contains('active')) {
-        els.aboutModal.classList.remove('active');
+        closeHelpPanel();
       } else if (document.getElementById('notif-drawer')?.classList.contains('active')) {
         document.getElementById('notif-drawer').classList.remove('active');
         document.getElementById('btn-notif')?.setAttribute('aria-expanded', 'false');
@@ -4042,7 +4308,14 @@ api.onPlayLastLight(payload => {
   startGuidedBreathing();
 });
 api.onOpenSettings(() => {
-  openSettingsPanel();
+  // Routed through the central navigation entry point -- see
+  // handleSidebarNavigation() and the els.btnCompanion handler above for
+  // the same reasoning. No DOM "opener" element is needed for this path:
+  // handleSidebarNavigation('set') determines settingsReturnTab from
+  // whichever tab is *currently* active, not from whatever triggered the
+  // call, so a tray-menu/global-shortcut invocation works identically to
+  // a real click.
+  handleSidebarNavigation('set');
 });
 api.onBrowserWarning?.(data => {
   if (data?.message) notify(data.message, 'warning', 8000);
