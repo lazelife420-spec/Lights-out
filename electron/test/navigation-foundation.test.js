@@ -183,15 +183,18 @@ function buildModalElements() {
 
 function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab } = {}) {
   const navItems = buildNavItems();
-  navItems.forEach(el => el.classList.toggle('active', el.dataset.nsTab === activeTab));
 
   const modalEls = buildModalElements();
+  // Mirror applyMainPanelVisibility()'s real invariant: exactly one panel
+  // starts visible (matching activeTab), every other one starts hidden --
+  // not all defaulted to '' the way a bare createElement() would, which
+  // would make "did the destination NOT switch" assertions vacuously true.
   const panels = {
-    panelLib: createElement(),
-    panelModes: createElement(),
-    panelSch: createElement(),
-    panelSet: createElement({ style: { display: 'none' } }),
-    panelStats: createElement()
+    panelLib: createElement({ style: { display: activeTab === 'lib' ? '' : 'none' } }),
+    panelModes: createElement({ style: { display: activeTab === 'modes' ? '' : 'none' } }),
+    panelSch: createElement({ style: { display: activeTab === 'sch' ? '' : 'none' } }),
+    panelSet: createElement({ style: { display: activeTab === 'set' ? '' : 'none' } }),
+    panelStats: createElement({ style: { display: activeTab === 'stats' ? '' : 'none' } })
   };
   const btnNotif = createElement({ id: 'btn-notif' });
   const btnLanWarningCancel = createElement({ id: 'btn-lan-warning-cancel' });
@@ -254,7 +257,8 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab } = {}) 
     // extracted here, just tracked so tests can assert closeSettingsPanel
     // itself never calls them (it doesn't -- callers do, separately).
     discardSettingsPanelChanges: async () => { calls.discardSettingsPanelChanges++; },
-    openHelpPanel: () => { modalEls['about-modal'].classList.add('active'); },
+    saveSettingsPanel: async () => { calls.saveSettingsPanel = (calls.saveSettingsPanel || 0) + 1; },
+    refreshUpdaterStatus: () => {},
     renderStatusPanel: () => {},
     exitFullscreenClock: () => { calls.exitFullscreenClock++; state.fullscreenClock = false; },
     cancelTimer: () => { calls.cancelTimer++; state.running = false; state.paused = false; },
@@ -268,16 +272,25 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab } = {}) 
   const source = [
     extractConst(rendererSource, 'NAV_DISMISSIBLE_MODALS'),
     extractFunction(rendererSource, 'closeAnyDismissibleModal'),
+    extractConst(rendererSource, 'NAV_BLOCKING_MODAL_IDS'),
+    extractFunction(rendererSource, 'findActiveBlockingModal'),
     extractFunction(rendererSource, 'setSidebarSelection'),
     extractFunction(rendererSource, 'applyMainPanelVisibility'),
+    'let helpOpenerElement = null;',
+    extractFunction(rendererSource, 'openHelpPanel'),
+    extractFunction(rendererSource, 'closeHelpPanel'),
     `let settingsReturnTab = ${JSON.stringify(settingsReturnTab ?? 'lib')};`,
     'const NS_TAB_DISPLAY_NAME = { lib: "Tonight", modes: "Night Modes", sch: "Schedule", stats: "Stats" };',
     extractFunction(rendererSource, 'openSettingsPanel'),
     extractFunction(rendererSource, 'closeSettingsPanel'),
     extractFunction(rendererSource, 'handleSidebarNavigation'),
-    `this.__nav = { closeAnyDismissibleModal, handleSidebarNavigation, setSidebarSelection, applyMainPanelVisibility, openSettingsPanel, closeSettingsPanel, getSettingsReturnTab: () => settingsReturnTab };`
+    `this.__nav = { closeAnyDismissibleModal, findActiveBlockingModal, handleSidebarNavigation, setSidebarSelection, applyMainPanelVisibility, openSettingsPanel, closeSettingsPanel, openHelpPanel, closeHelpPanel, getSettingsReturnTab: () => settingsReturnTab, getHelpOpenerElement: () => helpOpenerElement };`
   ].join('\n');
   vm.runInContext(source, context);
+  // Initialize .active/aria-current via the real setSidebarSelection(),
+  // matching activeTab -- not a manual classList toggle -- so tests start
+  // from a realistic "already navigated here" state.
+  context.__nav.setSidebarSelection(activeTab);
 
   return {
     state,
@@ -379,16 +392,25 @@ test('top-level navigation closes an open compatible modal, and the destination 
   assert.equal(sandbox.panels.panelLib.style.display, 'none', 'Tonight must actually become hidden -- not just covered');
 });
 
-test('destructive/in-progress modals are left alone by navigation (documented exception, not a regression)', async () => {
+test('destructive/in-progress modals are left alone by navigation, and navigation itself is blocked while one is active', async () => {
+  // Superseded contract (corrective pass): the original v11.2 Navigation
+  // Foundation commit (6ccd458) let the underlying screen switch anyway,
+  // leaving the exempted modal merely stacked on top. That was found to
+  // still let a user lose track of an active safety decision by
+  // navigating away underneath it -- the corrected, required contract is
+  // that navigation is refused outright while one of these is open. See
+  // the more thorough "each non-dismissible safety/in-progress modal
+  // blocks top-level navigation entirely" test below for full coverage
+  // across all four; this one keeps the original scenario as a direct,
+  // narrow regression check.
   const sandbox = createNavigationSandbox({ activeTab: 'lib' });
   sandbox.modalEls['warning-modal'].classList.add('active');
 
-  await sandbox.handleSidebarNavigation('modes');
+  const result = await sandbox.handleSidebarNavigation('modes');
 
+  assert.equal(result, false, 'navigation must be refused while an active power-safety warning is open');
   assert.equal(sandbox.modalEls['warning-modal'].classList.contains('active'), true, 'an active power-safety warning must never be silently dismissed by navigation');
-  // The underlying screen still switches -- navigation itself isn't blocked,
-  // only the exempted modal's own dismissal is left to its existing (Escape-only) path.
-  assert.equal(sandbox.panels.panelModes.style.display, '');
+  assert.equal(sandbox.panels.panelModes.style.display, 'none', 'the underlying screen must not switch while the warning is unresolved');
 });
 
 // --- Back navigation (REQUIRED item 2) -------------------------------------
@@ -505,17 +527,154 @@ test('navigation never alters state.action, Dry Run, or other power/settings fie
   assert.equal(sandbox.state.unit, snapshot.unit);
 });
 
+// --- Help/About navigation truth (corrective pass, REQUIRED item 1) -------
+//
+// Reproduced defect: Settings open -> click Help -> About opens on top of
+// Settings, but the sidebar marks Help as current even though Settings is
+// still the actual visible destination underneath. Help/About is a modal
+// action, not a page destination, and must never claim current-view truth.
+
+test('Help opened from Tonight leaves Tonight current (no false destination claim)', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+
+  await sandbox.handleSidebarNavigation('help');
+
+  assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), true, 'About must open');
+  const libItem = sandbox.navItems.find(i => i.dataset.nsTab === 'lib');
+  const helpItem = sandbox.navItems.find(i => i.dataset.nsTab === 'help');
+  assert.equal(libItem.classList.contains('active'), true, 'Tonight must remain the current destination underneath');
+  assert.equal(libItem.getAttribute('aria-current'), 'page');
+  assert.equal(helpItem.classList.contains('active'), false, 'Help must never claim to be the current destination');
+  assert.equal(helpItem.getAttribute('aria-current'), null);
+  assert.equal(sandbox.panels.panelLib.style.display, '', 'the underlying Tonight panel must still actually be the one showing');
+});
+
+test('Help opened from Settings leaves Settings current (the exact reproduced defect)', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'sch' });
+  await sandbox.openSettingsPanel(); // Settings now open, current
+
+  await sandbox.handleSidebarNavigation('help');
+
+  assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), true);
+  const setItem = sandbox.navItems.find(i => i.dataset.nsTab === 'set');
+  const helpItem = sandbox.navItems.find(i => i.dataset.nsTab === 'help');
+  assert.equal(setItem.classList.contains('active'), true, 'Settings must remain the current destination underneath About');
+  assert.equal(setItem.getAttribute('aria-current'), 'page');
+  assert.equal(helpItem.getAttribute('aria-current'), null, 'Help must not claim current-view truth');
+  assert.equal(sandbox.panels.panelSet.style.display, '', 'Settings must still actually be the visible underlying panel');
+});
+
+test('closing Help restores focus to whatever had it before Help opened', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+  const helpButton = sandbox.navItems.find(i => i.dataset.nsTab === 'help');
+  sandbox.fakeDocument.__setActive(helpButton);
+
+  sandbox.openHelpPanel();
+  assert.equal(sandbox.getHelpOpenerElement(), helpButton);
+
+  sandbox.closeHelpPanel();
+
+  assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), false);
+  assert.equal(helpButton.__focused, true, 'focus must return to whatever opened Help');
+  assert.equal(sandbox.getHelpOpenerElement(), null, 'the opener reference must clear once consumed');
+});
+
+test('Help never causes an implicit Settings Save or Cancel', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'sch' });
+  await sandbox.openSettingsPanel();
+
+  await sandbox.handleSidebarNavigation('help');
+  sandbox.closeHelpPanel();
+
+  assert.equal(sandbox.calls.discardSettingsPanelChanges, 0, 'opening/closing Help must never discard Settings state');
+  assert.equal((sandbox.calls.saveSettingsPanel || 0), 0, 'opening/closing Help must never save Settings state');
+  assert.equal(sandbox.panels.panelSet.style.display, '', 'Settings must still be open, exactly as the user left it');
+});
+
+// --- Non-dismissible safety/in-progress modals block navigation
+// (corrective pass, REQUIRED item 2) ----------------------------------------
+//
+// Preserves the deliberate exclusion from auto-dismissal (warning/
+// override/snooze-tax/ritual-overlay), but page-level navigation must not
+// switch the screen underneath one of these either -- it's refused
+// outright until the user resolves it through the modal's own controls.
+
+test('each non-dismissible safety/in-progress modal blocks top-level navigation entirely', async () => {
+  for (const id of NON_DISMISSIBLE_MODAL_IDS) {
+    const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+    sandbox.modalEls[id].classList.add('active');
+
+    const result = await sandbox.handleSidebarNavigation('modes');
+
+    assert.equal(result, false, `navigation must report refused while ${id} is active`);
+    assert.equal(sandbox.panels.panelModes.style.display, 'none', `${id}: the destination must not switch`);
+    assert.equal(sandbox.panels.panelLib.style.display, '', `${id}: the underlying screen must not change`);
+    const libItem = sandbox.navItems.find(i => i.dataset.nsTab === 'lib');
+    const modesItem = sandbox.navItems.find(i => i.dataset.nsTab === 'modes');
+    assert.equal(libItem.classList.contains('active'), true, `${id}: the nav indicator must not move`);
+    assert.equal(modesItem.classList.contains('active'), false, `${id}: the nav indicator must not move`);
+    assert.equal(sandbox.modalEls[id].classList.contains('active'), true, `${id}: the modal itself must remain active`);
+  }
+});
+
+test('blocked navigation has zero side effects: no plan/power state change, no Save/Cancel triggered', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+  sandbox.modalEls['warning-modal'].classList.add('active');
+  const snapshot = { ...sandbox.state };
+
+  await sandbox.handleSidebarNavigation('sch');
+
+  assert.equal(sandbox.state.action, snapshot.action);
+  assert.equal(sandbox.state.dryRun, snapshot.dryRun);
+  assert.equal(sandbox.calls.discardSettingsPanelChanges, 0);
+  assert.equal(sandbox.calls.saveAppSettings.length, 0);
+  assert.equal(sandbox.calls.render, 0);
+});
+
+test('resolving/closing the blocking modal permits navigation afterward', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+  sandbox.modalEls['warning-modal'].classList.add('active');
+
+  const blockedResult = await sandbox.handleSidebarNavigation('modes');
+  assert.equal(blockedResult, false);
+  assert.equal(sandbox.panels.panelModes.style.display, 'none');
+
+  // User resolves it through the modal's own controls (simulated here by
+  // just clearing 'active', matching what Snooze/Cancel/Dismiss/etc. do).
+  sandbox.modalEls['warning-modal'].classList.remove('active');
+
+  const allowedResult = await sandbox.handleSidebarNavigation('modes');
+  assert.equal(allowedResult, true);
+  assert.equal(sandbox.panels.panelModes.style.display, '', 'navigation must succeed once the blocking modal is gone');
+});
+
+test('ordinary dismissible modals (About, profiles, receipts, etc.) still dismiss on navigation -- blocking logic does not interfere', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+  sandbox.modalEls['about-modal'].classList.add('active');
+  sandbox.modalEls['receipts-modal'].classList.add('active');
+
+  const result = await sandbox.handleSidebarNavigation('modes');
+
+  assert.equal(result, true);
+  assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), false);
+  assert.equal(sandbox.modalEls['receipts-modal'].classList.contains('active'), false);
+  assert.equal(sandbox.panels.panelModes.style.display, '');
+});
+
 // --- Settings Save/Cancel semantics unchanged (structural regression guard) ---
 
 // --- Escape contract (REQUIRED item 4) -------------------------------------
 //
 // The existing Escape handler already implements the required contract
 // correctly (priority: fullscreen clock > Settings discard > each modal in
-// turn > running-timer cancel as the final fallback) -- this slice does not
-// modify it at all (see the "Escape handler is byte-for-byte unchanged"
-// structural test below). These tests exist to PROVE that existing,
-// unmodified precedence behaviorally, per the roadmap's explicit
-// requirement, not to introduce new behavior.
+// turn > running-timer cancel as the final fallback). This corrective pass
+// makes exactly ONE surgical substitution inside it -- the about-modal
+// branch now calls closeHelpPanel() instead of a raw classList.remove(),
+// so closing About via Escape gets the same focus-restoration as every
+// other close path -- at the same position in the same priority order,
+// with every other branch untouched. The "unchanged" test below asserts
+// that precisely: the branch order and the running-timer fallback are
+// byte-for-byte identical; only that one line differs.
 
 function createEscapeSandbox({ fullscreenClock = false, running = false, paused = false, activeModalIds = [] } = {}) {
   const modalEls = buildModalElements();
@@ -538,7 +697,7 @@ function createEscapeSandbox({ fullscreenClock = false, running = false, paused 
   };
   const fakeDocument = createFakeDocument({ elementsById, navItems: [] });
 
-  const calls = { exitFullscreenClock: 0, discardSettingsPanelChanges: 0, closeSettingsPanel: 0, ritualCancel: 0, hideRitualOverlay: 0, cancelTimer: 0 };
+  const calls = { exitFullscreenClock: 0, discardSettingsPanelChanges: 0, closeSettingsPanel: 0, ritualCancel: 0, hideRitualOverlay: 0, cancelTimer: 0, closeHelpPanel: 0 };
   const state = { fullscreenClock, running, paused };
   const els = { panelSet: settingsPanel, profilesModal: modalEls['profiles-modal'], receiptsModal: modalEls['receipts-modal'], aboutModal: modalEls['about-modal'] };
 
@@ -552,6 +711,10 @@ function createEscapeSandbox({ fullscreenClock = false, running = false, paused 
     closeSettingsPanel: () => { calls.closeSettingsPanel++; },
     cancelTimer: () => { calls.cancelTimer++; },
     hideRitualOverlay: () => { calls.hideRitualOverlay++; },
+    // Stub matching closeHelpPanel()'s externally-visible effect --
+    // closeHelpPanel() itself is separately, fully tested (real,
+    // extracted) in the Help/About section below.
+    closeHelpPanel: () => { calls.closeHelpPanel++; modalEls['about-modal'].classList.remove('active'); },
     api: { ritualCancel: async () => { calls.ritualCancel++; } }
   };
 
@@ -562,15 +725,19 @@ function createEscapeSandbox({ fullscreenClock = false, running = false, paused 
   return { state, els, modalEls, settingsPanel, calls, handleEscape: context.__handleEscape };
 }
 
-test('Escape handler is byte-for-byte unchanged by this slice (structural regression guard)', () => {
-  // This slice deliberately does not touch the Escape handler at all --
-  // it introduces a SEPARATE, parallel dismissal path for navigation
-  // (closeAnyDismissibleModal), specifically to avoid any risk of
-  // altering Escape's existing, working precedence (especially
-  // Escape-cancels-a-running-timer). Confirms the branch text is present
-  // verbatim.
+test('Escape handler is unchanged except the single, intentional closeHelpPanel() substitution (structural regression guard)', () => {
+  // This slice does not otherwise touch the Escape handler -- the
+  // navigation fix uses a SEPARATE, parallel dismissal path
+  // (closeAnyDismissibleModal), specifically to avoid any risk to
+  // Escape's existing, working precedence (especially
+  // Escape-cancels-a-running-timer).
   const branch = extractMainEscapeBranch(rendererSource);
   assert.match(branch, /else if \(state\.running \|\| state\.paused\) \{\s*cancelTimer\(\);\s*\}/, 'the running-timer-cancel fallback must still be the last branch, unchanged');
+  assert.match(branch, /else if \(els\.aboutModal\?\.classList\.contains\('active'\)\) \{\s*closeHelpPanel\(\);\s*\}/, 'the about-modal branch must be at the same position, now calling closeHelpPanel()');
+  // Every other modal branch keeps its original raw close, unmodified.
+  assert.match(branch, /els\.profilesModal\.classList\.remove\('active'\)/);
+  assert.match(branch, /els\.receiptsModal\.classList\.remove\('active'\)/);
+  assert.match(branch, /document\.getElementById\('warning-modal'\)\.classList\.remove\('active'\)/);
   assert.match(branch, /if \(state\.fullscreenClock\) \{\s*exitFullscreenClock\(\);/, 'fullscreen-clock-exit must still be the first, highest-priority branch, unchanged');
 });
 

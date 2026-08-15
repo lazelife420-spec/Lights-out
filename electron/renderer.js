@@ -1453,10 +1453,28 @@ async function discardSettingsPanelChanges() {
   }
 }
 
+// Help/About is a modal action, not a persistent page destination -- it
+// never replaces whatever page (Tonight/Modes/Schedule/Settings) is
+// actually current underneath it (see handleSidebarNavigation(), which
+// deliberately never calls setSidebarSelection('help')). helpOpenerElement
+// remembers what had focus right before it opened, so closing it restores
+// focus/context there instead of leaving it stranded on a hidden modal --
+// for a normal sidebar click that's the Help button itself; the point is
+// closing About never needs to guess, and never touches Settings'
+// Save/Cancel state either way.
+let helpOpenerElement = null;
+
 function openHelpPanel() {
+  helpOpenerElement = document.activeElement || null;
   els.aboutModal?.classList.add('active');
   refreshUpdaterStatus();
   notify('Open Settings for controls and About for version/update details.', 'info', 4200);
+}
+
+function closeHelpPanel() {
+  els.aboutModal?.classList.remove('active');
+  if (helpOpenerElement && typeof helpOpenerElement.focus === 'function') helpOpenerElement.focus();
+  helpOpenerElement = null;
 }
 
 // Exactly one of LIB / SCH / STATS is visible at a time. Each child element's
@@ -1524,13 +1542,13 @@ async function renderStatusPanel() {
 // guided ritual that Escape only ever dismisses via an explicit, awaited
 // api.ritualCancel() call). Navigating to a different sidebar tab must
 // never silently discard any of those -- so it doesn't touch them at
-// all; they keep their pre-existing Escape-only handling, unchanged, and
-// (as before) can end up visually stacked over the newly-selected screen
-// if the user navigates while one is open. That is a known, intentional
-// gap, not fixed in this slice -- fixing it means deciding real
-// power-safety UX (what should navigating away from an imminent-shutdown
-// warning actually do?), which belongs to a dedicated review, not a
-// structural navigation pass.
+// all; they keep their pre-existing Escape-only handling, completely
+// unchanged. Unlike the modals below, though, navigation doesn't just
+// leave them alone while switching the screen underneath -- see
+// NAV_BLOCKING_MODAL_IDS and findActiveBlockingModal() further down:
+// while any of these is active, page-level navigation is refused
+// outright, so the user can never lose track of an active safety
+// decision by switching screens out from under it.
 const NAV_DISMISSIBLE_MODALS = [
   { get: () => els.profilesModal, close: el => el.classList.remove('active') },
   { get: () => els.receiptsModal, close: el => el.classList.remove('active') },
@@ -1573,7 +1591,38 @@ function closeAnyDismissibleModal() {
   return closed;
 }
 
+// The four modals representing active power-safety, confirmation,
+// snooze-tax, or in-progress ritual state (see NAV_DISMISSIBLE_MODALS'
+// comment above for why each one specifically cannot be auto-dismissed).
+// handleSidebarNavigation() refuses to navigate at all while any of these
+// is open -- see findActiveBlockingModal() below.
+const NAV_BLOCKING_MODAL_IDS = ['warning-modal', 'override-modal', 'snooze-tax-modal', 'ritual-overlay'];
+
+// Returns the first currently-active blocking modal element (see
+// NAV_BLOCKING_MODAL_IDS), or null if none is open.
+function findActiveBlockingModal() {
+  for (const id of NAV_BLOCKING_MODAL_IDS) {
+    const el = document.getElementById(id);
+    if (el?.classList.contains('active')) return el;
+  }
+  return null;
+}
+
 async function handleSidebarNavigation(tab, { persist = true } = {}) {
+  // Required navigation invariant: if a modal represents active
+  // power-safety, confirmation, snooze-tax, or in-progress ritual state
+  // that cannot be safely dismissed automatically (see
+  // NAV_BLOCKING_MODAL_IDS below), page-level navigation is refused
+  // outright until the user resolves it through the modal's own
+  // controls -- underlying destination, nav indicator, modal, and
+  // plan/power state all stay exactly as they were. Checked before
+  // anything else runs, so a blocked request has zero side effects.
+  const blockingModal = findActiveBlockingModal();
+  if (blockingModal) {
+    notify('Finish or dismiss the current alert before navigating', 'warning');
+    return false;
+  }
+
   // Required navigation invariant: before a page-level transition
   // completes, any dismissible blocking modal/drawer left open from
   // wherever the user was is cleared first -- deterministically, from
@@ -1601,8 +1650,14 @@ async function handleSidebarNavigation(tab, { persist = true } = {}) {
     handled = true;
   }
   if (tab === 'help') {
+    // Help/About is a modal action, not a page destination -- it must
+    // never claim current-view truth. Whatever page is actually current
+    // underneath (Tonight/Modes/Schedule/Settings) stays current, both
+    // visually (.active) and for assistive tech (aria-current); this
+    // deliberately returns before the setSidebarSelection(tab) call
+    // below, which every real destination still goes through.
     openHelpPanel();
-    handled = true;
+    return true;
   }
   if (tab === 'stats') {
     applyMainPanelVisibility('stats');
@@ -3439,11 +3494,11 @@ if (els.btnClearReceipts) {
   // so clicking its own background is just clicking the page.
 
   if (els.aboutModalClose) {
-    els.aboutModalClose.addEventListener('click', () => els.aboutModal.classList.remove('active'));
+    els.aboutModalClose.addEventListener('click', () => closeHelpPanel());
   }
   if (els.aboutModal) {
     els.aboutModal.addEventListener('click', event => {
-      if (event.target === els.aboutModal) els.aboutModal.classList.remove('active');
+      if (event.target === els.aboutModal) closeHelpPanel();
     });
   }
 
@@ -3630,7 +3685,7 @@ if (els.btnClearReceipts) {
       } else if (els.receiptsModal?.classList.contains('active')) {
         els.receiptsModal.classList.remove('active');
       } else if (els.aboutModal?.classList.contains('active')) {
-        els.aboutModal.classList.remove('active');
+        closeHelpPanel();
       } else if (document.getElementById('notif-drawer')?.classList.contains('active')) {
         document.getElementById('notif-drawer').classList.remove('active');
         document.getElementById('btn-notif')?.setAttribute('aria-expanded', 'false');
