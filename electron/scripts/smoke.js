@@ -754,11 +754,13 @@ check('renderer: LIB/SCH/DEV/STATS panels are mutually exclusive, single-visible
   assertMatch(htmlSrc, /id="ns-panel-stats"[^>]*style="display:none"/, 'PROOF panel should start hidden in HTML');
 });
 
-check('renderer: PROOF panel shows only real companion/session data, honest empty state', () => {
+check('renderer: PROOF panel shows only real session/receipt history, honest empty state', () => {
   assertMatch(rendererSrc, /async function renderStatusPanel\(\) \{/, 'status panel renderer missing');
-  assertMatch(rendererSrc, /api\.getRemoteControl\?\.\(\)/, 'PROOF should read real companion status, not fabricate it');
   assertMatch(rendererSrc, /api\.listReceipts\?\.\(5\)/, 'PROOF should read real receipt history, not fabricate it');
   assertMatch(rendererSrc, /No session history yet\./, 'PROOF must show an honest empty state when there is no history');
+  // Companion/phone status belongs to the Devices panel, not Proof.
+  assert(!rendererSrc.includes('statsCompanionMode'), 'Proof panel should not retain statsCompanionMode binding');
+  assert(!rendererSrc.includes('statsCompanionStatus'), 'Proof panel should not retain statsCompanionStatus binding');
 });
 
 check('renderer: DEVICES panel shows real device data without inventing state', () => {
@@ -767,6 +769,20 @@ check('renderer: DEVICES panel shows real device data without inventing state', 
   assertMatch(rendererSrc, /api\.getFamilyPeers\?\.\(\)/, 'DEVICES should read real family peers, not fabricate them');
   assertMatch(rendererSrc, /api\.getSmartLightConfig\?\.\(\)/, 'DEVICES should read real smart-light config');
   assertMatch(rendererSrc, /api\.getWifiGuardSettings\?\.\(\)/, 'DEVICES should read real WiFi Guard config');
+  assertMatch(rendererSrc, /updateCompanionStatus\(/, 'DEVICES should have a shared companion status updater');
+  assertMatch(rendererSrc, /function renderFamilyPeers\(/, 'DEVICES should use one shared peer-list renderer');
+});
+
+check('renderer: DEVICES panel routes to existing Settings categories', () => {
+  assertMatch(rendererSrc, /function openDeviceSettings\(category\)/, 'openDeviceSettings helper missing');
+  assertMatch(rendererSrc, /els\.btnDevCompanion\?\.addEventListener\('click', \(\) => openDeviceSettings\('phone'\)\)/, 'Phone Companion button must route to the phone category');
+  assertMatch(rendererSrc, /els\.btnDevLights\?\.addEventListener\('click', \(\) => openDeviceSettings\('wind-down'\)\)/, 'Smart Lights button must route to the wind-down category');
+  assertMatch(rendererSrc, /els\.btnDevWifi\?\.addEventListener\('click', \(\) => openDeviceSettings\('protection'\)\)/, 'Wi-Fi Guard button must route to the protection category');
+});
+
+check('renderer: DEVICES panel live-updates volatile PC status only', () => {
+  assertMatch(rendererSrc, /function updateDevicesPcStatus\(\)/, 'updateDevicesPcStatus helper missing');
+  assertMatch(rendererSrc, /if \(els\.panelDev && els\.panelDev\.style\.display !== 'none'\) \{\s*updateDevicesPcStatus\(\);\s*\}/, 'render() must update Devices PC status only while visible');
 });
 
 check('renderer: DEVICES PC status uses canonical idle/focus/dim/lastlight phases', () => {

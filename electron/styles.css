@@ -950,6 +950,49 @@ input:disabled {
   gap: 14px;
 }
 
+/* Devices panel */
+.dev-status-section {
+  flex-direction: column;
+}
+
+.dev-section-header {
+  padding: 0 0 4px 0;
+}
+
+.dev-subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 2px 0 0;
+}
+
+.dev-note {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin: 6px 0 0;
+}
+
+.dev-empty {
+  font-size: 10px;
+}
+
+.dev-scan-group {
+  margin: 0;
+}
+
+.dev-scan-status {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+
+.dev-peers {
+  margin-top: 6px;
+}
+
+.device-actions {
+  margin-top: 10px;
+}
+
 .status-card {
   flex: 1;
   background: linear-gradient(160deg, var(--bg-card) 0%, rgba(21,25,28,0.85) 100%);

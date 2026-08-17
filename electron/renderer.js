@@ -692,10 +692,6 @@ const els = {
   panelSch: document.getElementById('ns-panel-sch'),
   panelDev: document.getElementById('ns-panel-dev'),
   panelStats: document.getElementById('ns-panel-stats'),
-  statsCompanionMode: document.getElementById('stats-companion-mode'),
-  statsCompanionStatus: document.getElementById('stats-companion-status'),
-  statsCompanionNetwork: document.getElementById('stats-companion-network'),
-  statsCompanionClients: document.getElementById('stats-companion-clients'),
   statsSessionSummary: document.getElementById('stats-session-summary'),
   btnStatsViewLedger: document.getElementById('btn-stats-view-ledger'),
   // Devices panel
@@ -712,6 +708,9 @@ const els = {
   devFamilyPeers: document.getElementById('dev-family-peers'),
   devLightsStatus: document.getElementById('dev-lights-status'),
   devWifiStatus: document.getElementById('dev-wifi-status'),
+  btnDevCompanion: document.getElementById('btn-dev-companion'),
+  btnDevLights: document.getElementById('btn-dev-lights'),
+  btnDevWifi: document.getElementById('btn-dev-wifi'),
   aboutModal: document.getElementById('about-modal'),
   aboutModalClose: document.getElementById('about-modal-close'),
   // Version display (footer + About modal). HTML carries a static fallback string;
@@ -1472,25 +1471,8 @@ function applyMainPanelVisibility(panel) {
   if (panel === 'sch') activateTopTab('schedule');
 }
 
-// Pulls only data that already exists elsewhere in the app (companion status,
-// receipt history) — no new tracking, no fabricated numbers.
+// Pulls only receipt/session history. Companion/phone status lives in Devices.
 async function renderStatusPanel() {
-  try {
-    const rc = await api.getRemoteControl?.();
-    const modeLabels = { off: 'Off', local: 'This PC only', wifi: 'Same Wi-Fi' };
-    const mode = rc?.mode || 'off';
-    if (els.statsCompanionMode) els.statsCompanionMode.textContent = modeLabels[mode] || 'Off';
-    if (els.statsCompanionStatus) els.statsCompanionStatus.textContent = rc?.statusLabel || 'Off';
-    if (els.statsCompanionNetwork) {
-      els.statsCompanionNetwork.textContent = mode === 'wifi' ? `${rc.lanIp}:${rc.port}`
-        : mode === 'local' ? `127.0.0.1:${rc.port}`
-        : '—';
-    }
-    if (els.statsCompanionClients) els.statsCompanionClients.textContent = String(rc?.clients || 0);
-  } catch {
-    if (els.statsCompanionStatus) els.statsCompanionStatus.textContent = 'Unavailable';
-  }
-
   if (!els.statsSessionSummary) return;
   try {
     const receipts = await api.listReceipts?.(5);
@@ -1555,11 +1537,26 @@ async function handleSidebarNavigation(tab, { persist = true } = {}) {
 
 els.btnStatsViewLedger?.addEventListener('click', () => openReceiptsLedger());
 
-// Render the Devices dashboard. Read-only; configuration lives in Settings.
-async function renderDevicesPanel() {
+// Canonical phase names must match the main status text used in render().
+const phaseLabels = { focus: 'Focus', dim: 'Winding Down', lastlight: 'Last Light', idle: 'Running' };
+const companionModeLabels = { off: 'Off', local: 'This PC only', wifi: 'Same Wi-Fi' };
+
+// Render a list of family peers into a container. Keeps DOM presentation in one place.
+function renderFamilyPeers(peers, statusEl, peersEl) {
+  const count = Array.isArray(peers) ? peers.length : 0;
+  if (statusEl) statusEl.textContent = `${count} found`;
+  if (!peersEl) return;
+  if (!count) {
+    peersEl.innerHTML = '<p class="empty-state dev-empty">No peers discovered yet.</p>';
+    return;
+  }
+  peersEl.innerHTML = peers.map(p => `<div class="status-row"><span>${escapeHtml(p.name || p.ip)}</span><span>${escapeHtml(p.ip)}</span></div>`).join('');
+}
+
+// Update the volatile PC status rows in the Devices panel. Called on every render()
+// only when #ns-panel-dev is visible, so it does not rebuild the whole panel.
+function updateDevicesPcStatus() {
   const isIdle = !state.running && !state.paused;
-  // Canonical phase names must match the main status text used in render().
-  const phaseLabels = { focus: 'Focus', dim: 'Winding Down', lastlight: 'Last Light', idle: 'Running' };
   const pcStatus = isIdle ? 'Idle'
     : state.paused ? 'Paused'
     : (phaseLabels[state.phase] || 'Running');
@@ -1572,54 +1569,58 @@ async function renderDevicesPanel() {
     els.devPcRemaining.textContent = (isIdle || !Number.isFinite(state.remainingSeconds)) ? '—' : formatTime(state.remainingSeconds);
   }
   if (els.devPcDryrun) els.devPcDryrun.textContent = state.dryRun ? 'On' : 'Off';
+}
+
+// Update the Phone Companion card from a remote control status object.
+function updateCompanionStatus(rc) {
+  const mode = rc?.mode || 'off';
+  if (els.devCompanionMode) els.devCompanionMode.textContent = companionModeLabels[mode] || 'Off';
+  if (els.devCompanionStatus) els.devCompanionStatus.textContent = rc?.statusLabel || 'Off';
+  if (els.devCompanionNetwork) {
+    els.devCompanionNetwork.textContent = mode === 'wifi' ? `${rc.lanIp}:${rc.port}`
+      : mode === 'local' ? `127.0.0.1:${rc.port}`
+      : '—';
+  }
+  if (els.devCompanionClients) els.devCompanionClients.textContent = String(rc?.clients || 0);
+}
+
+// Update the planned-device cards (Smart Lights / WiFi Guard) from their configs.
+function updateDevicePlanCards(light, wifi) {
+  if (els.devLightsStatus) {
+    els.devLightsStatus.textContent = (light?.enabled && light?.provider && light.provider !== 'none')
+      ? `Configured (${light.provider})`
+      : 'Planned';
+  }
+  if (els.devWifiStatus) {
+    els.devWifiStatus.textContent = (wifi?.enabled && wifi?.configured)
+      ? `Configured (${wifi.provider})`
+      : 'Planned';
+  }
+}
+
+// Render the Devices dashboard. Read-only; configuration lives in Settings.
+async function renderDevicesPanel() {
+  updateDevicesPcStatus();
 
   try {
     const rc = await api.getRemoteControl?.();
-    const modeLabels = { off: 'Off', local: 'This PC only', wifi: 'Same Wi-Fi' };
-    const mode = rc?.mode || 'off';
-    if (els.devCompanionMode) els.devCompanionMode.textContent = modeLabels[mode] || 'Off';
-    if (els.devCompanionStatus) els.devCompanionStatus.textContent = rc?.statusLabel || 'Off';
-    if (els.devCompanionNetwork) {
-      els.devCompanionNetwork.textContent = mode === 'wifi' ? `${rc.lanIp}:${rc.port}`
-        : mode === 'local' ? `127.0.0.1:${rc.port}`
-        : '—';
-    }
-    if (els.devCompanionClients) els.devCompanionClients.textContent = String(rc?.clients || 0);
+    updateCompanionStatus(rc);
   } catch {
     if (els.devCompanionStatus) els.devCompanionStatus.textContent = 'Unavailable';
   }
 
   try {
     const peers = await api.getFamilyPeers?.() || [];
-    if (els.devFamilyStatus) els.devFamilyStatus.textContent = `${peers.length} found`;
-    if (els.devFamilyPeers) {
-      if (!peers.length) {
-        els.devFamilyPeers.innerHTML = '<p class="empty-state" style="font-size:10px">No peers discovered yet.</p>';
-      } else {
-        els.devFamilyPeers.innerHTML = peers.map(p => `<div class="status-row"><span>${escapeHtml(p.name || p.ip)}</span><span>${escapeHtml(p.ip)}</span></div>`).join('');
-      }
-    }
+    renderFamilyPeers(peers, els.devFamilyStatus, els.devFamilyPeers);
   } catch {
     if (els.devFamilyStatus) els.devFamilyStatus.textContent = 'Unavailable';
-    if (els.devFamilyPeers) els.devFamilyPeers.innerHTML = '<p class="empty-state" style="font-size:10px">No peers discovered yet.</p>';
+    if (els.devFamilyPeers) els.devFamilyPeers.innerHTML = '<p class="empty-state dev-empty">No peers discovered yet.</p>';
   }
 
   try {
     const light = await api.getSmartLightConfig?.();
-    if (els.devLightsStatus) {
-      els.devLightsStatus.textContent = (light?.enabled && light?.provider && light.provider !== 'none')
-        ? `Configured (${light.provider})`
-        : 'Planned';
-    }
-  } catch {}
-
-  try {
     const wifi = await api.getWifiGuardSettings?.();
-    if (els.devWifiStatus) {
-      els.devWifiStatus.textContent = (wifi?.enabled && wifi?.configured)
-        ? `Configured (${wifi.provider})`
-        : 'Planned';
-    }
+    updateDevicePlanCards(light, wifi);
   } catch {}
 }
 
@@ -1627,18 +1628,24 @@ els.btnDevFamilyScan?.addEventListener('click', async () => {
   if (els.devFamilyStatus) els.devFamilyStatus.textContent = 'Scanning...';
   try {
     const peers = await api.getFamilyPeers?.() || [];
-    if (els.devFamilyStatus) els.devFamilyStatus.textContent = `${peers.length} found`;
-    if (els.devFamilyPeers) {
-      if (!peers.length) {
-        els.devFamilyPeers.innerHTML = '<p class="empty-state" style="font-size:10px">No peers discovered yet.</p>';
-      } else {
-        els.devFamilyPeers.innerHTML = peers.map(p => `<div class="status-row"><span>${escapeHtml(p.name || p.ip)}</span><span>${escapeHtml(p.ip)}</span></div>`).join('');
-      }
-    }
+    renderFamilyPeers(peers, els.devFamilyStatus, els.devFamilyPeers);
   } catch {
     if (els.devFamilyStatus) els.devFamilyStatus.textContent = 'Unavailable';
   }
 });
+
+// Companion status can change when the user edits settings; refresh it live.
+api.onRemoteControlStatus?.(data => updateCompanionStatus(data));
+
+// Actionable buttons route into the existing Settings categories.
+function openDeviceSettings(category) {
+  openSettingsPanel();
+  if (category) switchSettingsCategory(category);
+}
+
+els.btnDevCompanion?.addEventListener('click', () => openDeviceSettings('phone'));
+els.btnDevLights?.addEventListener('click', () => openDeviceSettings('wind-down'));
+els.btnDevWifi?.addEventListener('click', () => openDeviceSettings('protection'));
 
 function formatIdleClockTime(now, compact = false) {
   const use12Hour = state.clockFormat === '12h';
@@ -1827,6 +1834,11 @@ function render() {
   document.querySelectorAll('.tonight-card').forEach(card => {
     card.classList.toggle('selected', card.dataset.card === state.selectedCard);
   });
+
+  // If the Devices panel is visible, update only the volatile PC card.
+  if (els.panelDev && els.panelDev.style.display !== 'none') {
+    updateDevicesPcStatus();
+  }
 }
 
 function resolveClockDial() {

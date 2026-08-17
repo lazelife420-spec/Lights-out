@@ -839,13 +839,13 @@
 
       <!-- DEVICES: Connected and planned devices panel -->
       <div class="ns-main-panel" id="ns-panel-dev" style="display:none">
-        <section class="status-section">
-          <div class="section-header" style="padding:0 0 4px 0">
+        <section class="status-section dev-status-section">
+          <div class="dev-section-header">
             <h2 class="section-title">Devices</h2>
-            <p class="section-subtitle" style="font-size:11px">What Lights Out can talk to now. Configure device integrations in Settings.</p>
+            <p class="dev-subtitle">What Lights Out can talk to now. Configure device integrations in Settings.</p>
           </div>
 
-          <div class="status-card">
+          <div class="status-card dev-pc-card">
             <div class="card-header">
               <span class="icon">&#x1F4BB;</span>
               <span>This PC</span>
@@ -858,7 +858,7 @@
             </div>
           </div>
 
-          <div class="status-card">
+          <div class="status-card dev-companion-card">
             <div class="card-header">
               <span class="icon">&#x1F4F1;</span>
               <span>Phone Companion</span>
@@ -868,76 +868,63 @@
               <div class="status-row"><span>Status</span><span id="dev-companion-status">Off</span></div>
               <div class="status-row"><span>Network</span><span id="dev-companion-network">&mdash;</span></div>
               <div class="status-row"><span>Connected devices</span><span id="dev-companion-clients">0</span></div>
+              <div class="device-actions">
+                <button type="button" id="btn-dev-companion" class="btn-secondary btn-sm">Open Phone Companion settings</button>
+              </div>
             </div>
           </div>
 
-          <div class="status-card">
+          <div class="status-card dev-family-card">
             <div class="card-header">
               <span class="icon">&#x1F3E0;</span>
               <span>Family LAN</span>
             </div>
             <div class="card-body">
-              <div class="option-group" style="margin:0">
+              <div class="option-group dev-scan-group">
                 <button type="button" id="btn-dev-family-scan" class="btn-secondary btn-sm">Scan for Peers</button>
-                <span id="dev-family-status" style="font-size:11px;color:var(--text-muted);margin-left:8px"></span>
+                <span id="dev-family-status" class="dev-scan-status"></span>
               </div>
-              <div id="dev-family-peers" style="margin-top:6px"></div>
+              <div id="dev-family-peers" class="dev-peers"></div>
             </div>
           </div>
 
-          <div class="status-card">
+          <div class="status-card dev-lights-card">
             <div class="card-header">
               <span class="icon">&#x1F4A1;</span>
               <span>Smart Lights</span>
             </div>
             <div class="card-body">
               <div class="status-row"><span>Status</span><span id="dev-lights-status">Planned</span></div>
-              <p style="font-size:10px;color:var(--text-muted);margin:6px 0 0">Optional Philips Hue or HTTP integration in Settings. Native device control is planned, not shipped.</p>
+              <p class="dev-note">Optional Philips Hue or HTTP integration in Settings. Native device control is planned, not shipped.</p>
+              <div class="device-actions">
+                <button type="button" id="btn-dev-lights" class="btn-secondary btn-sm">Open Smart Lights settings</button>
+              </div>
             </div>
           </div>
 
-          <div class="status-card">
+          <div class="status-card dev-wifi-card">
             <div class="card-header">
               <span class="icon">&#x1F6E1;&#xFE0F;</span>
               <span>WiFi Guard</span>
             </div>
             <div class="card-body">
               <div class="status-row"><span>Status</span><span id="dev-wifi-status">Planned</span></div>
-              <p style="font-size:10px;color:var(--text-muted);margin:6px 0 0">Experimental router/webhook/adapter control in Settings. Native device control is planned, not shipped.</p>
+              <p class="dev-note">Experimental router/webhook/adapter control in Settings. Native device control is planned, not shipped.</p>
+              <div class="device-actions">
+                <button type="button" id="btn-dev-wifi" class="btn-secondary btn-sm">Open Wi-Fi Guard settings</button>
+              </div>
             </div>
           </div>
         </section>
       </div>
 
-      <!-- STATS: Status / proof / diagnostics panel (Proof in the new IA) -->
+      <!-- STATS: Proof / run history panel -->
       <div class="ns-main-panel" id="ns-panel-stats" style="display:none">
-        <section class="status-section">
-          <div class="status-card">
-            <div class="card-header">
-              <span class="icon">&#x1F4F1;</span>
-              <span>Companion Status</span>
-            </div>
-            <div class="card-body">
-              <div class="status-row">
-                <span>Mode</span>
-                <span id="stats-companion-mode">Off</span>
-              </div>
-              <div class="status-row">
-                <span>Status</span>
-                <span id="stats-companion-status">Off</span>
-              </div>
-              <div class="status-row">
-                <span>Network</span>
-                <span id="stats-companion-network">&mdash;</span>
-              </div>
-              <div class="status-row">
-                <span>Connected devices</span>
-                <span id="stats-companion-clients">0</span>
-              </div>
-            </div>
+        <section class="status-section proof-section">
+          <div class="dev-section-header">
+            <h2 class="section-title">Proof</h2>
+            <p class="dev-subtitle">What actually ran. Morning Proof and run receipts live here.</p>
           </div>
-        </section>
-        <section class="status-section">
           <div class="status-card">
             <div class="card-header">
               <span class="icon">&#x1F4CB;</span>
@@ -947,8 +934,8 @@
               <p class="empty-state">No session history yet.</p>
             </div>
           </div>
+          <button class="btn-secondary" id="btn-stats-view-ledger">View Full Ledger</button>
         </section>
-        <button class="btn-secondary" id="btn-stats-view-ledger">View Full Ledger</button>
       </div>
 
   <!-- Settings: a primary dashboard view (sibling of Tonight/Modes/Schedule/
