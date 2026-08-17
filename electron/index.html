@@ -105,38 +105,39 @@
     <!-- Northstar left sidebar (icon rail) -->
     <aside class="ns-sidebar" aria-label="Navigation">
       <div class="ns-sidebar-logo">
-        <img src="assets/brand/lights-out-icon.svg" alt="Lights Out" draggable="false">
+        <img src="assets/brand/lights-out-icon.svg" alt="" draggable="false">
+        <span class="ns-sidebar-wordmark">Lights Out</span>
       </div>
       <nav class="ns-sidebar-nav">
         <button class="ns-nav-item active" data-ns-tab="lib" title="Tonight" aria-label="Open tonight">
           <span class="ns-nav-icon" aria-hidden="true">&#x1F319;</span>
-          <span class="ns-nav-label">TONIGHT</span>
+          <span class="ns-nav-label">Tonight</span>
         </button>
         <button class="ns-nav-item" data-ns-tab="modes" title="Night Modes" aria-label="Open night modes">
           <span class="ns-nav-icon" aria-hidden="true">&#x1F4DA;</span>
-          <span class="ns-nav-label">MODES</span>
+          <span class="ns-nav-label">Modes</span>
         </button>
         <button class="ns-nav-item" data-ns-tab="sch" title="Open schedule" aria-label="Open schedule">
           <span class="ns-nav-icon" aria-hidden="true">&#x1F4C5;</span>
-          <span class="ns-nav-label">SCHEDULE</span>
+          <span class="ns-nav-label">Schedule</span>
         </button>
         <button class="ns-nav-item" data-ns-tab="dev" title="Open devices" aria-label="Open devices">
           <span class="ns-nav-icon" aria-hidden="true">&#x1F4F1;</span>
-          <span class="ns-nav-label">DEVICES</span>
+          <span class="ns-nav-label">Devices</span>
         </button>
         <button class="ns-nav-item" data-ns-tab="stats" title="Open proof" aria-label="Open proof">
           <span class="ns-nav-icon" aria-hidden="true">&#x1F4CA;</span>
-          <span class="ns-nav-label">PROOF</span>
-        </button>
-        <button class="ns-nav-item" data-ns-tab="set" title="Open settings" aria-label="Open settings">
-          <span class="ns-nav-icon" aria-hidden="true">&#x2699;</span>
-          <span class="ns-nav-label">SETTINGS</span>
+          <span class="ns-nav-label">Proof</span>
         </button>
       </nav>
       <div class="ns-sidebar-footer">
+        <button class="ns-nav-item" data-ns-tab="set" title="Open settings" aria-label="Open settings">
+          <span class="ns-nav-icon" aria-hidden="true">&#x2699;&#xFE0F;</span>
+          <span class="ns-nav-label">Settings</span>
+        </button>
         <button class="ns-nav-item" data-ns-tab="help" title="Open help and about" aria-label="Open help and about">
-          <span class="ns-nav-icon" aria-hidden="true">&#x3F;</span>
-          <span class="ns-nav-label">?</span>
+          <span class="ns-nav-icon" aria-hidden="true">&#x2753;</span>
+          <span class="ns-nav-label">Help</span>
         </button>
       </div>
     </aside>
@@ -172,8 +173,8 @@
           </div>
         </div>
         <div class="menu-item" id="menu-settings" tabindex="0" role="button" aria-haspopup="menu" aria-expanded="false">
-          <span>Settings</span>
-          <div class="submenu" role="menu" aria-label="Settings">
+          <span>Quick Toggles</span>
+          <div class="submenu" role="menu" aria-label="Quick toggles">
             <div class="submenu-item toggle" role="menuitemcheckbox" tabindex="-1" id="toggle-dryrun">
               <span>Dry Run Mode</span>
               <span class="toggle-indicator">OFF</span>
@@ -187,13 +188,13 @@
               <span class="toggle-indicator">ON</span>
             </div>
             <div class="submenu-item" role="menuitem" tabindex="-1" id="open-options">
-              <span>Advanced Options...</span>
+              <span>Open full Settings</span>
             </div>
           </div>
         </div>
         <div class="menu-item" id="menu-help" tabindex="0" role="button" aria-haspopup="menu" aria-expanded="false">
-          <span>Help</span>
-          <div class="submenu" role="menu" aria-label="Help">
+          <span>Info</span>
+          <div class="submenu" role="menu" aria-label="Info">
             <div class="submenu-item" role="menuitem" tabindex="-1" data-help="Use presets for quick starts, Options for launch behavior, and the tray menu for pause, snooze, or cancel.">
               <span class="icon">&#x2139;</span>
               <span>Documentation</span>
@@ -204,7 +205,7 @@
             </div>
             <div class="submenu-item" role="menuitem" tabindex="-1" id="open-about">
               <span class="icon">&#x24D8;</span>
-              <span>About Lights Out</span>
+              <span>Version &amp; Updates</span>
             </div>
           </div>
         </div>
@@ -231,7 +232,7 @@
          "Settings" at the app's normal/default 520px window width). -->
     <div class="ns-header-wordmark" aria-hidden="true">
       <img src="assets/brand/lights-out-icon.svg" alt="" draggable="false" class="ns-wordmark-icon">
-      <span class="ns-wordmark-title">Lights Out PC</span>
+      <span class="ns-wordmark-title">Lights Out</span>
       <span class="ns-wordmark-sub">Bedtime Mode for Windows</span>
     </div>
 
@@ -390,10 +391,18 @@
         <span class="streak-callout-go" aria-hidden="true">&#x203A;</span>
       </button>
 
+      <!-- Context band: secondary information that supports tonight's plan
+           without competing with it visually. Wraps Saved Profiles, Session/
+           Power status, and the Tonight's Automation summary under one
+           lighter-weight heading instead of three equal-weight sections --
+           presentation-only grouping, nothing moved or removed. -->
+      <div class="ns-context-band">
+      <div class="ns-context-band-label">Also tonight</div>
+
       <!-- Saved Profiles -->
       <section class="profiles-section" id="profiles-section">
         <div class="profiles-header">
-          <span class="profiles-title">Saved Profiles</span>
+          <span class="profiles-title">Quick plans</span>
           <div class="profiles-header-actions">
             <button class="btn-save-profile-quick" id="btn-save-current-profile" title="Save the current timer as a reusable profile">&#x2795; Save as Profile</button>
             <button class="btn-icon" id="btn-manage-profiles" title="Manage Profiles" aria-label="Manage profiles">&#x2699;</button>
@@ -451,6 +460,46 @@
           </div>
         </div>
       </section>
+
+      <!-- Tonight's Automation: surfaces Smart Lights, WiFi Guard, and First
+           Light here so a user doesn't need to already know these live inside
+           Settings sub-tabs. Real status only (no "connected" implied unless
+           actually configured); Edit routes into the existing Settings
+           category via openDeviceSettings(). -->
+      <section class="status-section tonight-automation-section">
+        <div class="status-card tonight-automation-card">
+          <div class="card-header">
+            <span class="icon">&#x1F319;</span>
+            <span>Tonight's automation</span>
+          </div>
+          <div class="card-body">
+            <div class="status-row ta-row">
+              <span>&#x1F4A1; Smart Lights</span>
+              <span class="ta-row-right">
+                <span id="ta-lights-status">Not configured</span>
+                <button type="button" class="ta-edit-btn" data-ta-target="wind-down">Edit</button>
+              </span>
+            </div>
+            <div class="status-row ta-row">
+              <span>&#x1F6E1;&#xFE0F; WiFi Guard <span class="status-pill status-local ta-experimental-pill">EXPERIMENTAL</span></span>
+              <span class="ta-row-right">
+                <span id="ta-wifi-status">Not configured</span>
+                <button type="button" class="ta-edit-btn" data-ta-target="protection">Edit</button>
+              </span>
+            </div>
+            <div class="status-row ta-row">
+              <span>&#x1F305; First Light</span>
+              <span class="ta-row-right">
+                <span id="ta-alarm-status">Not set</span>
+                <button type="button" class="ta-edit-btn" data-ta-target="automations">Edit</button>
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      </div>
+      <!-- /ns-context-band -->
 
       <!-- Morning Proof / Last Run Card (northstar hero) -->
       <section class="morning-proof-section ns-proof-section" id="morning-proof-section" style="display:none">
@@ -549,16 +598,39 @@
 
       <!-- SCH: Schedule panel (duration/clock mode, calendar controls) -->
       <section class="tabs-section ns-main-panel" id="ns-panel-sch" style="display:none">
+
+        <!-- Next tonight: always-visible truthful summary regardless of which
+             sub-tab is open below. Mirrors state that Automations/Calendar
+             already compute -- no second source of truth. -->
+        <div class="sch-next-summary" id="sch-next-summary">
+          <div class="sch-next-label">Next tonight</div>
+          <div class="sch-next-rows">
+            <div class="sch-next-row">
+              <span class="sch-next-icon" aria-hidden="true">&#x1F319;</span>
+              <span id="sch-next-bedtime">No bedtime rule set</span>
+            </div>
+            <div class="sch-next-row">
+              <span class="sch-next-icon" aria-hidden="true">&#x1F305;</span>
+              <span id="sch-next-firstlight">First Light: not set</span>
+            </div>
+            <div class="sch-next-row">
+              <span class="sch-next-icon" aria-hidden="true">&#x1F916;</span>
+              <span id="sch-next-autopilot">Autopilot: off</span>
+            </div>
+          </div>
+        </div>
+
         <div class="tabs-header">
-          <button class="tab-btn active" data-tab="library">Quick Setup</button>
-          <button class="tab-btn" data-tab="schedule">Schedule</button>
+          <button class="tab-btn active" data-tab="schedule">Schedule</button>
+          <button class="tab-btn" data-tab="automations">Automations</button>
           <button class="tab-btn" data-tab="clock">Clock</button>
+          <span class="tab-divider" aria-hidden="true" data-label="Tools"></span>
+          <button class="tab-btn" data-tab="library">Quick Setup</button>
           <button class="tab-btn" data-tab="focus">Focus</button>
           <button class="tab-btn" data-tab="countdown">Countdown</button>
-          <button class="tab-btn" data-tab="streaks">Streaks</button>
         </div>
         <div class="tabs-content">
-          <div class="tab-panel active" id="tab-library">
+          <div class="tab-panel" id="tab-library">
             <div class="tonight-grid">
               <div class="tonight-card" data-card="sleep-45" data-minutes="45" data-action="sleep" data-force="false">
                 <div class="card-title">45 MIN SLEEP</div>
@@ -574,7 +646,7 @@
               </div>
             </div>
           </div>
-          <div class="tab-panel" id="tab-schedule">
+          <div class="tab-panel active" id="tab-schedule">
             <div class="schedule-controls">
               <label>
                 <input type="checkbox" id="chk-schedule">
@@ -693,20 +765,56 @@
                 <button class="btn-secondary" id="btn-cal-calendly-fetch">Fetch Events</button>
               </div>
 
-              <!-- Upcoming events list -->
+              <!-- Upcoming events list. The nearest occurrence already has
+                   its own Start button here -- a separate "Next Event" card
+                   below used to repeat the exact same bedtime/time a third
+                   time on this screen (after the header's "Next tonight"
+                   summary and this list's first row). Removed as pure
+                   duplication, not a feature cut: starting the next
+                   occurrence is still one click, right here. -->
               <div class="calendar-events" id="calendar-events">
                 <!-- Events loaded dynamically -->
               </div>
+            </div>
+          </div>
 
-              <!-- Next event card -->
-              <div class="next-event-card" id="next-event-card" style="display:none">
-                <div class="next-event-label">Next Event</div>
-                <div class="next-event-name" id="next-event-name"></div>
-                <div class="next-event-time" id="next-event-time"></div>
-                <button class="btn-primary btn-sm" id="btn-start-from-event">Start Timer</button>
+          <!-- Automations: the recurring, non-manual behaviors Lights Out can
+               run on its own. First Light gets a real feature card instead of
+               a buried settings line; Autopilot Bedtime and Content Blocker
+               are real, independently-scheduled features surfaced here
+               because Automations is "what runs on its own." Edit/Set route
+               into the existing Settings categories -- no duplicate source
+               of truth, no new configuration UI. -->
+          <div class="tab-panel" id="tab-automations">
+            <div class="automation-hero-card" id="firstlight-hero-card">
+              <div class="ah-icon" aria-hidden="true">&#x1F305;</div>
+              <div class="ah-body">
+                <div class="ah-title">First Light</div>
+                <div class="ah-state" id="firstlight-hero-state">No morning alarm set</div>
+                <div class="ah-sub" id="firstlight-hero-sub">Set a morning wake alarm for tomorrow.</div>
+              </div>
+              <button type="button" class="btn-secondary btn-sm" id="firstlight-hero-btn" data-ta-target="automations">Set First Light</button>
+            </div>
+
+            <div class="also-scheduled-section">
+              <div class="also-scheduled-header">Also automated</div>
+              <div class="status-row as-row">
+                <span>&#x1F916; Autopilot Bedtime</span>
+                <span class="ta-row-right">
+                  <span id="as-autopilot-status">Off</span>
+                  <button type="button" class="ta-edit-btn" data-ta-target="automations">Edit</button>
+                </span>
+              </div>
+              <div class="status-row as-row">
+                <span>&#x1F6AB; Content Blocker</span>
+                <span class="ta-row-right">
+                  <span id="as-content-blocker-status">Off</span>
+                  <button type="button" class="ta-edit-btn" data-ta-target="protection">Edit</button>
+                </span>
               </div>
             </div>
           </div>
+
           <div class="tab-panel" id="tab-clock">
             <div class="clock-presets">
               <button class="clock-btn" data-time="22:30">10:30 PM</button>
@@ -767,73 +875,6 @@
               <button class="cd-btn" data-hours="4">4 Hours</button>
             </div>
           </div>
-
-        <!-- Streaks + Insights panel -->
-        <div class="tab-panel" id="tab-streaks">
-          <div class="streaks-panel">
-            <!-- Routine consistency score -->
-            <div class="sleep-score-hero" id="sleep-score-section">
-              <div class="score-ring-wrap">
-                <svg class="score-ring" viewBox="0 0 120 120">
-                  <circle class="score-ring-bg" cx="60" cy="60" r="52"/>
-                  <circle class="score-ring-fill" id="score-ring-fill" cx="60" cy="60" r="52" style="stroke-dashoffset:327"/>
-                </svg>
-                <div class="score-value" id="score-value">--</div>
-              </div>
-              <div class="score-label" id="score-label">Routine Consistency Score</div>
-              <div class="score-breakdown" id="score-breakdown"></div>
-            </div>
-
-            <div class="streak-hero">
-              <div class="streak-number" id="streak-count">0</div>
-              <div class="streak-label">Completion Streak</div>
-            </div>
-            <div class="streak-stats">
-              <div class="streak-stat">
-                <span class="stat-value" id="streak-best">0</span>
-                <span class="stat-label">Best</span>
-              </div>
-              <div class="streak-stat">
-                <span class="stat-value" id="streak-total">0</span>
-                <span class="stat-label">Completed Runs</span>
-              </div>
-              <div class="streak-stat">
-                <span class="stat-value" id="streak-weekavg">--:--</span>
-                <span class="stat-label">Avg Bedtime</span>
-              </div>
-              <div class="streak-stat">
-                <span class="stat-value" id="streak-ontime">0%</span>
-                <span class="stat-label">Before 11 PM (7d)</span>
-              </div>
-            </div>
-            <div class="streaks-section-header">
-              <h4>This Week</h4>
-              <button class="btn btn-secondary" id="btn-copy-weekly-report" style="padding: 4px 10px; font-size: 11px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px;">&#x1F4CB; Copy Report</button>
-            </div>
-            <p class="weekly-report-text" id="weekly-report-text" style="font-size:11px;color:var(--text-secondary);white-space:pre-line;line-height:1.6;margin:0 0 16px"></p>
-            <div class="streaks-section-header">
-              <h4>Completion History (Last 30 Days)</h4>
-              <button class="btn btn-secondary" id="btn-export-streaks" style="padding: 4px 10px; font-size: 11px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px;">&#x1F4CB; Export Ledger</button>
-            </div>
-            <div class="sleep-history-grid" id="sleep-history-grid">
-              <!-- Rendered as a contribution-style habit grid by JS -->
-            </div>
-            <div class="streaks-section-header">
-              <h4>Trends</h4>
-              <div class="trend-granularity-toggle" id="trend-granularity-toggle">
-                <button class="trend-toggle-btn active" data-granularity="week" type="button">Weekly</button>
-                <button class="trend-toggle-btn" data-granularity="month" type="button">Monthly</button>
-              </div>
-            </div>
-            <div class="trend-list" id="trend-list">
-              <!-- Populated by JS: aggregate runs/average completion time/before-11% per week or month -->
-            </div>
-            <h4 class="achievements-heading">Achievements</h4>
-            <div class="achievements-grid" id="achievements-grid">
-              <!-- Populated by JS -->
-            </div>
-          </div>
-        </div>
         </div>
       </section>
 
@@ -864,6 +905,7 @@
               <span>Phone Companion</span>
             </div>
             <div class="card-body">
+              <p class="dev-note">Control this timer from your phone on the same Wi-Fi. Off by default; never forces shutdown/hibernate/logout from the phone.</p>
               <div class="status-row"><span>Mode</span><span id="dev-companion-mode">Off</span></div>
               <div class="status-row"><span>Status</span><span id="dev-companion-status">Off</span></div>
               <div class="status-row"><span>Network</span><span id="dev-companion-network">&mdash;</span></div>
@@ -880,6 +922,8 @@
               <span>Family LAN</span>
             </div>
             <div class="card-body">
+              <p class="dev-note">Send the same action to another PC on this network, only if it's also running Lights Out with a matching pairing token. Manual only &mdash; never runs on its own.</p>
+              <div class="status-row"><span>Tonight</span><span>Manual only &mdash; not automated</span></div>
               <div class="option-group dev-scan-group">
                 <button type="button" id="btn-dev-family-scan" class="btn-secondary btn-sm">Scan for Peers</button>
                 <span id="dev-family-status" class="dev-scan-status"></span>
@@ -894,8 +938,9 @@
               <span>Smart Lights</span>
             </div>
             <div class="card-body">
-              <div class="status-row"><span>Status</span><span id="dev-lights-status">Planned</span></div>
-              <p class="dev-note">Optional Philips Hue or HTTP integration in Settings. Native device control is planned, not shipped.</p>
+              <div class="status-row"><span>Status</span><span id="dev-lights-status">Not configured</span></div>
+              <div class="status-row"><span>Tonight</span><span id="dev-lights-tonight">&mdash;</span></div>
+              <p class="dev-note">Optional Philips Hue or HTTP integration. Nothing is controlled until you configure and successfully test it in Settings.</p>
               <div class="device-actions">
                 <button type="button" id="btn-dev-lights" class="btn-secondary btn-sm">Open Smart Lights settings</button>
               </div>
@@ -905,11 +950,12 @@
           <div class="status-card dev-wifi-card">
             <div class="card-header">
               <span class="icon">&#x1F6E1;&#xFE0F;</span>
-              <span>WiFi Guard</span>
+              <span>WiFi Guard <span class="status-pill status-local" style="font-size:8px">EXPERIMENTAL</span></span>
             </div>
             <div class="card-body">
-              <div class="status-row"><span>Status</span><span id="dev-wifi-status">Planned</span></div>
-              <p class="dev-note">Experimental router/webhook/adapter control in Settings. Native device control is planned, not shipped.</p>
+              <div class="status-row"><span>Status</span><span id="dev-wifi-status">Not configured</span></div>
+              <div class="status-row"><span>Tonight</span><span id="dev-wifi-tonight">&mdash;</span></div>
+              <p class="dev-note">Requires a compatible router or your own webhook. Windows Firewall on this PC cannot block a different phone or tablet on the LAN.</p>
               <div class="device-actions">
                 <button type="button" id="btn-dev-wifi" class="btn-secondary btn-sm">Open Wi-Fi Guard settings</button>
               </div>
@@ -919,24 +965,151 @@
       </div>
 
       <!-- STATS: Proof / run history panel -->
-      <div class="ns-main-panel" id="ns-panel-stats" style="display:none">
-        <section class="status-section proof-section">
-          <div class="dev-section-header">
-            <h2 class="section-title">Proof</h2>
-            <p class="dev-subtitle">What actually ran. Morning Proof and run receipts live here.</p>
-          </div>
-          <div class="status-card">
-            <div class="card-header">
-              <span class="icon">&#x1F4CB;</span>
-              <span>Session History</span>
+      <section class="tabs-section ns-main-panel" id="ns-panel-stats" style="display:none">
+        <div class="dev-section-header">
+          <h2 class="section-title">Proof</h2>
+          <p class="dev-subtitle">What actually ran. Last run, history, and activity live here.</p>
+        </div>
+
+        <div class="tabs-header">
+          <button class="tab-btn active" data-tab="proof-last">Last Run</button>
+          <button class="tab-btn" data-tab="proof-history">History</button>
+          <button class="tab-btn" data-tab="proof-activity">Activity</button>
+        </div>
+        <div class="tabs-content">
+
+          <div class="tab-panel active" id="tab-proof-last">
+            <div class="status-card">
+              <div class="card-header">
+                <span class="icon">&#x1F31E;</span>
+                <span>Last Run</span>
+              </div>
+              <div class="card-body" id="proof-last-run-summary">
+                <p class="empty-state-title">Nothing recorded yet.</p>
+                <p class="empty-state">Complete or Dry Run a Lights Out session and the result will show up here.</p>
+                <button type="button" class="btn-secondary btn-sm" id="btn-proof-last-go-tonight">Go to Tonight</button>
+              </div>
             </div>
-            <div class="card-body" id="stats-session-summary">
-              <p class="empty-state">No session history yet.</p>
+          </div>
+
+          <div class="tab-panel" id="tab-proof-history">
+            <div class="status-card">
+              <div class="card-header">
+                <span class="icon">&#x1F4CB;</span>
+                <span>Session History</span>
+              </div>
+              <div class="card-body" id="stats-session-summary">
+                <p class="empty-state-title">Nothing recorded yet.</p>
+                <p class="empty-state">Complete or Dry Run a Lights Out session and the result will show up here.</p>
+                <button type="button" class="btn-secondary btn-sm" id="btn-proof-go-tonight">Go to Tonight</button>
+              </div>
+            </div>
+            <button class="btn-secondary" id="btn-stats-view-ledger">View Full Ledger</button>
+          </div>
+
+          <!-- Activity: relocated from Schedule > Streaks. Presentation-level
+               move only -- same ids, same render functions, same persisted
+               data. Streaks/behavioral history is evidence of what actually
+               happened, which belongs under Proof, not under Schedule. -->
+          <div class="tab-panel" id="tab-proof-activity">
+            <div class="streaks-panel">
+              <!-- Honest empty state: before any completed run exists, a
+                   giant 0/--/0% and 30 empty grid cells read as a broken or
+                   inactive dashboard, not "nothing happened yet". Shown by
+                   default; renderStreaks() swaps to #activity-detail once
+                   summary.totalNights > 0, same on/off pattern as
+                   PROOF_EMPTY_STATE_HTML for Last Run/History. -->
+              <div class="status-card" id="activity-empty-state">
+                <div class="card-body" style="text-align:center;padding:24px 16px">
+                  <p class="empty-state-title">No completed nights yet.</p>
+                  <p class="empty-state">Run or Dry Run a Lights Out session tonight -- once you've completed 1, this page will start tracking your streak, routine score, and history. The full picture unlocks after 3+ completed runs.</p>
+                  <button type="button" class="btn-secondary btn-sm" id="btn-activity-go-tonight">Go to Tonight</button>
+                </div>
+              </div>
+
+              <div id="activity-detail" style="display:none">
+                <!-- Evidence summary, styled like Last Run/History's status-card
+                     header so Activity reads as another Proof surface, not the
+                     old Streaks page pasted into a tab. Score ring + streak
+                     stats sit side-by-side in one card instead of two stacked
+                     full-width heroes. -->
+                <div class="status-card activity-summary-card">
+                  <div class="card-header">
+                    <span class="icon">&#x1F4CA;</span>
+                    <span>Activity Summary</span>
+                  </div>
+                  <div class="activity-summary-body">
+                    <div class="sleep-score-hero" id="sleep-score-section">
+                      <div class="score-ring-wrap">
+                        <svg class="score-ring" viewBox="0 0 120 120">
+                          <circle class="score-ring-bg" cx="60" cy="60" r="52"/>
+                          <circle class="score-ring-fill" id="score-ring-fill" cx="60" cy="60" r="52" style="stroke-dashoffset:327"/>
+                        </svg>
+                        <div class="score-value" id="score-value">--</div>
+                      </div>
+                      <div class="score-label" id="score-label">Routine Consistency Score</div>
+                      <div class="score-breakdown" id="score-breakdown"></div>
+                    </div>
+
+                    <div class="activity-streak-col">
+                      <div class="streak-hero">
+                        <div class="streak-number" id="streak-count">0</div>
+                        <div class="streak-label">Completion Streak</div>
+                      </div>
+                      <div class="streak-stats">
+                        <div class="streak-stat">
+                          <span class="stat-value" id="streak-best">0</span>
+                          <span class="stat-label">Best</span>
+                        </div>
+                        <div class="streak-stat">
+                          <span class="stat-value" id="streak-total">0</span>
+                          <span class="stat-label">Completed Runs</span>
+                        </div>
+                        <div class="streak-stat">
+                          <span class="stat-value" id="streak-weekavg">--:--</span>
+                          <span class="stat-label">Avg Bedtime</span>
+                        </div>
+                        <div class="streak-stat">
+                          <span class="stat-value" id="streak-ontime">0%</span>
+                          <span class="stat-label">Before 11 PM (7d)</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="streaks-section-header">
+                  <h4>This Week</h4>
+                  <button class="btn btn-secondary" id="btn-copy-weekly-report" style="padding: 4px 10px; font-size: 11px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px;">&#x1F4CB; Copy Report</button>
+                </div>
+                <p class="weekly-report-text" id="weekly-report-text" style="font-size:11px;color:var(--text-secondary);white-space:pre-line;line-height:1.6;margin:0 0 16px"></p>
+                <div class="streaks-section-header">
+                  <h4>Completion History (Last 30 Days)</h4>
+                  <button class="btn btn-secondary" id="btn-export-streaks" style="padding: 4px 10px; font-size: 11px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px;">&#x1F4CB; Export Ledger</button>
+                </div>
+                <div class="sleep-history-grid" id="sleep-history-grid">
+                  <!-- Rendered as a contribution-style habit grid by JS -->
+                </div>
+                <div class="streaks-section-header">
+                  <h4>Trends</h4>
+                  <div class="trend-granularity-toggle" id="trend-granularity-toggle">
+                    <button class="trend-toggle-btn active" data-granularity="week" type="button">Weekly</button>
+                    <button class="trend-toggle-btn" data-granularity="month" type="button">Monthly</button>
+                  </div>
+                </div>
+                <div class="trend-list" id="trend-list">
+                  <!-- Populated by JS: aggregate runs/average completion time/before-11% per week or month -->
+                </div>
+                <h4 class="achievements-heading">Achievements</h4>
+                <div class="achievements-grid" id="achievements-grid">
+                  <!-- Populated by JS -->
+                </div>
+              </div>
             </div>
           </div>
-          <button class="btn-secondary" id="btn-stats-view-ledger">View Full Ledger</button>
-        </section>
-      </div>
+
+        </div>
+      </section>
 
   <!-- Settings: a primary dashboard view (sibling of Tonight/Modes/Schedule/
        Stats, shown via applyMainPanelVisibility('set')), not a modal dialog
@@ -997,6 +1170,7 @@
         </div>
 
         <div class="option-section" data-settings-category="general">
+        <p class="settings-category-intro">How Lights Out behaves when Windows starts. Everything else -- the timer, shutdown behavior, and features -- lives in the categories to the left.</p>
         <div class="option-group">
           <label class="checkbox-label">
             <input type="checkbox" id="chk-run-login">

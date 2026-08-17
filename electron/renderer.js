@@ -498,6 +498,9 @@ const els = {
   statusDot: document.getElementById('status-dot'),
   statusText: document.getElementById('status-text'),
   // Streaks
+  activityEmptyState: document.getElementById('activity-empty-state'),
+  activityDetail: document.getElementById('activity-detail'),
+  btnActivityGoTonight: document.getElementById('btn-activity-go-tonight'),
   streakCount: document.getElementById('streak-count'),
   streakBest: document.getElementById('streak-best'),
   streakTotal: document.getElementById('streak-total'),
@@ -693,6 +696,7 @@ const els = {
   panelDev: document.getElementById('ns-panel-dev'),
   panelStats: document.getElementById('ns-panel-stats'),
   statsSessionSummary: document.getElementById('stats-session-summary'),
+  proofLastRunSummary: document.getElementById('proof-last-run-summary'),
   btnStatsViewLedger: document.getElementById('btn-stats-view-ledger'),
   // Devices panel
   devPcStatus: document.getElementById('dev-pc-status'),
@@ -707,10 +711,27 @@ const els = {
   devFamilyStatus: document.getElementById('dev-family-status'),
   devFamilyPeers: document.getElementById('dev-family-peers'),
   devLightsStatus: document.getElementById('dev-lights-status'),
+  devLightsTonight: document.getElementById('dev-lights-tonight'),
   devWifiStatus: document.getElementById('dev-wifi-status'),
+  devWifiTonight: document.getElementById('dev-wifi-tonight'),
   btnDevCompanion: document.getElementById('btn-dev-companion'),
   btnDevLights: document.getElementById('btn-dev-lights'),
   btnDevWifi: document.getElementById('btn-dev-wifi'),
+  // Tonight's Automation (Tonight panel) + Also Scheduled (Schedule tab):
+  // discoverability summaries that mirror existing device/settings state.
+  taLightsStatus: document.getElementById('ta-lights-status'),
+  taWifiStatus: document.getElementById('ta-wifi-status'),
+  taAlarmStatus: document.getElementById('ta-alarm-status'),
+  asAutopilotStatus: document.getElementById('as-autopilot-status'),
+  asContentBlockerStatus: document.getElementById('as-content-blocker-status'),
+  // Schedule > Automations: real First Light feature card.
+  firstlightHeroState: document.getElementById('firstlight-hero-state'),
+  firstlightHeroSub: document.getElementById('firstlight-hero-sub'),
+  firstlightHeroBtn: document.getElementById('firstlight-hero-btn'),
+  // Schedule header: always-visible "Next tonight" truthful summary.
+  schNextBedtime: document.getElementById('sch-next-bedtime'),
+  schNextFirstlight: document.getElementById('sch-next-firstlight'),
+  schNextAutopilot: document.getElementById('sch-next-autopilot'),
   aboutModal: document.getElementById('about-modal'),
   aboutModalClose: document.getElementById('about-modal-close'),
   // Version display (footer + About modal). HTML carries a static fallback string;
@@ -756,10 +777,6 @@ const els = {
   btnCalGoogleFetch: document.getElementById('btn-cal-google-fetch'),
   btnCalOutlookFetch: document.getElementById('btn-cal-outlook-fetch'),
   btnCalCalendlyFetch: document.getElementById('btn-cal-calendly-fetch'),
-  nextEventCard: document.getElementById('next-event-card'),
-  nextEventName: document.getElementById('next-event-name'),
-  nextEventTime: document.getElementById('next-event-time'),
-  btnStartFromEvent: document.getElementById('btn-start-from-event')
 };
 
 const state = {
@@ -1469,6 +1486,44 @@ function applyMainPanelVisibility(panel) {
   // this function called directly).
   if (els.panelSet) els.panelSet.style.display = panel === 'set' ? '' : 'none';
   if (panel === 'sch') activateTopTab('schedule');
+  if (panel === 'stats') activateTopTab('proof-last');
+  // Compact header wordmark on every secondary destination -- Tonight is the
+  // one screen where the full "Lights Out / Bedtime Mode for Windows" hero
+  // treatment earns its vertical space; repeating it at full size on
+  // Devices/Schedule/Proof/Settings just pushed each page's real title down.
+  // Identity still exists on those pages via the chrome-header's brand mark.
+  document.body.classList.toggle('ns-on-tonight', panel === 'lib');
+}
+
+// Intentional empty state: explains what Proof is and offers one real,
+// existing action (navigate to Tonight) instead of a bare "no data" line.
+const PROOF_EMPTY_STATE_HTML = `
+  <p class="empty-state-title">Nothing recorded yet.</p>
+  <p class="empty-state">Complete or Dry Run a Lights Out session and the result will show up here.</p>
+  <button type="button" class="btn-secondary btn-sm" id="btn-proof-go-tonight">Go to Tonight</button>
+`;
+
+// Same action vocabulary as els.devPcAction/night-mode formatters elsewhere
+// in the app -- Proof must show the words a person chose, not the raw
+// power-action code, same standard as humanizeReceiptResult() (renderer-receipts.js).
+function humanizeReceiptAction(action) {
+  const labels = { shutdown: 'Shutdown', restart: 'Restart', sleep: 'Sleep', hibernate: 'Hibernate', lock: 'Lock', logout: 'Log out' };
+  return labels[action] || (action ? action[0].toUpperCase() + action.slice(1) : '—');
+}
+
+function renderLastRunSummary(mostRecent) {
+  if (!els.proofLastRunSummary) return;
+  if (!mostRecent) {
+    els.proofLastRunSummary.innerHTML = PROOF_EMPTY_STATE_HTML.replace('btn-proof-go-tonight', 'btn-proof-last-go-tonight');
+    return;
+  }
+  const when = mostRecent.startedAt ? new Date(mostRecent.startedAt).toLocaleString() : '—';
+  const dryRunBadge = mostRecent.dryRun ? ' <span class="status-pill status-local">Dry Run</span>' : '';
+  els.proofLastRunSummary.innerHTML = `
+    <div class="status-row"><span>When</span><span>${escapeHtml(when)}</span></div>
+    <div class="status-row"><span>Result</span><span>${escapeHtml(humanizeReceiptResult(mostRecent.result))}${dryRunBadge}</span></div>
+    <div class="status-row"><span>Action</span><span>${escapeHtml(humanizeReceiptAction(mostRecent.action))}</span></div>
+  `;
 }
 
 // Pulls only receipt/session history. Companion/phone status lives in Devices.
@@ -1477,17 +1532,32 @@ async function renderStatusPanel() {
   try {
     const receipts = await api.listReceipts?.(5);
     if (!receipts || !receipts.length) {
-      els.statsSessionSummary.innerHTML = '<p class="empty-state">No session history yet.</p>';
+      els.statsSessionSummary.innerHTML = PROOF_EMPTY_STATE_HTML;
+      renderLastRunSummary(null);
       return;
     }
     els.statsSessionSummary.innerHTML = receipts.map(r => {
       const when = r.startedAt ? new Date(r.startedAt).toLocaleDateString() : '—';
-      return `<div class="status-row"><span>${escapeHtml(when)}</span><span>${escapeHtml(r.result || '')} &middot; ${escapeHtml(r.action || '')}</span></div>`;
+      const dryRunBadge = r.dryRun ? ' <span class="status-pill status-local">Dry Run</span>' : '';
+      return `<div class="status-row"><span>${escapeHtml(when)}</span><span>${escapeHtml(humanizeReceiptResult(r.result))} &middot; ${escapeHtml(humanizeReceiptAction(r.action))}${dryRunBadge}</span></div>`;
     }).join('');
+    renderLastRunSummary(receipts[0]);
   } catch {
-    els.statsSessionSummary.innerHTML = '<p class="empty-state">No session history yet.</p>';
+    els.statsSessionSummary.innerHTML = PROOF_EMPTY_STATE_HTML;
+    renderLastRunSummary(null);
   }
 }
+
+// Delegated so it survives renderStatusPanel() replacing #stats-session-summary's
+// and #proof-last-run-summary's innerHTML (the button nodes are recreated on
+// every empty-state render).
+els.statsSessionSummary?.addEventListener('click', (e) => {
+  if (e.target.closest('#btn-proof-go-tonight')) handleSidebarNavigation('lib');
+});
+els.proofLastRunSummary?.addEventListener('click', (e) => {
+  if (e.target.closest('#btn-proof-last-go-tonight')) handleSidebarNavigation('lib');
+});
+els.btnActivityGoTonight?.addEventListener('click', () => handleSidebarNavigation('lib'));
 
 async function handleSidebarNavigation(tab, { persist = true } = {}) {
   let handled = false;
@@ -1584,17 +1654,30 @@ function updateCompanionStatus(rc) {
   if (els.devCompanionClients) els.devCompanionClients.textContent = String(rc?.clients || 0);
 }
 
-// Update the planned-device cards (Smart Lights / WiFi Guard) from their configs.
+// Update the planned-device cards (Smart Lights / WiFi Guard) from their
+// configs. Also drives the Tonight's Automation summary (els.taLightsStatus /
+// els.taWifiStatus) so both surfaces show the same real state.
 function updateDevicePlanCards(light, wifi) {
-  if (els.devLightsStatus) {
-    els.devLightsStatus.textContent = (light?.enabled && light?.provider && light.provider !== 'none')
-      ? `Configured (${light.provider})`
-      : 'Planned';
+  const lightsReady = light?.enabled && light?.provider && light.provider !== 'none';
+  const wifiReady = wifi?.enabled && wifi?.configured;
+  const lightsText = lightsReady ? `Configured (${light.provider})` : 'Not configured';
+  const wifiText = wifiReady ? `Configured (${wifi.provider})` : 'Not configured';
+  if (els.devLightsStatus) els.devLightsStatus.textContent = lightsText;
+  if (els.taLightsStatus) els.taLightsStatus.textContent = lightsText;
+  if (els.devWifiStatus) els.devWifiStatus.textContent = wifiText;
+  if (els.taWifiStatus) els.taWifiStatus.textContent = wifiText;
+  // "Tonight" line: what will actually happen. When not configured, Status
+  // already says so above -- repeating "not set up" a second row down read
+  // as two rows saying the same thing, so this collapses to a plain dash.
+  if (els.devLightsTonight) {
+    els.devLightsTonight.textContent = lightsReady
+      ? `Dims at wind-down via ${light.provider}`
+      : '\u2014';
   }
-  if (els.devWifiStatus) {
-    els.devWifiStatus.textContent = (wifi?.enabled && wifi?.configured)
-      ? `Configured (${wifi.provider})`
-      : 'Planned';
+  if (els.devWifiTonight) {
+    els.devWifiTonight.textContent = wifiReady
+      ? `Blocks network at dim phase (${wifi.provider})`
+      : '\u2014';
   }
 }
 
@@ -1646,6 +1729,12 @@ function openDeviceSettings(category) {
 els.btnDevCompanion?.addEventListener('click', () => openDeviceSettings('phone'));
 els.btnDevLights?.addEventListener('click', () => openDeviceSettings('wind-down'));
 els.btnDevWifi?.addEventListener('click', () => openDeviceSettings('protection'));
+
+// Tonight's Automation (Tonight panel) + Also Scheduled (Schedule tab) Edit
+// links all route into the existing Settings categories via the same helper.
+document.querySelectorAll('.ta-edit-btn').forEach(btn => {
+  btn.addEventListener('click', () => openDeviceSettings(btn.dataset.taTarget));
+});
 
 function formatIdleClockTime(now, compact = false) {
   const use12Hour = state.clockFormat === '12h';
@@ -2406,6 +2495,15 @@ function showStreakCelebration(count) {
 
 function renderStreaks(summary, catalog, report, sleepScore, history, trend) {
   if (!summary) return;
+
+  // Honest empty state: before any completed run, a 0/--/0%/30-empty-cells
+  // dashboard reads as inactive or broken, not "nothing happened yet". Lead
+  // with a plain explanation instead, then reveal the full analytics once
+  // there is at least one completed night.
+  const hasActivity = (summary.totalNights || 0) > 0;
+  if (els.activityEmptyState) els.activityEmptyState.style.display = hasActivity ? 'none' : '';
+  if (els.activityDetail) els.activityDetail.style.display = hasActivity ? '' : 'none';
+  if (!hasActivity) return;
 
   // App-use routine score. This is deliberately not presented as measured sleep.
   if (sleepScore && sleepScore.score !== null) {
@@ -3284,9 +3382,11 @@ if (els.btnClearReceipts) {
   // Armed Night Mode clear button.
   document.getElementById('armed-mode-clear')?.addEventListener('click', clearArmedNightMode);
 
-  // Home streak callout jumps to the Streaks tab for the full breakdown.
+  // Home streak callout jumps to Proof > Activity for the full breakdown
+  // (Streaks now lives there, not under Schedule).
   els.streakCallout?.addEventListener('click', () => {
-    document.querySelector('.tab-btn[data-tab="streaks"]')?.click();
+    handleSidebarNavigation('stats');
+    activateTopTab('proof-activity');
   });
 
   document.getElementById('btn-celebration-dismiss')?.addEventListener('click', () => {
@@ -3976,6 +4076,10 @@ async function loadInitialData() {
     // launch -- reopening Settings always showed them unchecked/default even
     // when actually enabled, and re-saving the Options modal from that state
     // would have silently disabled them.
+    // Drive the Tonight's Automation summary from the same configs on
+    // launch, so it doesn't require a visit to Devices to show real state.
+    updateDevicePlanCards(lightConfig, wifiConfig);
+
     if (wifiConfig) applyWifiGuardSettings(wifiConfig);
     if (cbConfig) applyContentBlockerSettings(cbConfig);
     if (accConfig) applyAccountabilitySettings(accConfig);

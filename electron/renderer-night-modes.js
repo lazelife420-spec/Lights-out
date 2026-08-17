@@ -35,42 +35,66 @@ function formatAction(action) {
   return map[action] || action;
 }
 
+function buildCard(mode) {
+  const card = document.createElement('div');
+  card.className = 'nm-card';
+  if (mode.status !== 'ready') card.classList.add('disabled');
+  if (mode.id === nmSelectedId) card.classList.add('selected');
+  card.dataset.modeId = mode.id;
+
+  const artwork = ARTWORK_MAP[mode.artworkId] || '\u{1F319}';
+  const statusTag = mode.status !== 'ready' ? getStatusTagHtml(mode.status) : '';
+
+  card.innerHTML = `
+    <div class="nm-card-artwork">${artwork}</div>
+    <div class="nm-card-title">${escapeHtml(mode.title)}</div>
+    <div class="nm-card-subtitle">${escapeHtml(mode.subtitle)}</div>
+    <div class="nm-card-tags">
+      <span class="nm-card-tag">${formatDuration(mode.timer.durationSeconds)}</span>
+      <span class="nm-card-tag">${formatAction(mode.timer.action)}</span>
+      ${statusTag}
+    </div>
+  `;
+
+  card.setAttribute('role', 'button');
+  card.setAttribute('tabindex', '0');
+  card.setAttribute('aria-label', `${mode.title}${mode.status !== 'ready' ? ' (unavailable)' : ''}`);
+  if (mode.id === nmSelectedId) card.setAttribute('aria-pressed', 'true');
+  card.addEventListener('click', () => selectMode(mode.id));
+  card.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectMode(mode.id); }
+  });
+  return card;
+}
+
+// Grouped by real catalog status, not invented tiers: "Ready to use" (status
+// === 'ready') vs "Requires setup / coming later" (everything else). This
+// gives the library real visual hierarchy instead of one flat undifferentiated
+// grid, without fabricating a "recommended" mode or a "My Modes" tier that
+// the current catalog/profiles data doesn't support.
 function renderCards() {
   const grid = document.getElementById('nm-cards-grid');
   if (!grid) return;
   grid.innerHTML = '';
 
-  for (const mode of nmCatalogue) {
-    const card = document.createElement('div');
-    card.className = 'nm-card';
-    if (mode.status !== 'ready') card.classList.add('disabled');
-    if (mode.id === nmSelectedId) card.classList.add('selected');
-    card.dataset.modeId = mode.id;
+  const ready = nmCatalogue.filter(mode => mode.status === 'ready');
+  const notReady = nmCatalogue.filter(mode => mode.status !== 'ready');
 
-    const artwork = ARTWORK_MAP[mode.artworkId] || '\u{1F319}';
-    const statusTag = mode.status !== 'ready' ? getStatusTagHtml(mode.status) : '';
+  const renderGroup = (title, modes, unready) => {
+    if (!modes.length) return;
+    const heading = document.createElement('div');
+    heading.className = 'nm-group-heading';
+    heading.textContent = title;
+    grid.appendChild(heading);
 
-    card.innerHTML = `
-      <div class="nm-card-artwork">${artwork}</div>
-      <div class="nm-card-title">${escapeHtml(mode.title)}</div>
-      <div class="nm-card-subtitle">${escapeHtml(mode.subtitle)}</div>
-      <div class="nm-card-tags">
-        <span class="nm-card-tag">${formatDuration(mode.timer.durationSeconds)}</span>
-        <span class="nm-card-tag">${formatAction(mode.timer.action)}</span>
-        ${statusTag}
-      </div>
-    `;
+    const row = document.createElement('div');
+    row.className = 'nm-group-row' + (unready ? ' nm-group-unready' : '');
+    modes.forEach(mode => row.appendChild(buildCard(mode)));
+    grid.appendChild(row);
+  };
 
-    card.setAttribute('role', 'button');
-    card.setAttribute('tabindex', '0');
-    card.setAttribute('aria-label', `${mode.title}${mode.status !== 'ready' ? ' (unavailable)' : ''}`);
-    if (mode.id === nmSelectedId) card.setAttribute('aria-pressed', 'true');
-    card.addEventListener('click', () => selectMode(mode.id));
-    card.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectMode(mode.id); }
-    });
-    grid.appendChild(card);
-  }
+  renderGroup('Ready to use', ready, false);
+  renderGroup('Requires setup / coming later', notReady, true);
 }
 
 function getStatusTagHtml(status) {

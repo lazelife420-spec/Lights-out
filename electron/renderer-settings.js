@@ -253,6 +253,8 @@ function applyContentBlockerSettings(cb) {
     els.contentTestResult.textContent = cb.setupError;
     els.contentTestResult.style.color = '#ff9800';
   }
+  // Drive the "Also Scheduled" summary on the Schedule tab.
+  if (els.asContentBlockerStatus) els.asContentBlockerStatus.textContent = cb.enabled ? 'On' : 'Off';
 }
 
 // Content Blocker recurring schedules -- independent of the shutdown timer's

@@ -307,6 +307,13 @@ async function refreshAutopilotStatus() {
       }
       if (els.autopilotSample) els.autopilotSample.textContent = `${status.learned.sampleSize} nights`;
     }
+    // Drive the "Also automated" summary on the Schedule > Automations tab.
+    const autopilotText = status.enabled
+      ? (status.learned?.bedtime ? `On \u00b7 ${status.learned.bedtime}` : 'On')
+      : 'Off';
+    if (els.asAutopilotStatus) els.asAutopilotStatus.textContent = autopilotText;
+    // Schedule header "Next tonight" summary.
+    if (els.schNextAutopilot) els.schNextAutopilot.textContent = `Autopilot: ${autopilotText.toLowerCase()}`;
   } catch {}
 }
 /* exported setupRemoteControlHandlers, renderFamilyPeers, renderWifiDevices, refreshTaxStats, refreshAutopilotStatus */

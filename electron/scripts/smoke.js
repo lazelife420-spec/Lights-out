@@ -754,10 +754,12 @@ check('renderer: LIB/SCH/DEV/STATS panels are mutually exclusive, single-visible
   assertMatch(htmlSrc, /id="ns-panel-stats"[^>]*style="display:none"/, 'PROOF panel should start hidden in HTML');
 });
 
-check('renderer: PROOF panel shows only real session/receipt history, honest empty state', () => {
+check('renderer: PROOF panel shows only real session/receipt history, intentional honest empty state', () => {
   assertMatch(rendererSrc, /async function renderStatusPanel\(\) \{/, 'status panel renderer missing');
   assertMatch(rendererSrc, /api\.listReceipts\?\.\(5\)/, 'PROOF should read real receipt history, not fabricate it');
-  assertMatch(rendererSrc, /No session history yet\./, 'PROOF must show an honest empty state when there is no history');
+  assertMatch(rendererSrc, /Nothing recorded yet\./, 'PROOF must show an intentional, explained empty state when there is no history');
+  assertMatch(rendererSrc, /id="btn-proof-go-tonight"/, 'PROOF empty state must offer a real, existing action (Go to Tonight)');
+  assertMatch(rendererSrc, /handleSidebarNavigation\('lib'\)/, 'Go to Tonight must route through the real sidebar navigation, not a fabricated action');
   // Companion/phone status belongs to the Devices panel, not Proof.
   assert(!rendererSrc.includes('statsCompanionMode'), 'Proof panel should not retain statsCompanionMode binding');
   assert(!rendererSrc.includes('statsCompanionStatus'), 'Proof panel should not retain statsCompanionStatus binding');

@@ -120,21 +120,6 @@ function setupCalendarHandlers() {
   els.btnCalOutlookFetch?.addEventListener('click', () => fetchAndRenderEvents());
   els.btnCalCalendlyFetch?.addEventListener('click', () => fetchAndRenderEvents());
 
-  // Start from event.
-  els.btnStartFromEvent?.addEventListener('click', () => {
-    if (calNextEvent) {
-      const now = new Date();
-      const evtStart = new Date(calNextEvent.start);
-      const diffSec = Math.max(0, Math.round((evtStart - now) / 1000));
-      if (diffSec > 0) {
-        api.startTimer({ durationSeconds: diffSec, action: calNextEvent.action || 'shutdown' });
-        notify(`Timer set for ${calNextEvent.summary}`, 'success');
-      } else {
-        notify('Event has already passed', 'warning');
-      }
-    }
-  });
-
   // Load initial config.
   loadCalendarConfig();
   fetchAndRenderEvents();
@@ -322,7 +307,7 @@ function renderCalendarEvents() {
 
   if (!upcoming.length) {
     els.calendarEvents.innerHTML = '<div style="color:var(--text-muted);font-size:11px;padding:8px">No upcoming events found.</div>';
-    if (els.nextEventCard) els.nextEventCard.style.display = 'none';
+    if (els.schNextBedtime) els.schNextBedtime.textContent = 'No bedtime rule set';
     return;
   }
 
@@ -356,19 +341,15 @@ function renderCalendarEvents() {
     });
   });
 
-  // Next event card.
-  if (els.nextEventCard && calNextEvent) {
-    els.nextEventCard.style.display = '';
-    const start = new Date(calNextEvent.start);
-    if (els.nextEventName) els.nextEventName.textContent = calNextEvent.summary;
-    if (els.nextEventTime) {
-      const isToday = start.toDateString() === now.toDateString();
-      const isTomorrow = new Date(now.getTime() + 86400000).toDateString() === start.toDateString();
-      const timeStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-      if (isToday) els.nextEventTime.textContent = `Today at ${timeStr}`;
-      else if (isTomorrow) els.nextEventTime.textContent = `Tomorrow at ${timeStr}`;
-      else els.nextEventTime.textContent = `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at ${timeStr}`;
-    }
+  // Schedule header "Next tonight" summary -- same real next-event data,
+  // just mirrored into the always-visible header above the sub-tabs.
+  if (els.schNextBedtime && calNextEvent) {
+    const start2 = new Date(calNextEvent.start);
+    const isToday2 = start2.toDateString() === now.toDateString();
+    const isTomorrow2 = new Date(now.getTime() + 86400000).toDateString() === start2.toDateString();
+    const timeStr2 = start2.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const when2 = isToday2 ? `today at ${timeStr2}` : isTomorrow2 ? `tomorrow at ${timeStr2}` : `${start2.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at ${timeStr2}`;
+    els.schNextBedtime.textContent = `${calNextEvent.summary} \u2014 ${when2}`;
   }
 }
 /* exported importCalendarFile, importCalendarUrl, setupCalendarHandlers */

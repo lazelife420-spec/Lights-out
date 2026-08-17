@@ -52,6 +52,18 @@ function setupAlarmHandlers() {
   refreshAlarmStatus();
 }
 
+// "HH:MM" (24h, as stored by <input type="time">) -> "7:30 AM". Falls back
+// to the raw string if it isn't in that shape, so it never fabricates a time.
+function formatClockTime(hhmm) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || ''));
+  if (!m) return hhmm || 'scheduled';
+  let h = parseInt(m[1], 10);
+  const min = m[2];
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${h}:${min} ${suffix}`;
+}
+
 async function refreshAlarmStatus() {
   try {
     const status = await api.getWakeAlarmStatus();
@@ -63,6 +75,33 @@ async function refreshAlarmStatus() {
         els.alarmStatus.textContent = 'No First Light scheduled';
         els.alarmStatus.style.color = 'var(--text-muted)';
       }
+    }
+    // Drive the Tonight's Automation summary from the same real status, so
+    // First Light is discoverable outside Settings.
+    const summaryText = status.active ? `First Light at ${status.alarmTime || 'scheduled'}` : 'Not set';
+    if (els.taAlarmStatus) els.taAlarmStatus.textContent = summaryText;
+
+    // Schedule > Automations: a real First Light feature card instead of a
+    // buried settings line.
+    if (els.firstlightHeroState) {
+      els.firstlightHeroState.textContent = status.active
+        ? formatClockTime(status.alarmTime)
+        : 'No morning alarm set';
+    }
+    if (els.firstlightHeroSub) {
+      els.firstlightHeroSub.textContent = status.active
+        ? 'Morning alarm ready.'
+        : 'Set a morning wake alarm for tomorrow.';
+    }
+    if (els.firstlightHeroBtn) {
+      els.firstlightHeroBtn.textContent = status.active ? 'Edit' : 'Set First Light';
+    }
+
+    // Schedule header "Next tonight" summary.
+    if (els.schNextFirstlight) {
+      els.schNextFirstlight.textContent = status.active
+        ? `First Light: ${formatClockTime(status.alarmTime)}`
+        : 'First Light: not set';
     }
   } catch {}
 }

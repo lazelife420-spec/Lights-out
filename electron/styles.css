@@ -520,9 +520,17 @@ body.warm-shift .ambient-canvas {
 }
 
 .empty-state {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
-  padding: 8px 0;
+  padding: 0 0 10px;
+  line-height: 1.5;
+}
+
+.empty-state-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 4px 0 4px;
 }
 
 /* Timer Section (hero) */
@@ -959,10 +967,20 @@ input:disabled {
   padding: 0 0 4px 0;
 }
 
+/* Page title consistency: Devices/Proof headers use this same combo as
+   Modes' .nm-library-title/.nm-library-subtitle so every top-level
+   destination's title reads at the same size and weight. */
+.section-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+}
+
 .dev-subtitle {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-muted);
-  margin: 2px 0 0;
+  margin: 0;
 }
 
 .dev-note {
@@ -991,6 +1009,49 @@ input:disabled {
 
 .device-actions {
   margin-top: 10px;
+}
+
+/* Tonight's Automation (Tonight panel) / Also Scheduled (Schedule tab):
+   compact discoverability rows that link into existing Settings categories
+   without duplicating configuration UI. */
+.ta-row-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ta-edit-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--accent);
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.ta-edit-btn:hover {
+  background: rgba(212, 165, 10, 0.08);
+}
+
+.ta-experimental-pill {
+  margin-left: 4px;
+  font-size: 8px;
+  vertical-align: middle;
+}
+
+.also-scheduled-section {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.also-scheduled-header {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
 }
 
 .status-card {
@@ -1110,6 +1171,114 @@ input:disabled {
 .tab-btn.active::after {
   width: 60%;
   box-shadow: 0 0 10px rgba(118,201,255,0.6);
+}
+
+/* Visual-only divider inside .tabs-header marking Quick Setup/Focus/Countdown
+   as a secondary "Tools" group -- not equivalent to Schedule/Automations/Clock.
+   Was a bare border-left + tiny uppercase word squeezed between tab buttons,
+   which read as a separator hacked into a tab bar. Gets its own full-height
+   rail + label pill so it reads as an intentional group heading instead. */
+.tab-divider {
+  flex: 0 0 auto;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  margin: 0 4px;
+  border-left: 1px solid var(--border-color);
+}
+.tab-divider::before {
+  content: attr(data-label);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--bg-hover);
+  padding: 3px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* Schedule header: always-visible "Next tonight" truthful summary. */
+.sch-next-summary {
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border-color);
+}
+
+.sch-next-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.sch-next-rows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.sch-next-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.sch-next-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* First Light: a real feature card, not a buried settings line. */
+.automation-hero-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255,183,77,0.08) 0%, rgba(255,183,77,0.02) 100%);
+  border: 1px solid rgba(255,183,77,0.2);
+  margin-bottom: 16px;
+}
+
+.ah-icon {
+  font-size: 32px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.ah-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.ah-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.ah-state {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.ah-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
 }
 
 .tabs-content {
@@ -1647,6 +1816,25 @@ body.phase-lastlight .cockpit {
   gap: 6px;
 }
 
+/* Settings polish: give each option group real card presence instead of a
+   bare label+control floating in open space -- most visible on sparse
+   categories (General is a single checkbox) where the surrounding panel
+   still fills the full dashboard height (protected by smoke.js so Settings
+   never regresses back into a small centered dialog). */
+.settings-categories .option-group {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md, 8px);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+.settings-category-intro {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 14px;
+  max-width: 60ch;
+}
+
 .option-group label {
   font-size: 11px;
   color: var(--text-secondary);
@@ -1796,29 +1984,49 @@ body.phase-lastlight .cockpit {
   background: #b63a3a;
 }
 
-/* Streaks + Insights */
+/* Streaks + Insights (Proof > Activity) */
 .streaks-panel {
   padding: 8px 4px;
 }
+
+/* Activity summary card: score ring + streak stats side-by-side in one
+   status-card, matching Proof's Last Run/History card language instead of
+   two stacked full-width gamification heroes. */
+.activity-summary-card .card-body,
+.activity-summary-body {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.activity-streak-col {
+  flex: 1;
+  min-width: 220px;
+}
+
 /* Sleep Score hero ring */
 .sleep-score-hero {
   text-align: center;
-  padding: 12px 0 8px;
+  padding: 4px 0;
+  flex-shrink: 0;
 }
 .score-ring-wrap {
   position: relative;
-  width: 120px;
-  height: 120px;
-  margin: 0 auto 8px;
+  width: 92px;
+  height: 92px;
+  margin: 0 auto 6px;
 }
 .score-ring {
-  width: 120px;
-  height: 120px;
+  width: 92px;
+  height: 92px;
   transform: rotate(-90deg);
 }
 .score-ring-bg {
   fill: none;
-  stroke: var(--bg-card);
+  /* Was var(--bg-card): invisible once the ring moved inside a status-card
+     with a near-identical background (Proof > Activity restyle). Needs
+     contrast against the card itself, not just the page background. */
+  stroke: rgba(255,255,255,0.09);
   stroke-width: 8;
 }
 .score-ring-fill {
@@ -1835,24 +2043,29 @@ body.phase-lastlight .cockpit {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 36px;
+  font-size: 26px;
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1;
 }
 .score-label {
-  font-size: 12px;
+  font-size: 10.5px;
   font-weight: 600;
   color: var(--accent-amber);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.06em;
   margin-bottom: 8px;
+  max-width: 180px;
+  margin-left: auto;
+  margin-right: auto;
 }
 .score-breakdown {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 0 16px;
+  padding: 0;
+  max-width: 200px;
+  margin: 0 auto;
 }
 .score-bar {
   display: flex;
@@ -1885,32 +2098,33 @@ body.phase-lastlight .cockpit {
 }
 
 .streak-hero {
-  text-align: center;
-  padding: 16px 0 12px;
+  text-align: left;
+  padding: 0 0 10px;
 }
 .streak-number {
-  font-size: 56px;
+  font-size: 34px;
   font-weight: 700;
   color: var(--accent-amber);
   line-height: 1;
+  display: inline-block;
 }
 .streak-label {
-  font-size: 11px;
+  font-size: 10.5px;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.06em;
   color: var(--text-muted);
-  margin-top: 4px;
+  margin-top: 2px;
 }
 .streak-stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  margin: 12px 0;
+  margin: 0;
 }
 .streak-stat {
   background: var(--bg-card);
   border-radius: 6px;
-  padding: 10px 8px;
+  padding: 8px 8px;
   text-align: center;
 }
 .stat-value {
@@ -2427,6 +2641,34 @@ body.mini-mode .action-btn {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 10px;
+}
+
+/* Tonight's "Quick plans": compact chips, not full-weight cards, so Saved
+   Profiles reads as a shortcut row under the plan/timer, not a second
+   equally-weighted section (management UI keeps the full grid via the
+   Manage Profiles modal, untouched below). */
+.ns-context-band .profiles-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ns-context-band .profile-card {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 999px;
+}
+
+.ns-context-band .profile-card .profile-name {
+  font-size: 12.5px;
+}
+
+.ns-context-band .profile-card .profile-hint {
+  font-size: 10.5px;
+  color: var(--text-muted);
 }
 
 .profile-card {
@@ -4320,20 +4562,29 @@ body.mini-mode .ll-line {
    All .ns-* classes. No existing selectors modified.
    ========================================================================== */
 
-/* ── Sidebar icon rail ── */
+/* ── Sidebar: a real labeled destination rail at normal desktop widths.
+   Collapses to an icon-only rail only below --ns-sidebar-collapse-width,
+   which is narrower than the app's enforced minimum window width (900px
+   per windowGeometry.NORMAL_MINIMUM), so the collapse is a genuine
+   narrow-window fallback, not the normal desktop state. ── */
+:root {
+  --ns-sidebar-width: 208px;
+  --ns-sidebar-collapse-width: 84px;
+}
+
 .ns-sidebar {
   position: absolute;
   top: 0;
   left: 0;
   bottom: 0;
-  width: 80px;
+  width: var(--ns-sidebar-width);
   z-index: 90;
   display: none;                        /* hidden until .ns-lobby active */
   flex-direction: column;
-  align-items: center;
-  background: rgba(8, 12, 22, 0.88);
+  align-items: stretch;
+  background: rgba(8, 12, 22, 0.92);
   border-right: 1px solid rgba(255,255,255,0.06);
-  padding: 12px 0;
+  padding: 18px 12px;
   gap: 0;
 }
 
@@ -4342,62 +4593,73 @@ body.ns-lobby .ns-sidebar {
 }
 
 body.ns-lobby .dashboard {
-  padding-left: calc(80px + var(--section-gap));
+  padding-left: calc(var(--ns-sidebar-width) + var(--section-gap));
 }
 
 .ns-sidebar-logo {
-  width: 40px;
-  height: 40px;
-  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 6px;
+  margin-bottom: 24px;
 }
 
 .ns-sidebar-logo img {
-  width: 100%;
-  height: 100%;
+  width: 30px;
+  height: 30px;
   object-fit: contain;
+  flex-shrink: 0;
+}
+
+.ns-sidebar-wordmark {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 .ns-sidebar-nav {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  gap: 3px;
   flex: 1;
 }
 
 .ns-sidebar-footer {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  gap: 3px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.07);
 }
 
 .ns-nav-item {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
-  gap: 3px;
-  width: 56px;
-  padding: 8px 4px;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
   background: transparent;
   border: none;
   border-radius: 10px;
   cursor: pointer;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   transition: all 0.15s ease;
 }
 
 .ns-nav-item:hover {
   background: rgba(255,255,255,0.06);
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 
 .ns-nav-item:focus-visible {
   outline: 2px solid rgba(107, 211, 255, 0.9);
   outline-offset: 2px;
   background: rgba(255,255,255,0.08);
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 
 .ns-nav-item.active {
@@ -4409,13 +4671,69 @@ body.ns-lobby .dashboard {
 .ns-nav-icon {
   font-size: 18px;
   line-height: 1;
+  flex-shrink: 0;
 }
 
 .ns-nav-label {
-  font-size: 9px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+/* Icon-only fallback: only kicks in below the sidebar's own collapse
+   width, i.e. only when the window is genuinely too narrow for labels --
+   not the normal desktop state. */
+@media (max-width: 720px) {
+  :root {
+    --ns-sidebar-width: var(--ns-sidebar-collapse-width);
+  }
+  .ns-sidebar {
+    align-items: center;
+    padding: 14px 8px;
+  }
+  .ns-sidebar-logo {
+    flex-direction: column;
+    gap: 4px;
+    padding: 0;
+  }
+  .ns-sidebar-wordmark {
+    display: none;
+  }
+  .ns-nav-item {
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    padding: 8px 4px;
+  }
+  .ns-nav-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+}
+
+/* ── Context band: groups Saved Profiles, Session/Power status, and
+   Tonight's Automation under one lighter-weight heading so they read as
+   supporting context rather than three sections competing with the hero
+   plan card above them. ── */
+.ns-context-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--section-gap);
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.015);
+  border: 1px solid rgba(255,255,255,0.04);
+}
+
+.ns-context-band-label {
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
+  color: var(--text-muted);
+  opacity: 0.75;
 }
 
 /* ── Header wordmark: its own row below .chrome-header (not absolutely
@@ -4425,8 +4743,8 @@ body.ns-lobby .dashboard {
   display: none;                        /* hidden until .ns-lobby active */
   flex-direction: column;
   align-items: center;
-  gap: 1px;
-  padding: 6px 0 2px;
+  gap: 3px;
+  padding: 14px 0 6px;
   pointer-events: none;
   user-select: none;
 }
@@ -4435,25 +4753,45 @@ body.ns-lobby .ns-header-wordmark {
   display: flex;
 }
 
-.ns-wordmark-icon {
+/* Compact variant for every secondary destination (Modes/Schedule/Devices/
+   Proof/Settings) -- ns-lobby just means "not mid-run" (governs the whole
+   idle dashboard chrome, sidebar included) and is intentionally left alone;
+   this is a second, independent axis for "which page", so the sidebar/
+   focus-mode behavior this class already protects is untouched. */
+body.ns-lobby:not(.ns-on-tonight) .ns-header-wordmark {
+  padding: 6px 0 2px;
+  gap: 0;
+}
+body.ns-lobby:not(.ns-on-tonight) .ns-wordmark-icon {
   width: 20px;
   height: 20px;
+}
+body.ns-lobby:not(.ns-on-tonight) .ns-wordmark-title {
+  font-size: 14px;
+}
+body.ns-lobby:not(.ns-on-tonight) .ns-wordmark-sub {
+  display: none;
+}
+
+.ns-wordmark-icon {
+  width: 36px;
+  height: 36px;
   object-fit: contain;
-  margin-bottom: 1px;
+  margin-bottom: 2px;
 }
 
 .ns-wordmark-title {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 22px;
+  font-weight: 800;
   color: var(--text-primary);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   line-height: 1;
 }
 
 .ns-wordmark-sub {
-  font-size: 9px;
+  font-size: 12px;
   color: var(--text-muted);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.03em;
 }
 
 /* ── Tonight's Run hero card ── */
@@ -4969,11 +5307,12 @@ body.mini-mode .ns-proof-section { display: none !important; }
   margin: 20px 0 8px;
 }
 .streaks-section-header h4 {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: var(--text-secondary);
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 0;
 }
 .sleep-history-grid {
   display: grid;
@@ -5291,11 +5630,29 @@ body.fullscreen-clock-mode .fullscreen-clock-exit {
   align-items: flex-start;
 }
 .nm-cards-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  flex: 1;
+  min-width: 0;
+}
+.nm-group-heading {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 12px;
+  padding-top: 4px;
+}
+.nm-group-heading:first-child {
+  padding-top: 0;
+}
+.nm-group-row {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 14px;
-  flex: 1;
-  min-width: 0;
+}
+.nm-group-row.nm-group-unready .nm-card {
+  opacity: 0.7;
 }
 .nm-card {
   background: var(--card-bg, rgba(255,255,255,0.03));
