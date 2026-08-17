@@ -1,11 +1,12 @@
 # Lights Out PC
 
-**Bedtime Mode for Windows — a shutdown timer that gets out of your way until it matters.**
+**Bedtime Mode for Windows — a PC shutdown ritual and phone companion that gets out of your way until it matters.**
 A [Proof Foundry](https://prooffoundry.com) product.
 
 Set a time. Press START. Lights Out PC walks you through a calm wind-down, then a
-cinematic Last Light final countdown before your PC shuts off. Emergency cancel
-is always available. No surprise force-quits. No cloud account. No drama.
+cinematic Last Light final countdown before your PC shuts off. Control the timer
+from your phone with the optional companion. Emergency cancel is always available.
+No surprise force-quits. No cloud account. No drama.
 
 [![Download v11.1.0](https://img.shields.io/badge/Download-v11.1.0-blue?style=for-the-badge)](https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.1.0)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
@@ -43,8 +44,10 @@ keystroke away (`Ctrl+Shift+S`).
 - **No cloud.** Receipts and settings live in `AppData`, never a server.
 
 One outbound connection by default: a periodic check against the GitHub Releases
-API for a newer version. No personal data. No usage analytics. Smart-light,
-calendar, and Wi-Fi features only reach out when you configure them.
+API for a newer version. No personal data. No usage analytics. Calendar features
+only reach out when you configure them. Smart-light and Wi-Fi/router controls
+are not yet implemented; optional LuxGrid RGB event integration can react to
+Lights Out events locally.
 
 ### Proof-backed releases
 
@@ -83,13 +86,20 @@ contributor handoff.
   restored on launch.
 - **Customization console** - accent color, theme (Midnight / Carbon / Aurora),
   ring style, window opacity, and sound volume, applied live.
-- **Smart Lights** - Philips Hue or HTTP webhook (gradual dim, warm shift, off-at-end).
+- **Smart Lights (planned / experimental)** - Philips Hue or HTTP webhook code
+  exists (gradual dim, warm shift, off-at-end), but it is not runtime-proven
+  with real hardware and is not treated as a shipped feature. Optional **LuxGrid
+  RGB** event integration can react to Lights Out events.
 - **Saved profiles** - save the current timer as a profile in one click, schedule
   by duration or a specific date/time, and right-click a profile to Start, Edit, or
   Delete it. Plus **calendar scheduling** (.ics import).
 - **Phone Companion Easy Connect** - control Lights Out from your phone on the same
   Wi-Fi via a simple QR scan + pairing code. Off by default, token-protected, and never
-  exposes LAN access in "This PC only" mode.
+  exposes LAN access in "This PC only" mode. The phone companion cannot force a
+  shutdown, log out, or hibernate.
+- **Whole-room bedtime control (planned)** - eventually schedule the PC,
+  compatible lights, and Wi-Fi/router behavior independently, with presets and
+  recurrence. Not available today.
 - **Last Light finale** - a cinematic timer-zero sequence with countdown ring,
   atmospheric panels, and UNPLUG visual (v10.3.0 northstar design). Power action
   fires automatically; emergency cancel (`Ctrl+Shift+S`) is always available.
@@ -108,6 +118,9 @@ contributor handoff.
 - **System actions are opt-in.** Night Light, media pause, and window lockout
   during wind-down are all OFF by default. The app never touches your OS unless
   you explicitly enable it.
+- **Remote companion is opt-in and limited.** The phone companion can start,
+  pause, snooze, or cancel the timer, but it cannot force a shutdown, log out,
+  or hibernate.
 
 <img src="docs/release/screenshots/v10.0.2/04_settings_winddown.png" width="520" alt="Settings showing Wind-down system actions all OFF by default">
 

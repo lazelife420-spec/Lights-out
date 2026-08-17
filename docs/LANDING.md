@@ -1,6 +1,7 @@
 # Lights Out PC — Bedtime Mode for Windows
 
-I built a Windows shutdown timer I would actually use every night.
+I built a Windows bedtime control app I would actually use every night.
+It starts with the PC and is designed to grow into a whole-room bedtime control system.
 
 Windows commands work, but they are annoying.
 Old shutdown timer apps work, but most feel clunky.
@@ -23,10 +24,14 @@ Installer, portable build, SHA256 checksums, and proof-backed releases are all p
   hands. Start common timers (28 min / 1 hour), or pause / resume / snooze / cancel
   straight from the tray. The live countdown stays in the tray tooltip.
 - **Countdown to shutdown, restart, sleep, hibernate, or log out.**
+- **Phone Companion Easy Connect** — control the timer from your phone on the
+  same Wi-Fi via QR scan + pairing code. Off by default, token-protected, and
+  never forces a shutdown, log out, or hibernate.
 - **Wind-down phase** with ambient visuals (fireplace, rain, starfield, aurora),
   a warm color shift, and optional Night Light / media pause.
-- **Smart lights, saved profiles, calendar scheduling (.ics), and a Last Light
-  finale** for the people who want the full ritual.
+- **Saved profiles, calendar scheduling (.ics), and a Last Light finale** for
+  the people who want the full ritual. Optional **LuxGrid RGB event integration**
+  can react to Lights Out events, but that is not native smart-light control.
 
 ## Safe by default
 
@@ -38,6 +43,25 @@ Installer, portable build, SHA256 checksums, and proof-backed releases are all p
   all OFF by default. The app never touches your OS unless you turn them on.
 
 ![Settings - wind-down system actions OFF by default](release/screenshots/v10.0.2/04_settings_winddown.png)
+
+## Planned: whole-room bedtime control
+
+The long-term idea is a bedtime automation scheduler where each part of the
+night environment can have its own action and schedule:
+
+- **PC** — shut down / sleep / hibernate / lock at a set time.
+- **Bedroom lights** — dim or turn off at a chosen time.
+- **Other lights** — off at different times.
+- **Wi-Fi/router** — disable or change state at a chosen time.
+- **Phone companion** — view everything, change times, add time, cancel actions.
+- **Dates and recurrence** — tonight only, specific date, weekdays, weekends,
+  selected days.
+- **Presets/Rituals** — save the whole collection as Weeknight, Movie Night,
+  Weekend, etc.
+
+This is not implemented in the current release. The current app controls the PC
+and supports the phone companion; smart-light and Wi-Fi/router orchestration
+are future directions.
 
 ## Proof-backed releases
 
@@ -66,8 +90,8 @@ profiles and the clock.
 
 ### Short version (for social / forum posts)
 
-> Lights Out PC - a free Windows bedtime shutdown timer that lives in your tray.
-> Shows the clock while idle, starts a 28-min or 1-hour timer in one click, winds
-> down with ambient visuals, and never force-shuts-down unless you ask it to.
+> Lights Out PC - a free Windows bedtime control app that starts with the PC.
+> Set a timer, control it from your phone on the same Wi-Fi, wind down with
+> ambient visuals, and never force-shut-down unless you ask it to.
 > No account, no ads. Installer + portable + SHA256 checksums, all public.
 > https://github.com/lazelife420-spec/Lights-out/releases/latest

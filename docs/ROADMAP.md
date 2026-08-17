@@ -17,8 +17,32 @@ lives in `CHANGELOG.md`.
 Current strongest product promise:
 
 ```text
-Lights Out helps Windows users stop drifting past bedtime by turning shutdown into a visible, repeatable routine with proof.
+Lights Out helps Windows users stop drifting past bedtime by turning PC shutdown into a visible, repeatable routine with proof — and is designed to grow into whole-room bedtime control.
 ```
+
+## Long-term product vision
+
+The eventual information architecture should make room for whole-room bedtime
+control, not merely a timer with a Settings drawer. One possible northstar:
+
+- **Tonight** — what is happening tonight, chronological timeline, quick changes.
+- **Schedule** — dates, times, recurrence, saved rituals/presets.
+- **Devices** — PC, phone companion, lights, Wi-Fi/router, LuxGrid.
+- **Proof** — what actually ran, what failed or skipped, Morning Proof.
+- **Settings** — actual preferences only.
+
+The scheduling model is per-device: each thing in the night environment gets
+its own action and time. Example "Tonight's Plan":
+
+- PC — Shutdown · 12:30 AM
+- Bedroom Lights — Off · 12:00 AM
+- Wi-Fi — Off · 1:00 AM
+- Living Room — Dim · 11:30 PM
+- Repeat — Sun–Thu
+
+This is a design direction, not a shipped feature. Current release (v11.1.0)
+controls the PC and supports the phone companion; smart-light, Wi-Fi/router,
+and independent device scheduling are explicitly not implemented.
 
 ## The Proof Foundry Standard
 
@@ -199,6 +223,7 @@ scope-expansion decisions, not a continuation of already-declared work.
 | Family Profiles v1 | Scoped as a local-only household member directory, profile assignment/filtering, and canonical receipt attribution. LAN sync, authentication, and remote profile mutation are explicitly out of scope. See `docs/FAMILY_PROFILES_V1_SCOPE.md`. |
 | Focus scoring | Would need a new persistence layer (Focus Sessions currently has no historical event log, unlike Streaks). Also carries messaging risk against the "no guaranteed productivity" brand promise — needs the same care Sleep Score got to avoid gamification/fake-score framing. |
 | Screen-time limits | `screenTime.js` today is read-only/advisory (a "reality check" message), not enforcement. Actual *limits* imply a new blocking mechanism — real system-modification risk, same category as content-blocker schedules but with a different (unbuilt) trigger. |
+| Whole-room bedtime control | Per-device scheduling, smart-light orchestration, and Wi-Fi/router behavior. None of these are implemented or runtime-proven. This is a long-term product direction, not a near-term candidate. |
 
 **Checked and dropped, 2026-07-10: "Recurring alarms."** Confirmed fully
 redundant with the Schedule tab's existing multi-rule builtin calendar

@@ -28,7 +28,7 @@ A Proof Foundry Product
 Subhead:
 
 ```text
-A Windows wind-down timer with profiles, streaks, proof receipts, and shutdown controls that stay out of your way until it matters.
+A Windows bedtime control app that starts with the PC: a wind-down timer, saved night modes, streaks, proof receipts, optional phone companion control, and room to grow into whole-room bedtime control.
 ```
 
 Primary CTA:
@@ -83,7 +83,7 @@ A shutdown cockpit, not a toy timer.
 Body:
 
 ```text
-Lights Out gives you a clean command surface for nightly shutdowns, saved profiles, snooze control, power status, streaks, and proof receipts.
+Lights Out gives you a clean command surface for nightly PC shutdowns, saved night modes, snooze control, power status, streaks, proof receipts, and optional phone companion control.
 ```
 
 Feature copy:
@@ -103,6 +103,12 @@ Copy or view proof of completed sessions.
 
 Safer remote control
 Remote control is gated behind a pairing token and stays off by default.
+
+Phone companion
+Start, pause, snooze, or cancel the PC timer from your phone on the same Wi-Fi. No cloud, no account.
+
+Whole-room bedtime control — planned
+Eventually Lights Out may schedule the PC, compatible lights, and Wi-Fi/router behavior independently. Not available today.
 
 Verified updates
 Release assets include installer, portable build, and checksums.
@@ -236,6 +242,10 @@ No. Remote control is off by default and requires a pairing token when enabled.
 ### Is there a portable version?
 
 Yes. Releases include an installer and portable build when published.
+
+### Does Lights Out control smart lights or Wi-Fi today?
+
+No. Those are planned directions. The current release controls the PC and supports an optional phone companion for the timer. LuxGrid RGB event integration can react to Lights Out events, but that is not native smart-light control.
 
 ### How do I verify the download?
 
