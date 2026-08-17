@@ -120,6 +120,14 @@
           <span class="ns-nav-icon" aria-hidden="true">&#x1F4C5;</span>
           <span class="ns-nav-label">SCHEDULE</span>
         </button>
+        <button class="ns-nav-item" data-ns-tab="dev" title="Open devices" aria-label="Open devices">
+          <span class="ns-nav-icon" aria-hidden="true">&#x1F4F1;</span>
+          <span class="ns-nav-label">DEVICES</span>
+        </button>
+        <button class="ns-nav-item" data-ns-tab="stats" title="Open proof" aria-label="Open proof">
+          <span class="ns-nav-icon" aria-hidden="true">&#x1F4CA;</span>
+          <span class="ns-nav-label">PROOF</span>
+        </button>
         <button class="ns-nav-item" data-ns-tab="set" title="Open settings" aria-label="Open settings">
           <span class="ns-nav-icon" aria-hidden="true">&#x2699;</span>
           <span class="ns-nav-label">SETTINGS</span>
@@ -129,10 +137,6 @@
         <button class="ns-nav-item" data-ns-tab="help" title="Open help and about" aria-label="Open help and about">
           <span class="ns-nav-icon" aria-hidden="true">&#x3F;</span>
           <span class="ns-nav-label">?</span>
-        </button>
-        <button class="ns-nav-item" data-ns-tab="stats" title="Open stats" aria-label="Open stats">
-          <span class="ns-nav-icon" aria-hidden="true">&#x1F4CA;</span>
-          <span class="ns-nav-label">STATS</span>
         </button>
       </div>
     </aside>
@@ -833,7 +837,79 @@
         </div>
       </section>
 
-      <!-- STATS: Status / proof / diagnostics panel -->
+      <!-- DEVICES: Connected and planned devices panel -->
+      <div class="ns-main-panel" id="ns-panel-dev" style="display:none">
+        <section class="status-section">
+          <div class="section-header" style="padding:0 0 4px 0">
+            <h2 class="section-title">Devices</h2>
+            <p class="section-subtitle" style="font-size:11px">What Lights Out can talk to now. Configure device integrations in Settings.</p>
+          </div>
+
+          <div class="status-card">
+            <div class="card-header">
+              <span class="icon">&#x1F4BB;</span>
+              <span>This PC</span>
+            </div>
+            <div class="card-body">
+              <div class="status-row"><span>Status</span><span id="dev-pc-status">Idle</span></div>
+              <div class="status-row"><span>Action</span><span id="dev-pc-action">Shutdown</span></div>
+              <div class="status-row"><span>Remaining</span><span id="dev-pc-remaining">—</span></div>
+              <div class="status-row"><span>Dry Run</span><span id="dev-pc-dryrun">Off</span></div>
+            </div>
+          </div>
+
+          <div class="status-card">
+            <div class="card-header">
+              <span class="icon">&#x1F4F1;</span>
+              <span>Phone Companion</span>
+            </div>
+            <div class="card-body">
+              <div class="status-row"><span>Mode</span><span id="dev-companion-mode">Off</span></div>
+              <div class="status-row"><span>Status</span><span id="dev-companion-status">Off</span></div>
+              <div class="status-row"><span>Network</span><span id="dev-companion-network">&mdash;</span></div>
+              <div class="status-row"><span>Connected devices</span><span id="dev-companion-clients">0</span></div>
+            </div>
+          </div>
+
+          <div class="status-card">
+            <div class="card-header">
+              <span class="icon">&#x1F3E0;</span>
+              <span>Family LAN</span>
+            </div>
+            <div class="card-body">
+              <div class="option-group" style="margin:0">
+                <button type="button" id="btn-dev-family-scan" class="btn-secondary btn-sm">Scan for Peers</button>
+                <span id="dev-family-status" style="font-size:11px;color:var(--text-muted);margin-left:8px"></span>
+              </div>
+              <div id="dev-family-peers" style="margin-top:6px"></div>
+            </div>
+          </div>
+
+          <div class="status-card">
+            <div class="card-header">
+              <span class="icon">&#x1F4A1;</span>
+              <span>Smart Lights</span>
+            </div>
+            <div class="card-body">
+              <div class="status-row"><span>Status</span><span id="dev-lights-status">Planned</span></div>
+              <p style="font-size:10px;color:var(--text-muted);margin:6px 0 0">Optional Philips Hue or HTTP integration in Settings. Native device control is planned, not shipped.</p>
+            </div>
+          </div>
+
+          <div class="status-card">
+            <div class="card-header">
+              <span class="icon">&#x1F6E1;&#xFE0F;</span>
+              <span>WiFi Guard</span>
+            </div>
+            <div class="card-body">
+              <div class="status-row"><span>Status</span><span id="dev-wifi-status">Planned</span></div>
+              <p style="font-size:10px;color:var(--text-muted);margin:6px 0 0">Experimental router/webhook/adapter control in Settings. Native device control is planned, not shipped.</p>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- STATS: Status / proof / diagnostics panel (Proof in the new IA) -->
       <div class="ns-main-panel" id="ns-panel-stats" style="display:none">
         <section class="status-section">
           <div class="status-card">

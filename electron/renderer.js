@@ -686,10 +686,11 @@ const els = {
   receiptsList: document.getElementById('receipts-list'),
   btnClearReceipts: document.getElementById('btn-clear-receipts'),
   btnExportReceipts: document.getElementById('btn-export-receipts'),
-  // Northstar sidebar destinations (LIB/SCH/MODES/STATS)
+  // Northstar sidebar destinations (LIB/SCH/MODES/DEV/STATS)
   panelLib: document.getElementById('ns-panel-lib'),
   panelModes: document.getElementById('ns-panel-modes'),
   panelSch: document.getElementById('ns-panel-sch'),
+  panelDev: document.getElementById('ns-panel-dev'),
   panelStats: document.getElementById('ns-panel-stats'),
   statsCompanionMode: document.getElementById('stats-companion-mode'),
   statsCompanionStatus: document.getElementById('stats-companion-status'),
@@ -697,6 +698,20 @@ const els = {
   statsCompanionClients: document.getElementById('stats-companion-clients'),
   statsSessionSummary: document.getElementById('stats-session-summary'),
   btnStatsViewLedger: document.getElementById('btn-stats-view-ledger'),
+  // Devices panel
+  devPcStatus: document.getElementById('dev-pc-status'),
+  devPcAction: document.getElementById('dev-pc-action'),
+  devPcRemaining: document.getElementById('dev-pc-remaining'),
+  devPcDryrun: document.getElementById('dev-pc-dryrun'),
+  devCompanionMode: document.getElementById('dev-companion-mode'),
+  devCompanionStatus: document.getElementById('dev-companion-status'),
+  devCompanionNetwork: document.getElementById('dev-companion-network'),
+  devCompanionClients: document.getElementById('dev-companion-clients'),
+  btnDevFamilyScan: document.getElementById('btn-dev-family-scan'),
+  devFamilyStatus: document.getElementById('dev-family-status'),
+  devFamilyPeers: document.getElementById('dev-family-peers'),
+  devLightsStatus: document.getElementById('dev-lights-status'),
+  devWifiStatus: document.getElementById('dev-wifi-status'),
   aboutModal: document.getElementById('about-modal'),
   aboutModalClose: document.getElementById('about-modal-close'),
   // Version display (footer + About modal). HTML carries a static fallback string;
@@ -1447,6 +1462,7 @@ function applyMainPanelVisibility(panel) {
   if (els.panelLib) els.panelLib.style.display = panel === 'lib' ? '' : 'none';
   if (els.panelModes) els.panelModes.style.display = panel === 'modes' ? '' : 'none';
   if (els.panelSch) els.panelSch.style.display = panel === 'sch' ? '' : 'none';
+  if (els.panelDev) els.panelDev.style.display = panel === 'dev' ? '' : 'none';
   if (els.panelStats) els.panelStats.style.display = panel === 'stats' ? '' : 'none';
   // Settings is a full sibling panel too (see openSettingsPanel/closeSettingsPanel)
   // -- not a modal overlay, so it must be hidden here exactly like the others
@@ -1514,6 +1530,11 @@ async function handleSidebarNavigation(tab, { persist = true } = {}) {
     openHelpPanel();
     handled = true;
   }
+  if (tab === 'dev') {
+    applyMainPanelVisibility('dev');
+    renderDevicesPanel();
+    handled = true;
+  }
   if (tab === 'stats') {
     applyMainPanelVisibility('stats');
     renderStatusPanel();
@@ -1526,13 +1547,98 @@ async function handleSidebarNavigation(tab, { persist = true } = {}) {
   }
 
   setSidebarSelection(tab);
-  if (persist && ['lib', 'modes', 'sch', 'stats'].includes(tab)) {
+  if (persist && ['lib', 'modes', 'sch', 'dev', 'stats'].includes(tab)) {
     try { api.saveAppSettings({ app: { nsActiveTab: tab } }); } catch (_) {}
   }
   return true;
 }
 
 els.btnStatsViewLedger?.addEventListener('click', () => openReceiptsLedger());
+
+// Render the Devices dashboard. Read-only; configuration lives in Settings.
+async function renderDevicesPanel() {
+  const isIdle = !state.running && !state.paused;
+  // Canonical phase names must match the main status text used in render().
+  const phaseLabels = { focus: 'Focus', dim: 'Winding Down', lastlight: 'Last Light', idle: 'Running' };
+  const pcStatus = isIdle ? 'Idle'
+    : state.paused ? 'Paused'
+    : (phaseLabels[state.phase] || 'Running');
+  if (els.devPcStatus) els.devPcStatus.textContent = pcStatus;
+  if (els.devPcAction) {
+    const actionMap = { shutdown: 'Shutdown', restart: 'Restart', sleep: 'Sleep', hibernate: 'Hibernate', logout: 'Log out', lock: 'Lock' };
+    els.devPcAction.textContent = actionMap[state.action] || (state.action ? state.action[0].toUpperCase() + state.action.slice(1) : '—');
+  }
+  if (els.devPcRemaining) {
+    els.devPcRemaining.textContent = (isIdle || !Number.isFinite(state.remainingSeconds)) ? '—' : formatTime(state.remainingSeconds);
+  }
+  if (els.devPcDryrun) els.devPcDryrun.textContent = state.dryRun ? 'On' : 'Off';
+
+  try {
+    const rc = await api.getRemoteControl?.();
+    const modeLabels = { off: 'Off', local: 'This PC only', wifi: 'Same Wi-Fi' };
+    const mode = rc?.mode || 'off';
+    if (els.devCompanionMode) els.devCompanionMode.textContent = modeLabels[mode] || 'Off';
+    if (els.devCompanionStatus) els.devCompanionStatus.textContent = rc?.statusLabel || 'Off';
+    if (els.devCompanionNetwork) {
+      els.devCompanionNetwork.textContent = mode === 'wifi' ? `${rc.lanIp}:${rc.port}`
+        : mode === 'local' ? `127.0.0.1:${rc.port}`
+        : '—';
+    }
+    if (els.devCompanionClients) els.devCompanionClients.textContent = String(rc?.clients || 0);
+  } catch {
+    if (els.devCompanionStatus) els.devCompanionStatus.textContent = 'Unavailable';
+  }
+
+  try {
+    const peers = await api.getFamilyPeers?.() || [];
+    if (els.devFamilyStatus) els.devFamilyStatus.textContent = `${peers.length} found`;
+    if (els.devFamilyPeers) {
+      if (!peers.length) {
+        els.devFamilyPeers.innerHTML = '<p class="empty-state" style="font-size:10px">No peers discovered yet.</p>';
+      } else {
+        els.devFamilyPeers.innerHTML = peers.map(p => `<div class="status-row"><span>${escapeHtml(p.name || p.ip)}</span><span>${escapeHtml(p.ip)}</span></div>`).join('');
+      }
+    }
+  } catch {
+    if (els.devFamilyStatus) els.devFamilyStatus.textContent = 'Unavailable';
+    if (els.devFamilyPeers) els.devFamilyPeers.innerHTML = '<p class="empty-state" style="font-size:10px">No peers discovered yet.</p>';
+  }
+
+  try {
+    const light = await api.getSmartLightConfig?.();
+    if (els.devLightsStatus) {
+      els.devLightsStatus.textContent = (light?.enabled && light?.provider && light.provider !== 'none')
+        ? `Configured (${light.provider})`
+        : 'Planned';
+    }
+  } catch {}
+
+  try {
+    const wifi = await api.getWifiGuardSettings?.();
+    if (els.devWifiStatus) {
+      els.devWifiStatus.textContent = (wifi?.enabled && wifi?.configured)
+        ? `Configured (${wifi.provider})`
+        : 'Planned';
+    }
+  } catch {}
+}
+
+els.btnDevFamilyScan?.addEventListener('click', async () => {
+  if (els.devFamilyStatus) els.devFamilyStatus.textContent = 'Scanning...';
+  try {
+    const peers = await api.getFamilyPeers?.() || [];
+    if (els.devFamilyStatus) els.devFamilyStatus.textContent = `${peers.length} found`;
+    if (els.devFamilyPeers) {
+      if (!peers.length) {
+        els.devFamilyPeers.innerHTML = '<p class="empty-state" style="font-size:10px">No peers discovered yet.</p>';
+      } else {
+        els.devFamilyPeers.innerHTML = peers.map(p => `<div class="status-row"><span>${escapeHtml(p.name || p.ip)}</span><span>${escapeHtml(p.ip)}</span></div>`).join('');
+      }
+    }
+  } catch {
+    if (els.devFamilyStatus) els.devFamilyStatus.textContent = 'Unavailable';
+  }
+});
 
 function formatIdleClockTime(now, compact = false) {
   const use12Hour = state.clockFormat === '12h';
@@ -2391,7 +2497,7 @@ function toggleMiniMode() {
 // exit (Alt+Tab, taskbar) that never goes through our IPC.
 function enterFullscreenClock() {
   // The fullscreen CSS only hides content within #ns-panel-lib; force that
-  // panel active first so a stale nsActiveTab (e.g. left on Schedule/Stats
+  // panel active first so a stale nsActiveTab (e.g. left on Schedule/Proof
   // from a prior session) can't leak its content into the fullscreen view.
   handleSidebarNavigation('lib', { persist: false });
   api.setFullScreenClock?.(true);

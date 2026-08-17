@@ -600,9 +600,10 @@ check('layout: Settings migrates persisted nsActiveTab "set"/"help" to Tonight o
 check('ui: icon-only navigation and footer buttons have accessible labels', () => {
   assertMatch(htmlSrc, /data-ns-tab="lib"[^>]*aria-label="Open tonight"/, 'TONIGHT aria-label missing');
   assertMatch(htmlSrc, /data-ns-tab="sch"[^>]*aria-label="Open schedule"/, 'SCH aria-label missing');
+  assertMatch(htmlSrc, /data-ns-tab="dev"[^>]*aria-label="Open devices"/, 'DEVICES aria-label missing');
   assertMatch(htmlSrc, /data-ns-tab="set"[^>]*aria-label="Open settings"/, 'SET aria-label missing');
   assertMatch(htmlSrc, /data-ns-tab="help"[^>]*aria-label="Open help and about"/, 'Help aria-label missing');
-  assertMatch(htmlSrc, /data-ns-tab="stats"[^>]*aria-label="Open stats"/, 'Stats aria-label missing');
+  assertMatch(htmlSrc, /data-ns-tab="stats"[^>]*aria-label="Open proof"/, 'PROOF aria-label missing');
   assertMatch(htmlSrc, /id="btn-notif"[^>]*aria-label="Open notifications"/, 'Notifications aria-label missing');
   assertMatch(htmlSrc, /id="btn-widget"[^>]*aria-label="Toggle desktop widget"/, 'Widget aria-label missing');
   assertMatch(htmlSrc, /id="btn-companion"[^>]*aria-label="Open companion setup"/, 'Companion aria-label missing');
@@ -736,25 +737,44 @@ check('renderer: visible sidebar navigation routes to a real tab or modal', () =
   assertMatch(rendererSrc, /if \(tab === 'sch'\) \{[\s\S]*applyMainPanelVisibility\('sch'\);[\s\S]*handled = true;/s, 'SCH routing missing');
   assertMatch(rendererSrc, /if \(tab === 'set'\) \{[\s\S]*openSettingsPanel\(\);[\s\S]*handled = true;/s, 'SET routing missing');
   assertMatch(rendererSrc, /if \(tab === 'help'\) \{[\s\S]*openHelpPanel\(\);[\s\S]*handled = true;/s, 'Help routing missing');
-  assertMatch(rendererSrc, /if \(tab === 'stats'\) \{[\s\S]*applyMainPanelVisibility\('stats'\);[\s\S]*renderStatusPanel\(\);[\s\S]*handled = true;/s, 'STATS routing missing');
+  assertMatch(rendererSrc, /if \(tab === 'dev'\) \{[\s\S]*applyMainPanelVisibility\('dev'\);[\s\S]*renderDevicesPanel\(\);[\s\S]*handled = true;/s, 'DEVICES routing missing');
+  assertMatch(rendererSrc, /if \(tab === 'stats'\) \{[\s\S]*applyMainPanelVisibility\('stats'\);[\s\S]*renderStatusPanel\(\);[\s\S]*handled = true;/s, 'PROOF routing missing');
   assertMatch(rendererSrc, /document\.querySelectorAll\('\.ns-nav-item'\)\.forEach\(btn => \{[\s\S]*handleSidebarNavigation\(btn\.dataset\.nsTab\);/s, 'sidebar click handler missing');
 });
 
-check('renderer: LIB/SCH/STATS panels are mutually exclusive, single-visible destinations', () => {
+check('renderer: LIB/SCH/DEV/STATS panels are mutually exclusive, single-visible destinations', () => {
   assertMatch(rendererSrc, /function applyMainPanelVisibility\(panel\) \{/, 'panel visibility switcher missing');
   assertMatch(rendererSrc, /els\.panelLib\.style\.display = panel === 'lib' \? '' : 'none';/, 'LIB panel toggle missing');
   assertMatch(rendererSrc, /els\.panelSch\.style\.display = panel === 'sch' \? '' : 'none';/, 'SCH panel toggle missing');
-  assertMatch(rendererSrc, /els\.panelStats\.style\.display = panel === 'stats' \? '' : 'none';/, 'STATS panel toggle missing');
+  assertMatch(rendererSrc, /els\.panelDev\.style\.display = panel === 'dev' \? '' : 'none';/, 'DEVICES panel toggle missing');
+  assertMatch(rendererSrc, /els\.panelStats\.style\.display = panel === 'stats' \? '' : 'none';/, 'PROOF panel toggle missing');
   assertMatch(htmlSrc, /id="ns-panel-lib"/, 'LIB panel container missing from HTML');
   assertMatch(htmlSrc, /id="ns-panel-sch"[^>]*style="display:none"/, 'SCH panel should start hidden in HTML');
-  assertMatch(htmlSrc, /id="ns-panel-stats"[^>]*style="display:none"/, 'STATS panel should start hidden in HTML');
+  assertMatch(htmlSrc, /id="ns-panel-dev"[^>]*style="display:none"/, 'DEVICES panel should start hidden in HTML');
+  assertMatch(htmlSrc, /id="ns-panel-stats"[^>]*style="display:none"/, 'PROOF panel should start hidden in HTML');
 });
 
-check('renderer: STATS panel shows only real companion/session data, honest empty state', () => {
+check('renderer: PROOF panel shows only real companion/session data, honest empty state', () => {
   assertMatch(rendererSrc, /async function renderStatusPanel\(\) \{/, 'status panel renderer missing');
-  assertMatch(rendererSrc, /api\.getRemoteControl\?\.\(\)/, 'STATS should read real companion status, not fabricate it');
-  assertMatch(rendererSrc, /api\.listReceipts\?\.\(5\)/, 'STATS should read real receipt history, not fabricate it');
-  assertMatch(rendererSrc, /No session history yet\./, 'STATS must show an honest empty state when there is no history');
+  assertMatch(rendererSrc, /api\.getRemoteControl\?\.\(\)/, 'PROOF should read real companion status, not fabricate it');
+  assertMatch(rendererSrc, /api\.listReceipts\?\.\(5\)/, 'PROOF should read real receipt history, not fabricate it');
+  assertMatch(rendererSrc, /No session history yet\./, 'PROOF must show an honest empty state when there is no history');
+});
+
+check('renderer: DEVICES panel shows real device data without inventing state', () => {
+  assertMatch(rendererSrc, /async function renderDevicesPanel\(\) \{/, 'devices panel renderer missing');
+  assertMatch(rendererSrc, /api\.getRemoteControl\?\.\(\)/, 'DEVICES should read real companion status, not fabricate it');
+  assertMatch(rendererSrc, /api\.getFamilyPeers\?\.\(\)/, 'DEVICES should read real family peers, not fabricate them');
+  assertMatch(rendererSrc, /api\.getSmartLightConfig\?\.\(\)/, 'DEVICES should read real smart-light config');
+  assertMatch(rendererSrc, /api\.getWifiGuardSettings\?\.\(\)/, 'DEVICES should read real WiFi Guard config');
+});
+
+check('renderer: DEVICES PC status uses canonical idle/focus/dim/lastlight phases', () => {
+  // The main status text already maps phases to these labels; the Devices
+  // dashboard must derive PC status from the same canonical state.phase values.
+  assertMatch(rendererSrc, /const labels = \{ focus: 'Focus', dim: 'Winding Down', lastlight: 'Last Light', idle: 'Running' \};/, 'main status phase labels missing');
+  assertMatch(rendererSrc, /const phaseLabels = \{ focus: 'Focus', dim: 'Winding Down', lastlight: 'Last Light', idle: 'Running' \};/, 'Devices phase labels must match main status text');
+  assertMatch(rendererSrc, /isIdle \? 'Idle'[\s\S]*state\.paused \? 'Paused'[\s\S]*\(phaseLabels\[state\.phase\] \|\| 'Running'\)/, 'Devices PC status derivation missing');
 });
 
 check('renderer: footer and ledger controls provide real feedback', () => {
