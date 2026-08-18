@@ -414,14 +414,32 @@
 
       <!-- LIB: Tonight (control room) -->
       <div class="ns-main-panel" id="ns-panel-lib" style="display:none">
-<!-- Armed Night Mode banner (shown when Use Tonight loads a mode into the lobby) -->
+<!-- Tonight's current-plan banner. Originally only appeared when Use
+           Tonight armed a Night Mode (hidden otherwise, leaving Tonight
+           with no plan summary at all for a plain custom timer -- a real
+           current-plan-clarity gap). renderArmedModeBanner() in
+           renderer.js now always populates title/meta, whether armed
+           (Night Mode name) or not (falls back to "Custom Timer" using
+           the same derivation Home's Tonight card already uses), and
+           only shows the clear (x) button and NIGHT MODE label for the
+           armed case -- there's nothing to "clear" about a plain custom
+           timer. Same element/ids as before; behavior is additive. -->
       <div class="armed-mode-banner" id="armed-mode-banner" style="display:none" role="status" aria-live="polite">
-        <div class="armed-mode-info">
-          <span class="armed-mode-label">NIGHT MODE</span>
-          <span class="armed-mode-title" id="armed-mode-title"></span>
-          <span class="armed-mode-meta" id="armed-mode-meta"></span>
+        <div class="armed-mode-row">
+          <div class="armed-mode-info">
+            <span class="armed-mode-label" id="armed-mode-label">NIGHT MODE</span>
+            <span class="armed-mode-title" id="armed-mode-title"></span>
+            <span class="armed-mode-meta" id="armed-mode-meta"></span>
+          </div>
+          <button class="armed-mode-clear" id="armed-mode-clear" title="Remove night mode selection" aria-label="Remove night mode selection">&times;</button>
         </div>
-        <button class="armed-mode-clear" id="armed-mode-clear" title="Remove night mode selection" aria-label="Remove night mode selection">&times;</button>
+        <!-- Participating tonight: compact real-status chips (Smart
+             Lights/WiFi Guard/Companion), only shown for whatever is
+             actually configured/connected right now -- reads the exact
+             same synced values Home's "Tonight at a glance" and Devices
+             already show (ta-lights-status/ta-wifi-status/
+             ta-companion-status), no new fetch, no fabricated state. -->
+        <div class="tonight-plan-features" id="tonight-plan-features" aria-hidden="true"></div>
       </div>
 
       <!-- Timer Ring Section -->
@@ -450,6 +468,12 @@
             <div class="time-sub" id="timer-sub"></div>
           </div>
           <button class="fullscreen-clock-btn" id="btn-fullscreen-clock" title="Full screen clock" aria-label="Full screen clock" style="display:none">&#x26F6;</button>
+          <!-- Disambiguates the orange ring's two real states, which
+               otherwise look identical: idle shows the CONFIGURED
+               duration as a preview (nothing started yet), running shows
+               the same ring live-counting down. render() toggles this
+               with the exact isIdle it already computes -- no new state. -->
+          <div class="ring-state-badge" id="ring-state-badge" aria-hidden="true">PREVIEW</div>
         </div>
 
         <!-- Quick Action Bar (shown when timer is running) -->
@@ -487,6 +511,15 @@
             <button class="chip" data-min="60">1h</button>
             <button class="chip" data-min="120">2h</button>
           </div>
+          <!-- Tonight's own explicit Start action -- previously the only
+               way to start a non-chip (custom-duration) timer from this
+               page was the Space shortcut or Home's hero CTA; landing
+               here directly via the sidebar with a typed duration had no
+               visible Start control at all. Routes through the exact
+               same shared startTonightPlan() the hero CTA and Space
+               shortcut already use -- no new start path, no engine
+               change. -->
+          <button class="btn-start-custom" id="btn-start-custom">Start Custom Timer</button>
           <button class="btn-secondary" id="btn-ritual" style="margin-top:8px;font-size:11px;padding:6px 14px;border-radius:8px;opacity:0.85" title="Guided bedtime ritual: breathing → block → timer → lights">&#x1F319; Begin Ritual</button>
         </div>
       </section>

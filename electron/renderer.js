@@ -1852,6 +1852,13 @@ function render() {
 
   updateRing(displaySeconds, totalSeconds);
 
+  // Phase 5A: the ring shows two visually-identical states (configured
+  // duration as a preview vs the same ring actually counting down) --
+  // this label disambiguates them. Only relevant when the ring itself is
+  // showing (not the ambient clock face).
+  const ringBadge = document.getElementById('ring-state-badge');
+  if (ringBadge) ringBadge.classList.toggle('visible', isIdle && !idleClockVisible);
+
   els.btnStop.style.display = state.running || state.paused ? 'flex' : 'none';
   els.btnPause.style.display = state.running || state.paused ? 'flex' : 'none';
   els.btnSnooze.disabled = !(state.running || state.paused);
@@ -2182,22 +2189,64 @@ function renderHome() {
   }
 }
 
+// Phase 5A (Tonight Session Coherence Pass): previously this banner was
+// hidden entirely unless a Night Mode was armed, leaving Tonight with no
+// current-plan summary at all for a plain custom timer -- the exact
+// "current-plan clarity" gap the pass targets. Now always shows a plan
+// summary: the armed Night Mode's identity when one exists, or a
+// "Custom Timer" fallback derived from state.action/inputSeconds() --
+// the same values Home's Tonight card already reads, so the two never
+// disagree. Only the NIGHT MODE label and the clear (x) button are
+// specific to the armed case; there's nothing to "clear" about a plain
+// custom timer.
 function renderArmedModeBanner() {
   const banner = document.getElementById('armed-mode-banner');
   if (!banner) return;
-  if (!state.armedNightMode) {
-    banner.style.display = 'none';
-    return;
-  }
-  const m = state.armedNightMode;
-  const durMin = Math.round(m.durationSeconds / 60);
-  const actionLabel = { shutdown: 'Shutdown', sleep: 'Sleep', restart: 'Restart', hibernate: 'Hibernate', lock: 'Lock', logout: 'Log out' }[m.action] || m.action;
-  banner.style.display = '';
+  const actionLabelMap = { shutdown: 'Shutdown', sleep: 'Sleep', restart: 'Restart', hibernate: 'Hibernate', lock: 'Lock', logout: 'Log out' };
   const titleEl = document.getElementById('armed-mode-title');
   const metaEl = document.getElementById('armed-mode-meta');
-  if (titleEl) titleEl.textContent = m.nightModeTitle;
-  const ritualLabel = m.ritualId === 'standard' ? 'Standard ritual' : 'Direct';
-  if (metaEl) metaEl.textContent = `${durMin} min \u00B7 ${actionLabel} \u00B7 ${ritualLabel}`;
+  const labelEl = document.getElementById('armed-mode-label');
+  const clearBtn = document.getElementById('armed-mode-clear');
+  banner.style.display = '';
+
+  const m = state.armedNightMode;
+  if (m) {
+    const durMin = Math.round(m.durationSeconds / 60);
+    const ritualLabel = m.ritualId === 'standard' ? 'Standard ritual' : 'Direct';
+    if (labelEl) labelEl.textContent = 'NIGHT MODE';
+    if (titleEl) titleEl.textContent = m.nightModeTitle;
+    if (metaEl) metaEl.textContent = `${durMin} min \u00B7 ${actionLabelMap[m.action] || m.action} \u00B7 ${ritualLabel}`;
+    if (clearBtn) clearBtn.style.display = '';
+  } else {
+    const durMin = Math.max(1, Math.round(inputSeconds() / 60));
+    if (labelEl) labelEl.textContent = 'TONIGHT';
+    if (titleEl) titleEl.textContent = 'Custom Timer';
+    if (metaEl) metaEl.textContent = `${durMin} min \u00B7 ${actionLabelMap[state.action] || state.action}`;
+    if (clearBtn) clearBtn.style.display = 'none';
+  }
+
+  renderTonightPlanFeatures();
+}
+
+// Participating tonight: compact real-status chips reusing the exact
+// same synced values Home's "Tonight at a glance" tiles already show
+// (ta-lights-status/ta-wifi-status/ta-companion-status, kept current by
+// updateDevicePlanCards()/updateCompanionStatus() regardless of which
+// page is visible) -- no new fetch, no fabricated state, and never
+// shows a feature that isn't actually configured/connected.
+function renderTonightPlanFeatures() {
+  const container = document.getElementById('tonight-plan-features');
+  if (!container) return;
+  const icons = window.NS_GLANCE_ICONS || {};
+  const readText = id => document.getElementById(id)?.textContent?.trim() || '';
+  const chips = [];
+  const lights = readText('ta-lights-status');
+  if (lights && lights !== 'Not configured') chips.push({ icon: icons.lights, label: `Smart Lights \u00B7 ${lights}` });
+  const wifi = readText('ta-wifi-status');
+  if (wifi && wifi !== 'Not configured') chips.push({ icon: icons.wifi, label: `WiFi Guard \u00B7 ${wifi}` });
+  const companion = readText('ta-companion-status');
+  if (companion && companion !== 'Off') chips.push({ icon: icons.companion, label: `Companion \u00B7 ${companion}` });
+  container.innerHTML = chips.map(c => `<span class="tonight-plan-feature-chip">${c.icon || ''}<span>${escapeHtml(c.label)}</span></span>`).join('');
 }
 
 // Check whether the current lobby values still match the armed mode's canonical values.
@@ -3104,6 +3153,11 @@ if (els.autopilotOverrideTime) {
   });
 }
 refreshAutopilotStatus();
+
+// Tonight's own explicit Start action (Phase 5A) -- routes through the
+// exact same shared command the Home hero CTA and Space shortcut already
+// use, so this is a third caller of the existing path, not a new one.
+document.getElementById('btn-start-custom')?.addEventListener('click', () => startTonightPlan());
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Ritual Mode: guided bedtime ritual flow

@@ -472,9 +472,16 @@ check('ipc: shared Start architecture and timer/login handlers remain exposed', 
   assertMatch(rendererStartSrc, /function startTonightPlan\(\)\s*\{\s*return startTimer\(inputSeconds\(\), 'play'\);\s*\}/, 'shared startTonightPlan command missing');
   const explicitPlayPayloads = rendererStartSrc.match(/startTimer\(inputSeconds\(\), 'play'\)/g) || [];
   assert(explicitPlayPayloads.length === 1, `expected one authoritative play payload, found ${explicitPlayPayloads.length}`);
+  // Phase 5A (Tonight Session Coherence Pass): Tonight previously had no
+  // explicit Start control of its own for a custom (non-chip) duration --
+  // only the Home hero CTA and the Space shortcut could reach
+  // startTonightPlan(). #btn-start-custom fixes that gap by routing
+  // through the exact same shared command, so the definition now has
+  // three real callers instead of two.
   const sharedStartReferences = rendererStartSrc.match(/startTonightPlan\(\)/g) || [];
-  assert(sharedStartReferences.length === 3, `hero CTA and keyboard must share startTonightPlan; found ${sharedStartReferences.length - 1} callers`);
+  assert(sharedStartReferences.length === 4, `hero CTA, Tonight's own Start button, and keyboard must share startTonightPlan; found ${sharedStartReferences.length - 1} callers`);
   assertMatch(rendererStartSrc, /getElementById\('ns-home-cta'\)\?\.addEventListener\('click', handleHomeCta\)/, 'hero CTA bypasses the state-aware handler');
+  assertMatch(rendererStartSrc, /getElementById\('btn-start-custom'\)\?\.addEventListener\('click', \(\) => startTonightPlan\(\)\)/, "Tonight's own Start button bypasses shared Start command");
   assertMatch(rendererStartSrc, /function handleHomeCta\(\) \{[\s\S]*startTonightPlan\(\);/, "handleHomeCta's start branch bypasses shared Start command");
   assertMatch(rendererStartSrc, /event\.code === 'Space'[\s\S]*else startTonightPlan\(\);/s, 'Space shortcut bypasses shared Start command');
   assert(!/id="btn-proof-again"/.test(startHtmlSrc), 'the old "Play Tonight Again" replay button was deliberately removed (redundant with the hero CTA) and must not return');
@@ -1554,13 +1561,15 @@ check('profile-ritual-gateway: renderer sends startOrigin without ritual branchi
   assert(playExplicit === 1, `expected exactly 1 explicit 'play' caller (inside startTonightPlan), found ${playExplicit}`);
   // Home/Library redesign pass: the old hero CTA always called this
   // directly; it's now handleHomeCta()'s 'start' branch (see
-  // homeCtaState()), one of two remaining real callers. "Play Tonight
-  // Again" was removed entirely (redundant with the new hero CTA), so the
-  // caller count dropped from 3 to 2: handleHomeCta's start branch and the
+  // homeCtaState()). "Play Tonight Again" was removed entirely (redundant
+  // with the new hero CTA). Phase 5A then added Tonight's own explicit
+  // Start button (#btn-start-custom) -- Tonight previously had no way to
+  // start a typed custom duration without leaving the page. Three real
+  // callers: handleHomeCta's start branch, #btn-start-custom, and the
   // Space shortcut (this count excludes the function's own definition
   // line).
   const planCallSites = (rendererSrc.match(/startTonightPlan\(\)/g) || []).length - 1;
-  assert(planCallSites === 2, `expected exactly 2 callers of startTonightPlan(), found ${planCallSites}`);
+  assert(planCallSites === 3, `expected exactly 3 callers of startTonightPlan(), found ${planCallSites}`);
 });
 
 check('profile-ritual-gateway: remote source cannot trigger profile ritual', () => {
@@ -1659,18 +1668,24 @@ check('ux: ns-home-cta has aria-label', () => {
 check('ux: exactly one Start control exists -- no hidden or duplicate #btn-start', () => {
   // There used to be two buttons (#btn-start in setup-controls, #ns-play-btn
   // in the hero) that fired the identical startTimer(inputSeconds(), 'play')
-  // call. The fix was one element, one shared function (startTonightPlan).
-  // The Home/Library redesign pass kept that invariant but renamed/
-  // restructured the hero side: #ns-play-btn -> #ns-home-cta (state-aware,
-  // routes through handleHomeCta()), and removed the old "Play Tonight
-  // Again" replay caller entirely (redundant with the new hero CTA) -- so
-  // startTonightPlan() now has exactly two real callers (handleHomeCta's
-  // start branch, the Space shortcut) plus its own definition, not three.
+  // call. The fix was one shared function (startTonightPlan), called from
+  // however many real UI entry points genuinely need it -- not "exactly
+  // one caller" (that was never the invariant; #btn-start was retired
+  // because it was a literal duplicate of the hero CTA's payload, not
+  // because a second real entry point is inherently wrong). The
+  // Home/Library redesign pass renamed the hero side (#ns-play-btn ->
+  // #ns-home-cta, state-aware via handleHomeCta()) and removed "Play
+  // Tonight Again" (redundant with the hero CTA). Phase 5A then added
+  // Tonight's own #btn-start-custom, a genuinely new real entry point --
+  // Tonight previously had no way to start a typed custom duration
+  // without leaving the page -- so the caller count is intentionally 3,
+  // not the "no duplicates" ceiling of 1 this check's name refers to for
+  // #btn-start specifically.
   assert(!/id="btn-start"/.test(htmlSrc), '#btn-start must not exist in the DOM at all -- no hidden duplicate control');
   assert(!/getElementById\('btn-start'\)/.test(rendererSrc), 'no code may reference a #btn-start element anymore');
   assertMatch(rendererSrc, /function startTonightPlan\(\)\s*\{\s*return startTimer\(inputSeconds\(\), 'play'\);\s*\}/, 'a single shared startTonightPlan() function must exist');
   const startCallers = (rendererSrc.match(/startTonightPlan\(\)/g) || []).length;
-  assert(startCallers === 3, `expected startTonightPlan() to be called by handleHomeCta's start branch and the Space shortcut (plus its own definition), found ${startCallers} references`);
+  assert(startCallers === 4, `expected startTonightPlan() to be called by handleHomeCta's start branch, Tonight's own Start button, and the Space shortcut (plus its own definition), found ${startCallers} references`);
   assertMatch(rendererSrc, /getElementById\('ns-home-cta'\)\?\.addEventListener\('click', handleHomeCta\)/, 'the hero CTA must route through the state-aware handler');
 });
 

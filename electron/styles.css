@@ -564,6 +564,27 @@ body.warm-shift .ambient-canvas {
   z-index: 1;
 }
 
+/* Disambiguates the ring's two visually-identical states (Phase 5A):
+   idle shows the configured duration as a preview, running shows the
+   same ring actually counting down. Only rendered while idle -- see
+   render()'s ring-state-badge toggle. */
+.ring-state-badge {
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: #0d0e11;
+  background: var(--accent-amber);
+  padding: 3px 10px;
+  border-radius: 20px;
+  z-index: 2;
+  display: none;
+}
+.ring-state-badge.visible { display: block; }
+
 /* Soft glass disc behind the ring to give the hero depth. */
 .ring-container::before {
   content: '';
@@ -914,6 +935,34 @@ input:disabled {
   gap: 8px;
   flex-wrap: wrap;
   justify-content: center;
+}
+
+/* Tonight's own explicit Start action (Phase 5A) -- see index.html for
+   why this was missing. Same visual weight as the other primary CTAs
+   (.ns-home-cta / .nm-btn-use-tonight) for a consistent "this is THE
+   action" language across Home/Library/Tonight. */
+.btn-start-custom {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 11px 20px;
+  background: linear-gradient(135deg, #1a4fd6, #1266d4);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(26,79,214,0.4);
+  transition: all 0.15s ease;
+}
+.btn-start-custom:hover {
+  background: linear-gradient(135deg, #2055e0, #1470e0);
+  box-shadow: 0 6px 20px rgba(26,79,214,0.55);
+  transform: translateY(-1px);
 }
 
 .chip {
@@ -5956,16 +6005,25 @@ body.fullscreen-clock-mode .fullscreen-clock-exit {
   }
 }
 
-/* Armed Night Mode banner in the lobby */
+/* Tonight's current-plan banner (Phase 5A: always shows a plan summary,
+   not just when a Night Mode is armed -- see index.html for the full
+   rationale). Column layout: info+clear row, then an optional
+   participating-features row below. */
 .armed-mode-banner {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 8px;
   background: rgba(91, 140, 255, 0.08);
   border: 1px solid rgba(91, 140, 255, 0.25);
   border-radius: 10px;
   padding: 10px 14px;
   margin: 0 20px 12px;
+}
+.armed-mode-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 .armed-mode-info {
   display: flex;
@@ -5973,6 +6031,26 @@ body.fullscreen-clock-mode .fullscreen-clock-exit {
   gap: 10px;
   flex-wrap: wrap;
 }
+/* Participating tonight: compact icon+label chips, real data only. */
+.tonight-plan-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tonight-plan-features:empty { display: none; }
+.tonight-plan-feature-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 20px;
+  padding: 3px 10px 3px 6px;
+}
+.tonight-plan-feature-chip svg { width: 12px; height: 12px; flex-shrink: 0; color: var(--accent-cyan); }
 .armed-mode-label {
   font-size: 9px;
   font-weight: 700;
