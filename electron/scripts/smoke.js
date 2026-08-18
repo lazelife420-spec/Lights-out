@@ -674,8 +674,11 @@ check('renderer: running-state controls still swap stop-pause visibility and lab
   assertMatch(rendererSrc, /els\.btnStop\.style\.display = state\.running \|\| state\.paused \? 'flex' : 'none';/, 'renderer stop visibility changed');
   assertMatch(rendererSrc, /els\.btnPause\.style\.display = state\.running \|\| state\.paused \? 'flex' : 'none';/, 'renderer pause visibility changed');
   assertMatch(rendererSrc, /els\.btnPause\.querySelector\('span:last-child'\)\.textContent = state\.paused \? 'Resume' : 'Pause';/, 'renderer pause/resume label changed');
-  assertMatch(rendererSrc, /state\.dryRun \? `Dry Run · \$\{phaseLabel\}` : phaseLabel/, 'active Dry Run status must remain prominent');
-  assertMatch(rendererSrc, /state\.dryRun \? 'Dry Run · Paused' : 'Paused'/, 'paused Dry Run status must remain prominent');
+  // Phase 5D-B: the Live branch used to be bare phaseLabel/'Paused' --
+  // Dry Run got a distinct word, Live got silence. Both branches must now
+  // name the mode explicitly.
+  assertMatch(rendererSrc, /state\.dryRun \? `Dry Run · \$\{phaseLabel\}` : `Live · \$\{phaseLabel\}`/, 'active Dry Run/Live status must both be prominent, not just Dry Run');
+  assertMatch(rendererSrc, /state\.dryRun \? 'Dry Run · Paused' : 'Live · Paused'/, 'paused Dry Run/Live status must both be prominent, not just Dry Run');
 });
 
 check('renderer: keyboard shortcuts - Space (Start/Pause)', () => {
@@ -1839,6 +1842,58 @@ check('nav: Quick plans cards are keyboard-activatable, not mouse-only', () => {
   // way they are for actual <button> elements elsewhere in the app.
   assertMatch(rendererSrc, /class="profile-card[^"]*" data-profile-id="\$\{profile\.id\}"[^`]*tabindex="0" role="button"/, 'Quick plans cards must be focusable with a real button role');
   assertMatch(rendererSrc, /card\.addEventListener\('keydown', event => \{[\s\S]*event\.key === 'Enter' \|\| event\.key === ' '[\s\S]*card\.click\(\);/, 'Quick plans cards must activate on Enter/Space, not just click');
+});
+
+check('command-clarity: top menu labels no longer hide their contents', () => {
+  // "Quick Toggles" gave no hint that Dry Run Mode -- the app's most
+  // important state -- lived inside it. "Info" didn't match its own
+  // internal id (menu-help) or its actual contents (Documentation,
+  // Keyboard Shortcuts, Version & Updates).
+  assertMatch(htmlSrc, /id="menu-settings"[^>]*>\s*<span>Status &amp; Safety<\/span>/, 'the Dry Run/safety menu must be labeled for what it contains');
+  assertMatch(htmlSrc, /id="menu-help"[^>]*>\s*<span>Help<\/span>/, 'the help menu must say Help, matching its own id');
+  assert(!/<span>Quick Toggles<\/span>/.test(htmlSrc), 'the old "Quick Toggles" label must not return');
+  assert(!/<span>Info<\/span>/.test(htmlSrc), 'the old "Info" label must not return');
+  // Same items, same ids, same behavior -- this was a label change only.
+  assertMatch(htmlSrc, /id="toggle-dryrun"/, 'Dry Run toggle must still exist under its new label');
+  assertMatch(htmlSrc, /id="open-about"/, 'Version & Updates must still exist under Help');
+});
+
+check('command-clarity: footer status pill names Live/Dry Run in both directions', () => {
+  assertMatch(rendererSrc, /els\.statusText\.textContent = 'Live Ready';/, 'idle+live must say something truthful, not bare "Idle"');
+  assertMatch(rendererSrc, /pill\.classList\.add\('live-ready'\);/, 'live-ready must get its own distinct pill class, not fall back to the unstyled default');
+  const stylesSrcForStatus = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  assertMatch(stylesSrcForStatus, /\.status-pill\.live-ready \{/, 'live-ready needs its own CSS treatment, same as .status-pill.dryrun already has');
+});
+
+check('command-clarity: ritual overlay icons are SVG, not emoji', () => {
+  const ritualSrc = fs.readFileSync(path.join(root, 'renderer-ritual-focus.js'), 'utf8');
+  assertMatch(ritualSrc, /const RITUAL_ICONS = \{/, 'RITUAL_ICONS must still exist');
+  assert(!/\\u\{1F4A8\}|\\u\{1F6AB\}|\\u\{1F319\}|\\u\{23F0\}|\\u\{1F4A1\}/.test(ritualSrc), 'raw emoji code points must not return to RITUAL_ICONS');
+  assertMatch(ritualSrc, /els\.ritualStepIcon\.innerHTML = RITUAL_ICONS\[step\.id\] \|\| RITUAL_ICONS\.dim;/, 'ritual step icon must render as markup (innerHTML), not text');
+  assert(!/id="ritual-step-icon">&#x1F319;</.test(htmlSrc), 'the static emoji fallback icon must not return');
+});
+
+check('command-clarity: Schedule TOOLS divider is a plain label, not a fake tab', () => {
+  const stylesSrc = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  const dividerBlock = stylesSrc.match(/\.tab-divider::before \{[^}]*\}/s)?.[0] || '';
+  assert(dividerBlock.length > 0, '.tab-divider::before rule must exist');
+  assert(!/border-radius/.test(dividerBlock), 'the divider label must not be pill-shaped like a tab button');
+  assert(!/background:/.test(dividerBlock), 'the divider label must not have button-like background chrome');
+});
+
+check('command-clarity: Save Profile modal has no stray emoji in new/edited copy', () => {
+  assertMatch(htmlSrc, /placeholder="e\.g\., A" maxlength="4"/, 'avatar placeholder must not suggest an emoji example');
+  assertMatch(htmlSrc, /data-filter="pinned"[^>]*>Pinned</, 'the Pinned filter must not carry a pin emoji');
+});
+
+check('command-clarity: footer Companion shortcut keeps its unique behavior, gains disambiguating help', () => {
+  // Audited and deliberately NOT removed -- its handler opens the external
+  // pairing page directly when Companion is ready, which Devices/Settings
+  // don't do. Removing it would be a functionality regression, not
+  // redundancy cleanup, so this only checks the handler is untouched and a
+  // data-ns-help tooltip was added.
+  assertMatch(rendererSrc, /els\.btnCompanion\?\.addEventListener\('click', async \(\) => \{[\s\S]*api\.openExternal\?\.\(rc\.url\)/, 'the unique open-pairing-page-directly behavior must be preserved');
+  assertMatch(htmlSrc, /id="btn-companion"[^>]*data-ns-help="[^"]+"/, 'footer Companion shortcut must carry disambiguating help text');
 });
 
 check('nav: no timer/power/schedule-execution files touched by the Navigation Contract', () => {

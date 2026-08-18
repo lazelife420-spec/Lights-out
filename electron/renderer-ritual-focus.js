@@ -17,9 +17,20 @@
 // breathingTimer were also wireEvents()-local; hoisted here alongside the
 // functions that use them (updateRitualOverlay reads the first two;
 // startGuidedBreathing/stopGuidedBreathing read and mutate the rest).
+// Phase 5D-B: was raw emoji (breathe/block/dim/timer/lights), swapped for
+// the same SVG stroke-icon family used elsewhere in the app (sidebar,
+// NS_MODE_ICONS in renderer-night-modes.js). Kept as local literal SVG
+// strings rather than referencing window.NS_MODE_ICONS/NS_GLANCE_ICONS
+// directly -- renderer-night-modes.js loads AFTER this file (see
+// index.html), so those globals don't exist yet at this module's
+// top-level evaluation time.
+const RITUAL_SVG_OPEN = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
 const RITUAL_ICONS = {
-  breathe: '\u{1F4A8}', block: '\u{1F6AB}', dim: '\u{1F319}',
-  timer: '\u{23F0}', lights: '\u{1F4A1}'
+  breathe: `<svg ${RITUAL_SVG_OPEN}><circle cx="12" cy="12" r="8"/></svg>`,
+  block: `<svg ${RITUAL_SVG_OPEN}><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`,
+  dim: `<svg ${RITUAL_SVG_OPEN}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`,
+  timer: `<svg ${RITUAL_SVG_OPEN}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  lights: `<svg ${RITUAL_SVG_OPEN}><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>`
 };
 const RITUAL_DESCS = {
   breathe: 'Take a moment to breathe deeply and relax.',
@@ -49,7 +60,7 @@ function updateRitualOverlay(state) {
   els.ritualOverlay.classList.add('active');
   els.ritualOverlay.setAttribute('aria-hidden', 'false');
 
-  els.ritualStepIcon.textContent = RITUAL_ICONS[step.id] || '\u{1F319}';
+  els.ritualStepIcon.innerHTML = RITUAL_ICONS[step.id] || RITUAL_ICONS.dim;
   els.ritualStepTitle.textContent = step.label;
   els.ritualStepDesc.textContent = RITUAL_DESCS[step.id] || '';
   els.btnRitualSkip.style.display = step.skippable ? '' : 'none';

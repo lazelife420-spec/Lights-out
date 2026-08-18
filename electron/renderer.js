@@ -1930,7 +1930,14 @@ function render() {
   document.getElementById('toggle-mute')?.querySelector('.toggle-indicator')?.replaceChildren(document.createTextNode(state.sound ? 'ON' : 'OFF'));
   document.getElementById('toggle-graceful')?.querySelector('.toggle-indicator')?.replaceChildren(document.createTextNode(state.gracefulClose ? 'ON' : 'OFF'));
 
-  // Status pill: single animated indicator replacing badge soup
+  // Status pill: single animated indicator replacing badge soup.
+  // Phase 5D-B: the idle case used to say bare "Idle" when dry-run was
+  // off, which never told the user the app was actually primed to take a
+  // real action -- "Dry Run" got a distinct look (see .status-pill.dryrun
+  // below) but the live case got none, silently distinguished only by the
+  // absence of the word "Dry Run". Every branch now names Live/Dry Run
+  // explicitly and consistently; no change to state.dryRun itself or when
+  // a real action can fire.
   if (els.statusPill) {
     const pill = els.statusPill;
     pill.className = 'status-pill';
@@ -1943,21 +1950,24 @@ function render() {
       if (outcomePill) {
         pill.classList.add(outcomePill.cls);
         els.statusText.textContent = outcomePill.text;
+      } else if (state.dryRun) {
+        els.statusText.textContent = 'Dry Run';
+        pill.classList.add('dryrun');
       } else {
-        els.statusText.textContent = state.dryRun ? 'Dry Run' : 'Idle';
-        if (state.dryRun) pill.classList.add('dryrun');
+        els.statusText.textContent = 'Live Ready';
+        pill.classList.add('live-ready');
       }
     } else if (state.paused) {
       pill.classList.add('paused');
       if (state.dryRun) pill.classList.add('dryrun');
-      els.statusText.textContent = state.dryRun ? 'Dry Run · Paused' : 'Paused';
+      els.statusText.textContent = state.dryRun ? 'Dry Run · Paused' : 'Live · Paused';
     } else {
       const phaseClass = state.phase === 'dim' ? 'dim' : state.phase === 'lastlight' ? 'lastlight' : 'running';
       pill.classList.add(phaseClass);
       if (state.dryRun) pill.classList.add('dryrun');
       const labels = { focus: 'Focus', dim: 'Winding Down', lastlight: 'Last Light', idle: 'Running' };
       const phaseLabel = labels[state.phase] || 'Running';
-      els.statusText.textContent = state.dryRun ? `Dry Run · ${phaseLabel}` : phaseLabel;
+      els.statusText.textContent = state.dryRun ? `Dry Run · ${phaseLabel}` : `Live · ${phaseLabel}`;
     }
   }
 

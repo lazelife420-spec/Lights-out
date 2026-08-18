@@ -1240,6 +1240,11 @@ input:disabled {
   margin: 0 4px;
   border-left: 1px solid var(--border-color);
 }
+/* Phase 5D-B: was styled with a pill background/border-radius, making it
+   look like an inert fake tab sitting inside the real tab row instead of a
+   plain section label attached to the divider line. The border-left on
+   .tab-divider already does the actual dividing; this is label text only
+   now, no button-like chrome. */
 .tab-divider::before {
   content: attr(data-label);
   font-size: 9px;
@@ -1247,9 +1252,6 @@ input:disabled {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-muted);
-  background: var(--bg-hover);
-  padding: 3px 7px;
-  border-radius: 999px;
   white-space: nowrap;
 }
 
@@ -1524,6 +1526,17 @@ input[type="datetime-local"] {
 }
 .status-pill.dryrun .status-dot {
   background: var(--accent-cyan);
+}
+/* Phase 5D-B: dry-run got a distinct color the moment this component was
+   built; the live-and-idle case never did, so it fell back to the same
+   flat muted gray as everything else and read as "nothing to see here"
+   instead of "ready to actually act". */
+.status-pill.live-ready {
+  background: rgba(76, 175, 80, 0.1);
+  color: var(--accent-green);
+}
+.status-pill.live-ready .status-dot {
+  background: var(--accent-green);
 }
 .status-pill.complete {
   background: rgba(76, 175, 80, 0.12);

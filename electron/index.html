@@ -176,9 +176,13 @@
             </div>
           </div>
         </div>
+        <!-- Phase 5D-B: renamed from "Quick Toggles" -- the app's most
+             important state (Dry Run vs Live) lived in here under a label
+             that gave no hint that's what it was. Same items, same ids,
+             same behavior; only the visible label changed. -->
         <div class="menu-item" id="menu-settings" tabindex="0" role="button" aria-haspopup="menu" aria-expanded="false">
-          <span>Quick Toggles</span>
-          <div class="submenu" role="menu" aria-label="Quick toggles">
+          <span>Status &amp; Safety</span>
+          <div class="submenu" role="menu" aria-label="Status and safety">
             <div class="submenu-item toggle" role="menuitemcheckbox" tabindex="-1" id="toggle-dryrun">
               <span>Dry Run Mode</span>
               <span class="toggle-indicator">OFF</span>
@@ -196,9 +200,11 @@
             </div>
           </div>
         </div>
+        <!-- Phase 5D-B: renamed from "Info" -- id was already menu-help,
+             the visible label just hadn't caught up. -->
         <div class="menu-item" id="menu-help" tabindex="0" role="button" aria-haspopup="menu" aria-expanded="false">
-          <span>Info</span>
-          <div class="submenu" role="menu" aria-label="Info">
+          <span>Help</span>
+          <div class="submenu" role="menu" aria-label="Help">
             <div class="submenu-item" role="menuitem" tabindex="-1" data-help="Use presets for quick starts, Options for launch behavior, and the tray menu for pause, snooze, or cancel.">
               <span class="icon">&#x2139;</span>
               <span>Documentation</span>
@@ -2063,7 +2069,15 @@
           <span class="badge notif-badge" id="notif-badge" style="display:none;position:absolute;top:-2px;right:-4px;font-size:8px;background:#ff4d4d;color:#fff;border-radius:50%;min-width:14px;height:14px;display:none;align-items:center;justify-content:center;padding:0 3px"></span>
         </button>
         <button class="footer-action" id="btn-widget" title="Toggle desktop widget" aria-label="Toggle desktop widget">&#x1F4CA;</button>
-        <button class="footer-action" id="btn-companion" title="Open companion setup" aria-label="Open companion setup">&#x1F4F1;</button>
+        <!-- Phase 5D-B: audited as a possible third redundant Companion
+             entry point (alongside Devices and Settings), but its handler
+             (renderer.js) does something the other two don't -- opens the
+             phone's pairing page directly in the browser when Companion is
+             already reachable, instead of just routing into the app.
+             Removing it would be a real functionality loss, not pure
+             redundancy cleanup, so it stays; disambiguated with help text
+             instead. -->
+        <button class="footer-action" id="btn-companion" title="Open companion setup" aria-label="Open companion setup" data-ns-help="Opens your phone's pairing page directly if Companion is ready, or Settings to set it up. Same destination as Devices -> Phone Companion.">&#x1F4F1;</button>
         <span class="badge update-badge" id="badge-update" style="display:none" title="Update available">UPDATE</span>
         <span id="version">v11.1.2</span>
       </div>
@@ -2096,7 +2110,7 @@
           </div>
           <div class="option-group">
             <label>Avatar (optional)</label>
-            <input type="text" id="new-profile-avatar" placeholder="e.g., A or 🌙" maxlength="4">
+            <input type="text" id="new-profile-avatar" placeholder="e.g., A" maxlength="4">
           </div>
           <div class="option-group">
             <label>Accent (optional)</label>
@@ -2127,7 +2141,7 @@
             <button class="filter-btn active" data-filter="all" style="padding: 4px 8px; font-size:10px; border-radius: 4px; cursor:pointer; border:1px solid var(--border-soft); background:rgba(255,255,255,0.08); color:#fff;">All</button>
             <button class="filter-btn" data-filter="duration" style="padding: 4px 8px; font-size:10px; border-radius: 4px; cursor:pointer; border:1px solid var(--border-soft); background:transparent; color:var(--text-muted);">Duration</button>
             <button class="filter-btn" data-filter="clock" style="padding: 4px 8px; font-size:10px; border-radius: 4px; cursor:pointer; border:1px solid var(--border-soft); background:transparent; color:var(--text-muted);">Clock</button>
-            <button class="filter-btn" data-filter="pinned" style="padding: 4px 8px; font-size:10px; border-radius: 4px; cursor:pointer; border:1px solid var(--border-soft); background:transparent; color:var(--text-muted);">📌 Pinned</button>
+            <button class="filter-btn" data-filter="pinned" style="padding: 4px 8px; font-size:10px; border-radius: 4px; cursor:pointer; border:1px solid var(--border-soft); background:transparent; color:var(--text-muted);">Pinned</button>
           </div>
           <div class="profiles-list" id="profiles-list">
             <!-- Profile items loaded dynamically -->
@@ -2242,8 +2256,13 @@
   <!-- Ritual Mode Overlay -->
   <div class="modal" id="ritual-overlay" style="display:none">
     <div class="modal-content" style="max-width:380px;text-align:center">
+      <!-- Phase 5D-B: was a raw emoji swapped per-step by
+           updateRitualOverlay() (renderer-ritual-focus.js); replaced with
+           the same SVG stroke-icon family used elsewhere (sidebar,
+           NS_MODE_ICONS). Static fallback here matches RITUAL_ICONS.dim,
+           the same default the JS itself falls back to. -->
       <div style="margin-bottom:16px">
-        <span style="font-size:32px" id="ritual-step-icon">&#x1F319;</span>
+        <span style="display:inline-flex;width:32px;height:32px;color:var(--text-primary)" id="ritual-step-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>
       </div>
       <h3 id="ritual-step-title" style="margin:0 0 8px;font-size:18px">Bedtime Ritual</h3>
       <p id="ritual-step-desc" style="font-size:12px;color:var(--text-muted);margin:0 0 16px">Preparing your wind-down sequence...</p>
