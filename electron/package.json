@@ -45,6 +45,7 @@
       "styles.css",
       "renderer-utils.js",
       "renderer-help.js",
+      "renderer-nav.js",
       "renderer-profiles.js",
       "renderer-calendar.js",
       "renderer-receipts.js",

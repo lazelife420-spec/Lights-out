@@ -85,7 +85,7 @@ function renderProfiles() {
     // without taking up any of the card's compact layout.
     const cardTitle = profile.notes ? `${profile.notes}` : `Ctrl+${index + 1} to quick-load`;
     return `
-      <div class="profile-card ${isActive ? 'active' : ''} ${profile.pinned ? 'pinned' : ''}" data-profile-id="${profile.id}" title="${escapeHtml(cardTitle)}">
+      <div class="profile-card ${isActive ? 'active' : ''} ${profile.pinned ? 'pinned' : ''}" data-profile-id="${profile.id}" title="${escapeHtml(cardTitle)}" tabindex="0" role="button" aria-pressed="${isActive}">
         <div class="profile-name">
           ${profile.avatar ? `<span class="profile-avatar" aria-hidden="true">${escapeHtml(profile.avatar)}</span>` : ''}
           ${profile.pinned ? '<span class="pin-badge" style="color:var(--accent-amber); margin-right:4px;">📌</span>' : ''}
@@ -100,11 +100,20 @@ function renderProfiles() {
 
   applyProfileAccentStyles(els.profilesGrid);
 
-  // Add click handlers
+  // Add click handlers. Phase 5C-A: these were mouse-only -- a real
+  // <button> gets Enter/Space activation for free, but this is a styled
+  // <div> (title/notes/pin-badge layout predates the a11y pass), so Enter
+  // and Space are wired explicitly here instead of converting the element.
   els.profilesGrid.querySelectorAll('.profile-card').forEach(card => {
     card.addEventListener('click', () => {
       const profileId = card.dataset.profileId;
       applyProfile(profileId);
+    });
+    card.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        card.click();
+      }
     });
   });
 }

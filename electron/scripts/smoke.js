@@ -34,7 +34,7 @@ function assertMatch(src, pattern, msg) {
 }
 
 // 1. Syntax-check every first-party JS file.
-const jsFiles = ['main.js', 'preload.js', 'renderer-utils.js', 'renderer-help.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'renderer.js', 'settings.js', 'smartLights.js', 'profiles.js', 'profileIdentity.js', 'profileRitualContext.js', 'startDecision.js', 'windowGeometry.js', 'calendar.js', 'lastLight.js', 'companionNetwork.js', 'companionFirewall.js', 'capabilityTruth.js'];
+const jsFiles = ['main.js', 'preload.js', 'renderer-utils.js', 'renderer-help.js', 'renderer-nav.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'renderer.js', 'settings.js', 'smartLights.js', 'profiles.js', 'profileIdentity.js', 'profileRitualContext.js', 'startDecision.js', 'windowGeometry.js', 'calendar.js', 'lastLight.js', 'companionNetwork.js', 'companionFirewall.js', 'capabilityTruth.js'];
 for (const file of jsFiles) {
   check(`syntax: ${file}`, () => {
     execFileSync(process.execPath, ['--check', path.join(root, file)], { stdio: 'pipe' });
@@ -665,7 +665,7 @@ check('preload: timer, mini-mode, and tray-settings bridge APIs remain exposed',
 // tags in index.html, and add new renderer-*.js shards here as they're split
 // out, so these content assertions keep matching regardless of which shard
 // the checked code physically lives in.
-const RENDERER_FILES = ['renderer-utils.js', 'renderer-help.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'renderer.js'];
+const RENDERER_FILES = ['renderer-utils.js', 'renderer-help.js', 'renderer-nav.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'renderer.js'];
 const rendererSrc = RENDERER_FILES.map(f => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
 check('renderer: running-state controls still swap stop-pause visibility and label', () => {
   // Start is no longer a separate setup-controls button toggled here -- the
@@ -770,7 +770,7 @@ check('renderer fallback: preview mode stays safe and idle by default', () => {
 });
 
 check('renderer: visible sidebar navigation routes to a real tab or modal', () => {
-  assertMatch(rendererSrc, /function handleSidebarNavigation\(tab, \{ persist = true \} = \{\}\) \{/, 'sidebar navigation router missing');
+  assertMatch(rendererSrc, /function handleSidebarNavigation\(tab, \{ persist = true, fromHistory = false \} = \{\}\) \{/, 'sidebar navigation router missing');
   assertMatch(rendererSrc, /if \(tab === 'lib'\) \{[\s\S]*applyMainPanelVisibility\('lib'\);[\s\S]*handled = true;/s, 'LIB routing missing');
   assertMatch(rendererSrc, /if \(tab === 'sch'\) \{[\s\S]*applyMainPanelVisibility\('sch'\);[\s\S]*handled = true;/s, 'SCH routing missing');
   assertMatch(rendererSrc, /if \(tab === 'set'\) \{[\s\S]*openSettingsPanel\(\);[\s\S]*handled = true;/s, 'SET routing missing');
@@ -1781,6 +1781,75 @@ check('help: no emoji in the new data-ns-help / ns-setup-hint copy', () => {
     assert(!emojiPattern.test(text), `emoji found in new help copy: "${text}"`);
   }
   assert(helpStrings.length + hintStrings.length >= 10, `sanity: expected at least 10 new help strings, found ${helpStrings.length + hintStrings.length}`);
+});
+
+check('nav: renderer-nav.js is loaded and wired before renderer.js', () => {
+  assertMatch(htmlSrc, /<script src="renderer-nav\.js"><\/script>/, 'renderer-nav.js must be loaded as a script');
+  const navTagIndex = htmlSrc.indexOf('<script src="renderer-nav.js">');
+  const rendererTagIndex = htmlSrc.indexOf('<script src="renderer.js">');
+  assert(navTagIndex > -1 && rendererTagIndex > -1 && navTagIndex < rendererTagIndex, 'renderer-nav.js must load before renderer.js');
+  assertMatch(rendererSrc, /function initNavigationContract\(\)/, 'initNavigationContract() must exist');
+  assertMatch(rendererSrc, /^initNavigationContract\(\);/m, 'initNavigationContract() must be invoked at load, not just defined');
+});
+
+check('nav: mouse-button and Alt+Arrow back/forward are wired', () => {
+  // MouseEvent.button 3/4 are the side (back/forward) buttons. Handled on
+  // both mouseup and auxclick since driver behavior for these buttons is
+  // inconsistent across Chromium builds.
+  assertMatch(rendererSrc, /event\.button === 3.*navGoBack\(\)/, 'mouse button 4 (back, MouseEvent.button===3) is not wired');
+  assertMatch(rendererSrc, /event\.button === 4.*navGoForward\(\)/, 'mouse button 5 (forward, MouseEvent.button===4) is not wired');
+  assertMatch(rendererSrc, /document\.addEventListener\('auxclick'/, 'auxclick fallback for side mouse buttons is missing');
+  assertMatch(rendererSrc, /event\.altKey[\s\S]{0,60}event\.key === 'ArrowLeft'[\s\S]{0,40}navGoBack\(\)/, 'Alt+Left back navigation is not wired');
+  assertMatch(rendererSrc, /event\.key === 'ArrowRight'[\s\S]{0,40}navGoForward\(\)/, 'Alt+Right forward navigation is not wired');
+  // Back/Forward must not act on the background while a real modal blocks
+  // it -- same "close/act on the modal first" precedent as Escape.
+  assertMatch(rendererSrc, /function navModalOpen\(\)/, 'mouse/Alt+Arrow navigation must not fire while a modal is open');
+});
+
+check('nav: handleSidebarNavigation pushes real navigation onto the back/forward stack', () => {
+  assertMatch(rendererSrc, /function handleSidebarNavigation\(tab, \{ persist = true, fromHistory = false \} = \{\}\) \{/, 'handleSidebarNavigation must accept fromHistory to avoid re-pushing history-driven moves');
+  assertMatch(rendererSrc, /if \(!fromHistory && typeof pushNavRoute === 'function'\) pushNavRoute\(tab\);/, 'real navigation must push onto the history stack');
+  assertMatch(rendererSrc, /function navGoBack\(\)/, 'navGoBack() must exist');
+  assertMatch(rendererSrc, /function navGoForward\(\)/, 'navGoForward() must exist');
+  assertMatch(rendererSrc, /handleSidebarNavigation\(target, \{ fromHistory: true \}\)/, 'history navigation must call back into handleSidebarNavigation, not duplicate its routing logic');
+});
+
+check('nav: arrow-key roving navigation covers sidebar, Library, Tonight, Schedule/Proof tabs, and Settings', () => {
+  assertMatch(rendererSrc, /function initNavigationContract\(\)[\s\S]*data-ns-navgroup/, 'delegated arrow-key nav handler is missing');
+  const navGroupTargets = [
+    ['sidebar', /<aside class="ns-sidebar"[^>]*data-ns-navgroup="vertical"/],
+    ['Library ready grid', /id="nm-ready-grid" data-ns-navgroup="horizontal"/],
+    ['Library unready grid', /id="nm-unready-grid" data-ns-navgroup="horizontal"/],
+    ['Tonight chips row', /class="chips-row" data-ns-navgroup="horizontal"/],
+    ['Tonight Quick plans', /id="profiles-grid" data-ns-navgroup="horizontal"/],
+    ['Settings rail', /class="settings-rail"[^>]*data-ns-navgroup="vertical"/],
+  ];
+  for (const [name, pattern] of navGroupTargets) {
+    assertMatch(htmlSrc, pattern, `${name} is missing data-ns-navgroup`);
+  }
+  // Schedule and Proof each have their own .tabs-header -- both must be
+  // covered, not just the first match.
+  const tabsHeaderCount = (htmlSrc.match(/class="tabs-header" data-ns-navgroup="horizontal"/g) || []).length;
+  assert(tabsHeaderCount === 2, `expected both Schedule's and Proof's .tabs-header to carry data-ns-navgroup, found ${tabsHeaderCount}`);
+});
+
+check('nav: Quick plans cards are keyboard-activatable, not mouse-only', () => {
+  // profile-card is a styled <div>, not a <button> -- Enter/Space
+  // activation and a real accessible role/tabindex are not free here the
+  // way they are for actual <button> elements elsewhere in the app.
+  assertMatch(rendererSrc, /class="profile-card[^"]*" data-profile-id="\$\{profile\.id\}"[^`]*tabindex="0" role="button"/, 'Quick plans cards must be focusable with a real button role');
+  assertMatch(rendererSrc, /card\.addEventListener\('keydown', event => \{[\s\S]*event\.key === 'Enter' \|\| event\.key === ' '[\s\S]*card\.click\(\);/, 'Quick plans cards must activate on Enter/Space, not just click');
+});
+
+check('nav: no timer/power/schedule-execution files touched by the Navigation Contract', () => {
+  // Guards the Phase 5C-A non-goal boundary: this pass is renderer-layer
+  // navigation ergonomics only. Fails loudly if nav-specific identifiers
+  // leak into files that should never need them.
+  const guardedFiles = ['main.js', 'startDecision.js', 'windowGeometry.js', 'calendar.js', 'calendarProviders.js', 'companionNetwork.js', 'companionFirewall.js'];
+  for (const file of guardedFiles) {
+    const src = fs.readFileSync(path.join(root, file), 'utf8');
+    assert(!/navGoBack|navGoForward|data-ns-navgroup|initNavigationContract/.test(src), `${file} must not reference Navigation Contract internals -- this pass is renderer-only`);
+  }
 });
 
 check('ux: Escape closes all modals (profiles, receipts, about, notif-drawer)', () => {

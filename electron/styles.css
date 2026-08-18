@@ -31,9 +31,13 @@
   --shadow-glow: 0 0 20px rgba(91,140,255,0.15);
 }
 
-/* Global focus ring for keyboard navigation */
+/* Global focus ring for keyboard navigation. [data-ns-help] covers the
+   informational (non-button) focusable elements added in Phase 5B-A
+   (current-plan banner, ring PREVIEW badge, ambient clock, participating
+   chips) that button/[role="button"] don't already reach. */
 button:focus-visible,
-[role="button"]:focus-visible {
+[role="button"]:focus-visible,
+[data-ns-help]:focus-visible {
   outline: 2px solid rgba(107, 211, 255, 0.9);
   outline-offset: 2px;
 }

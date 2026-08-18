@@ -103,7 +103,7 @@
     <button class="fullscreen-clock-exit" id="btn-fullscreen-clock-exit" title="Exit full screen (Esc)" aria-label="Exit full screen">&#x2715;</button>
 
     <!-- Northstar left sidebar (icon rail) -->
-    <aside class="ns-sidebar" aria-label="Navigation">
+    <aside class="ns-sidebar" aria-label="Navigation" data-ns-navgroup="vertical">
       <div class="ns-sidebar-logo">
         <img src="assets/brand/lights-out-icon.svg" alt="" draggable="false">
         <span class="ns-sidebar-wordmark">Lights Out</span>
@@ -509,7 +509,7 @@
                stepper and Start button entirely. Caption + per-chip help
                text only; the instant-start behavior itself is unchanged. -->
           <div class="ns-setup-hint">Presets start immediately -- no confirmation step</div>
-          <div class="chips-row">
+          <div class="chips-row" data-ns-navgroup="horizontal">
             <button class="chip" data-min="5" data-ns-help="Starts immediately: 5 min, using your current power action.">5m</button>
             <button class="chip" data-min="15" data-ns-help="Starts immediately: 15 min, using your current power action.">15m</button>
             <button class="chip" data-min="30" data-ns-help="Starts immediately: 30 min, using your current power action.">30m</button>
@@ -557,7 +557,7 @@
              click could easily be mistaken for an instant-start like the
              chips above. -->
         <div class="ns-setup-hint">Loads into the timer above -- press Start after, it won't start on its own</div>
-        <div class="profiles-grid" id="profiles-grid">
+        <div class="profiles-grid" id="profiles-grid" data-ns-navgroup="horizontal">
           <!-- Profiles loaded dynamically -->
         </div>
       </section>
@@ -658,7 +658,7 @@
           <!-- Ready to Use: larger visual tiles, not the old compact cards. -->
           <section class="nm-tier">
             <h3 class="nm-tier-heading">Ready to Use</h3>
-            <div class="nm-tile-row" id="nm-ready-grid">
+            <div class="nm-tile-row" id="nm-ready-grid" data-ns-navgroup="horizontal">
               <!-- Tiles rendered by renderer-night-modes.js -->
             </div>
           </section>
@@ -666,7 +666,7 @@
           <!-- Requires Setup / Coming Later: subdued, clearly separated. -->
           <section class="nm-tier nm-tier-subdued" id="nm-unready-section">
             <h3 class="nm-tier-heading">Requires Setup / Coming Later</h3>
-            <div class="nm-tile-row" id="nm-unready-grid">
+            <div class="nm-tile-row" id="nm-unready-grid" data-ns-navgroup="horizontal">
               <!-- Tiles rendered by renderer-night-modes.js -->
             </div>
           </section>
@@ -698,7 +698,7 @@
           </div>
         </div>
 
-        <div class="tabs-header">
+        <div class="tabs-header" data-ns-navgroup="horizontal">
           <button class="tab-btn active" data-tab="schedule">Schedule</button>
           <button class="tab-btn" data-tab="automations">Automations</button>
           <button class="tab-btn" data-tab="clock">Clock</button>
@@ -1049,7 +1049,7 @@
           <p class="dev-subtitle">What actually ran. Last run, history, and activity live here.</p>
         </div>
 
-        <div class="tabs-header">
+        <div class="tabs-header" data-ns-navgroup="horizontal">
           <button class="tab-btn active" data-tab="proof-last">Last Run</button>
           <button class="tab-btn" data-tab="proof-history">History</button>
           <button class="tab-btn" data-tab="proof-activity">Activity</button>
@@ -1199,7 +1199,7 @@
         <button class="modal-close" id="modal-close" aria-label="Back to Tonight">&times;</button>
       </div>
       <div class="modal-body">
-        <nav class="settings-rail" aria-label="Settings categories">
+        <nav class="settings-rail" aria-label="Settings categories" data-ns-navgroup="vertical">
           <button type="button" class="settings-rail-btn" data-settings-category="general">General</button>
           <button type="button" class="settings-rail-btn" data-settings-category="power-safety">Power &amp; Safety</button>
           <button type="button" class="settings-rail-btn" data-settings-category="wind-down">Wind-Down</button>
@@ -2399,6 +2399,7 @@
   <script src="ambientVisuals.js"></script>
   <script src="renderer-utils.js"></script>
   <script src="renderer-help.js"></script>
+  <script src="renderer-nav.js"></script>
   <script src="renderer-profiles.js"></script>
   <script src="renderer-calendar.js"></script>
   <script src="renderer-receipts.js"></script>

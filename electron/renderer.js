@@ -1576,7 +1576,7 @@ els.proofLastRunSummary?.addEventListener('click', (e) => {
 });
 els.btnActivityGoTonight?.addEventListener('click', () => handleSidebarNavigation('lib'));
 
-async function handleSidebarNavigation(tab, { persist = true } = {}) {
+async function handleSidebarNavigation(tab, { persist = true, fromHistory = false } = {}) {
   let handled = false;
 
   if (tab === 'home') {
@@ -1620,6 +1620,12 @@ async function handleSidebarNavigation(tab, { persist = true } = {}) {
   }
 
   setSidebarSelection(tab);
+  // Phase 5C-A: record real, user-driven navigation onto the app-level
+  // back/forward stack (renderer-nav.js). fromHistory is true only when
+  // navGoBack()/navGoForward() themselves called this -- otherwise every
+  // Back press would immediately re-push the tab it just left, and Forward
+  // would never have anything to redo.
+  if (!fromHistory && typeof pushNavRoute === 'function') pushNavRoute(tab);
   if (persist && ['home', 'lib', 'modes', 'sch', 'dev', 'stats'].includes(tab)) {
     try { api.saveAppSettings({ app: { nsActiveTab: tab } }); } catch (_) {}
   }
