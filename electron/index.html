@@ -1205,18 +1205,33 @@
         <button class="modal-close" id="modal-close" aria-label="Back to Tonight">&times;</button>
       </div>
       <div class="modal-body">
+        <!-- Phase 5E-B: visual grouping only -- every data-settings-category
+             value, button, and click handler is unchanged. Group labels are
+             plain non-interactive text (data-ns-navgroup's arrow-key nav
+             already skips non-button/non-tabindex elements, so these don't
+             need to be excluded from anything). -->
         <nav class="settings-rail" aria-label="Settings categories" data-ns-navgroup="vertical">
+          <div class="settings-rail-group-label">Basics</div>
           <button type="button" class="settings-rail-btn" data-settings-category="general">General</button>
-          <button type="button" class="settings-rail-btn" data-settings-category="power-safety">Power &amp; Safety</button>
-          <button type="button" class="settings-rail-btn" data-settings-category="wind-down">Wind-Down</button>
-          <button type="button" class="settings-rail-btn" data-settings-category="phone">Phone Companion</button>
-          <button type="button" class="settings-rail-btn" data-settings-category="protection">Protection</button>
-          <button type="button" class="settings-rail-btn" data-settings-category="accountability">Accountability</button>
-          <button type="button" class="settings-rail-btn" data-settings-category="automations">Automations</button>
           <button type="button" class="settings-rail-btn" data-settings-category="appearance">Appearance &amp; Sound</button>
+          <div class="settings-rail-group-label">Safety</div>
+          <button type="button" class="settings-rail-btn" data-settings-category="power-safety">Power &amp; Safety</button>
+          <button type="button" class="settings-rail-btn" data-settings-category="protection">Protection</button>
+          <div class="settings-rail-group-label">Night Automation</div>
+          <button type="button" class="settings-rail-btn" data-settings-category="wind-down">Wind-Down</button>
+          <button type="button" class="settings-rail-btn" data-settings-category="automations">Automations</button>
+          <div class="settings-rail-group-label">Connected Devices</div>
+          <button type="button" class="settings-rail-btn" data-settings-category="phone">Phone Companion</button>
+          <div class="settings-rail-group-label">Accountability</div>
+          <button type="button" class="settings-rail-btn" data-settings-category="accountability">Accountability</button>
+          <div class="settings-rail-group-label">Advanced</div>
           <button type="button" class="settings-rail-btn" data-settings-category="advanced">Advanced</button>
         </nav>
         <div class="settings-categories">
+        <div class="settings-category-summary" data-settings-category="power-safety">
+          <p class="settings-category-purpose">The action Lights Out takes when a timer completes, and the safety guards around it.</p>
+          <p class="settings-category-affects">Affects tonight: directly. This is the action a timer or Night Mode will run unless Dry Run is on.</p>
+        </div>
         <div class="option-section" data-settings-category="power-safety">
         <div class="option-group">
           <label>Action Type</label>
@@ -1253,6 +1268,10 @@
         </div>
         </div>
 
+        <div class="settings-category-summary" data-settings-category="general">
+          <p class="settings-category-purpose">Startup behavior and appearance -- the settings that aren't specific to any one feature.</p>
+          <p class="settings-category-affects">Affects tonight: whether the app is already running and idle when you sit down, not whether anything happens automatically.</p>
+        </div>
         <div class="option-section" data-settings-category="general">
         <p class="settings-category-intro">How Lights Out behaves when Windows starts. Everything else -- the timer, shutdown behavior, and features -- lives in the categories to the left.</p>
         <div class="option-group">
@@ -1263,6 +1282,10 @@
         </div>
         </div>
 
+        <div class="settings-category-summary" data-settings-category="advanced">
+          <p class="settings-category-purpose">Focus Mode's app-closing blocklist during wind-down, and other low-level options as they're added.</p>
+          <p class="settings-category-affects">Affects tonight: only if a blocklist is set below and a wind-down actually runs.</p>
+        </div>
         <div class="option-section" data-settings-category="advanced">
         <div class="option-group">
           <label>Focus Mode - Apps to close during wind-down</label>
@@ -1295,6 +1318,10 @@
         </div>
 
         <!-- Smart Lights Section -->
+        <div class="settings-category-summary" data-settings-category="wind-down">
+          <p class="settings-category-purpose">Smart Lights and system-level wind-down behavior (Night Light, pausing media, lockout) that can run alongside a timer.</p>
+          <p class="settings-category-affects">Affects tonight: only if Smart Lights is configured, or a wind-down action below is turned on -- all default off.</p>
+        </div>
         <div class="option-section lights-section" data-settings-category="wind-down">
           <h3>&#x1F4A1; Smart Lights <span class="status-pill status-local" style="font-size:8px">REQUIRES SETUP</span></h3>
           <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Nothing is controlled until you configure and successfully test the available Philips Hue or HTTP integration.</p>
@@ -1378,6 +1405,10 @@
         </div>
 
         <!-- First Light Section -->
+        <div class="settings-category-summary" data-settings-category="automations">
+          <p class="settings-category-purpose">First Light's morning wake sequence, and Autopilot's learned-bedtime auto-start.</p>
+          <p class="settings-category-affects">Affects tonight: Autopilot only if enabled; First Light only if a wake time is set below.</p>
+        </div>
         <div class="option-section alarm-section" data-settings-category="automations">
           <h3>&#x1F305; First Light</h3>
 
@@ -1408,6 +1439,10 @@
         </div>
 
         <!-- Remote Control Section -->
+        <div class="settings-category-summary" data-settings-category="phone">
+          <p class="settings-category-purpose">Lets your phone control this timer over the same Wi-Fi network. Off by default.</p>
+          <p class="settings-category-affects">Affects tonight: only if you turn it on and pair a device below.</p>
+        </div>
         <div class="option-section remote-control-section" data-settings-category="phone">
           <div style="display:flex;justify-content:space-between;align-items:center">
             <h3>&#x1F4F1; Phone Companion</h3>
@@ -1497,6 +1532,10 @@
         </div>
 
         <!-- WiFi Guard Section -->
+        <div class="settings-category-summary" data-settings-category="protection">
+          <p class="settings-category-purpose">Wi-Fi Guard and Content Blocker -- optional, experimental network-level restrictions.</p>
+          <p class="settings-category-affects">Affects tonight: only if configured. Neither runs unless explicitly set up and tested below.</p>
+        </div>
         <div class="option-section wifi-guard-section" data-settings-category="protection">
           <h3>&#x1F6E1;&#xFE0F; WiFi Guard <span class="status-pill status-local" style="font-size:8px">EXPERIMENTAL</span></h3>
           <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Requires a compatible router or your own webhook. Windows Firewall on this PC cannot block a different phone or tablet on the LAN.</p>
@@ -1665,6 +1704,10 @@
         </div>
 
         <!-- Accountability Partner Section -->
+        <div class="settings-category-summary" data-settings-category="accountability">
+          <p class="settings-category-purpose">Sends a notification to a webhook you control, and makes hitting snooze progressively more expensive.</p>
+          <p class="settings-category-affects">Affects tonight: only if you enable one of these below. No message is sent until a partner webhook exists.</p>
+        </div>
         <div class="option-section accountability-section" data-settings-category="accountability">
           <h3>&#x1F91D; Accountability Partner</h3>
           <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Sends JSON to a webhook you configure and test below. No message is sent until a partner webhook exists.</p>
@@ -1799,6 +1842,15 @@
         </div>
 
         <!-- Customization Section -->
+        <!-- Phase 5E-B: category summary cards -- static, truthful purpose
+             + "affects tonight" copy, no new live wiring. Shares
+             data-settings-category with the option-sections below it so
+             the broadened switchSettingsCategory() selector (renderer.js)
+             shows/hides it with the rest of the category automatically. -->
+        <div class="settings-category-summary" data-settings-category="appearance">
+          <p class="settings-category-purpose">How Lights Out looks and sounds -- theme, ring style, clock face, accent color, volume.</p>
+          <p class="settings-category-affects">Affects tonight: presentation only. Never changes what actually happens.</p>
+        </div>
         <div class="option-section customize-section" data-settings-category="appearance">
           <h3>&#x1F3A8; Customize</h3>
 

@@ -1738,6 +1738,47 @@ body.phase-lastlight .cockpit {
   color: var(--accent-cyan);
 }
 
+/* Phase 5E-B: visual-only grouping -- Basics/Safety/Night Automation/
+   Connected Devices/Accountability/Advanced. Plain non-interactive labels,
+   not buttons or tabs; the border-top does the actual grouping, matching
+   the same restrained pattern used for Schedule's TOOLS divider. */
+.settings-rail-group-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 14px 12px 4px;
+  border-top: 1px solid var(--border-color);
+  margin-top: 6px;
+}
+.settings-rail-group-label:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+/* Category summary card: purpose + "affects tonight" truth line at the
+   top of every category, so a category never opens as just a bare
+   checkbox with no explanation of what it's for or whether it matters. */
+.settings-category-summary {
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+}
+.settings-category-purpose {
+  font-size: 12px;
+  color: var(--text-primary);
+  margin: 0 0 6px;
+}
+.settings-category-affects {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
 .settings-categories {
   flex: 1 1 auto;
   min-width: 0;
@@ -1746,11 +1787,16 @@ body.phase-lastlight .cockpit {
   scrollbar-gutter: stable;
 }
 
-.settings-categories .option-section[data-settings-category] {
+/* Phase 5E-B: broadened from .option-section[data-settings-category] to
+   also cover .settings-category-summary cards, which use the same
+   data-settings-category + settings-category-active toggle
+   (switchSettingsCategory() in renderer.js) but aren't .option-section
+   elements themselves. */
+.settings-categories [data-settings-category] {
   display: none;
 }
 
-.settings-categories .option-section[data-settings-category].settings-category-active {
+.settings-categories [data-settings-category].settings-category-active {
   display: block;
 }
 

@@ -1896,6 +1896,53 @@ check('command-clarity: footer Companion shortcut keeps its unique behavior, gai
   assertMatch(htmlSrc, /id="btn-companion"[^>]*data-ns-help="[^"]+"/, 'footer Companion shortcut must carry disambiguating help text');
 });
 
+check('settings-shell: rail is visually grouped without changing categories or handlers', () => {
+  const expectedGroups = ['Basics', 'Safety', 'Night Automation', 'Connected Devices', 'Accountability', 'Advanced'];
+  for (const group of expectedGroups) {
+    assertMatch(htmlSrc, new RegExp(`class="settings-rail-group-label">${group}<`), `missing rail group label: ${group}`);
+  }
+  // All 9 categories, same ids, same order-independent set -- grouping is
+  // presentation only, switchSettingsCategory()'s category matching is
+  // untouched by this check (the click handlers are per-button, not
+  // per-group, so this is the invariant that actually matters).
+  const expectedCategories = ['general', 'power-safety', 'wind-down', 'phone', 'protection', 'accountability', 'automations', 'appearance', 'advanced'];
+  for (const cat of expectedCategories) {
+    assertMatch(htmlSrc, new RegExp(`class="settings-rail-btn" data-settings-category="${cat}"`), `settings-rail-btn for ${cat} must still exist`);
+  }
+});
+
+check('settings-shell: every category has a truthful summary card', () => {
+  const expectedCategories = ['general', 'power-safety', 'wind-down', 'phone', 'protection', 'accountability', 'automations', 'appearance', 'advanced'];
+  for (const cat of expectedCategories) {
+    assertMatch(htmlSrc, new RegExp(`class="settings-category-summary" data-settings-category="${cat}"`), `${cat} is missing its settings-category-summary card`);
+  }
+  // Purpose/affects text must exist for each -- a present-but-empty card
+  // would satisfy the check above without actually explaining anything.
+  const summaryCount = (htmlSrc.match(/class="settings-category-summary" data-settings-category="/g) || []).length;
+  const purposeCount = (htmlSrc.match(/class="settings-category-purpose">/g) || []).length;
+  const affectsCount = (htmlSrc.match(/class="settings-category-affects">/g) || []).length;
+  assert(summaryCount === 9 && purposeCount === 9 && affectsCount === 9, `expected 9 summary/purpose/affects each, found ${summaryCount}/${purposeCount}/${affectsCount}`);
+});
+
+check('settings-shell: category visibility toggle covers summary cards, same mechanism as option-sections', () => {
+  assertMatch(rendererSrc, /document\.querySelectorAll\('\.settings-categories \[data-settings-category\]'\)\.forEach\(section => \{/, 'switchSettingsCategory must toggle all [data-settings-category] elements, not just .option-section ones');
+  const stylesSrcForSettings = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  assertMatch(stylesSrcForSettings, /\.settings-categories \[data-settings-category\] \{\s*display: none;\s*\}/, 'the show/hide CSS must match the broadened JS selector, or summary cards would never hide');
+  assertMatch(stylesSrcForSettings, /\.settings-categories \[data-settings-category\]\.settings-category-active \{\s*display: block;\s*\}/, 'the active-state CSS must match the broadened JS selector');
+});
+
+check('settings-shell: no save/dirty-state or control behavior changed', () => {
+  // This pass is hierarchy + summary cards only -- every control id, the
+  // global (not per-category) save function, Dry Run's live-commit
+  // behavior, and Cancel's real discard must all be exactly as they were.
+  assertMatch(rendererSrc, /async function saveSettingsPanel\(\) \{/, 'saveSettingsPanel must still exist, unchanged in shape');
+  assertMatch(rendererSrc, /state\.dryRun is already correct by the time[\s\S]{0,20}Save runs/, "Dry Run's live-commit behavior/comment must be untouched");
+  assertMatch(htmlSrc, /id="sel-action"/, 'Power & Safety controls must be untouched');
+  assertMatch(htmlSrc, /id="chk-run-login"/, 'General controls must be untouched');
+  assertMatch(htmlSrc, /id="focus-blocklist"/, 'Advanced controls must be untouched');
+  assertMatch(htmlSrc, /id="btn-save-opt"/, 'the global Save button must still exist -- dirty-state Save/Close is a later, separate pass');
+});
+
 check('nav: no timer/power/schedule-execution files touched by the Navigation Contract', () => {
   // Guards the Phase 5C-A non-goal boundary: this pass is renderer-layer
   // navigation ergonomics only. Fails loudly if nav-specific identifiers

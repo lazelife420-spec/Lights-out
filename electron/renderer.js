@@ -1334,7 +1334,12 @@ function switchSettingsCategory(categoryId) {
   document.querySelectorAll('.settings-rail-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.settingsCategory === categoryId);
   });
-  document.querySelectorAll('.settings-categories .option-section[data-settings-category]').forEach(section => {
+  // Phase 5E-B: broadened from .option-section[data-settings-category] to
+  // also match the new .settings-category-summary cards, which share the
+  // same data-settings-category attribute and need to show/hide in sync
+  // with the rest of their category -- same selector, same toggle, no new
+  // visibility mechanism.
+  document.querySelectorAll('.settings-categories [data-settings-category]').forEach(section => {
     section.classList.toggle('settings-category-active', section.dataset.settingsCategory === categoryId);
   });
 }
