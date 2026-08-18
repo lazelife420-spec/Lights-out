@@ -237,7 +237,7 @@
     <div class="ns-header-wordmark" aria-hidden="true">
       <img src="assets/brand/lights-out-icon.svg" alt="" draggable="false" class="ns-wordmark-icon">
       <span class="ns-wordmark-title">Lights Out</span>
-      <span class="ns-wordmark-sub">Bedtime Mode for Windows</span>
+      <span class="ns-wordmark-sub">Night control for Windows</span>
     </div>
 
     <!-- Main Dashboard -->
@@ -264,7 +264,7 @@
             <img src="assets/brand/lights-out-icon.svg" alt="" class="ns-home-brand-icon">
             <div class="ns-home-brand-text">
               <div class="ns-home-brand-title">LIGHTS OUT</div>
-              <div class="ns-home-brand-tag">Tonight, under control.</div>
+              <div class="ns-home-brand-tag">Control the end of your day.</div>
             </div>
           </div>
           <button class="ns-home-cta" id="ns-home-cta" aria-label="Enter tonight">
@@ -313,7 +313,7 @@
              (plan / target time / action) with one neutral link into the
              control room -- distinct from the hero CTA above, which can
              start something; this just opens Tonight to review or adjust. -->
-        <section class="ns-home-card ns-home-tonight-card" id="ns-home-tonight-card">
+        <section class="ns-home-card ns-home-card-primary ns-home-tonight-card" id="ns-home-tonight-card">
           <div class="ns-home-card-label">TONIGHT</div>
           <div class="ns-home-tonight-row">
             <div class="ns-home-tonight-main">
@@ -342,55 +342,72 @@
           </div>
         </section>
 
-        <!-- Tonight at a glance: real status only, the same synced fields
-             the Devices panel and Settings already read/write
-             (ta-lights-status/ta-wifi-status/ta-alarm-status/
-             ta-companion-status) -- one compact row, not four editable
-             diagnostic cards. Clicking a tile routes into the relevant
-             Settings category or Devices via the existing
-             openDeviceSettings()/handleSidebarNavigation(), same as the
-             equivalent Devices-panel buttons. -->
-        <section class="ns-home-card">
-          <div class="ns-home-card-label">TONIGHT AT A GLANCE</div>
-          <div class="ns-home-glance-grid">
-            <button type="button" class="ns-home-glance-tile" id="ta-glance-alarm" data-ta-target="automations">
-              <span class="ns-home-glance-icon" aria-hidden="true"></span>
-              <span class="ns-home-glance-label">First Light</span>
-              <span class="ns-home-glance-status" id="ta-alarm-status">Not set</span>
-            </button>
-            <button type="button" class="ns-home-glance-tile" id="ta-glance-companion" data-ns-tab="dev">
-              <span class="ns-home-glance-icon" aria-hidden="true"></span>
-              <span class="ns-home-glance-label">Companion</span>
-              <span class="ns-home-glance-status" id="ta-companion-status">Off</span>
-            </button>
-            <button type="button" class="ns-home-glance-tile" id="ta-glance-lights" data-ta-target="wind-down">
-              <span class="ns-home-glance-icon" aria-hidden="true"></span>
-              <span class="ns-home-glance-label">Smart Lights</span>
-              <span class="ns-home-glance-status" id="ta-lights-status">Not configured</span>
-            </button>
-            <button type="button" class="ns-home-glance-tile" id="ta-glance-wifi" data-ta-target="protection">
-              <span class="ns-home-glance-icon" aria-hidden="true"></span>
-              <span class="ns-home-glance-label">Wi-Fi Guard <span class="status-pill status-local ta-experimental-pill">EXPERIMENTAL</span></span>
-              <span class="ns-home-glance-status" id="ta-wifi-status">Not configured</span>
-            </button>
-          </div>
-        </section>
+        <!-- Secondary summary tier: Tonight at a glance + Last Night,
+             deliberately grouped and visually subdued relative to the
+             Tonight/Night-Modes cards above (per review: Home had too many
+             equal-weight cards -- this makes "what's happening" and
+             "what to browse" clearly primary, and device/proof status
+             read as a compact summary underneath, not a fifth equal
+             section). Same elements/ids/bindings as before, only their
+             wrapper and visual weight changed. -->
+        <div class="ns-home-secondary">
 
-        <!-- Last Night: one compact real Proof result, shown only when one
-             exists -- renderMorningProof() in renderer-receipts.js keeps
-             this hidden otherwise. Icons are SVG, not emoji. -->
-        <section class="ns-home-card ns-home-lastnight" id="morning-proof-section" style="display:none">
-          <div class="ns-home-card-label">LAST NIGHT</div>
-          <div class="ns-home-lastnight-row">
-            <span class="ns-home-lastnight-icon" id="proof-icon" aria-hidden="true"></span>
-            <div class="ns-home-lastnight-text">
-              <div class="ns-home-lastnight-title" id="ns-proof-title">Session complete</div>
-              <div class="ns-home-lastnight-meta" id="ns-proof-timestamp"></div>
+          <!-- Tonight at a glance: real status only, the same synced fields
+               the Devices panel and Settings already read/write
+               (ta-lights-status/ta-wifi-status/ta-alarm-status/
+               ta-companion-status) -- one compact row, not four editable
+               diagnostic cards. Clicking a tile routes into the relevant
+               Settings category or Devices via the existing
+               openDeviceSettings()/handleSidebarNavigation(), same as the
+               equivalent Devices-panel buttons. -->
+          <section class="ns-home-card ns-home-card-secondary ns-home-glance-card">
+            <div class="ns-home-card-label">TONIGHT AT A GLANCE</div>
+            <div class="ns-home-glance-grid">
+              <button type="button" class="ns-home-glance-tile" id="ta-glance-alarm" data-ta-target="automations">
+                <span class="ns-home-glance-icon" aria-hidden="true"></span>
+                <span class="ns-home-glance-label">First Light</span>
+                <span class="ns-home-glance-status" id="ta-alarm-status">Not set</span>
+              </button>
+              <button type="button" class="ns-home-glance-tile" id="ta-glance-companion" data-ns-tab="dev">
+                <span class="ns-home-glance-icon" aria-hidden="true"></span>
+                <span class="ns-home-glance-label">Companion</span>
+                <span class="ns-home-glance-status" id="ta-companion-status">Off</span>
+              </button>
+              <button type="button" class="ns-home-glance-tile" id="ta-glance-lights" data-ta-target="wind-down">
+                <span class="ns-home-glance-icon" aria-hidden="true"></span>
+                <span class="ns-home-glance-label">Smart Lights</span>
+                <span class="ns-home-glance-status" id="ta-lights-status">Not configured</span>
+              </button>
+              <button type="button" class="ns-home-glance-tile" id="ta-glance-wifi" data-ta-target="protection">
+                <span class="ns-home-glance-icon" aria-hidden="true"></span>
+                <span class="ns-home-glance-label">Wi-Fi Guard <span class="status-pill status-local ta-experimental-pill">EXPERIMENTAL</span></span>
+                <span class="ns-home-glance-status" id="ta-wifi-status">Not configured</span>
+              </button>
             </div>
-            <span class="ns-home-lastnight-badge proof-badge ns-proof-badge" id="proof-badge"></span>
-            <button class="ns-home-lastnight-link" id="btn-proof-details">View Ledger</button>
-          </div>
-        </section>
+          </section>
+
+          <!-- Last Night: one compact real Proof result, shown only when
+               one exists -- renderMorningProof() in renderer-receipts.js
+               keeps this hidden otherwise. Icons are SVG, not emoji. -->
+          <section class="ns-home-card ns-home-card-secondary ns-home-lastnight" id="morning-proof-section" style="display:none">
+            <div class="ns-home-card-label">LAST NIGHT</div>
+            <div class="ns-home-lastnight-row">
+              <div class="ns-home-lastnight-main">
+                <span class="ns-home-lastnight-icon" id="proof-icon" aria-hidden="true"></span>
+                <div class="ns-home-lastnight-text">
+                  <div class="ns-home-lastnight-title" id="ns-proof-title">Session complete</div>
+                  <div class="ns-home-lastnight-meta" id="ns-proof-timestamp"></div>
+                </div>
+              </div>
+              <div class="ns-home-lastnight-actions">
+                <span class="ns-home-lastnight-badge proof-badge ns-proof-badge" id="proof-badge"></span>
+                <button class="ns-home-lastnight-link" id="btn-proof-details">View Ledger</button>
+              </div>
+            </div>
+          </section>
+
+        </div>
+        <!-- /ns-home-secondary -->
 
       </div>
       <!-- /HOME panel -->

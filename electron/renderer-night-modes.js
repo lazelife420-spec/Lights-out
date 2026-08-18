@@ -33,6 +33,23 @@ const NS_MODE_ICONS = {
 };
 const NS_MODE_ICON_FALLBACK = NS_MODE_ICONS['quick-sleep'];
 
+// Per-mode accent identity (a distinct color language per mode, not
+// fabricated artwork) so the Featured area and its tile read as having a
+// real visual identity instead of one generic blue badge repeated for
+// every mode. Classes defined alongside .nm-featured-icon/.nm-tile-badge
+// in styles.css.
+const NS_MODE_ACCENTS = {
+  'quick-sleep': 'nm-accent-blue',
+  'lights-down': 'nm-accent-amber',
+  'movie-wind-down': 'nm-accent-purple',
+  'full-shutdown': 'nm-accent-red',
+  'quiet-house': 'nm-accent-teal',
+  'school-night': 'nm-accent-indigo'
+};
+function modeAccentClass(mode) {
+  return NS_MODE_ACCENTS[mode.artworkId] || 'nm-accent-blue';
+}
+
 // Shared with renderer.js's Home "Tonight at a glance" tiles.
 const NS_GLANCE_ICONS = {
   alarm: `<svg ${SVG_OPEN}><path d="M12 2v7"/><path d="m4.22 10.22 1.42 1.42"/><path d="M1 18h2"/><path d="M21 18h2"/><path d="m18.36 11.64 1.42-1.42"/><path d="M23 22H1"/><path d="m16 6-4 4-4-4"/><path d="M8 18a4 4 0 1 1 8 0"/></svg>`,
@@ -104,7 +121,7 @@ function buildTile(mode) {
   const statusTag = mode.status !== 'ready' ? getStatusTagHtml(mode.status) : '';
 
   tile.innerHTML = `
-    <span class="nm-tile-badge" aria-hidden="true">${modeIconSvg(mode)}</span>
+    <span class="nm-tile-badge ${mode.status === 'ready' ? modeAccentClass(mode) : ''}" aria-hidden="true">${modeIconSvg(mode)}</span>
     <span class="nm-tile-title">${escapeHtml(mode.title)}</span>
     <span class="nm-tile-tags">
       <span class="nm-tile-tag">${formatDuration(mode.timer.durationSeconds)}</span>
@@ -185,7 +202,9 @@ async function renderFeatured(mode) {
   empty.style.display = 'none';
   content.style.display = '';
 
-  document.getElementById('nm-detail-artwork').innerHTML = modeIconSvg(mode);
+  const artworkEl = document.getElementById('nm-detail-artwork');
+  artworkEl.innerHTML = modeIconSvg(mode);
+  artworkEl.className = `nm-featured-icon ${mode.status === 'ready' ? modeAccentClass(mode) : ''}`;
   document.getElementById('nm-detail-title').textContent = mode.title;
   document.getElementById('nm-detail-subtitle').textContent = mode.subtitle;
 
@@ -332,7 +351,7 @@ function renderHomeNightModesTeaser() {
     tile.className = 'ns-home-mode-tile';
     tile.dataset.modeId = mode.id;
     tile.innerHTML = `
-      <span class="ns-home-mode-badge" aria-hidden="true">${modeIconSvg(mode)}</span>
+      <span class="ns-home-mode-badge ${modeAccentClass(mode)}" aria-hidden="true">${modeIconSvg(mode)}</span>
       <span class="ns-home-mode-title">${escapeHtml(mode.title)}</span>
       <span class="ns-home-mode-meta">${formatDuration(mode.timer.durationSeconds)} &middot; ${formatAction(mode.timer.action)}</span>
     `;

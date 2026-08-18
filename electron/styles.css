@@ -4811,46 +4811,59 @@ body.ns-lobby:not(.ns-on-tonight) .ns-wordmark-sub {
 .ns-home-hero {
   position: relative;
   overflow: hidden;
-  border-radius: 16px;
-  border: 1px solid rgba(74,158,255,0.2);
-  background: linear-gradient(135deg, rgba(16,24,44,0.96) 0%, rgba(9,13,24,0.94) 100%);
-  padding: 34px 32px;
+  border-radius: 18px;
+  border: 1px solid rgba(74,158,255,0.22);
+  background:
+    linear-gradient(160deg, rgba(19,28,52,0.97) 0%, rgba(8,11,21,0.98) 78%);
+  padding: 42px 36px;
   margin-bottom: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
   flex-wrap: wrap;
+  box-shadow: 0 18px 48px rgba(4,8,20,0.4);
 }
 
+/* Atmosphere, not artwork: a night-sky gradient wash plus a faint
+   repeating-dot "starfield" -- both pure CSS gradients, no image asset --
+   giving the hero real presence as the app's strongest visual surface
+   without fabricating photographic art. */
 .ns-home-hero-bg {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 70% 90% at 15% 30%, rgba(74,158,255,0.16) 0%, transparent 65%),
-    radial-gradient(ellipse 50% 60% at 90% 100%, rgba(118,201,255,0.10) 0%, transparent 60%);
+    radial-gradient(ellipse 80% 100% at 12% 20%, rgba(74,158,255,0.20) 0%, transparent 62%),
+    radial-gradient(ellipse 60% 70% at 92% 105%, rgba(118,201,255,0.13) 0%, transparent 60%),
+    radial-gradient(1.5px 1.5px at 20% 25%, rgba(255,255,255,0.5) 50%, transparent 52%),
+    radial-gradient(1.5px 1.5px at 45% 15%, rgba(255,255,255,0.35) 50%, transparent 52%),
+    radial-gradient(1px 1px at 70% 35%, rgba(255,255,255,0.4) 50%, transparent 52%),
+    radial-gradient(1.5px 1.5px at 85% 12%, rgba(255,255,255,0.3) 50%, transparent 52%),
+    radial-gradient(1px 1px at 32% 55%, rgba(255,255,255,0.25) 50%, transparent 52%),
+    radial-gradient(1.5px 1.5px at 60% 65%, rgba(255,255,255,0.2) 50%, transparent 52%);
   pointer-events: none;
 }
 
 .ns-home-brand {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 18px;
   position: relative;
   z-index: 1;
 }
 
 .ns-home-brand-icon {
-  width: 52px;
-  height: 52px;
+  width: 58px;
+  height: 58px;
   object-fit: contain;
   flex-shrink: 0;
+  filter: drop-shadow(0 2px 10px rgba(74,158,255,0.35));
 }
 
 .ns-home-brand-title {
-  font-size: 26px;
+  font-size: 29px;
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   color: var(--text-primary);
   line-height: 1.1;
 }
@@ -4956,6 +4969,38 @@ body.ns-lobby:not(.ns-on-tonight) .ns-wordmark-sub {
   margin-bottom: 14px;
 }
 
+/* Primary tier: "what's happening now" -- a stronger accent than the
+   plain card shell so Tonight visually reads as the main thing, not a
+   card of equal weight with Night Modes/glance/last-night below it. */
+.ns-home-card-primary {
+  background: linear-gradient(135deg, rgba(74,158,255,0.09) 0%, rgba(74,158,255,0.03) 100%);
+  border-color: rgba(74,158,255,0.28);
+}
+
+/* Secondary tier: Tonight-at-a-glance + Last Night, grouped together and
+   visually quieter than Tonight/Night-Modes above -- device/proof status
+   should read as a compact summary, not a fifth equal-weight section. */
+.ns-home-secondary {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 14px;
+  align-items: start;
+}
+@media (max-width: 760px) {
+  .ns-home-secondary { grid-template-columns: 1fr; }
+}
+.ns-home-card-secondary {
+  background: rgba(255,255,255,0.014);
+  border-color: rgba(255,255,255,0.045);
+  padding: 13px 16px;
+  margin-bottom: 0;
+}
+.ns-home-card-secondary .ns-home-card-label {
+  font-size: 10px;
+  opacity: 0.8;
+  margin-bottom: 8px;
+}
+
 .ns-home-card-header {
   display: flex;
   align-items: center;
@@ -5046,9 +5091,10 @@ body.ns-lobby:not(.ns-on-tonight) .ns-wordmark-sub {
   background: rgba(91,140,255,0.05);
 }
 .ns-home-mode-badge {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  border: 1px solid transparent;
   background: linear-gradient(135deg, rgba(91,140,255,0.22), rgba(91,140,255,0.06));
   color: #9fc0ff;
   display: flex;
@@ -5108,10 +5154,27 @@ body.ns-lobby:not(.ns-on-tonight) .ns-wordmark-sub {
 }
 
 /* Last Night: one compact real result row. */
+/* Two explicit rows (icon+text, then badge+action) instead of one flex
+   row where fixed-width children (badge, button) fought the text column
+   for space at narrower widths -- that used to squeeze the title down to
+   near-zero and wrap it one word per line. This is robust regardless of
+   the secondary column's width. */
 .ns-home-lastnight-row {
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ns-home-lastnight-main {
+  display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
+  min-width: 0;
+}
+.ns-home-lastnight-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .ns-home-lastnight-icon {
   width: 22px;
@@ -5638,16 +5701,30 @@ body.fullscreen-clock-mode .fullscreen-clock-exit {
 }
 .nm-featured-icon {
   flex-shrink: 0;
-  width: 76px;
-  height: 76px;
-  border-radius: 18px;
+  width: 92px;
+  height: 92px;
+  border-radius: 20px;
   background: linear-gradient(135deg, rgba(91,140,255,0.22), rgba(91,140,255,0.06));
   border: 1px solid rgba(91,140,255,0.3);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #9fc0ff;
+  box-shadow: 0 10px 28px rgba(91,140,255,0.14);
 }
+.nm-featured-icon svg { width: 44px; height: 44px; }
+
+/* Per-mode accent identity -- a distinct color language per Night Mode
+   (not fabricated artwork) so the Featured area and its tile read as
+   having a real visual identity, not one generic blue badge repeated six
+   times. Applied via a second class alongside .nm-featured-icon/
+   .nm-tile-badge (see NS_MODE_ACCENTS in renderer-night-modes.js). */
+.nm-accent-blue { background: linear-gradient(135deg, rgba(91,140,255,0.24), rgba(91,140,255,0.06)); border-color: rgba(91,140,255,0.32); color: #9fc0ff; }
+.nm-accent-amber { background: linear-gradient(135deg, rgba(212,165,10,0.26), rgba(212,165,10,0.06)); border-color: rgba(212,165,10,0.34); color: #f0c35c; }
+.nm-accent-purple { background: linear-gradient(135deg, rgba(168,85,247,0.24), rgba(168,85,247,0.06)); border-color: rgba(168,85,247,0.32); color: #c79bfa; }
+.nm-accent-red { background: linear-gradient(135deg, rgba(255,109,77,0.24), rgba(255,109,77,0.06)); border-color: rgba(255,109,77,0.32); color: #ff9d7d; }
+.nm-accent-teal { background: linear-gradient(135deg, rgba(34,211,238,0.22), rgba(34,211,238,0.06)); border-color: rgba(34,211,238,0.3); color: #7fe3f0; }
+.nm-accent-indigo { background: linear-gradient(135deg, rgba(99,102,241,0.24), rgba(99,102,241,0.06)); border-color: rgba(99,102,241,0.32); color: #a5a8f5; }
 .nm-featured-icon svg { width: 38px; height: 38px; }
 .nm-featured-body { flex: 1; min-width: 0; }
 .nm-featured-eyebrow {
@@ -5826,16 +5903,17 @@ body.fullscreen-clock-mode .fullscreen-clock-exit {
   background: rgba(255,255,255,0.03);
 }
 .nm-tile-badge {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 48px;
+  height: 48px;
+  border-radius: 13px;
   background: linear-gradient(135deg, rgba(91,140,255,0.22), rgba(91,140,255,0.06));
+  border: 1px solid transparent;
   color: #9fc0ff;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.nm-tile-badge svg { width: 22px; height: 22px; }
+.nm-tile-badge svg { width: 24px; height: 24px; }
 .nm-tile.disabled .nm-tile-badge {
   background: rgba(255,255,255,0.06);
   color: var(--text-muted);
