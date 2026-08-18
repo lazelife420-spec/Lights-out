@@ -325,7 +325,11 @@ if (desktopUxProofBridge?.enabled) {
       activeModal: document.querySelector('.modal.active')?.id || null,
       running: state.running,
       paused: state.paused,
-      heroTitle: document.getElementById('ns-hero-title')?.textContent || null
+      // Home/Library redesign pass: the old #ns-hero-title lives on Tonight
+      // no longer exists at all -- this now reads Home's Tonight-recap
+      // plan title (#ns-home-tonight-plan), keeping the same snapshot key
+      // for any external reader.
+      heroTitle: document.getElementById('ns-home-tonight-plan')?.textContent || null
     })
   };
 }
@@ -689,7 +693,8 @@ const els = {
   receiptsList: document.getElementById('receipts-list'),
   btnClearReceipts: document.getElementById('btn-clear-receipts'),
   btnExportReceipts: document.getElementById('btn-export-receipts'),
-  // Northstar sidebar destinations (LIB/SCH/MODES/DEV/STATS)
+  // Northstar sidebar destinations (HOME/LIB/SCH/MODES/DEV/STATS)
+  panelHome: document.getElementById('ns-panel-home'),
   panelLib: document.getElementById('ns-panel-lib'),
   panelModes: document.getElementById('ns-panel-modes'),
   panelSch: document.getElementById('ns-panel-sch'),
@@ -722,6 +727,10 @@ const els = {
   taLightsStatus: document.getElementById('ta-lights-status'),
   taWifiStatus: document.getElementById('ta-wifi-status'),
   taAlarmStatus: document.getElementById('ta-alarm-status'),
+  // Home/Library redesign pass: Companion's equivalent "at a glance" status,
+  // mirrored the same way updateDevicePlanCards() already mirrors
+  // taLightsStatus/taWifiStatus from the Devices-panel configs.
+  taCompanionStatus: document.getElementById('ta-companion-status'),
   asAutopilotStatus: document.getElementById('as-autopilot-status'),
   asContentBlockerStatus: document.getElementById('as-content-blocker-status'),
   // Schedule > Automations: real First Light feature card.
@@ -1312,7 +1321,7 @@ async function openReceiptsLedger() {
   }
 }
 
-let settingsReturnTab = 'lib';
+let settingsReturnTab = 'home';
 
 // Desktop settings page: a fixed category rail beside a single visible
 // content panel, instead of one long scrolling list covering every domain
@@ -1346,7 +1355,7 @@ function openSettingsPanel() {
 // an overlay, so leaving Settings must re-show that panel's content, not
 // just its sidebar highlight.
 function closeSettingsPanel() {
-  const returnTab = settingsReturnTab || 'lib';
+  const returnTab = settingsReturnTab || 'home';
   applyMainPanelVisibility(returnTab);
   setSidebarSelection(returnTab);
   render();
@@ -1358,7 +1367,14 @@ async function saveSettingsPanel() {
   state.graceMinutes = clamp(Number(els.graceMinutes.value) || 0, 0, 10);
   state.forceShutdown = els.chkForceShutdown.checked;
   state.muteSystem = els.chkMute.checked;
-  state.dryRun = Boolean(els.chkDryRun?.checked);
+  // Dry Run is deliberately NOT re-read from the checkbox here. It's an
+  // always-live, immediately-committed value (its own 'change' listener
+  // below, and the top-menu quick toggle, both write state.dryRun and
+  // persist on the spot) -- state.dryRun is already correct by the time
+  // Save runs. Re-reading the checkbox here previously let a stale DOM
+  // value (present whenever Dry Run had just been changed through the
+  // OTHER editor while Settings stayed open) silently overwrite a newer
+  // canonical value on Save.
   state.runAtLogin = Boolean(els.chkRunLogin?.checked);
 
   // Save Smart Lights config
@@ -1475,6 +1491,7 @@ function openHelpPanel() {
 // own conditional display logic (isIdle, has-streak, has-proof, etc.) keeps
 // working independently underneath — this only toggles the panel-level wrapper.
 function applyMainPanelVisibility(panel) {
+  if (els.panelHome) els.panelHome.style.display = panel === 'home' ? '' : 'none';
   if (els.panelLib) els.panelLib.style.display = panel === 'lib' ? '' : 'none';
   if (els.panelModes) els.panelModes.style.display = panel === 'modes' ? '' : 'none';
   if (els.panelSch) els.panelSch.style.display = panel === 'sch' ? '' : 'none';
@@ -1562,6 +1579,10 @@ els.btnActivityGoTonight?.addEventListener('click', () => handleSidebarNavigatio
 async function handleSidebarNavigation(tab, { persist = true } = {}) {
   let handled = false;
 
+  if (tab === 'home') {
+    applyMainPanelVisibility('home');
+    handled = true;
+  }
   if (tab === 'lib') {
     applyMainPanelVisibility('lib');
     handled = true;
@@ -1599,7 +1620,7 @@ async function handleSidebarNavigation(tab, { persist = true } = {}) {
   }
 
   setSidebarSelection(tab);
-  if (persist && ['lib', 'modes', 'sch', 'dev', 'stats'].includes(tab)) {
+  if (persist && ['home', 'lib', 'modes', 'sch', 'dev', 'stats'].includes(tab)) {
     try { api.saveAppSettings({ app: { nsActiveTab: tab } }); } catch (_) {}
   }
   return true;
@@ -1646,6 +1667,10 @@ function updateCompanionStatus(rc) {
   const mode = rc?.mode || 'off';
   if (els.devCompanionMode) els.devCompanionMode.textContent = companionModeLabels[mode] || 'Off';
   if (els.devCompanionStatus) els.devCompanionStatus.textContent = rc?.statusLabel || 'Off';
+  // Mirror into Home's "Tonight at a glance" Companion tile -- same real
+  // value the Devices panel shows, same pattern updateDevicePlanCards()
+  // already uses for Smart Lights/WiFi Guard.
+  if (els.taCompanionStatus) els.taCompanionStatus.textContent = rc?.statusLabel || 'Off';
   if (els.devCompanionNetwork) {
     els.devCompanionNetwork.textContent = mode === 'wifi' ? `${rc.lanIp}:${rc.port}`
       : mode === 'local' ? `127.0.0.1:${rc.port}`
@@ -1838,13 +1863,15 @@ function render() {
   if (setupEl) setupEl.style.display = (state.running || state.paused) ? 'none' : '';
   if (runEl) runEl.style.display = (state.running || state.paused) ? '' : 'none';
 
-  // Northstar lobby elements: show on idle, hide while running/paused.
-  const nsHero = document.getElementById('ns-hero-card');
-  const nsTrust = document.getElementById('ns-trust-bar');
-  if (nsHero) nsHero.style.display = isIdle ? '' : 'none';
-  if (nsTrust) nsTrust.style.display = isIdle ? '' : 'none';
+  // Home is its own route now (not the same view as Tonight), so its hero/
+  // trust bar/discovery cards stay visible regardless of session state --
+  // only the CTA/recap text changes (see renderHome()). The old
+  // isIdle-based hide here dates from when Home and Tonight were the same
+  // panel and hiding hero content made the running countdown the only
+  // thing left on screen; that reasoning no longer applies to a separate
+  // Home route, so it was removed rather than carried over unexamined.
   document.body.classList.toggle('ns-lobby', isIdle);
-  renderTonightHero();
+  renderHome();
   renderArmedModeBanner();
 
   // Focused active-run screen: while a run is active, hide the idle-only
@@ -1911,9 +1938,19 @@ function render() {
   els.actionName.textContent = actionLabel();
   els.endTime.textContent = state.running || state.paused ? formatEndTime(state.endsAt) : 'Idle';
 
-  // Don't clobber the user's in-progress edits while the Settings panel is open.
+  // Dry Run has two independent, immediate-commit editors -- this checkbox
+  // (see its 'change' listener in wireEvents) and the top-menu quick
+  // toggle -- so unlike the fields below, there is no "in-progress unsaved
+  // edit" on it for a background render() to protect. It must stay synced
+  // to canonical state.dryRun even while the Settings panel is open, or
+  // changing it via the top-menu toggle while Settings is already open
+  // leaves this checkbox showing a stale value -- and Save used to
+  // silently re-read and persist that stale value over the newer one (see
+  // saveSettingsPanel(), which no longer re-reads this checkbox at all).
+  if (els.chkDryRun) els.chkDryRun.checked = state.dryRun;
+
+  // Don't clobber the user's other in-progress edits while the Settings panel is open.
   if (els.panelSet?.style.display === 'none') {
-    if (els.chkDryRun) els.chkDryRun.checked = state.dryRun;
     if (els.chkForceShutdown) els.chkForceShutdown.checked = state.forceShutdown;
     if (els.chkMute) els.chkMute.checked = state.muteSystem;
     if (els.chkRunLogin) els.chkRunLogin.checked = state.runAtLogin;
@@ -2074,30 +2111,75 @@ function armNightMode(mode) { // eslint-disable-line no-unused-vars -- called fr
   persistArmedNightMode();
 }
 
-// Tonight's hero card: derives every displayed field (title, duration,
-// action, preview ring, CTA label) from the same state.armedNightMode /
-// state.action / inputSeconds() that the armed-mode banner and the
-// countdown ring already read. Previously this card's title/preview/CTA
-// were static markup, never bound to anything, so "Use Tonight" updated
-// the banner and the ring but left this card showing whatever had been
-// hardcoded in index.html -- two contradictory plans on screen at once.
-// Called from render() so it always stays in the same single pass as
-// every other lobby surface.
-function renderTonightHero() {
-  const titleEl = document.getElementById('ns-hero-title');
-  const previewEl = document.getElementById('ns-preview-time');
-  const playLabelEl = document.getElementById('ns-play-label');
-  if (!titleEl && !previewEl && !playLabelEl) return;
+// Home's hero CTA: exactly one of three real states, never fabricated --
+//   'choose'   nothing has ever been picked (no armed Night Mode, no saved
+//              profile selected) -- nudge toward browsing the Library.
+//   'start'    a plan IS selected (armed Night Mode or a saved profile) and
+//              nothing is running -- clicking starts it for real, via the
+//              exact same shared start command the old hero CTA used
+//              (see startTonightPlan below), then lands on Tonight to
+//              watch it run.
+//   'continue' a session is already running/paused -- clicking only
+//              navigates to Tonight; it never starts a second timer.
+function homeCtaState() {
+  if (state.running || state.paused) return 'continue';
+  if (state.armedNightMode || state.currentProfileId) return 'start';
+  return 'choose';
+}
+
+function handleHomeCta() {
+  const mode = homeCtaState();
+  if (mode === 'continue' || mode === 'choose') {
+    handleSidebarNavigation(mode === 'continue' ? 'lib' : 'modes');
+    return;
+  }
+  startTonightPlan();
+}
+
+// Home's hero + Tonight-recap card: derives every displayed field (CTA
+// state/label/icon, plan title, target time, action) from the same
+// state.armedNightMode / state.currentProfileId / state.action /
+// inputSeconds() the armed-mode banner and Tonight's countdown ring already
+// read -- one source of truth, not a second copy of "what's configured."
+// Called from render() so it stays in the same single pass as every other
+// lobby surface.
+function renderHome() {
+  const ctaLabelEl = document.getElementById('ns-home-cta-label');
+  const ctaIconEl = document.getElementById('ns-home-cta-icon');
+  if (!ctaLabelEl && !ctaIconEl) return; // Home markup not present (e.g. some tests' minimal fixtures)
 
   const armed = state.armedNightMode;
-  const planTitle = armed ? armed.nightModeTitle : 'Custom Timer';
+  const profile = !armed && state.currentProfileId
+    ? state.profiles?.find(p => p.id === state.currentProfileId)
+    : null;
+  const planTitle = armed ? armed.nightModeTitle : (profile ? profile.name : 'Custom Timer');
   const durationSeconds = armed ? armed.durationSeconds : inputSeconds();
-  const durationMin = Math.max(1, Math.round(durationSeconds / 60));
   const planActionLabel = armed ? actionLabel(armed.action) : actionLabel();
+  const icons = window.NS_HOME_ICONS || {};
 
-  if (titleEl) titleEl.textContent = `${planTitle} · ${durationMin} min · ${planActionLabel}`;
-  if (previewEl) previewEl.textContent = formatTime(durationSeconds);
-  if (playLabelEl) playLabelEl.textContent = `Start ${planTitle}`;
+  const mode = homeCtaState();
+  if (ctaLabelEl) {
+    ctaLabelEl.textContent = mode === 'continue' ? 'Continue Tonight' : mode === 'start' ? 'Start Tonight' : 'Choose Tonight';
+  }
+  if (ctaIconEl) {
+    ctaIconEl.innerHTML = mode === 'start' ? (icons.play || '') : (icons.arrow || '');
+  }
+
+  const planEl = document.getElementById('ns-home-tonight-plan');
+  const timeEl = document.getElementById('ns-home-tonight-time');
+  const actionEl = document.getElementById('ns-home-tonight-action');
+  if (planEl) planEl.textContent = planTitle;
+  if (actionEl) actionEl.textContent = planActionLabel;
+  if (timeEl) {
+    if (state.paused) {
+      timeEl.textContent = 'Paused';
+    } else if (state.running) {
+      timeEl.textContent = `Ends ${formatEndTime(state.endsAt)}`;
+    } else {
+      const wouldEndAt = new Date(Date.now() + durationSeconds * 1000).toISOString();
+      timeEl.textContent = `Would end ${formatEndTime(wouldEndAt)}`;
+    }
+  }
 }
 
 function renderArmedModeBanner() {
@@ -2141,6 +2223,10 @@ function startTonightPlan() {
 
 async function startTimer(seconds = inputSeconds(), origin = null) {
   const durationSeconds = Math.max(1, Math.round(seconds));
+  
+  if (origin === 'play') {
+    handleSidebarNavigation('lib');
+  }
 
   try {
     SoundSystem.playStart();
@@ -3192,12 +3278,6 @@ if (els.btnProofCopy) {
   });
 }
 
-// Northstar proof hero: Play Tonight Again — delegates to existing start flow.
-document.getElementById('btn-proof-again')?.addEventListener('click', () => {
-  if (els.morningProofSection) els.morningProofSection.style.display = 'none';
-  startTonightPlan();
-});
-
 // Northstar proof hero: Dismiss — hides the card.
 function dismissMorningProof() {
   if (els.morningProofSection) els.morningProofSection.style.display = 'none';
@@ -3376,8 +3456,40 @@ if (els.btnClearReceipts) {
     });
   });
 
-  // The Tonight hero CTA is the one primary Start control.
-  document.getElementById('ns-play-btn')?.addEventListener('click', () => startTonightPlan());
+  // Home's hero CTA: state-aware (Choose/Start/Continue Tonight), decided
+  // fresh on every click by handleHomeCta() -- see homeCtaState(). Only the
+  // 'start' branch reaches the shared start command; 'choose'/'continue'
+  // only navigate, never start a second timer over a running one.
+  document.getElementById('ns-home-cta')?.addEventListener('click', handleHomeCta);
+
+  // Tonight recap card: neutral navigation into the control room, no side
+  // effect -- distinct from the hero CTA above, which can start something.
+  document.getElementById('ns-home-tonight-open')?.addEventListener('click', () => handleSidebarNavigation('lib'));
+
+  // Night Modes teaser: "Browse Library" just navigates, same central entry
+  // point every other nav control uses.
+  document.getElementById('ns-home-browse-library')?.addEventListener('click', () => handleSidebarNavigation('modes'));
+
+  // Tonight at a glance tiles: same routing the equivalent Devices-panel
+  // buttons already use (openDeviceSettings for Settings categories, direct
+  // navigation for the Companion tile, which has its full detail in
+  // Devices, not Settings). Icons are set once here (static per tile, no
+  // per-render cost) from the same NS_GLANCE_ICONS the Library reads, so
+  // Home and Library never drift into two different icon vocabularies.
+  const glanceIcons = window.NS_GLANCE_ICONS || {};
+  const glanceTileSpecs = [
+    { id: 'ta-glance-alarm', icon: glanceIcons.alarm, onClick: () => openDeviceSettings('automations') },
+    { id: 'ta-glance-companion', icon: glanceIcons.companion, onClick: () => handleSidebarNavigation('dev') },
+    { id: 'ta-glance-lights', icon: glanceIcons.lights, onClick: () => openDeviceSettings('wind-down') },
+    { id: 'ta-glance-wifi', icon: glanceIcons.wifi, onClick: () => openDeviceSettings('protection') }
+  ];
+  glanceTileSpecs.forEach(spec => {
+    const tile = document.getElementById(spec.id);
+    if (!tile) return;
+    const iconEl = tile.querySelector('.ns-home-glance-icon');
+    if (iconEl && spec.icon) iconEl.innerHTML = spec.icon;
+    tile.addEventListener('click', spec.onClick);
+  });
 
   // Armed Night Mode clear button.
   document.getElementById('armed-mode-clear')?.addEventListener('click', clearArmedNightMode);
@@ -4004,13 +4116,14 @@ function updateLightsUI() {
 
 async function loadInitialData() {
   try {
-    const [systemInfo, appSettings, lightConfig, wifiConfig, cbConfig, accConfig] = await Promise.all([
+    const [systemInfo, appSettings, lightConfig, wifiConfig, cbConfig, accConfig, remoteControl] = await Promise.all([
       api.getSystemInfo(),
       api.getAppSettings(),
       api.getSmartLightConfig(),
       api.getWifiGuardSettings?.(),
       api.getContentBlockerSettings?.(),
-      api.getAccountabilitySettings?.()
+      api.getAccountabilitySettings?.(),
+      api.getRemoteControl?.()
     ]);
 
     // --- Critical: rehydrate persisted settings FIRST. A failure in any
@@ -4079,6 +4192,8 @@ async function loadInitialData() {
     // Drive the Tonight's Automation summary from the same configs on
     // launch, so it doesn't require a visit to Devices to show real state.
     updateDevicePlanCards(lightConfig, wifiConfig);
+    // Same reasoning for Home's Companion glance tile.
+    if (remoteControl) updateCompanionStatus(remoteControl);
 
     if (wifiConfig) applyWifiGuardSettings(wifiConfig);
     if (cbConfig) applyContentBlockerSettings(cbConfig);

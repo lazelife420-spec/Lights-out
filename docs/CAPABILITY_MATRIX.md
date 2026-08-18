@@ -33,8 +33,8 @@ This matrix is derived from an actual inspection of the Electron source (`electr
 | Phone Companion Easy Connect | **Shipped / Visible** | `companion.js`, `companion.html`, `remoteControl.js`; QR + token, off by default, local or same-Wi-Fi. Real phone pairing is the next pending proof lane. |
 | Companion action set | **Shipped / Visible** | `remoteControl.js` `COMPANION_ACTIONS`: `start`, `startNightMode`, `getNightModes`, `togglePause`, `snooze`, `cancel`. `ALLOWED_ACTIONS` for remote start: `shutdown`, `sleep`, `restart`. No `hibernate`, `lock`, `logout`, no force shutdown. |
 | Family LAN remote | **Shipped / Buried** | `family.js` + `main.js` `familyCommandHandler`; `start`, `pause`, `resume`, `snooze`, `cancel` over LAN beacon. Discovery is surfaced in the Devices panel; configuration stays under Settings > Phone Companion. |
-| Smart Lights | **Partial / Stubbed** | `smartLights.js` is a full implementation (Hue, HTTP, Home Assistant, IFTTT, MQTT), but it is gated: `enabled` requires a successful `testSmartLightConnection()` and the UI lives under Settings > Wind-Down with a `REQUIRES SETUP` pill. No real hardware proof is claimed. |
-| WiFi Guard | **Partial / Stubbed** | `wifiGuard.js` has providers (`tplink`, `asus`, `netgear`, `webhook`, `adapter`) and is wired to block on dim / unblock on cancel, but marked `EXPERIMENTAL` and rejected for the retired `firewall` provider. Tests only cover input sanitizers. |
+| Smart Lights | **Partial / Stubbed** | `smartLights.js` is a full implementation (Hue, HTTP, Home Assistant, IFTTT, MQTT), but it is gated: `enabled` requires a successful `testSmartLightConnection()`. Operational state is surfaced in the Devices panel with configuration deep links to Settings > Wind-Down. No real hardware proof is claimed. |
+| WiFi Guard | **Partial / Stubbed** | `wifiGuard.js` has providers (`tplink`, `asus`, `netgear`, `webhook`, `adapter`) and is wired to block on dim / unblock on cancel, but marked `EXPERIMENTAL`. Operational state is surfaced in the Devices panel with configuration deep links. Tests only cover input sanitizers. |
 | Per-device whole-room scheduling | **Absent / Planned** | No data model or UI for independent timers per device. Vision lives in `docs/ROADMAP.md`. |
 | Native "Devices" top-level panel | **Shipped / Visible** | `index.html` sidebar now has `DEVICES` (`ns-panel-dev`) exposing This PC, Phone Companion, Family LAN, Smart Lights, and WiFi Guard with read-only status and settings shortcuts. |
 | Native "Proof" top-level panel | **Shipped / Visible** | `index.html` sidebar `PROOF` (`ns-panel-stats`) shows run history / session receipts; Companion Status moved to Devices. |
@@ -69,7 +69,7 @@ This matrix is derived from an actual inspection of the Electron source (`electr
 | WiFi Guard config | **Shipped / Buried** | Nested under Settings > Protection. |
 | Family Mode config | **Shipped / Buried** | Nested under Settings > Phone Companion. |
 | Content Blocker / Accountability | **Shipped / Buried** | `contentBlocker.js`, `accountability.js`; in Settings > Protection / Accountability. |
-| First Light alarm | **Shipped / Buried** | `alarm.js`; in Settings > Automations. |
+| First Light alarm | **Shipped / Visible** | `alarm.js`; surfaced as a proper Schedule → Automations feature. |
 
 ---
 

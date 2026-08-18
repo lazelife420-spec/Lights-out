@@ -457,18 +457,28 @@ check('ipc: shared Start architecture and timer/login handlers remain exposed', 
   const startDispatches = startHandler[1].match(/(?:await\s+)?startTimer\(options, legacyAction\)/g) || [];
   assert(startDispatches.length === 1, `start-timer IPC must dispatch exactly once, found ${startDispatches.length}`);
 
-  const visibleHeroStarts = startHtmlSrc.match(/id="ns-play-btn"/g) || [];
-  assert(visibleHeroStarts.length === 1, `expected one semantic hero Start control, found ${visibleHeroStarts.length}`);
+  // Home/Library redesign pass: the hero Start control is now #ns-home-cta,
+  // a single state-aware button (Choose/Start/Continue Tonight, see
+  // homeCtaState()/handleHomeCta() in renderer.js) instead of an
+  // always-start #ns-play-btn. Only its 'start' branch reaches the shared
+  // command; the old "Play Tonight Again" replay button was removed
+  // entirely (redundant with the new hero CTA), so the shared command now
+  // has exactly two real callers (hero CTA's start branch, Space shortcut)
+  // instead of three.
+  const visibleHeroCtas = startHtmlSrc.match(/id="ns-home-cta"/g) || [];
+  assert(visibleHeroCtas.length === 1, `expected one semantic hero CTA control, found ${visibleHeroCtas.length}`);
   assert(!/id="btn-start"/.test(startHtmlSrc), 'hidden or competing #btn-start control must not return');
+  assert(!/id="ns-play-btn"/.test(startHtmlSrc), 'the old always-start #ns-play-btn must not return alongside the state-aware CTA');
   assertMatch(rendererStartSrc, /function startTonightPlan\(\)\s*\{\s*return startTimer\(inputSeconds\(\), 'play'\);\s*\}/, 'shared startTonightPlan command missing');
   const explicitPlayPayloads = rendererStartSrc.match(/startTimer\(inputSeconds\(\), 'play'\)/g) || [];
   assert(explicitPlayPayloads.length === 1, `expected one authoritative play payload, found ${explicitPlayPayloads.length}`);
   const sharedStartReferences = rendererStartSrc.match(/startTonightPlan\(\)/g) || [];
-  assert(sharedStartReferences.length === 4, `hero, keyboard, and replay must share startTonightPlan; found ${sharedStartReferences.length - 1} callers`);
-  assertMatch(rendererStartSrc, /getElementById\('ns-play-btn'\)\?\.addEventListener\('click', \(\) => startTonightPlan\(\)\)/, 'hero CTA bypasses shared Start command');
+  assert(sharedStartReferences.length === 3, `hero CTA and keyboard must share startTonightPlan; found ${sharedStartReferences.length - 1} callers`);
+  assertMatch(rendererStartSrc, /getElementById\('ns-home-cta'\)\?\.addEventListener\('click', handleHomeCta\)/, 'hero CTA bypasses the state-aware handler');
+  assertMatch(rendererStartSrc, /function handleHomeCta\(\) \{[\s\S]*startTonightPlan\(\);/, "handleHomeCta's start branch bypasses shared Start command");
   assertMatch(rendererStartSrc, /event\.code === 'Space'[\s\S]*else startTonightPlan\(\);/s, 'Space shortcut bypasses shared Start command');
-  assertMatch(rendererStartSrc, /getElementById\('btn-proof-again'\)[\s\S]*startTonightPlan\(\);/s, 'proof replay bypasses shared Start command');
-  assert(!/getElementById\('ns-play-btn'\)[\s\S]{0,160}startTimer\(/.test(rendererStartSrc), 'hero CTA carries a competing start payload');
+  assert(!/id="btn-proof-again"/.test(startHtmlSrc), 'the old "Play Tonight Again" replay button was deliberately removed (redundant with the hero CTA) and must not return');
+  assert(!/getElementById\('ns-home-cta'\)[\s\S]{0,160}startTimer\(/.test(rendererStartSrc), 'hero CTA carries a competing start payload');
 
   assertMatch(mainSrc, /ipcMain\.handle\('cancel-timer', async \(\) => cancelTimer\(\)\);/, 'cancel-timer IPC missing');
   assertMatch(mainSrc, /ipcMain\.handle\('pause-timer', async \(\) => pauseTimer\(\)\);/, 'pause-timer IPC missing');
@@ -549,7 +559,11 @@ check('widget: updates on lifecycle changes, not just timer ticks', () => {
 
 // 7. Core UI controls exist (start/pause/resume/snooze/cancel/mini + customize).
 const htmlSrc = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-for (const id of ['ns-play-btn', 'btn-stop', 'btn-pause', 'btn-snooze', 'btn-mini', 'btn-warning-ledger', 'btn-notif', 'btn-widget', 'btn-companion', 'cz-accent', 'cz-theme', 'cz-ring', 'cz-opacity', 'cz-volume', 'cz-clock-format', 'cz-clock-scale', 'cz-clock-dial', 'cz-clock-date', 'chk-lastlight', 'sel-lastlight-sequence', 'warning-modal', 'last-light-overlay', 'morning-proof-section', 'proof-card', 'receipts-modal']) {
+// Home/Library redesign pass: 'ns-play-btn' -> 'ns-home-cta' (the state-aware
+// hero CTA replacing the always-start button); 'proof-card' removed
+// entirely -- the Last Night card is no longer a wrapped nested card, just
+// the #morning-proof-section element itself (see its compact new markup).
+for (const id of ['ns-home-cta', 'btn-stop', 'btn-pause', 'btn-snooze', 'btn-mini', 'btn-warning-ledger', 'btn-notif', 'btn-widget', 'btn-companion', 'cz-accent', 'cz-theme', 'cz-ring', 'cz-opacity', 'cz-volume', 'cz-clock-format', 'cz-clock-scale', 'cz-clock-dial', 'cz-clock-date', 'chk-lastlight', 'sel-lastlight-sequence', 'warning-modal', 'last-light-overlay', 'morning-proof-section', 'receipts-modal']) {
   check(`ui: #${id} present`, () => {
     assert(htmlSrc.includes(`id="${id}"`), `missing #${id}`);
   });
@@ -695,9 +709,9 @@ check('settings: Settings panel listeners are attached exactly once', () => {
   assert(saveListeners.length === 1, `expected one Save listener, found ${saveListeners.length}`);
 });
 
-check('settings: persisted nsActiveTab "set" migrates to Tonight on launch', () => {
+check('settings: persisted nsActiveTab "set" migrates to Home on launch', () => {
   assertMatch(rendererSrc, /app\.nsActiveTab === 'set' \|\| app\.nsActiveTab === 'help'/, 'a persisted nsActiveTab of "set" or "help" must be detected');
-  assertMatch(rendererSrc, /await api\.saveAppSettings\(\{\s*app:\s*\{\s*nsActiveTab:\s*'lib'\s*\}\s*\}\)\.catch\(/, 'migration to Tonight must complete before renderer readiness');
+  assertMatch(rendererSrc, /await api\.saveAppSettings\(\{\s*app:\s*\{\s*nsActiveTab:\s*'home'\s*\}\s*\}\)\.catch\(/, 'migration to Home must complete before renderer readiness');
   assertMatch(rendererSrc, /window\.__desktopUxProof = \{[\s\S]*ready: false,[\s\S]*version:/s, 'renderer proof readiness object must exist before initialization');
   assertMatch(rendererSrc, /await loadInitialData\(\)[\s\S]*render\(\);[\s\S]*markDesktopUxProofReady\(\);/s, 'proof readiness must follow state restoration and first render');
 });
@@ -907,7 +921,13 @@ check('settings: WiFi Guard / Content Blocker / Accountability settings actually
   // stale (always-unchecked) state would have silently disabled them.
   // Fixed by fetching each via its own dedicated getter, same pattern as
   // smartLights/getSmartLightConfig already used correctly.
-  assertMatch(rendererSrc, /const \[systemInfo, appSettings, lightConfig, wifiConfig, cbConfig, accConfig\] = await Promise\.all\(\[/, 'loadInitialData must fetch wifiGuard/contentBlocker/accountability via their own calls, not assume they are nested in appSettings');
+  // Home/Library redesign pass: loadInitialData()'s destructuring gained a
+  // trailing `remoteControl` (Companion status, proactively fetched so
+  // Home's "Tonight at a glance" Companion tile shows real state on launch
+  // too, same reasoning as the pre-existing light/wifi fetches) -- the
+  // wifiGuard/contentBlocker/accountability fix this check guards is
+  // unrelated and unchanged.
+  assertMatch(rendererSrc, /const \[systemInfo, appSettings, lightConfig, wifiConfig, cbConfig, accConfig, remoteControl\] = await Promise\.all\(\[/, 'loadInitialData must fetch wifiGuard/contentBlocker/accountability via their own calls, not assume they are nested in appSettings');
   assertMatch(rendererSrc, /api\.getWifiGuardSettings\?\.\(\)/, 'loadInitialData missing api.getWifiGuardSettings() call');
   assertMatch(rendererSrc, /api\.getContentBlockerSettings\?\.\(\)/, 'loadInitialData missing api.getContentBlockerSettings() call');
   assertMatch(rendererSrc, /api\.getAccountabilitySettings\?\.\(\)/, 'loadInitialData missing api.getAccountabilitySettings() call');
@@ -1030,19 +1050,34 @@ check('companion: no const-bound getElementById references an id missing from th
   assert(dead.length === 0, `dead getElementById reference(s) found: ${dead.join(', ')}`);
 });
 
-check('morning proof: Mission Complete overlay has accessible close affordances', () => {
-  assert(htmlSrc.includes('id="btn-proof-close"'), 'visible Close button missing');
-  assert(htmlSrc.includes('id="btn-proof-dismiss"'), 'dismiss X button missing');
-  assert(/btn-proof-dismiss[^>]*aria-label="[^"]*"/.test(htmlSrc), 'dismiss X should have an aria-label');
-  assertMatch(rendererSrc, /function dismissMorningProof\(\)/, 'dismissMorningProof helper missing');
-  assertMatch(rendererSrc, /document\.getElementById\('btn-proof-close'\)\?\.addEventListener\('click', dismissMorningProof\)/, 'Close button not wired to dismiss');
-  assertMatch(rendererSrc, /document\.getElementById\('btn-proof-dismiss'\)\?\.addEventListener\('click', dismissMorningProof\)/, 'dismiss X not wired to dismiss');
-  assertMatch(rendererSrc, /e\.key === 'Escape'[^}]*morningProofSection\.style\.display !== 'none'/, 'Escape handler for Mission Complete overlay missing');
+check('morning proof: Last Night card is compact, not a dismissible overlay', () => {
+  // Home/Library redesign pass: the old "Mission Complete" hero was a
+  // full-width overlay-style card that visually dominated the lobby, so it
+  // needed its own Close/dismiss-X affordances. It's now one compact,
+  // always-in-flow section among Home's other discovery cards (Tonight,
+  // Night Modes, Tonight at a glance) -- none of those get a per-section
+  // dismiss control either, so removing this one's Close/X (and the
+  // "Play Tonight Again" replay, redundant with the hero CTA) is
+  // consistent with the rest of Home, not an accessibility regression.
+  // dismissMorningProof()/its Escape handler are intentionally still wired
+  // (unchanged, pre-existing) since #morning-proof-section itself still
+  // exists; only the two dedicated close buttons and the replay button
+  // were removed.
+  assert(!/id="btn-proof-close"/.test(htmlSrc), 'the old dedicated Close button was deliberately removed and must not return');
+  assert(!/id="btn-proof-dismiss"/.test(htmlSrc), 'the old dedicated dismiss-X button was deliberately removed and must not return');
+  assert(!/id="btn-proof-again"/.test(htmlSrc), 'the old "Play Tonight Again" replay was deliberately removed (redundant with the hero CTA) and must not return');
+  assertMatch(htmlSrc, /id="btn-proof-details"/, 'View Ledger link must still be present on the compact card');
 });
 
-check('morning proof: Play Tonight Again still works', () => {
-  assertMatch(rendererSrc, /document\.getElementById\('btn-proof-again'\)\?\.addEventListener\('click', \(\) => \{/, 'Play Tonight Again button missing');
-  assertMatch(rendererSrc, /if \(els\.morningProofSection\) els\.morningProofSection\.style\.display = 'none';\s*\n\s*startTonightPlan\(\);/, 'Play Tonight Again should delegate to the shared start function, not a separate button');
+check('morning proof: Play Tonight Again was deliberately removed, not orphaned', () => {
+  // Home/Library redesign pass: "Play Tonight Again" duplicated the new
+  // hero CTA's job (starting tonight's configured plan) from inside a
+  // compact info card, so it was removed rather than kept as a second path
+  // to the same shared start command. Checks it's actually gone -- not
+  // just unwired -- on both sides: no button in the HTML, and no listener
+  // referencing it left behind in the renderer.
+  assert(!/id="btn-proof-again"/.test(htmlSrc), 'the old "Play Tonight Again" button was deliberately removed and must not return');
+  assert(!/getElementById\('btn-proof-again'\)/.test(rendererSrc), 'no code may reference a #btn-proof-again element anymore');
 });
 
 check('ux: focused active-run screen hides idle-only lobby clutter while a run is active', () => {
@@ -1517,10 +1552,15 @@ check('profile-ritual-gateway: renderer sends startOrigin without ritual branchi
   // copies (hero CTA, the old #btn-start, Space key) that could drift.
   const playExplicit = (rendererSrc.match(/startTimer\(inputSeconds\(\), 'play'\)/g) || []).length;
   assert(playExplicit === 1, `expected exactly 1 explicit 'play' caller (inside startTonightPlan), found ${playExplicit}`);
-  // And exactly the hero CTA, Space shortcut, and "Play Tonight Again" call
-  // that shared wrapper (this count excludes its own definition line).
+  // Home/Library redesign pass: the old hero CTA always called this
+  // directly; it's now handleHomeCta()'s 'start' branch (see
+  // homeCtaState()), one of two remaining real callers. "Play Tonight
+  // Again" was removed entirely (redundant with the new hero CTA), so the
+  // caller count dropped from 3 to 2: handleHomeCta's start branch and the
+  // Space shortcut (this count excludes the function's own definition
+  // line).
   const planCallSites = (rendererSrc.match(/startTonightPlan\(\)/g) || []).length - 1;
-  assert(planCallSites === 3, `expected exactly 3 callers of startTonightPlan(), found ${planCallSites}`);
+  assert(planCallSites === 2, `expected exactly 2 callers of startTonightPlan(), found ${planCallSites}`);
 });
 
 check('profile-ritual-gateway: remote source cannot trigger profile ritual', () => {
@@ -1598,31 +1638,40 @@ check('stats-dashboard: module and IPC', () => {
 });
 
 // 18. Runtime UX truth: every visible nav/control has a real action or is disabled.
-check('ux: ns-play-btn is wired to the shared start function', () => {
-  assertMatch(rendererSrc, /getElementById\('ns-play-btn'\)\?\.addEventListener\('click', \(\) => startTonightPlan\(\)\)/, 'ns-play-btn not wired');
+check('ux: ns-home-cta is wired to the state-aware hero handler', () => {
+  // Home/Library redesign pass: #ns-play-btn (always calls startTonightPlan
+  // directly) was replaced by #ns-home-cta, wired to handleHomeCta() --
+  // Choose/Start/Continue Tonight -- which only reaches startTonightPlan()
+  // in its 'start' branch. See homeCtaState()/handleHomeCta() in
+  // renderer.js.
+  assertMatch(rendererSrc, /getElementById\('ns-home-cta'\)\?\.addEventListener\('click', handleHomeCta\)/, 'ns-home-cta not wired');
 });
 
-check('ux: ns-play-btn has exactly one click handler (no duplicate startTimer)', () => {
-  const matches = rendererSrc.match(/getElementById\('ns-play-btn'\)\?\.addEventListener\('click'/g) || [];
-  assert(matches.length === 1, `ns-play-btn should have exactly one click handler, found ${matches.length}`);
+check('ux: ns-home-cta has exactly one click handler (no duplicate startTimer)', () => {
+  const matches = rendererSrc.match(/getElementById\('ns-home-cta'\)\?\.addEventListener\('click'/g) || [];
+  assert(matches.length === 1, `ns-home-cta should have exactly one click handler, found ${matches.length}`);
 });
 
-check('ux: ns-play-btn has aria-label', () => {
-  assertMatch(htmlSrc, /id="ns-play-btn"[^>]*aria-label="Start tonight/, 'ns-play-btn aria-label missing');
+check('ux: ns-home-cta has aria-label', () => {
+  assertMatch(htmlSrc, /id="ns-home-cta"[^>]*aria-label="Enter tonight"/, 'ns-home-cta aria-label missing');
 });
 
 check('ux: exactly one Start control exists -- no hidden or duplicate #btn-start', () => {
   // There used to be two buttons (#btn-start in setup-controls, #ns-play-btn
   // in the hero) that fired the identical startTimer(inputSeconds(), 'play')
-  // call. The fix is not a hidden duplicate kept alive for callers -- it is
-  // one element, one shared function (startTonightPlan), used by every
-  // caller: the hero CTA, "Play Tonight Again", and the Space shortcut.
+  // call. The fix was one element, one shared function (startTonightPlan).
+  // The Home/Library redesign pass kept that invariant but renamed/
+  // restructured the hero side: #ns-play-btn -> #ns-home-cta (state-aware,
+  // routes through handleHomeCta()), and removed the old "Play Tonight
+  // Again" replay caller entirely (redundant with the new hero CTA) -- so
+  // startTonightPlan() now has exactly two real callers (handleHomeCta's
+  // start branch, the Space shortcut) plus its own definition, not three.
   assert(!/id="btn-start"/.test(htmlSrc), '#btn-start must not exist in the DOM at all -- no hidden duplicate control');
   assert(!/getElementById\('btn-start'\)/.test(rendererSrc), 'no code may reference a #btn-start element anymore');
   assertMatch(rendererSrc, /function startTonightPlan\(\)\s*\{\s*return startTimer\(inputSeconds\(\), 'play'\);\s*\}/, 'a single shared startTonightPlan() function must exist');
   const startCallers = (rendererSrc.match(/startTonightPlan\(\)/g) || []).length;
-  assert(startCallers >= 4, `expected startTonightPlan() to be called by the hero CTA, Play Tonight Again, and the Space shortcut (plus its own definition), found ${startCallers} references`);
-  assertMatch(rendererSrc, /getElementById\('ns-play-btn'\)\?\.addEventListener\('click', \(\) => startTonightPlan\(\)\)/, 'the hero CTA must call the shared start function');
+  assert(startCallers === 3, `expected startTonightPlan() to be called by handleHomeCta's start branch and the Space shortcut (plus its own definition), found ${startCallers} references`);
+  assertMatch(rendererSrc, /getElementById\('ns-home-cta'\)\?\.addEventListener\('click', handleHomeCta\)/, 'the hero CTA must route through the state-aware handler');
 });
 
 check('ux: Escape closes all modals (profiles, receipts, about, notif-drawer)', () => {
@@ -1656,7 +1705,10 @@ check('warning: dialog timing and emergency cancel', () => {
 check('session: receipt and morning proof rendering', () => {
   assertMatch(mainSrc, /const receipt = runReceipts\.createRunReceipt\(timerState\);/, 'run receipt creation missing in main');
   assertMatch(htmlSrc, /id="morning-proof-section"/, 'morning proof section missing in HTML');
-  assertMatch(htmlSrc, /id="proof-card"/, 'proof card missing in HTML');
+  // Home/Library redesign pass: #proof-card (a nested wrapper div inside
+  // #morning-proof-section) was removed -- the compact Last Night card is
+  // just the section element itself now, no extra nesting.
+  assert(!/id="proof-card"/.test(htmlSrc), 'the old nested #proof-card wrapper was deliberately removed and must not return');
   // The canonical function is renderMorningProof(receipt), not showMorningProof(receipt)
   assertMatch(rendererSrc, /function renderMorningProof\(receipt\) \{/, 'renderMorningProof function missing in renderer');
 });
@@ -1822,9 +1874,14 @@ check('night-modes: timerState carries nightModeId, nightModeTitle, and nightMod
 });
 
 check('night-modes: MODES panel exists in HTML', () => {
+  // Home/Library redesign pass: the flat #nm-cards-grid + narrow
+  // #nm-detail-panel sidebar became a large #nm-featured presentation area
+  // above two tiered browsing rows (#nm-ready-grid "Ready to Use",
+  // #nm-unready-grid "Requires Setup / Coming Later") -- see nm-tile-row.
   assertMatch(htmlSrc, /id="ns-panel-modes"/, 'MODES panel missing from HTML');
-  assertMatch(htmlSrc, /id="nm-cards-grid"/, 'cards grid missing from HTML');
-  assertMatch(htmlSrc, /id="nm-detail-panel"/, 'detail panel missing from HTML');
+  assertMatch(htmlSrc, /id="nm-featured"/, 'Featured/Selected Mode area missing from HTML');
+  assertMatch(htmlSrc, /id="nm-ready-grid"/, '"Ready to Use" tile row missing from HTML');
+  assertMatch(htmlSrc, /id="nm-unready-grid"/, '"Requires Setup / Coming Later" tile row missing from HTML');
   assertMatch(htmlSrc, /id="nm-btn-use-tonight"/, 'Use Tonight button missing from HTML');
 });
 
@@ -1877,12 +1934,17 @@ check('night-modes: armed mode banner in HTML', () => {
   assertMatch(htmlSrc, /id="armed-mode-clear"/, 'armed-mode-clear button missing from HTML');
 });
 
-check('night-modes: cards have keyboard accessibility', () => {
+check('night-modes: tiles have keyboard accessibility', () => {
+  // Home/Library redesign pass: tiles are now real <button type="button">
+  // elements (buildTile() in renderer-night-modes.js), not <div
+  // role="button" tabindex="0"> with a manual keydown polyfill -- a real
+  // button is natively focusable and Enter/Space-activatable, so the
+  // role/tabindex/keydown plumbing this check used to require is gone
+  // because it's no longer needed, not because accessibility regressed.
   const rendNm = fs.readFileSync(path.join(root, 'renderer-night-modes.js'), 'utf8');
-  assertMatch(rendNm, /role.*button/, 'cards missing role=button');
-  assertMatch(rendNm, /tabindex.*0/, 'cards missing tabindex=0');
-  assertMatch(rendNm, /aria-pressed/, 'cards missing aria-pressed');
-  assertMatch(rendNm, /keydown/, 'cards missing keydown handler');
+  assertMatch(rendNm, /tile\.type = 'button';/, 'tiles must be real <button> elements, not div+role+tabindex');
+  assertMatch(rendNm, /aria-pressed/, 'tiles missing aria-pressed');
+  assertMatch(rendNm, /aria-label/, 'tiles missing aria-label');
 });
 
 check('night-modes: receipt includes nightModeVersion', () => {

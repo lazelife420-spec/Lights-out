@@ -1,18 +1,57 @@
 // Renderer: Night Modes library interaction.
-// Renders the card grid, handles selection, detail view, and Use Tonight handoff.
+// Renders the Library's Featured/Selected area + Ready/Requires-setup tile
+// rows, handles selection, and the Use Tonight handoff into Tonight.
+//
+// Home/Library redesign pass: replaced the emoji ARTWORK_MAP with inline
+// stroke-SVG icons (NS_MODE_ICONS) matching the sidebar's coherent icon
+// family, and replaced the old flat card-grid + narrow text sidebar with a
+// large Featured area (Steam-like: what's selected gets real visual
+// prominence) sitting above two tiered rows of larger tiles. Also exports
+// NS_MODE_ICONS/NS_GLANCE_ICONS and renderHomeNightModesTeaser() for
+// renderer.js's Home panel to reuse the same icon language and catalogue
+// data -- one source of truth for "what a mode looks like," not two.
 
-/* global api, escapeHtml */
+/* global api, escapeHtml, handleSidebarNavigation */
 
 'use strict';
 
-const ARTWORK_MAP = {
-  'quick-sleep': '\u{1F319}',
-  'lights-down': '\u{1F506}',
-  'movie-wind-down': '\u{1F3AC}',
-  'full-shutdown': '\u{26A1}',
-  'quiet-house': '\u{1F3E0}',
-  'school-night': '\u{1F4DA}'
+// ─────────────────────────────────────────────────────────────────────────────
+// Icon family: inline stroke SVGs, same spec as the sidebar nav icons
+// (viewBox 0 0 24 24, stroke=currentColor, stroke-width=2, round caps/joins,
+// fill=none) -- generic geometric glyphs, not emoji, one coherent family.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SVG_OPEN = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+
+const NS_MODE_ICONS = {
+  'quick-sleep': `<svg ${SVG_OPEN}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`,
+  'lights-down': `<svg ${SVG_OPEN}><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>`,
+  'movie-wind-down': `<svg ${SVG_OPEN}><path d="M4 8l1.4-4h3L7 8"/><path d="M9.5 8L11 4h3l-1.4 4"/><path d="M15 8l1.4-4h3L18 8"/><rect x="3" y="8" width="18" height="12" rx="2"/></svg>`,
+  'full-shutdown': `<svg ${SVG_OPEN}><path d="M12 2v6"/><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/></svg>`,
+  'quiet-house': `<svg ${SVG_OPEN}><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
+  'school-night': `<svg ${SVG_OPEN}><path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1.5 2.5 3 6 3s6-1.5 6-3v-5"/></svg>`
 };
+const NS_MODE_ICON_FALLBACK = NS_MODE_ICONS['quick-sleep'];
+
+// Shared with renderer.js's Home "Tonight at a glance" tiles.
+const NS_GLANCE_ICONS = {
+  alarm: `<svg ${SVG_OPEN}><path d="M12 2v7"/><path d="m4.22 10.22 1.42 1.42"/><path d="M1 18h2"/><path d="M21 18h2"/><path d="m18.36 11.64 1.42-1.42"/><path d="M23 22H1"/><path d="m16 6-4 4-4-4"/><path d="M8 18a4 4 0 1 1 8 0"/></svg>`,
+  companion: `<svg ${SVG_OPEN}><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>`,
+  lights: NS_MODE_ICONS['lights-down'],
+  wifi: `<svg ${SVG_OPEN}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`
+};
+
+// Also shared: Home's hero CTA and Tonight-card icons.
+const NS_HOME_ICONS = {
+  play: `<svg ${SVG_OPEN} fill="currentColor" stroke="none"><polygon points="6 3 20 12 6 21 6 3"/></svg>`,
+  arrow: `<svg ${SVG_OPEN}><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>`
+};
+
+if (typeof window !== 'undefined') {
+  window.NS_MODE_ICONS = NS_MODE_ICONS;
+  window.NS_GLANCE_ICONS = NS_GLANCE_ICONS;
+  window.NS_HOME_ICONS = NS_HOME_ICONS;
+}
 
 let nmCatalogue = [];
 let nmSelectedId = null;
@@ -35,122 +74,68 @@ function formatAction(action) {
   return map[action] || action;
 }
 
-function buildCard(mode) {
-  const card = document.createElement('div');
-  card.className = 'nm-card';
-  if (mode.status !== 'ready') card.classList.add('disabled');
-  if (mode.id === nmSelectedId) card.classList.add('selected');
-  card.dataset.modeId = mode.id;
-
-  const artwork = ARTWORK_MAP[mode.artworkId] || '\u{1F319}';
-  const statusTag = mode.status !== 'ready' ? getStatusTagHtml(mode.status) : '';
-
-  card.innerHTML = `
-    <div class="nm-card-artwork">${artwork}</div>
-    <div class="nm-card-title">${escapeHtml(mode.title)}</div>
-    <div class="nm-card-subtitle">${escapeHtml(mode.subtitle)}</div>
-    <div class="nm-card-tags">
-      <span class="nm-card-tag">${formatDuration(mode.timer.durationSeconds)}</span>
-      <span class="nm-card-tag">${formatAction(mode.timer.action)}</span>
-      ${statusTag}
-    </div>
-  `;
-
-  card.setAttribute('role', 'button');
-  card.setAttribute('tabindex', '0');
-  card.setAttribute('aria-label', `${mode.title}${mode.status !== 'ready' ? ' (unavailable)' : ''}`);
-  if (mode.id === nmSelectedId) card.setAttribute('aria-pressed', 'true');
-  card.addEventListener('click', () => selectMode(mode.id));
-  card.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectMode(mode.id); }
-  });
-  return card;
-}
-
-// Grouped by real catalog status, not invented tiers: "Ready to use" (status
-// === 'ready') vs "Requires setup / coming later" (everything else). This
-// gives the library real visual hierarchy instead of one flat undifferentiated
-// grid, without fabricating a "recommended" mode or a "My Modes" tier that
-// the current catalog/profiles data doesn't support.
-function renderCards() {
-  const grid = document.getElementById('nm-cards-grid');
-  if (!grid) return;
-  grid.innerHTML = '';
-
-  const ready = nmCatalogue.filter(mode => mode.status === 'ready');
-  const notReady = nmCatalogue.filter(mode => mode.status !== 'ready');
-
-  const renderGroup = (title, modes, unready) => {
-    if (!modes.length) return;
-    const heading = document.createElement('div');
-    heading.className = 'nm-group-heading';
-    heading.textContent = title;
-    grid.appendChild(heading);
-
-    const row = document.createElement('div');
-    row.className = 'nm-group-row' + (unready ? ' nm-group-unready' : '');
-    modes.forEach(mode => row.appendChild(buildCard(mode)));
-    grid.appendChild(row);
-  };
-
-  renderGroup('Ready to use', ready, false);
-  renderGroup('Requires setup / coming later', notReady, true);
+function modeIconSvg(mode) {
+  return NS_MODE_ICONS[mode.artworkId] || NS_MODE_ICON_FALLBACK;
 }
 
 function getStatusTagHtml(status) {
   if (status === 'coming_soon') {
-    return '<span class="nm-card-tag status-coming-soon">COMING SOON</span>';
+    return '<span class="nm-tile-tag status-coming-soon">COMING SOON</span>';
   }
   if (status === 'needs_router_setup' || status === 'needs_device_setup') {
-    return '<span class="nm-card-tag status-needs-setup">NEEDS SETUP</span>';
+    return '<span class="nm-tile-tag status-needs-setup">NEEDS SETUP</span>';
   }
   return '';
 }
 
-function renderDetail(mode) {
-  const panel = document.getElementById('nm-detail-panel');
-  if (!panel || !mode) { if (panel) panel.style.display = 'none'; return; }
+// A larger, tile-style card for the "Ready to Use" / "Requires Setup" rows --
+// icon in its own accent-tinted badge (not a bare glyph), title, and one
+// compact tag row. Deliberately lighter than the old .nm-card (no long
+// subtitle) since the full description now lives in the Featured area once
+// selected, not repeated on every tile.
+function buildTile(mode) {
+  const tile = document.createElement('button');
+  tile.type = 'button';
+  tile.className = 'nm-tile';
+  if (mode.status !== 'ready') tile.classList.add('disabled');
+  if (mode.id === nmSelectedId) tile.classList.add('selected');
+  tile.dataset.modeId = mode.id;
 
-  panel.style.display = '';
+  const statusTag = mode.status !== 'ready' ? getStatusTagHtml(mode.status) : '';
 
-  const artwork = ARTWORK_MAP[mode.artworkId] || '\u{1F319}';
-  document.getElementById('nm-detail-artwork').textContent = artwork;
-  document.getElementById('nm-detail-title').textContent = mode.title;
-  document.getElementById('nm-detail-subtitle').textContent = mode.subtitle;
-
-  // Timeline
-  const timeline = document.getElementById('nm-detail-timeline');
-  timeline.innerHTML = '';
-  const steps = buildTimeline(mode);
-  for (const step of steps) {
-    const li = document.createElement('li');
-    li.textContent = step;
-    timeline.appendChild(li);
-  }
-
-  // Meta
-  const meta = document.getElementById('nm-detail-meta');
-  meta.innerHTML = `
-    <div class="nm-meta-row"><span class="nm-meta-label">Duration</span><span>${formatDuration(mode.timer.durationSeconds)}</span></div>
-    <div class="nm-meta-row"><span class="nm-meta-label">Action</span><span>${formatAction(mode.timer.action)}</span></div>
-    <div class="nm-meta-row"><span class="nm-meta-label">Ritual</span><span>${mode.timer.ritualId === 'standard' ? 'Standard wind-down' : 'None (direct start)'}</span></div>
+  tile.innerHTML = `
+    <span class="nm-tile-badge" aria-hidden="true">${modeIconSvg(mode)}</span>
+    <span class="nm-tile-title">${escapeHtml(mode.title)}</span>
+    <span class="nm-tile-tags">
+      <span class="nm-tile-tag">${formatDuration(mode.timer.durationSeconds)}</span>
+      <span class="nm-tile-tag">${formatAction(mode.timer.action)}</span>
+      ${statusTag}
+    </span>
   `;
 
-  // Status
-  const statusEl = document.getElementById('nm-detail-status');
-  if (mode.status === 'ready') {
-    statusEl.textContent = '\u2705 Ready on this PC';
-    statusEl.className = 'nm-detail-status ready';
-  } else {
-    const reason = (mode.availability && mode.availability.reason) || mode.status.replace(/_/g, ' ');
-    statusEl.textContent = '\u26A0\uFE0F ' + reason;
-    statusEl.className = 'nm-detail-status unavailable';
-  }
+  tile.setAttribute('aria-pressed', String(mode.id === nmSelectedId));
+  tile.setAttribute('aria-label', `${mode.title}${mode.status !== 'ready' ? ' (unavailable)' : ''}`);
+  tile.addEventListener('click', () => selectMode(mode.id));
+  return tile;
+}
 
-  // Use Tonight button
-  const btn = document.getElementById('nm-btn-use-tonight');
-  btn.disabled = mode.status !== 'ready';
-  btn.textContent = mode.status === 'ready' ? 'Use Tonight' : 'Not Available';
+// Grouped by real catalog status, not invented tiers: "Ready to use" (status
+// === 'ready') vs "Requires setup / coming later" (everything else).
+function renderCards() {
+  const readyGrid = document.getElementById('nm-ready-grid');
+  const unreadyGrid = document.getElementById('nm-unready-grid');
+  const unreadySection = document.getElementById('nm-unready-section');
+  if (!readyGrid || !unreadyGrid) return;
+  readyGrid.innerHTML = '';
+  unreadyGrid.innerHTML = '';
+
+  const ready = nmCatalogue.filter(mode => mode.status === 'ready');
+  const notReady = nmCatalogue.filter(mode => mode.status !== 'ready');
+
+  ready.forEach(mode => readyGrid.appendChild(buildTile(mode)));
+  notReady.forEach(mode => unreadyGrid.appendChild(buildTile(mode)));
+
+  if (unreadySection) unreadySection.style.display = notReady.length ? '' : 'none';
 }
 
 function buildTimeline(mode) {
@@ -161,6 +146,88 @@ function buildTimeline(mode) {
   steps.push(`Run a ${formatDuration(mode.timer.durationSeconds)} countdown.`);
   steps.push(`${formatAction(mode.timer.action)} this PC when the countdown completes.`);
   return steps;
+}
+
+// Real, non-fabricated "what else participates tonight" chips -- only shown
+// when the corresponding global feature is actually enabled/configured, per
+// the same source data the Devices panel and Home's "Tonight at a glance"
+// read (state.smartLights / api.getWifiGuardSettings). Never claims a
+// feature is active when it isn't configured; omitted entirely otherwise.
+async function buildFeatureChips(mode) {
+  const chips = [];
+  if (mode.timer.ritualId === 'standard') {
+    chips.push({ icon: NS_HOME_ICONS.arrow, label: 'Guided ritual' });
+  }
+  try {
+    const light = await api.getSmartLightConfig?.();
+    if (light?.enabled && light.provider && light.provider !== 'none') {
+      chips.push({ icon: NS_GLANCE_ICONS.lights, label: `Smart Lights (${light.provider})` });
+    }
+  } catch { /* real-data-or-nothing: no chip on failure */ }
+  try {
+    const wifi = await api.getWifiGuardSettings?.();
+    if (wifi?.enabled && wifi.configured) {
+      chips.push({ icon: NS_GLANCE_ICONS.wifi, label: 'WiFi Guard' });
+    }
+  } catch { /* real-data-or-nothing: no chip on failure */ }
+  return chips;
+}
+
+async function renderFeatured(mode) {
+  const empty = document.getElementById('nm-featured-empty');
+  const content = document.getElementById('nm-featured-content');
+  if (!empty || !content) return;
+  if (!mode) {
+    empty.style.display = '';
+    content.style.display = 'none';
+    return;
+  }
+  empty.style.display = 'none';
+  content.style.display = '';
+
+  document.getElementById('nm-detail-artwork').innerHTML = modeIconSvg(mode);
+  document.getElementById('nm-detail-title').textContent = mode.title;
+  document.getElementById('nm-detail-subtitle').textContent = mode.subtitle;
+
+  const timeline = document.getElementById('nm-detail-timeline');
+  timeline.innerHTML = '';
+  for (const step of buildTimeline(mode)) {
+    const li = document.createElement('li');
+    li.textContent = step;
+    timeline.appendChild(li);
+  }
+
+  const meta = document.getElementById('nm-detail-meta');
+  meta.innerHTML = `
+    <div class="nm-meta-row"><span class="nm-meta-label">Duration</span><span>${formatDuration(mode.timer.durationSeconds)}</span></div>
+    <div class="nm-meta-row"><span class="nm-meta-label">Action</span><span>${formatAction(mode.timer.action)}</span></div>
+    <div class="nm-meta-row"><span class="nm-meta-label">Ritual</span><span>${mode.timer.ritualId === 'standard' ? 'Standard wind-down' : 'None (direct start)'}</span></div>
+  `;
+
+  const statusEl = document.getElementById('nm-detail-status');
+  const statusIconOk = `<svg ${SVG_OPEN} width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>`;
+  const statusIconWarn = `<svg ${SVG_OPEN} width="14" height="14"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+  if (mode.status === 'ready') {
+    statusEl.innerHTML = `${statusIconOk}<span>Ready on this PC</span>`;
+    statusEl.className = 'nm-detail-status ready';
+  } else {
+    const reason = (mode.availability && mode.availability.reason) || mode.status.replace(/_/g, ' ');
+    statusEl.innerHTML = `${statusIconWarn}<span>${escapeHtml(reason)}</span>`;
+    statusEl.className = 'nm-detail-status unavailable';
+  }
+
+  const featuresEl = document.getElementById('nm-detail-features');
+  if (featuresEl) {
+    const chips = await buildFeatureChips(mode);
+    featuresEl.innerHTML = chips.length
+      ? chips.map(c => `<span class="nm-feature-chip">${c.icon}<span>${escapeHtml(c.label)}</span></span>`).join('')
+      : '';
+    featuresEl.style.display = chips.length ? '' : 'none';
+  }
+
+  const btn = document.getElementById('nm-btn-use-tonight');
+  btn.disabled = mode.status !== 'ready';
+  btn.textContent = mode.status === 'ready' ? 'Use Tonight' : 'Not Available';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -177,14 +244,17 @@ function selectMode(id) {
     clearArmedNightMode();
   }
 
-  // Update card selection state and aria-pressed
-  document.querySelectorAll('.nm-card').forEach(c => {
-    const isSelected = c.dataset.modeId === id;
-    c.classList.toggle('selected', isSelected);
-    c.setAttribute('aria-pressed', String(isSelected));
+  document.querySelectorAll('.nm-tile').forEach(t => {
+    const isSelected = t.dataset.modeId === id;
+    t.classList.toggle('selected', isSelected);
+    t.setAttribute('aria-pressed', String(isSelected));
   });
 
-  renderDetail(mode);
+  renderFeatured(mode);
+  const featured = document.getElementById('nm-featured');
+  if (featured && typeof featured.scrollIntoView === 'function') {
+    featured.scrollIntoView({ block: 'nearest' });
+  }
 }
 
 async function useTonight() {
@@ -234,9 +304,48 @@ async function useTonight() {
     }
   }
 
-  // Navigate to Tonight panel
-  const tonightBtn = document.querySelector('[data-ns-tab="lib"]');
-  if (tonightBtn) tonightBtn.click();
+  // Bridge Library -> Tonight through the same central navigation entry
+  // point every other nav control uses (handleSidebarNavigation), not a
+  // simulated click on the sidebar button.
+  if (typeof handleSidebarNavigation === 'function') {
+    handleSidebarNavigation('lib');
+  } else {
+    document.querySelector('[data-ns-tab="lib"]')?.click();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Home teaser: 3-4 "Ready" mode tiles shown on Home, above "Browse Library".
+// Selecting one here selects it in the Library too (so landing on Library
+// right after shows that mode already featured) and navigates there --
+// Home orients, Library is where you actually browse and commit.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function renderHomeNightModesTeaser() {
+  const row = document.getElementById('ns-home-modes-row');
+  if (!row) return;
+  row.innerHTML = '';
+  const ready = nmCatalogue.filter(mode => mode.status === 'ready').slice(0, 4);
+  ready.forEach(mode => {
+    const tile = document.createElement('button');
+    tile.type = 'button';
+    tile.className = 'ns-home-mode-tile';
+    tile.dataset.modeId = mode.id;
+    tile.innerHTML = `
+      <span class="ns-home-mode-badge" aria-hidden="true">${modeIconSvg(mode)}</span>
+      <span class="ns-home-mode-title">${escapeHtml(mode.title)}</span>
+      <span class="ns-home-mode-meta">${formatDuration(mode.timer.durationSeconds)} &middot; ${formatAction(mode.timer.action)}</span>
+    `;
+    tile.addEventListener('click', () => {
+      selectMode(mode.id);
+      if (typeof handleSidebarNavigation === 'function') handleSidebarNavigation('modes');
+    });
+    row.appendChild(tile);
+  });
+}
+
+if (typeof window !== 'undefined') {
+  window.renderHomeNightModesTeaser = renderHomeNightModesTeaser;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -264,16 +373,27 @@ async function initNightModes() {
     nmCatalogue = [];
   }
 
-  renderCards();
+  // Auto-feature a default mode so the Featured area never opens on the
+  // big empty "Select a Night Mode" placeholder (per review: a browsing
+  // library shouldn't lead with blank space). Prefers whatever is already
+  // armed for Tonight -- never override a real choice with an arbitrary
+  // default -- falling back to the first ready mode in catalogue order.
+  // This only sets what's *displayed* as featured; it does not arm
+  // anything or touch Tonight's configured duration/action (that still
+  // only happens via Use Tonight), so opening Library can never silently
+  // change what Home's hero CTA thinks is chosen.
+  if (!nmSelectedId) {
+    const armedId = (typeof state !== 'undefined' && state.armedNightMode) ? state.armedNightMode.nightModeId : null;
+    const armedMode = armedId ? nmCatalogue.find(m => m.id === armedId && m.status === 'ready') : null;
+    const defaultMode = armedMode || nmCatalogue.find(m => m.status === 'ready') || null;
+    if (defaultMode) {
+      nmSelectedId = defaultMode.id;
+    }
+  }
 
-  // Wire up detail back button
-  const backBtn = document.getElementById('nm-detail-back');
-  if (backBtn) backBtn.addEventListener('click', () => {
-    nmSelectedId = null;
-    document.querySelectorAll('.nm-card').forEach(c => c.classList.remove('selected'));
-    const panel = document.getElementById('nm-detail-panel');
-    if (panel) panel.style.display = 'none';
-  });
+  renderCards();
+  renderHomeNightModesTeaser();
+  renderFeatured(nmCatalogue.find(m => m.id === nmSelectedId) || null);
 
   // Wire up Use Tonight button
   const useBtn = document.getElementById('nm-btn-use-tonight');

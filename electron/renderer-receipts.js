@@ -55,72 +55,67 @@ async function loadMorningProof() {
   }
 }
 
+// Icon family for the Last Night card, matching the sidebar's coherent
+// stroke-SVG language (viewBox 0 0 24 24, stroke=currentColor,
+// stroke-width=2, round caps/joins) -- replaces the emoji-per-result
+// badge.icon values used before the Home/Library redesign pass. The
+// receipts LEDGER list (renderReceiptsModal below) still uses its own
+// emoji per result; out of scope for this pass, see the icon inventory.
+const NS_PROOF_ICON_SVG_OPEN = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+const NS_PROOF_ICONS = {
+  running: `<svg ${NS_PROOF_ICON_SVG_OPEN}><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>`,
+  completing: `<svg ${NS_PROOF_ICON_SVG_OPEN}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  power_executed: `<svg ${NS_PROOF_ICON_SVG_OPEN}><polyline points="20 6 9 17 4 12"/></svg>`,
+  dry_run_completed: `<svg ${NS_PROOF_ICON_SVG_OPEN}><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
+  cancelled: `<svg ${NS_PROOF_ICON_SVG_OPEN}><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
+  blocked: `<svg ${NS_PROOF_ICON_SVG_OPEN}><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`,
+  error: `<svg ${NS_PROOF_ICON_SVG_OPEN}><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+  unknown: `<svg ${NS_PROOF_ICON_SVG_OPEN}><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`
+};
+
 async function renderMorningProof(receipt) {
   if (!receipt || !els.morningProofSection) return;
   els.morningProofSection.style.display = '';
 
-  // Result → badge + headline.
+  // Result → badge + compact headline. Title-cased for a compact card, not
+  // the shouty all-caps the old full-width hero used. Icons are looked up
+  // separately from NS_PROOF_ICONS (SVG, not emoji) below.
   const badgeMap = {
-    running:           { text: 'RUNNING',    color: '#5b8cff', icon: '\u{1F504}', title: 'IN PROGRESS' },
-    completing:        { text: 'COMPLETING', color: '#d4a50a', icon: '⏳',    title: 'COMPLETING…' },
-    power_executed:    { text: 'COMPLETED',  color: '#4caf50', icon: '☀️', title: 'MISSION COMPLETE' },
-    dry_run_completed: { text: 'DRY RUN',    color: '#76c9ff', icon: '\u{1F4CB}', title: 'DRY RUN COMPLETE' },
-    cancelled:         { text: 'CANCELLED',  color: '#ff9800', icon: '❌',    title: 'SESSION CANCELLED' },
-    blocked:           { text: 'BLOCKED',    color: '#ff4d4d', icon: '\u{1F6AB}', title: 'BLOCKED' },
-    error:             { text: 'ERROR',      color: '#ff4d4d', icon: '⚠️', title: 'ERROR' }
+    running:           { text: 'RUNNING',    color: '#5b8cff', title: 'In progress' },
+    completing:        { text: 'COMPLETING', color: '#d4a50a', title: 'Completing…' },
+    power_executed:    { text: 'COMPLETED',  color: '#4caf50', title: 'Session complete' },
+    dry_run_completed: { text: 'DRY RUN',    color: '#76c9ff', title: 'Dry run complete' },
+    cancelled:         { text: 'CANCELLED',  color: '#ff9800', title: 'Session cancelled' },
+    blocked:           { text: 'BLOCKED',    color: '#ff4d4d', title: 'Blocked' },
+    error:             { text: 'ERROR',      color: '#ff4d4d', title: 'Error' }
   };
-  const badge = badgeMap[receipt.result] || { text: receipt.result?.toUpperCase(), color: 'var(--text-muted)', icon: '❓', title: receipt.result?.toUpperCase() || '—' };
+  const badge = badgeMap[receipt.result] || { text: receipt.result?.toUpperCase(), color: 'var(--text-muted)', title: receipt.result?.toUpperCase() || 'Unknown' };
 
   if (els.proofBadge) {
     els.proofBadge.textContent = badge.text;
     els.proofBadge.style.color = badge.color;
     els.proofBadge.style.borderColor = badge.color;
   }
-  if (els.proofIcon) els.proofIcon.textContent = badge.icon;
+  if (els.proofIcon) els.proofIcon.innerHTML = NS_PROOF_ICONS[receipt.result] || NS_PROOF_ICONS.unknown;
 
   const proofTitle = document.getElementById('ns-proof-title');
   if (proofTitle) proofTitle.textContent = badge.title;
 
-  // Timestamp line.
+  // Meta line: real duration/action/timestamp, only the parts we have.
   const timestamp = document.getElementById('ns-proof-timestamp');
   if (timestamp) {
-    const end = receipt.endedAt ? new Date(receipt.endedAt) : null;
-    const start = receipt.startedAt ? new Date(receipt.startedAt) : null;
     const parts = [];
-    if (start) parts.push('Started ' + start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-    if (end)   parts.push((receipt.result === 'cancelled' ? 'Cancelled' : 'Ended') + ' ' + end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    if (receipt.durationSeconds) parts.push(`${Math.floor(receipt.durationSeconds / 60)}m`);
+    if (receipt.action) {
+      const label = receipt.action.charAt(0).toUpperCase() + receipt.action.slice(1);
+      parts.push(receipt.forceShutdown ? `${label} (forced)` : label);
+    }
+    const end = receipt.endedAt ? new Date(receipt.endedAt) : null;
+    if (end) parts.push((receipt.result === 'cancelled' ? 'Cancelled ' : 'Ended ') + end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    if (receipt.profileName) parts.push(receipt.profileName);
     timestamp.textContent = parts.join(' · ');
   }
 
-  // Stat pills — only show pills we have real values for.
-  function showPill(id, valId, value) {
-    const pill = document.getElementById(id);
-    const valEl = document.getElementById(valId);
-    if (!pill) return;
-    if (value !== null && value !== undefined && value !== '') {
-      if (valEl) valEl.textContent = value;
-      pill.style.display = '';
-    } else {
-      pill.style.display = 'none';
-    }
-  }
-
-  const durMin = receipt.durationSeconds ? Math.floor(receipt.durationSeconds / 60) : null;
-  showPill('ns-pill-duration', 'ns-pill-duration-val', durMin !== null ? `${durMin}m` : null);
-
-  const actionLabel = receipt.action ? (receipt.action.charAt(0).toUpperCase() + receipt.action.slice(1)) + (receipt.forceShutdown ? ' ⚡' : '') + (receipt.dryRun ? ' \u{1F4CB}' : '') : null;
-  showPill('ns-pill-action', 'ns-pill-action-val', actionLabel);
-
-  if (timestamp && receipt.profileName) timestamp.textContent += ` · ${receipt.profileName}`;
-
-  const snoozes = receipt.snoozeCount || 0;
-  showPill('ns-pill-snoozes', 'ns-pill-snoozes-val', snoozes > 0 ? snoozes : null);
-
-  // Total runs from stats API (real count, no faking).
-  try {
-    const stats = await api.getReceiptStats?.();
-    showPill('ns-pill-runs', 'ns-pill-runs-val', stats?.total ?? null);
-  } catch { showPill('ns-pill-runs', 'ns-pill-runs-val', null); }
 }
 
 function renderReceiptsModal(receipts, stats) {

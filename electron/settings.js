@@ -115,7 +115,7 @@ const DEFAULTS = {
     clockSeconds: true,            // show the second hand
     clockSweep: true,              // smooth sweep vs per-second tick
     // Northstar UI state
-    nsActiveTab: 'lib',            // last active sidebar tab
+    nsActiveTab: 'home',            // last active sidebar tab
     nsSelectedMode: '',            // last selected lobby mode card
     widgetVisible: false,          // restore only after a confirmed widget show
     // Identity only: restoring this selection never applies or starts a timer.

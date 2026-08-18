@@ -47,9 +47,9 @@ function collectAppSettings() {
     // open when a save fires (Save button, live per-field auto-save, a
     // top-bar quick toggle) reopens itself on the next launch.
     nsActiveTab: (() => {
-      const active = document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || 'lib';
+      const active = document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || 'home';
       if (active === 'set' || active === 'help') {
-        return typeof settingsReturnTab === 'string' ? settingsReturnTab : 'lib';
+        return typeof settingsReturnTab === 'string' ? settingsReturnTab : 'home';
       }
       return active;
     })(),
@@ -127,8 +127,8 @@ async function applyAppSettings(app, { skipNavigation = false } = {}) {
   // Restore northstar sidebar tab. If it is a modal/settings tab (set/help),
   // migrate it to 'lib' on disk and navigate to 'lib' by default.
   if (app.nsActiveTab === 'set' || app.nsActiveTab === 'help') {
-    app.nsActiveTab = 'lib';
-    await api.saveAppSettings({ app: { nsActiveTab: 'lib' } }).catch(error => {
+    app.nsActiveTab = 'home';
+    await api.saveAppSettings({ app: { nsActiveTab: 'home' } }).catch(error => {
       console.error('Failed to migrate legacy active tab:', error);
       throw error;
     });
@@ -137,7 +137,7 @@ async function applyAppSettings(app, { skipNavigation = false } = {}) {
     if (app.nsActiveTab) {
       handleSidebarNavigation(app.nsActiveTab, { persist: false });
     } else {
-      handleSidebarNavigation('lib', { persist: false });
+      handleSidebarNavigation('home', { persist: false });
     }
   }
   // Restore northstar selected mode card.
