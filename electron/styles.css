@@ -4606,6 +4606,44 @@ body.mini-mode .ll-line {
 .context-menu-item.danger { color: var(--accent-red); }
 .context-menu-item.danger:hover { background: rgba(255, 77, 77, 0.12); }
 
+/* Shared help/tooltip pattern (Phase 5B-A) -- one floating node, positioned
+   and shown/hidden by renderer-help.js for any [data-ns-help] element on
+   hover or keyboard focus. Visual language matches .context-menu (same
+   elevated surface/border/shadow), kept intentionally small and plain --
+   this is a help affordance, not a decorative panel. */
+.ns-help-tip {
+  position: fixed;
+  z-index: 10000;
+  max-width: 260px;
+  padding: 8px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-2px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  pointer-events: none;
+}
+.ns-help-tip.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+/* Small muted caption used to explain a control's real behavior inline
+   (e.g. "starts immediately" / "loads, doesn't start") -- same visual
+   weight as .dev-note / .settings-category-intro elsewhere in the app. */
+.ns-setup-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin: 4px 0 0;
+}
+
 /* ==========================================================================
    NORTHSTAR LOBBY — Slice 2
    All .ns-* classes. No existing selectors modified.

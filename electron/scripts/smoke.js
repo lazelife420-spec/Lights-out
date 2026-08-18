@@ -34,7 +34,7 @@ function assertMatch(src, pattern, msg) {
 }
 
 // 1. Syntax-check every first-party JS file.
-const jsFiles = ['main.js', 'preload.js', 'renderer-utils.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'renderer.js', 'settings.js', 'smartLights.js', 'profiles.js', 'profileIdentity.js', 'profileRitualContext.js', 'startDecision.js', 'windowGeometry.js', 'calendar.js', 'lastLight.js', 'companionNetwork.js', 'companionFirewall.js', 'capabilityTruth.js'];
+const jsFiles = ['main.js', 'preload.js', 'renderer-utils.js', 'renderer-help.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'renderer.js', 'settings.js', 'smartLights.js', 'profiles.js', 'profileIdentity.js', 'profileRitualContext.js', 'startDecision.js', 'windowGeometry.js', 'calendar.js', 'lastLight.js', 'companionNetwork.js', 'companionFirewall.js', 'capabilityTruth.js'];
 for (const file of jsFiles) {
   check(`syntax: ${file}`, () => {
     execFileSync(process.execPath, ['--check', path.join(root, file)], { stdio: 'pipe' });
@@ -50,6 +50,23 @@ check('package: local main-process modules are included in the build', () => {
 
   for (const requiredFile of localRequires) {
     assert(packagedFiles.has(requiredFile), `${requiredFile} is required by main.js but missing from build.files`);
+  }
+});
+
+// Phase 5B-A: the same "packaged build silently drops a file" risk exists
+// for renderer <script src="..."> tags, not just main.js's require() calls
+// -- this is exactly how a new file like renderer-help.js could work in
+// every dev/smoke run (index.html loads it straight off disk) and then be
+// missing from the actual packaged .exe. Generalizes the check above to
+// every local script index.html references.
+check('package: renderer <script src> files are included in the build', () => {
+  const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const packagedFiles = new Set(packageJson.build?.files || []);
+  const htmlSrcForBuild = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const localScripts = [...htmlSrcForBuild.matchAll(/<script src="([^"]+\.js)"><\/script>/g)].map(m => m[1]);
+  assert(localScripts.length > 5, 'sanity: expected many local <script> tags in index.html');
+  for (const scriptFile of localScripts) {
+    assert(packagedFiles.has(scriptFile), `${scriptFile} is loaded by index.html but missing from build.files`);
   }
 });
 
@@ -648,7 +665,7 @@ check('preload: timer, mini-mode, and tray-settings bridge APIs remain exposed',
 // tags in index.html, and add new renderer-*.js shards here as they're split
 // out, so these content assertions keep matching regardless of which shard
 // the checked code physically lives in.
-const RENDERER_FILES = ['renderer-utils.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'renderer.js'];
+const RENDERER_FILES = ['renderer-utils.js', 'renderer-help.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'renderer.js'];
 const rendererSrc = RENDERER_FILES.map(f => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
 check('renderer: running-state controls still swap stop-pause visibility and label', () => {
   // Start is no longer a separate setup-controls button toggled here -- the
@@ -1687,6 +1704,83 @@ check('ux: exactly one Start control exists -- no hidden or duplicate #btn-start
   const startCallers = (rendererSrc.match(/startTonightPlan\(\)/g) || []).length;
   assert(startCallers === 4, `expected startTonightPlan() to be called by handleHomeCta's start branch, Tonight's own Start button, and the Space shortcut (plus its own definition), found ${startCallers} references`);
   assertMatch(rendererSrc, /getElementById\('ns-home-cta'\)\?\.addEventListener\('click', handleHomeCta\)/, 'the hero CTA must route through the state-aware handler');
+});
+
+check('help: shared hover/focus tooltip pattern exists and is wired', () => {
+  assertMatch(htmlSrc, /<script src="renderer-help\.js"><\/script>/, 'renderer-help.js must be loaded as a script');
+  // Must load before renderer.js so its top-level initHelpTooltips() call
+  // (and the shared document-level listeners it installs) exist before any
+  // other renderer code that might rely on hover/focus help being live.
+  const helpTagIndex = htmlSrc.indexOf('<script src="renderer-help.js">');
+  const rendererTagIndex = htmlSrc.indexOf('<script src="renderer.js">');
+  assert(helpTagIndex > -1 && rendererTagIndex > -1 && helpTagIndex < rendererTagIndex, 'renderer-help.js must load before renderer.js');
+  assertMatch(rendererSrc, /function initHelpTooltips\(\)/, 'initHelpTooltips() must exist');
+  assertMatch(rendererSrc, /^initHelpTooltips\(\);/m, 'initHelpTooltips() must be invoked at load, not just defined');
+  // Delegated on document, not a single element -- must work for content
+  // rendered after this file executes (Library tiles, Tonight's
+  // participating chips), not just what exists in index.html at parse time.
+  assertMatch(rendererSrc, /document\.addEventListener\('mouseover'/, 'hover must be handled via a delegated listener');
+  assertMatch(rendererSrc, /document\.addEventListener\('focusin'/, 'keyboard focus must be handled -- native title only fires on hover');
+  // This is a different attribute from the pre-existing data-help (top-menu
+  // Info items only, toasts on click) -- must not collide with it.
+  assertMatch(rendererSrc, /getAttribute\('data-ns-help'\)/, 'must read data-ns-help, not the pre-existing click-toast data-help attribute');
+});
+
+check('help: Tonight\'s highest-risk controls carry data-ns-help', () => {
+  const tonightHelpTargets = [
+    ['ring-state-badge', /id="ring-state-badge"[^>]*data-ns-help="[^"]+"/],
+    ['btn-start-custom', /id="btn-start-custom"[^>]*data-ns-help="[^"]+"/],
+    ['btn-ritual', /id="btn-ritual"[^>]*data-ns-help="[^"]+"/],
+    ['analog-clock', /id="analog-clock"[^>]*data-ns-help="[^"]+"/],
+    ['btn-pause', /id="btn-pause"[^>]*data-ns-help="[^"]+"/],
+    ['btn-snooze', /id="btn-snooze"[^>]*data-ns-help="[^"]+"/],
+    ['btn-stop', /id="btn-stop"[^>]*data-ns-help="[^"]+"/],
+  ];
+  for (const [name, pattern] of tonightHelpTargets) {
+    assertMatch(htmlSrc, pattern, `#${name} is missing data-ns-help`);
+  }
+  // The chips row (instant-start on click, no confirmation) needed a
+  // visible warning, not just a tooltip -- a hover-only warning is easy to
+  // miss on a control that fires immediately on click.
+  assertMatch(htmlSrc, /class="ns-setup-hint">Presets start immediately/, 'chips row is missing its visible instant-start warning');
+  assertMatch(htmlSrc, /class="chip" data-min="5" data-ns-help="[^"]+"/, 'chip presets are missing data-ns-help');
+  // Quick plans (#profiles-section) load a plan into the setup without
+  // starting it -- applyProfile() is deliberately inert on selection (see
+  // renderer-profiles.js). That was previously undocumented and easy to
+  // mistake for the chips' instant-start behavior.
+  assertMatch(htmlSrc, /class="ns-setup-hint">Loads into the timer above/, 'Quick plans section is missing its "loads, does not start" clarification');
+  // Participating chips (Smart Lights/WiFi Guard/Companion) are rendered by
+  // renderTonightPlanFeatures(), not present in static HTML.
+  assertMatch(rendererSrc, /tonight-plan-feature-chip" tabindex="0" data-ns-help="\$\{escapeHtml\(c\.help\)\}"/, 'participating chips are missing data-ns-help');
+});
+
+check('help: idle-clock bottom label reflects real schedule state, not a static default', () => {
+  // Regression guard: this exact unconditional pattern is what silently
+  // showed a static settings default (or a one-time onboarding answer) as
+  // if it were a live schedule target, even with nothing configured -- the
+  // reported "it always says 2200" bug. Must not come back.
+  assert(!/els\.timerLabel\.textContent = `Bedtime \$\{bedtime\}`;/.test(rendererSrc), 'the old unconditional "Bedtime ${bedtime}" label must not return');
+  // Must be driven by the same real computed value Schedule's own "Next
+  // tonight" summary uses (calNextEvent, from renderer-calendar.js) --
+  // not a second, disconnected source of truth.
+  assertMatch(rendererSrc, /typeof calNextEvent !== 'undefined' && calNextEvent/, 'idle-clock label must check the real calNextEvent, not a static field');
+  assertMatch(rendererSrc, /els\.timerLabel\.textContent = 'No time scheduled';/, 'must honestly say nothing is scheduled when calNextEvent is empty');
+  assertMatch(rendererSrc, /`Next action: \$\{evTime\}`/, 'a real scheduled event must be labeled "Next action:", not a bare bedtime string');
+});
+
+check('help: no emoji in the new data-ns-help / ns-setup-hint copy', () => {
+  // Explicit Phase 5B-A requirement: the help pattern itself must not add
+  // to the app's existing emoji/glyph inconsistency (flagged separately in
+  // LIGHTS_OUT_UI_WIRING_AND_HELP_AUDIT.md as a later, dedicated pass).
+  // Pre-existing emoji elsewhere (e.g. #btn-ritual's moon) are untouched
+  // and intentionally out of scope here -- this only checks new copy.
+  const emojiPattern = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}]/u;
+  const helpStrings = [...htmlSrc.matchAll(/data-ns-help="([^"]*)"/g), ...rendererSrc.matchAll(/data-ns-help="([^"]*)"/g)].map(m => m[1]);
+  const hintStrings = [...htmlSrc.matchAll(/class="ns-setup-hint">([^<]*)</g)].map(m => m[1]);
+  for (const text of [...helpStrings, ...hintStrings]) {
+    assert(!emojiPattern.test(text), `emoji found in new help copy: "${text}"`);
+  }
+  assert(helpStrings.length + hintStrings.length >= 10, `sanity: expected at least 10 new help strings, found ${helpStrings.length + hintStrings.length}`);
 });
 
 check('ux: Escape closes all modals (profiles, receipts, about, notif-drawer)', () => {

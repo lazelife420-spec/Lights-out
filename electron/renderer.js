@@ -1820,12 +1820,28 @@ function render() {
     els.timerMain.textContent = face === 'analog' || face === 'hybrid' ? '' : timeText;
     els.timerMain.classList.remove('hybrid-readout');
     if (els.timerSub) els.timerSub.textContent = showAnalog ? '' : dateText;
-    // Show next bedtime reminder if configured.
-    const bedtime = state.bedtime || '';
-    if (bedtime && els.timerLabel) {
-      els.timerLabel.textContent = `Bedtime ${bedtime}`;
-    } else {
-      els.timerLabel.textContent = 'ready';
+    // Real next scheduled/calendar event -- calNextEvent is computed by
+    // fetchAndRenderEvents() in renderer-calendar.js (loaded before this
+    // file, fetched proactively at startup, same source that already
+    // drives Schedule's own honest "No bedtime rule set" / "{summary} —
+    // today at {time}" summary). This replaces the old unconditional
+    // `Bedtime ${state.bedtime}` label, which showed a static settings
+    // default (or a one-time onboarding answer, never re-editable) with no
+    // connection to whether any real schedule/calendar rule actually
+    // exists -- it never said "not scheduled" even with nothing configured.
+    if (els.timerLabel) {
+      if (typeof calNextEvent !== 'undefined' && calNextEvent) {
+        const evStart = new Date(calNextEvent.start);
+        const isToday = evStart.toDateString() === now.toDateString();
+        const evTime = formatIdleClockTime(evStart, false);
+        els.timerLabel.textContent = isToday
+          ? `Next action: ${evTime}`
+          : `Next action: ${calNextEvent.summary} · ${evStart.toLocaleDateString('en-US', { weekday: 'short' })} ${evTime}`;
+        els.timerLabel.setAttribute('data-ns-help', `From your Schedule: "${calNextEvent.summary}". This is informational -- it only starts automatically if "Auto-start timer from calendar events" is on.`);
+      } else {
+        els.timerLabel.textContent = 'No time scheduled';
+        els.timerLabel.setAttribute('data-ns-help', 'No schedule or calendar rule is configured. Set one in Schedule, or start tonight manually below.');
+      }
     }
   } else {
     if (els.analogClock) {
@@ -1847,7 +1863,12 @@ function render() {
   // Briefly label how the last session ended, overriding the idle/clock label.
   if (isIdle && state.lastOutcome && els.timerLabel) {
     const outcomeLabels = { completed: 'session complete', dryrun: 'dry run complete', cancelled: 'session cancelled' };
-    if (outcomeLabels[state.lastOutcome]) els.timerLabel.textContent = outcomeLabels[state.lastOutcome];
+    if (outcomeLabels[state.lastOutcome]) {
+      els.timerLabel.textContent = outcomeLabels[state.lastOutcome];
+      // Stale "Next action"/"No time scheduled" help text would no longer
+      // match the text it's describing once this override applies.
+      els.timerLabel.removeAttribute('data-ns-help');
+    }
   }
 
   updateRing(displaySeconds, totalSeconds);
@@ -2241,12 +2262,16 @@ function renderTonightPlanFeatures() {
   const readText = id => document.getElementById(id)?.textContent?.trim() || '';
   const chips = [];
   const lights = readText('ta-lights-status');
-  if (lights && lights !== 'Not configured') chips.push({ icon: icons.lights, label: `Smart Lights \u00B7 ${lights}` });
+  if (lights && lights !== 'Not configured') chips.push({ icon: icons.lights, label: `Smart Lights \u00B7 ${lights}`, help: 'Configured in Settings \u2192 Wind-Down. Runs its dim/off sequence alongside the timer.' });
   const wifi = readText('ta-wifi-status');
-  if (wifi && wifi !== 'Not configured') chips.push({ icon: icons.wifi, label: `WiFi Guard \u00B7 ${wifi}` });
+  if (wifi && wifi !== 'Not configured') chips.push({ icon: icons.wifi, label: `WiFi Guard \u00B7 ${wifi}`, help: 'Configured in Settings \u2192 Protection. Experimental -- see Settings for real limitations.' });
   const companion = readText('ta-companion-status');
-  if (companion && companion !== 'Off') chips.push({ icon: icons.companion, label: `Companion \u00B7 ${companion}` });
-  container.innerHTML = chips.map(c => `<span class="tonight-plan-feature-chip">${c.icon || ''}<span>${escapeHtml(c.label)}</span></span>`).join('');
+  if (companion && companion !== 'Off') chips.push({ icon: icons.companion, label: `Companion \u00B7 ${companion}`, help: 'Your phone can control this session over the same Wi-Fi network. Configured in Settings \u2192 Phone Companion.' });
+  // Phase 5B-A: tabindex + data-ns-help so each chip explains itself on
+  // hover/focus (renderer-help.js) -- these already only render when the
+  // underlying system is actually configured, so the tooltip never claims
+  // participation that isn't real.
+  container.innerHTML = chips.map(c => `<span class="tonight-plan-feature-chip" tabindex="0" data-ns-help="${escapeHtml(c.help)}">${c.icon || ''}<span>${escapeHtml(c.label)}</span></span>`).join('');
 }
 
 // Check whether the current lobby values still match the armed mode's canonical values.

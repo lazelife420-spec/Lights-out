@@ -426,7 +426,7 @@
            timer. Same element/ids as before; behavior is additive. -->
       <div class="armed-mode-banner" id="armed-mode-banner" style="display:none" role="status" aria-live="polite">
         <div class="armed-mode-row">
-          <div class="armed-mode-info">
+          <div class="armed-mode-info" tabindex="0" data-ns-help="This is the plan that runs when you press Start -- either a custom timer or an armed Night Mode.">
             <span class="armed-mode-label" id="armed-mode-label">NIGHT MODE</span>
             <span class="armed-mode-title" id="armed-mode-title"></span>
             <span class="armed-mode-meta" id="armed-mode-meta"></span>
@@ -451,7 +451,7 @@
           </svg>
           <div class="timer-display">
             <div class="timer-name" id="timer-name" contenteditable="true" spellcheck="false" data-placeholder="Name this session">Last Call</div>
-            <svg class="analog-clock" id="analog-clock" viewBox="0 0 100 100" style="display:none" aria-hidden="true">
+            <svg class="analog-clock" id="analog-clock" viewBox="0 0 100 100" style="display:none" tabindex="0" role="img" aria-label="Current time -- not a timer" data-ns-help="Current time -- not a timer. Switches to a live countdown once you start tonight's plan.">
               <circle class="analog-rim" cx="50" cy="50" r="46.5"/>
               <g class="analog-ticks" id="analog-ticks"></g>
               <g class="analog-numerals" id="analog-numerals"></g>
@@ -464,7 +464,7 @@
               <text class="analog-date" id="analog-date" x="50" y="78" text-anchor="middle"></text>
             </svg>
             <div class="time-main" id="timer-main">28:20</div>
-            <div class="time-label" id="timer-label">until shutdown</div>
+            <div class="time-label" id="timer-label" tabindex="0">until shutdown</div>
             <div class="time-sub" id="timer-sub"></div>
           </div>
           <button class="fullscreen-clock-btn" id="btn-fullscreen-clock" title="Full screen clock" aria-label="Full screen clock" style="display:none">&#x26F6;</button>
@@ -473,20 +473,20 @@
                duration as a preview (nothing started yet), running shows
                the same ring live-counting down. render() toggles this
                with the exact isIdle it already computes -- no new state. -->
-          <div class="ring-state-badge" id="ring-state-badge" aria-hidden="true">PREVIEW</div>
+          <div class="ring-state-badge" id="ring-state-badge" tabindex="0" data-ns-help="Preview only -- shows your configured duration. Nothing has started yet.">PREVIEW</div>
         </div>
 
         <!-- Quick Action Bar (shown when timer is running) -->
         <div class="action-bar" id="action-bar-running" style="display:none">
-          <button class="action-btn secondary" id="btn-pause">
+          <button class="action-btn secondary" id="btn-pause" data-ns-help="Pauses the countdown. The power action will not run until you resume and it finishes.">
             <span class="icon">&#x23F8;</span>
             <span>Pause</span>
           </button>
-          <button class="action-btn secondary" id="btn-snooze">
+          <button class="action-btn secondary" id="btn-snooze" data-ns-help="Adds 5 minutes to the countdown and keeps it running.">
             <span class="icon">&#x23F9;</span>
             <span>Snooze</span>
           </button>
-          <button class="action-btn danger" id="btn-stop">
+          <button class="action-btn danger" id="btn-stop" data-ns-help="Cancels the session completely. No power action will run.">
             <span class="icon">&#x25A0;</span>
             <span>Cancel</span>
           </button>
@@ -503,13 +503,19 @@
               <button class="unit-btn" data-unit="sec">sec</button>
             </div>
           </div>
+          <!-- Phase 5B-A: these presets start the timer the instant you
+               click them (see the .chip handler in renderer.js) -- there
+               was no warning anywhere that this row skips the duration
+               stepper and Start button entirely. Caption + per-chip help
+               text only; the instant-start behavior itself is unchanged. -->
+          <div class="ns-setup-hint">Presets start immediately -- no confirmation step</div>
           <div class="chips-row">
-            <button class="chip" data-min="5">5m</button>
-            <button class="chip" data-min="15">15m</button>
-            <button class="chip" data-min="30">30m</button>
-            <button class="chip" data-min="45">45m</button>
-            <button class="chip" data-min="60">1h</button>
-            <button class="chip" data-min="120">2h</button>
+            <button class="chip" data-min="5" data-ns-help="Starts immediately: 5 min, using your current power action.">5m</button>
+            <button class="chip" data-min="15" data-ns-help="Starts immediately: 15 min, using your current power action.">15m</button>
+            <button class="chip" data-min="30" data-ns-help="Starts immediately: 30 min, using your current power action.">30m</button>
+            <button class="chip" data-min="45" data-ns-help="Starts immediately: 45 min, using your current power action.">45m</button>
+            <button class="chip" data-min="60" data-ns-help="Starts immediately: 1 hour, using your current power action.">1h</button>
+            <button class="chip" data-min="120" data-ns-help="Starts immediately: 2 hours, using your current power action.">2h</button>
           </div>
           <!-- Tonight's own explicit Start action -- previously the only
                way to start a non-chip (custom-duration) timer from this
@@ -519,8 +525,8 @@
                same shared startTonightPlan() the hero CTA and Space
                shortcut already use -- no new start path, no engine
                change. -->
-          <button class="btn-start-custom" id="btn-start-custom">Start Custom Timer</button>
-          <button class="btn-secondary" id="btn-ritual" style="margin-top:8px;font-size:11px;padding:6px 14px;border-radius:8px;opacity:0.85" title="Guided bedtime ritual: breathing → block → timer → lights">&#x1F319; Begin Ritual</button>
+          <button class="btn-start-custom" id="btn-start-custom" data-ns-help="Starts the duration and action configured above. Respects Dry Run mode and existing safety confirmations.">Start Custom Timer</button>
+          <button class="btn-secondary" id="btn-ritual" style="margin-top:8px;font-size:11px;padding:6px 14px;border-radius:8px;opacity:0.85" title="Guided bedtime ritual: breathing → block → timer → lights" data-ns-help="A separate guided wind-down (breathing, then block, then timer, then lights) -- not the same as Start Custom Timer.">&#x1F319; Begin Ritual</button>
         </div>
       </section>
 
@@ -544,6 +550,13 @@
             <button class="btn-icon" id="btn-manage-profiles" title="Manage Profiles" aria-label="Manage profiles">&#x2699;</button>
           </div>
         </div>
+        <!-- Phase 5B-A: applyProfile() (renderer-profiles.js) is deliberately
+             inert on selection -- it loads the plan's duration/action into
+             the setup above and replaces whatever was configured, but does
+             not start anything. That was previously undocumented, so a
+             click could easily be mistaken for an instant-start like the
+             chips above. -->
+        <div class="ns-setup-hint">Loads into the timer above -- press Start after, it won't start on its own</div>
         <div class="profiles-grid" id="profiles-grid">
           <!-- Profiles loaded dynamically -->
         </div>
@@ -2385,6 +2398,7 @@
   <script src="lastLight.js"></script>
   <script src="ambientVisuals.js"></script>
   <script src="renderer-utils.js"></script>
+  <script src="renderer-help.js"></script>
   <script src="renderer-profiles.js"></script>
   <script src="renderer-calendar.js"></script>
   <script src="renderer-receipts.js"></script>
