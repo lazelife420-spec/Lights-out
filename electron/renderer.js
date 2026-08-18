@@ -366,6 +366,7 @@ const els = {
   btnPlus: document.getElementById('btn-plus'),
   btnMinus: document.getElementById('btn-minus'),
   panelSet: document.getElementById('ns-panel-set'),
+  settingsContextBreadcrumb: document.getElementById('settings-context-breadcrumb'),
   modalClose: document.getElementById('modal-close'),
   btnCancelOpt: document.getElementById('btn-cancel-opt'),
   btnSaveOpt: document.getElementById('btn-save-opt'),
@@ -1344,6 +1345,22 @@ function switchSettingsCategory(categoryId) {
   });
 }
 
+// Phase 5E-C: renders (or hides) the "Opened from X" breadcrumb.
+// openSettingsPanel() always clears it first -- direct entry points
+// (sidebar, top-menu catch-all, tray) never had a real source to show, and
+// clearing here (rather than only setting it in openDeviceSettings) means
+// a stale label from a previous context-aware open can never linger.
+function renderSettingsContext(sourceLabel) {
+  if (!els.settingsContextBreadcrumb) return;
+  if (sourceLabel) {
+    els.settingsContextBreadcrumb.textContent = `Opened from ${sourceLabel}`;
+    els.settingsContextBreadcrumb.style.display = '';
+  } else {
+    els.settingsContextBreadcrumb.textContent = '';
+    els.settingsContextBreadcrumb.style.display = 'none';
+  }
+}
+
 function openSettingsPanel() {
   const activeTab = document.querySelector('.ns-nav-item.active')?.dataset?.nsTab;
   if (activeTab && !['set', 'help'].includes(activeTab)) settingsReturnTab = activeTab;
@@ -1353,6 +1370,7 @@ function openSettingsPanel() {
   setSidebarSelection('set');
   switchSettingsCategory('general');
   applyMainPanelVisibility('set');
+  renderSettingsContext(null);
 }
 
 // Returns to whichever primary view (Tonight/Modes/Schedule/Stats) was
@@ -1757,20 +1775,33 @@ els.btnDevFamilyScan?.addEventListener('click', async () => {
 api.onRemoteControlStatus?.(data => updateCompanionStatus(data));
 
 // Actionable buttons route into the existing Settings categories.
-function openDeviceSettings(category) {
+// Phase 5E-C: sourceLabel is optional, human-readable ("Devices · Smart
+// Lights"), rendered as the "Opened from X" breadcrumb by
+// renderSettingsContext() (called after openSettingsPanel(), which always
+// clears it first) -- never fabricated when the caller doesn't pass one.
+function openDeviceSettings(category, sourceLabel) {
   openSettingsPanel();
   if (category) switchSettingsCategory(category);
+  renderSettingsContext(sourceLabel || null);
 }
 
-els.btnDevCompanion?.addEventListener('click', () => openDeviceSettings('phone'));
-els.btnDevLights?.addEventListener('click', () => openDeviceSettings('wind-down'));
-els.btnDevWifi?.addEventListener('click', () => openDeviceSettings('protection'));
+els.btnDevCompanion?.addEventListener('click', () => openDeviceSettings('phone', els.btnDevCompanion.dataset.taSource));
+els.btnDevLights?.addEventListener('click', () => openDeviceSettings('wind-down', els.btnDevLights.dataset.taSource));
+els.btnDevWifi?.addEventListener('click', () => openDeviceSettings('protection', els.btnDevWifi.dataset.taSource));
 
 // Tonight's Automation (Tonight panel) + Also Scheduled (Schedule tab) Edit
 // links all route into the existing Settings categories via the same helper.
 document.querySelectorAll('.ta-edit-btn').forEach(btn => {
-  btn.addEventListener('click', () => openDeviceSettings(btn.dataset.taTarget));
+  btn.addEventListener('click', () => openDeviceSettings(btn.dataset.taTarget, btn.dataset.taSource));
 });
+
+// Phase 5E-C: was declared with a data-ta-target matching the .ta-edit-btn
+// pattern above but never had class="ta-edit-btn" or its own handler --
+// dead on click. Wired directly rather than retrofitted into the shared
+// loop, since it has its own id and (unlike the Edit buttons) its own
+// label/icon that shouldn't silently start matching a class-based selector
+// it was never given.
+els.firstlightHeroBtn?.addEventListener('click', () => openDeviceSettings(els.firstlightHeroBtn.dataset.taTarget, els.firstlightHeroBtn.dataset.taSource));
 
 function formatIdleClockTime(now, compact = false) {
   const use12Hour = state.clockFormat === '12h';
@@ -2945,7 +2976,11 @@ function wireEvents() {
         await api.openExternal?.(rc.url);
         notify('Companion pairing page opened', 'info');
       } else {
-        openSettingsPanel();
+        // Phase 5E-C: previously bare openSettingsPanel(), landing on
+        // General with no connection to why -- this button is specifically
+        // about Companion, so it should land there directly, same as the
+        // Devices card's equivalent button.
+        openDeviceSettings('phone', els.btnCompanion.dataset.taSource);
         notify(rc?.failed ? 'Companion is unavailable; review the connection error in Settings' : 'Enable and verify Phone Companion in Settings first', rc?.failed ? 'error' : 'info');
       }
     } catch {
@@ -3510,7 +3545,10 @@ if (els.btnClearReceipts) {
       }
 
       if (item.id === 'open-options') {
-        openSettingsPanel();
+        // Phase 5E-C: previously bare openSettingsPanel() (lands on
+        // General) -- this menu is where Dry Run Mode lives, so it now
+        // lands on Power & Safety with that context shown.
+        openDeviceSettings(item.dataset.taTarget, item.dataset.taSource);
         setSidebarSelection('set');
         return;
       }
@@ -3577,18 +3615,22 @@ if (els.btnClearReceipts) {
   // per-render cost) from the same NS_GLANCE_ICONS the Library reads, so
   // Home and Library never drift into two different icon vocabularies.
   const glanceIcons = window.NS_GLANCE_ICONS || {};
+  // Phase 5E-C: onClick reads the tile's own data-ta-source (set in
+  // index.html) rather than a hardcoded string here, same single-source
+  // pattern as the .ta-edit-btn/Devices buttons -- the label lives with
+  // the element it describes, not duplicated in JS.
   const glanceTileSpecs = [
-    { id: 'ta-glance-alarm', icon: glanceIcons.alarm, onClick: () => openDeviceSettings('automations') },
+    { id: 'ta-glance-alarm', icon: glanceIcons.alarm, onClick: tile => openDeviceSettings('automations', tile.dataset.taSource) },
     { id: 'ta-glance-companion', icon: glanceIcons.companion, onClick: () => handleSidebarNavigation('dev') },
-    { id: 'ta-glance-lights', icon: glanceIcons.lights, onClick: () => openDeviceSettings('wind-down') },
-    { id: 'ta-glance-wifi', icon: glanceIcons.wifi, onClick: () => openDeviceSettings('protection') }
+    { id: 'ta-glance-lights', icon: glanceIcons.lights, onClick: tile => openDeviceSettings('wind-down', tile.dataset.taSource) },
+    { id: 'ta-glance-wifi', icon: glanceIcons.wifi, onClick: tile => openDeviceSettings('protection', tile.dataset.taSource) }
   ];
   glanceTileSpecs.forEach(spec => {
     const tile = document.getElementById(spec.id);
     if (!tile) return;
     const iconEl = tile.querySelector('.ns-home-glance-icon');
     if (iconEl && spec.icon) iconEl.innerHTML = spec.icon;
-    tile.addEventListener('click', spec.onClick);
+    tile.addEventListener('click', () => spec.onClick(tile));
   });
 
   // Armed Night Mode clear button.

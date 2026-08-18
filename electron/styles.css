@@ -1819,6 +1819,18 @@ body.phase-lastlight .cockpit {
   font-weight: 600;
 }
 
+/* Phase 5E-C: "Opened from X" context line -- shown only when Settings
+   was reached from a real, identified entry point (renderSettingsContext()
+   in renderer.js). Sits between the header and the rail/category body as
+   its own thin strip, not crammed into the header's flex row. */
+.settings-context-breadcrumb {
+  padding: 8px 16px;
+  font-size: 11px;
+  color: var(--accent-cyan);
+  background: rgba(118, 201, 255, 0.06);
+  border-bottom: 1px solid var(--border-color);
+}
+
 .modal-close {
   width: 28px;
   height: 28px;

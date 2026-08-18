@@ -817,10 +817,11 @@ check('renderer: DEVICES panel shows real device data without inventing state', 
 });
 
 check('renderer: DEVICES panel routes to existing Settings categories', () => {
-  assertMatch(rendererSrc, /function openDeviceSettings\(category\)/, 'openDeviceSettings helper missing');
-  assertMatch(rendererSrc, /els\.btnDevCompanion\?\.addEventListener\('click', \(\) => openDeviceSettings\('phone'\)\)/, 'Phone Companion button must route to the phone category');
-  assertMatch(rendererSrc, /els\.btnDevLights\?\.addEventListener\('click', \(\) => openDeviceSettings\('wind-down'\)\)/, 'Smart Lights button must route to the wind-down category');
-  assertMatch(rendererSrc, /els\.btnDevWifi\?\.addEventListener\('click', \(\) => openDeviceSettings\('protection'\)\)/, 'Wi-Fi Guard button must route to the protection category');
+  // Phase 5E-C: openDeviceSettings gained a second (sourceLabel) parameter.
+  assertMatch(rendererSrc, /function openDeviceSettings\(category, sourceLabel\)/, 'openDeviceSettings helper missing');
+  assertMatch(rendererSrc, /els\.btnDevCompanion\?\.addEventListener\('click', \(\) => openDeviceSettings\('phone', els\.btnDevCompanion\.dataset\.taSource\)\)/, 'Phone Companion button must route to the phone category');
+  assertMatch(rendererSrc, /els\.btnDevLights\?\.addEventListener\('click', \(\) => openDeviceSettings\('wind-down', els\.btnDevLights\.dataset\.taSource\)\)/, 'Smart Lights button must route to the wind-down category');
+  assertMatch(rendererSrc, /els\.btnDevWifi\?\.addEventListener\('click', \(\) => openDeviceSettings\('protection', els\.btnDevWifi\.dataset\.taSource\)\)/, 'Wi-Fi Guard button must route to the protection category');
 });
 
 check('renderer: DEVICES panel live-updates volatile PC status only', () => {
@@ -1941,6 +1942,73 @@ check('settings-shell: no save/dirty-state or control behavior changed', () => {
   assertMatch(htmlSrc, /id="chk-run-login"/, 'General controls must be untouched');
   assertMatch(htmlSrc, /id="focus-blocklist"/, 'Advanced controls must be untouched');
   assertMatch(htmlSrc, /id="btn-save-opt"/, 'the global Save button must still exist -- dirty-state Save/Close is a later, separate pass');
+});
+
+check('settings-context: breadcrumb renders only for identified sources, cleared on direct entry', () => {
+  assertMatch(rendererSrc, /function renderSettingsContext\(sourceLabel\)/, 'renderSettingsContext must exist');
+  assertMatch(rendererSrc, /els\.settingsContextBreadcrumb\.style\.display = 'none';/, 'must hide the breadcrumb when no source is given');
+  // openSettingsPanel() clears it FIRST, before openDeviceSettings sets one
+  // -- so direct entry points (sidebar, tray, top-menu catch-all) never
+  // inherit a stale label from a previous context-aware open.
+  assertMatch(rendererSrc, /function openSettingsPanel\(\)[\s\S]*renderSettingsContext\(null\);\s*\}/, 'openSettingsPanel must always clear the breadcrumb first');
+  assertMatch(htmlSrc, /id="settings-context-breadcrumb" style="display:none"/, 'breadcrumb element must start hidden -- no fabricated context on load');
+});
+
+check('settings-context: every real entry point passes a truthful source label', () => {
+  const contextCallSites = [
+    ['Devices · Phone Companion button', /openDeviceSettings\('phone', els\.btnDevCompanion\.dataset\.taSource\)/],
+    ['Devices · Smart Lights button', /openDeviceSettings\('wind-down', els\.btnDevLights\.dataset\.taSource\)/],
+    ['Devices · Wi-Fi Guard button', /openDeviceSettings\('protection', els\.btnDevWifi\.dataset\.taSource\)/],
+    ['Schedule .ta-edit-btn (Autopilot/Content Blocker)', /openDeviceSettings\(btn\.dataset\.taTarget, btn\.dataset\.taSource\)/],
+    ['footer Companion shortcut', /openDeviceSettings\('phone', els\.btnCompanion\.dataset\.taSource\)/],
+    ['Status & Safety → Open full Settings', /openDeviceSettings\(item\.dataset\.taTarget, item\.dataset\.taSource\)/],
+    ['Home glance tiles', /openDeviceSettings\('automations', tile\.dataset\.taSource\)/],
+  ];
+  for (const [name, pattern] of contextCallSites) {
+    assertMatch(rendererSrc, pattern, `${name} must pass a source label to openDeviceSettings`);
+  }
+  // Direct entry points must NOT gain a fabricated source -- sidebar
+  // Settings and the tray/IPC callback still call bare openSettingsPanel().
+  assertMatch(rendererSrc, /if \(tab === 'set'\) \{\s*openSettingsPanel\(\);/, 'sidebar Settings must stay a direct, context-free entry point');
+  assertMatch(rendererSrc, /api\.onOpenSettings\(\(\) => \{\s*openSettingsPanel\(\);/, 'the tray/IPC Settings entry must stay context-free');
+});
+
+check('settings-context: data-ta-source lives with the element it describes, not duplicated in JS', () => {
+  const sourceTargets = [
+    ['Devices · Phone Companion', /id="btn-dev-companion"[^>]*data-ta-source="Devices &middot; Phone Companion"/],
+    ['Devices · Smart Lights', /id="btn-dev-lights"[^>]*data-ta-source="Devices &middot; Smart Lights"/],
+    ['Devices · Wi-Fi Guard', /id="btn-dev-wifi"[^>]*data-ta-source="Devices &middot; Wi-Fi Guard"/],
+    ['Home · First Light', /id="ta-glance-alarm"[^>]*data-ta-source="Home &middot; First Light"/],
+    ['Home · Smart Lights', /id="ta-glance-lights"[^>]*data-ta-source="Home &middot; Smart Lights"/],
+    ['Home · Wi-Fi Guard', /id="ta-glance-wifi"[^>]*data-ta-source="Home &middot; Wi-Fi Guard"/],
+    ['Schedule · Autopilot Bedtime', /data-ta-target="automations" data-ta-source="Schedule &middot; Autopilot Bedtime"/],
+    ['Schedule · Content Blocker', /data-ta-target="protection" data-ta-source="Schedule &middot; Content Blocker"/],
+    ['Schedule · First Light', /id="firstlight-hero-btn" data-ta-target="automations" data-ta-source="Schedule &middot; First Light"/],
+    // [^>]* fails here specifically -- data-ns-help on this button contains
+    // a literal "->" arrow, and [^>] excludes any >, even one quoted inside
+    // an earlier attribute's value.
+    ['Footer · Phone Companion', /id="btn-companion"[\s\S]{0,400}?data-ta-source="Footer &middot; Phone Companion"/],
+    ['Status & Safety · Power & Safety', /id="open-options" data-ta-target="power-safety" data-ta-source="Status &amp; Safety &middot; Power &amp; Safety"/],
+  ];
+  for (const [name, pattern] of sourceTargets) {
+    assertMatch(htmlSrc, pattern, `missing data-ta-source for ${name}`);
+  }
+});
+
+check('settings-context: the dead #firstlight-hero-btn now has a real handler', () => {
+  // Confirmed dead before this pass: had data-ta-target matching the
+  // .ta-edit-btn pattern but no class="ta-edit-btn" and no dedicated
+  // listener anywhere -- clicking it did nothing.
+  assertMatch(rendererSrc, /els\.firstlightHeroBtn\?\.addEventListener\('click', \(\) => openDeviceSettings\(els\.firstlightHeroBtn\.dataset\.taTarget, els\.firstlightHeroBtn\.dataset\.taSource\)\)/, '#firstlight-hero-btn must have a real click handler');
+});
+
+check('settings-context: Save/Cancel and return-tab behavior untouched', () => {
+  // This pass adds a breadcrumb and fixes dead/misrouted navigation --
+  // it must not touch how Settings is saved, cancelled, or returned from.
+  assertMatch(rendererSrc, /let settingsReturnTab = 'home';/, 'settingsReturnTab must be untouched');
+  assertMatch(rendererSrc, /function closeSettingsPanel\(\) \{/, 'closeSettingsPanel must be untouched in shape');
+  assertMatch(rendererSrc, /async function saveSettingsPanel\(\) \{/, 'saveSettingsPanel must be untouched in shape');
+  assertMatch(htmlSrc, /id="btn-save-opt"/, 'the global Save button must still exist -- dirty-state Save/Close is a separate, later pass');
 });
 
 check('nav: no timer/power/schedule-execution files touched by the Navigation Contract', () => {

@@ -195,7 +195,11 @@
               <span>Graceful Close</span>
               <span class="toggle-indicator">ON</span>
             </div>
-            <div class="submenu-item" role="menuitem" tabindex="-1" id="open-options">
+            <!-- Phase 5E-C: previously opened Settings on its General
+                 default with no connection to why -- this menu is where
+                 Dry Run Mode lives, so it now lands on Power & Safety
+                 (where Dry Run actually is) with that context shown. -->
+            <div class="submenu-item" role="menuitem" tabindex="-1" id="open-options" data-ta-target="power-safety" data-ta-source="Status &amp; Safety &middot; Power &amp; Safety">
               <span>Open full Settings</span>
             </div>
           </div>
@@ -369,7 +373,7 @@
           <section class="ns-home-card ns-home-card-secondary ns-home-glance-card">
             <div class="ns-home-card-label">TONIGHT AT A GLANCE</div>
             <div class="ns-home-glance-grid">
-              <button type="button" class="ns-home-glance-tile" id="ta-glance-alarm" data-ta-target="automations">
+              <button type="button" class="ns-home-glance-tile" id="ta-glance-alarm" data-ta-target="automations" data-ta-source="Home &middot; First Light">
                 <span class="ns-home-glance-icon" aria-hidden="true"></span>
                 <span class="ns-home-glance-label">First Light</span>
                 <span class="ns-home-glance-status" id="ta-alarm-status">Not set</span>
@@ -379,12 +383,12 @@
                 <span class="ns-home-glance-label">Companion</span>
                 <span class="ns-home-glance-status" id="ta-companion-status">Off</span>
               </button>
-              <button type="button" class="ns-home-glance-tile" id="ta-glance-lights" data-ta-target="wind-down">
+              <button type="button" class="ns-home-glance-tile" id="ta-glance-lights" data-ta-target="wind-down" data-ta-source="Home &middot; Smart Lights">
                 <span class="ns-home-glance-icon" aria-hidden="true"></span>
                 <span class="ns-home-glance-label">Smart Lights</span>
                 <span class="ns-home-glance-status" id="ta-lights-status">Not configured</span>
               </button>
-              <button type="button" class="ns-home-glance-tile" id="ta-glance-wifi" data-ta-target="protection">
+              <button type="button" class="ns-home-glance-tile" id="ta-glance-wifi" data-ta-target="protection" data-ta-source="Home &middot; Wi-Fi Guard">
                 <span class="ns-home-glance-icon" aria-hidden="true"></span>
                 <span class="ns-home-glance-label">Wi-Fi Guard <span class="status-pill status-local ta-experimental-pill">EXPERIMENTAL</span></span>
                 <span class="ns-home-glance-status" id="ta-wifi-status">Not configured</span>
@@ -877,7 +881,13 @@
                 <div class="ah-state" id="firstlight-hero-state">No morning alarm set</div>
                 <div class="ah-sub" id="firstlight-hero-sub">Set a morning wake alarm for tomorrow.</div>
               </div>
-              <button type="button" class="btn-secondary btn-sm" id="firstlight-hero-btn" data-ta-target="automations">Set First Light</button>
+              <!-- Phase 5E-C: this button had a data-ta-target already
+                   (matching the pattern of the real .ta-edit-btn links
+                   below) but no class="ta-edit-btn" and no dedicated
+                   handler -- it was dead, doing nothing on click. Given
+                   its own id, it gets a direct handler rather than the
+                   shared .ta-edit-btn one. -->
+              <button type="button" class="btn-secondary btn-sm" id="firstlight-hero-btn" data-ta-target="automations" data-ta-source="Schedule &middot; First Light">Set First Light</button>
             </div>
 
             <div class="also-scheduled-section">
@@ -886,14 +896,14 @@
                 <span>&#x1F916; Autopilot Bedtime</span>
                 <span class="ta-row-right">
                   <span id="as-autopilot-status">Off</span>
-                  <button type="button" class="ta-edit-btn" data-ta-target="automations">Edit</button>
+                  <button type="button" class="ta-edit-btn" data-ta-target="automations" data-ta-source="Schedule &middot; Autopilot Bedtime">Edit</button>
                 </span>
               </div>
               <div class="status-row as-row">
                 <span>&#x1F6AB; Content Blocker</span>
                 <span class="ta-row-right">
                   <span id="as-content-blocker-status">Off</span>
-                  <button type="button" class="ta-edit-btn" data-ta-target="protection">Edit</button>
+                  <button type="button" class="ta-edit-btn" data-ta-target="protection" data-ta-source="Schedule &middot; Content Blocker">Edit</button>
                 </span>
               </div>
             </div>
@@ -995,7 +1005,7 @@
               <div class="status-row"><span>Network</span><span id="dev-companion-network">&mdash;</span></div>
               <div class="status-row"><span>Connected devices</span><span id="dev-companion-clients">0</span></div>
               <div class="device-actions">
-                <button type="button" id="btn-dev-companion" class="btn-secondary btn-sm">Open Phone Companion settings</button>
+                <button type="button" id="btn-dev-companion" class="btn-secondary btn-sm" data-ta-source="Devices &middot; Phone Companion">Open Phone Companion settings</button>
               </div>
             </div>
           </div>
@@ -1026,7 +1036,7 @@
               <div class="status-row"><span>Tonight</span><span id="dev-lights-tonight">&mdash;</span></div>
               <p class="dev-note">Optional Philips Hue or HTTP integration. Nothing is controlled until you configure and successfully test it in Settings.</p>
               <div class="device-actions">
-                <button type="button" id="btn-dev-lights" class="btn-secondary btn-sm">Open Smart Lights settings</button>
+                <button type="button" id="btn-dev-lights" class="btn-secondary btn-sm" data-ta-source="Devices &middot; Smart Lights">Open Smart Lights settings</button>
               </div>
             </div>
           </div>
@@ -1041,7 +1051,7 @@
               <div class="status-row"><span>Tonight</span><span id="dev-wifi-tonight">&mdash;</span></div>
               <p class="dev-note">Requires a compatible router or your own webhook. Windows Firewall on this PC cannot block a different phone or tablet on the LAN.</p>
               <div class="device-actions">
-                <button type="button" id="btn-dev-wifi" class="btn-secondary btn-sm">Open Wi-Fi Guard settings</button>
+                <button type="button" id="btn-dev-wifi" class="btn-secondary btn-sm" data-ta-source="Devices &middot; Wi-Fi Guard">Open Wi-Fi Guard settings</button>
               </div>
             </div>
           </div>
@@ -1204,6 +1214,12 @@
         <h2>Settings</h2>
         <button class="modal-close" id="modal-close" aria-label="Back to Tonight">&times;</button>
       </div>
+      <!-- Phase 5E-C: shown only when Settings was opened from a real,
+           identified entry point (Devices/Home/Schedule/Status & Safety
+           card or shortcut) via openDeviceSettings(category, sourceLabel).
+           Opening Settings directly (sidebar, top-menu catch-all, tray)
+           leaves this hidden -- no fabricated context. -->
+      <div class="settings-context-breadcrumb" id="settings-context-breadcrumb" style="display:none"></div>
       <div class="modal-body">
         <!-- Phase 5E-B: visual grouping only -- every data-settings-category
              value, button, and click handler is unchanged. Group labels are
@@ -2129,7 +2145,7 @@
              Removing it would be a real functionality loss, not pure
              redundancy cleanup, so it stays; disambiguated with help text
              instead. -->
-        <button class="footer-action" id="btn-companion" title="Open companion setup" aria-label="Open companion setup" data-ns-help="Opens your phone's pairing page directly if Companion is ready, or Settings to set it up. Same destination as Devices -> Phone Companion.">&#x1F4F1;</button>
+        <button class="footer-action" id="btn-companion" title="Open companion setup" aria-label="Open companion setup" data-ns-help="Opens your phone's pairing page directly if Companion is ready, or Settings to set it up. Same destination as Devices -> Phone Companion." data-ta-source="Footer &middot; Phone Companion">&#x1F4F1;</button>
         <span class="badge update-badge" id="badge-update" style="display:none" title="Update available">UPDATE</span>
         <span id="version">v11.1.2</span>
       </div>
