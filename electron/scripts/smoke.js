@@ -427,6 +427,27 @@ check('window chrome: frameless window remains movable and resizable', () => {
   assertMatch(windowCss, /\.window-controls\s*\{[\s\S]*-webkit-app-region:\s*drag;/s, 'title area must remain draggable');
 });
 
+// Phase 5H-A: the header's own drag region used to be entirely blocked by
+// .main-menu's no-drag box (flex:1, so it spanned the whole centered nav
+// track including the empty space either side of the three labels) --
+// the header looked mostly draggable but almost none of it actually was.
+// Pins the fix: drag lives on the header/title/empty space, no-drag is
+// scoped to the pills and buttons that actually need clicks, not their
+// containers.
+check('window chrome: header drag region is not swallowed by the nav container', () => {
+  const dragCss = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  assertMatch(dragCss, /\.chrome-header\s*\{[\s\S]*?-webkit-app-region:\s*drag;[\s\S]*?\}/, 'chrome-header must remain draggable');
+  const mainMenuRule = dragCss.match(/\.main-menu\s*\{([\s\S]*?)\}/);
+  assert(mainMenuRule, '.main-menu rule missing');
+  assert(!/-webkit-app-region:\s*no-drag/.test(mainMenuRule[1]), '.main-menu must not blanket-block drag over its whole flex track -- empty space beside the menu labels must stay draggable');
+  const menuItemRule = dragCss.match(/\.menu-item\s*\{([\s\S]*?)\}/);
+  assert(menuItemRule, '.menu-item rule missing');
+  assertMatch(menuItemRule[1], /-webkit-app-region:\s*no-drag/, 'individual .menu-item pills must opt out of drag so they stay clickable');
+  const windowButtonsRule = dragCss.match(/\.window-buttons\s*\{([\s\S]*?)\}/);
+  assert(windowButtonsRule, '.window-buttons rule missing');
+  assertMatch(windowButtonsRule[1], /-webkit-app-region:\s*no-drag/, 'window control buttons must stay clickable');
+});
+
 check('window state: normal bounds persist safely across launches and mini mode', () => {
   const settingsSrc = fs.readFileSync(path.join(root, 'settings.js'), 'utf8');
   assertMatch(settingsSrc, /window:\s*\{\s*bounds: null,\s*maximized: false\s*\}/, 'window-state defaults missing');

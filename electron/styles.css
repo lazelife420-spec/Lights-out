@@ -334,13 +334,18 @@ body.warm-shift .ambient-canvas {
 }
 
 /* Main Menu */
+/* Phase 5H-A: this flex:1 nav used to be no-drag on its own box, which
+   made its whole centered flex track (including the empty space on
+   either side of the three menu labels) block dragging -- most of the
+   header's width read as dead-zone even though it looked empty. The nav
+   itself now inherits drag from .chrome-header; only the actual clickable
+   .menu-item pills opt back out. */
 .main-menu {
   display: flex;
   align-items: center;
   gap: 4px;
   flex: 1;
   justify-content: center;
-  -webkit-app-region: no-drag;
 }
 
 .menu-item {
@@ -351,6 +356,10 @@ body.warm-shift .ambient-canvas {
   cursor: pointer;
   border-radius: 4px;
   transition: all 0.15s ease;
+  /* Phase 5H-A: no-drag now lives on the pill itself, not the whole nav,
+     so only the clickable label -- not the empty flex space around it --
+     is exempted from the header's drag region. */
+  -webkit-app-region: no-drag;
 }
 
 .menu-item:hover {
