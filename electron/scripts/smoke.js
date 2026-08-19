@@ -2037,6 +2037,18 @@ check('quick-controls: Quick Controls drawer and trigger exist', () => {
   assertMatch(rendererSrc, /els\.statusPill\.addEventListener\('click'/, 'Status pill must be wired to toggleQuickControls');
 });
 
+// Follow-up fix: the Quick Controls drawer's border/hover rules originally
+// referenced an undefined --card-border custom property -- an invalid
+// var() drops the whole declaration, so .qc-drawer/.qc-plan-card silently
+// had no border, and the status pill's hover/focus fill never applied.
+check('quick-controls: drawer/pill styling uses real, defined CSS custom properties', () => {
+  const cssSrc = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  assert(!/var\(--card-border\)/.test(cssSrc), 'undefined --card-border must not be referenced -- it is never defined, so the declaration using it silently drops entirely');
+  assertMatch(cssSrc, /\.qc-drawer\s*\{[\s\S]*?border:\s*1px solid var\(--border-color\);/, '.qc-drawer border must use the real --border-color token');
+  assertMatch(cssSrc, /\.qc-plan-card\s*\{[\s\S]*?border:\s*1px solid var\(--border-color\);/, '.qc-plan-card border must use the real --border-color token');
+  assertMatch(cssSrc, /\.status-pill:hover, \.status-pill:focus-visible \{\s*background:\s*var\(--bg-hover\);/, 'status pill hover/focus fill must use --bg-hover, the token every other :hover rule in this file uses for the same purpose');
+});
+
 check('settings-context: the dead #firstlight-hero-btn now has a real handler', () => {
   // Confirmed dead before this pass: had data-ta-target matching the
   // .ta-edit-btn pattern but no class="ta-edit-btn" and no dedicated

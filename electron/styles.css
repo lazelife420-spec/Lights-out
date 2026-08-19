@@ -1493,6 +1493,15 @@ input[type="datetime-local"] {
 }
 
 /* Phase 5I-A Commit 3: Quick Controls Drawer */
+/* Follow-up: this block originally referenced an undefined --card-border
+   custom property in three places -- an invalid var() drops the whole
+   declaration, so .qc-drawer/.qc-plan-card silently rendered with no
+   border at all, and the status pill's hover/focus background never
+   applied either, despite the pill now being a real clickable control.
+   The two borders now use --border-color (the actual token, already used
+   correctly two rules below in .qc-drawer-header); the pill's hover fill
+   uses --bg-hover instead, the token this codebase's other :hover rules
+   already use for exactly this case, and one that adapts per theme. */
 .qc-drawer-overlay {
   position: fixed;
   inset: 0;
@@ -1514,7 +1523,7 @@ input[type="datetime-local"] {
   left: 16px;
   width: 320px;
   background: var(--bg-primary);
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.3);
   z-index: 100;
@@ -1553,7 +1562,7 @@ input[type="datetime-local"] {
   margin-top: 4px;
   padding: 12px;
   background: var(--bg-secondary);
-  border: 1px solid var(--card-border);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   text-align: center;
 }
@@ -1600,7 +1609,7 @@ input[type="datetime-local"] {
   user-select: none;
 }
 .status-pill:hover, .status-pill:focus-visible {
-  background: var(--card-border);
+  background: var(--bg-hover);
   outline: none;
 }
 .status-pill:focus-visible {
