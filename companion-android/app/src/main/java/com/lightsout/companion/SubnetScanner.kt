@@ -3,6 +3,7 @@ package com.lightsout.companion
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.LinkProperties
+import android.net.NetworkCapabilities
 import android.util.Log
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -42,10 +43,19 @@ internal object SubnetScanner {
     // can't be determined (no active network, no IPv4 address, etc.) --
     // callers should treat null as "scan not possible right now," not as an
     // error to surface to the user.
+    @Suppress("DEPRECATION") // allNetworks: simplest synchronous way to enumerate candidates; no callback needed here
     private fun ownSubnetBase(context: Context): String? {
         return try {
             val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return null
-            val network = cm.activeNetwork ?: return null
+            // Prefer a network with the Wi-Fi transport specifically. When a VPN or
+            // "private DNS as VPN" profile (Google Fi, NextDNS, MDM, etc.) is active,
+            // cm.activeNetwork commonly resolves to the VPN's tunnel interface, whose
+            // subnet has nothing to do with the LAN the desktop is actually on -- that
+            // would burn the whole scan budget probing the wrong /24 and never find it.
+            val network = cm.allNetworks
+                .firstOrNull { cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true }
+                ?: cm.activeNetwork
+                ?: return null
             val props: LinkProperties = cm.getLinkProperties(network) ?: return null
             val ipv4 = props.linkAddresses
                 .mapNotNull { it.address?.hostAddress }
