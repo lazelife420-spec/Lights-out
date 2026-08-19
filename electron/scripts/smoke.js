@@ -2140,6 +2140,15 @@ check('arm-model: armed custom timer persists and restores the same way as armed
   assertMatch(settingsSrc, /const restoredArmedCustomTimer = !restoredArmedMode && app\.armedCustomTimer/, 'applyAppSettings must restore an armed custom timer on load, same as armed Night Mode');
 });
 
+check('layout: main scroll area has enough bottom clearance to clear the footer', () => {
+  // Was 30px, not enough for the last row of a long page (e.g. Tonight's
+  // Quick Plans) to sit clear of .app-footer -- confirmed via real-runtime
+  // capture that content was reading as cut off/hidden near the footer.
+  const stylesSrc = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  const dashboardBlock = stylesSrc.match(/\.dashboard \{[^}]*\}/s)?.[0] || '';
+  assertMatch(dashboardBlock, /padding-bottom: 56px;/, '.dashboard must keep enough bottom clearance for the footer, not regress to the old insufficient 30px');
+});
+
 check('nav: no timer/power/schedule-execution files touched by the Navigation Contract', () => {
   // Guards the Phase 5C-A non-goal boundary: this pass is renderer-layer
   // navigation ergonomics only. Fails loudly if nav-specific identifiers

@@ -507,7 +507,14 @@ body.warm-shift .ambient-canvas {
   flex: 1;
   overflow-y: auto;
   padding: var(--section-gap);
-  padding-bottom: 30px;
+  /* Was 30px -- not enough clearance for the last row of a long page
+     (e.g. Tonight's Quick Plans) to sit clear of .app-footer below it.
+     .app-footer isn't fixed/overlaid (confirmed: no position rule
+     anywhere for it), it's a normal flex sibling of .dashboard inside
+     .cockpit, but its own padding + content brings it close enough to
+     ~40px tall that 30px of scroll-area breathing room read as content
+     "disappearing behind" it. */
+  padding-bottom: 56px;
   display: flex;
   flex-direction: column;
   position: relative;
