@@ -213,7 +213,7 @@
               <span class="icon">&#x2139;</span>
               <span>Documentation</span>
             </div>
-            <div class="submenu-item" role="menuitem" tabindex="-1" data-help="Space starts or pauses. Escape cancels. Ctrl+M toggles mini mode. Number keys 1-6 start quick presets.">
+            <div class="submenu-item" role="menuitem" tabindex="-1" data-help="Space starts or pauses. Escape cancels. Ctrl+M toggles mini mode. Number keys 1-6 set quick presets.">
               <span class="icon">&#x2328;</span>
               <span>Keyboard Shortcuts</span>
             </div>
@@ -463,7 +463,11 @@
             <span class="armed-mode-title" id="armed-mode-title"></span>
             <span class="armed-mode-meta" id="armed-mode-meta"></span>
           </div>
-          <button class="armed-mode-clear" id="armed-mode-clear" title="Remove night mode selection" aria-label="Remove night mode selection">&times;</button>
+          <!-- Phase 5I-B: was "Remove night mode selection" -- this same
+               button/handler (clearAnyArmedPlan()) also clears an armed
+               custom timer, which isn't a Night Mode. Generic wording so it
+               makes sense for both. -->
+          <button class="armed-mode-clear" id="armed-mode-clear" title="Clear armed plan" aria-label="Clear armed plan">&times;</button>
         </div>
         <!-- Participating tonight: compact real-status chips (Smart
              Lights/WiFi Guard/Companion), only shown for whatever is
@@ -543,19 +547,20 @@
               <button class="unit-btn" data-unit="sec">sec</button>
             </div>
           </div>
-          <!-- Phase 5B-A: these presets start the timer the instant you
-               click them (see the .chip handler in renderer.js) -- there
-               was no warning anywhere that this row skips the duration
-               stepper and Start button entirely. Caption + per-chip help
-               text only; the instant-start behavior itself is unchanged. -->
-          <div class="ns-setup-hint">Presets start immediately -- no confirmation step</div>
+          <!-- Phase 5B-A: these presets used to start the timer the
+               instant you click them -- predates Arm Tonight/Start Now
+               being real, separate commit actions. Phase 5I-B: chips now
+               only set the duration below, same as Quick Plans cards
+               already do (see applyTonightCard() in renderer.js); use
+               Start Now or Arm Tonight to actually commit. -->
+          <div class="ns-setup-hint">Presets set the duration -- use Start Now or Arm Tonight to commit</div>
           <div class="chips-row" data-ns-navgroup="horizontal">
-            <button class="chip" data-min="5" data-ns-help="Starts immediately: 5 min, using your current power action.">5m</button>
-            <button class="chip" data-min="15" data-ns-help="Starts immediately: 15 min, using your current power action.">15m</button>
-            <button class="chip" data-min="30" data-ns-help="Starts immediately: 30 min, using your current power action.">30m</button>
-            <button class="chip" data-min="45" data-ns-help="Starts immediately: 45 min, using your current power action.">45m</button>
-            <button class="chip" data-min="60" data-ns-help="Starts immediately: 1 hour, using your current power action.">1h</button>
-            <button class="chip" data-min="120" data-ns-help="Starts immediately: 2 hours, using your current power action.">2h</button>
+            <button class="chip" data-min="5" data-ns-help="Set duration to 5 min, using your current power action. Use Start Now or Arm Tonight to commit.">5m</button>
+            <button class="chip" data-min="15" data-ns-help="Set duration to 15 min, using your current power action. Use Start Now or Arm Tonight to commit.">15m</button>
+            <button class="chip" data-min="30" data-ns-help="Set duration to 30 min, using your current power action. Use Start Now or Arm Tonight to commit.">30m</button>
+            <button class="chip" data-min="45" data-ns-help="Set duration to 45 min, using your current power action. Use Start Now or Arm Tonight to commit.">45m</button>
+            <button class="chip" data-min="60" data-ns-help="Set duration to 1 hour, using your current power action. Use Start Now or Arm Tonight to commit.">1h</button>
+            <button class="chip" data-min="120" data-ns-help="Set duration to 2 hours, using your current power action. Use Start Now or Arm Tonight to commit.">2h</button>
           </div>
           <!-- Tonight's own explicit Start action -- previously the only
                way to start a non-chip (custom-duration) timer from this

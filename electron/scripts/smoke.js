@@ -1764,15 +1764,15 @@ check('help: Tonight\'s highest-risk controls carry data-ns-help', () => {
   for (const [name, pattern] of tonightHelpTargets) {
     assertMatch(htmlSrc, pattern, `#${name} is missing data-ns-help`);
   }
-  // The chips row (instant-start on click, no confirmation) needed a
-  // visible warning, not just a tooltip -- a hover-only warning is easy to
-  // miss on a control that fires immediately on click.
-  assertMatch(htmlSrc, /class="ns-setup-hint">Presets start immediately/, 'chips row is missing its visible instant-start warning');
+  // Phase 5I-B: chips no longer instant-start (see the arm-model check
+  // below) -- caption now tells the user they still need Start Now/Arm
+  // Tonight to commit, same idea as the Quick Plans caption already had.
+  assertMatch(htmlSrc, /class="ns-setup-hint">Presets set the duration -- use Start Now or Arm Tonight to commit/, 'chips row is missing its "set duration, does not start" caption');
   assertMatch(htmlSrc, /class="chip" data-min="5" data-ns-help="[^"]+"/, 'chip presets are missing data-ns-help');
   // Quick plans (#profiles-section) load a plan into the setup without
   // starting it -- applyProfile() is deliberately inert on selection (see
-  // renderer-profiles.js). That was previously undocumented and easy to
-  // mistake for the chips' instant-start behavior.
+  // renderer-profiles.js). Chips now follow the same inert pattern (Phase
+  // 5I-B), so this caption is no longer the odd one out.
   assertMatch(htmlSrc, /class="ns-setup-hint">Loads into the timer above/, 'Quick plans section is missing its "loads, does not start" clarification');
   // Participating chips (Smart Lights/WiFi Guard/Companion) are rendered by
   // renderTonightPlanFeatures(), not present in static HTML.
@@ -2140,19 +2140,36 @@ check('arm-model: Arm Tonight has its own visible, active styling -- not the ter
   assertMatch(armBtnBlock, /font-weight: 700/, 'Arm Tonight must match Start Now\'s visual weight (700), not a muted secondary weight');
 });
 
-check('arm-model: instant-start chips/presets/shortcuts clear any armed plan (Night Mode or custom timer) before starting', () => {
-  // Every real startTimer() call site outside startTonightPlan() must call
-  // the shared clear helper (or an equivalent explicit clear of both
-  // fields) immediately before starting -- confirmed for all three
-  // non-startTonightPlan call sites found in the source audit.
-  const instantStartSites = [
-    ['quick-preset menu item', /clearAnyArmedPlan\(\);\s*\n\s*startTimer\(Number\(item\.dataset\.minutes\) \* 60\);/],
-    ['Tonight duration chip', /clearAnyArmedPlan\(\);\s*\n\s*startTimer\(minutes \* 60\);/],
-    ['number-key shortcut', /clearAnyArmedPlan\(\);\s*\n\s*startTimer\(presets\[event\.key\] \* 60\);/],
+// Phase 5I-B: chips/quick-preset menu items/number-key shortcuts used to
+// call startTimer() directly -- a real countdown, no confirmation -- which
+// predates Arm Tonight/Start Now being real, separate commit actions and
+// became the one control surface still silently skipping both (see
+// LIGHTS_OUT_PHASE5I_A_CONTROL_MODEL_QUICK_CONTROLS_AUDIT.md, section 1).
+// They now only select a duration, exactly like Quick Plans cards
+// (applyTonightCard()) already did -- Start Now and Arm Tonight remain the
+// only two ways to actually commit a plan.
+check('arm-model: duration presets (chips/quick-preset menu items/number keys) select a duration, they do not start the timer', () => {
+  const selectOnlySites = [
+    ['quick-preset menu item', /if \(item\.dataset\.minutes\) \{\s*state\.unit = 'min';\s*setInputFromSeconds\(Number\(item\.dataset\.minutes\) \* 60\);\s*checkArmedModeMatch\(\);/],
+    ['Tonight duration chip', /chip\.addEventListener\('click', \(\) => \{\s*const minutes = Number\(chip\.dataset\.min\);\s*state\.unit = 'min';\s*setInputFromSeconds\(minutes \* 60\);\s*checkArmedModeMatch\(\);/],
+    ['number-key shortcut', /if \(presets\[event\.key\] && !state\.running && !state\.paused\) \{\s*state\.unit = 'min';\s*setInputFromSeconds\(presets\[event\.key\] \* 60\);\s*checkArmedModeMatch\(\);/],
   ];
-  for (const [name, pattern] of instantStartSites) {
-    assertMatch(rendererSrc, pattern, `${name} must clear any armed plan before instant-starting`);
+  for (const [name, pattern] of selectOnlySites) {
+    assertMatch(rendererSrc, pattern, `${name} must set duration via checkArmedModeMatch(), not instant-start`);
   }
+
+  // None of the three duration-only call sites may call startTimer directly
+  // any more -- Start Now (startTonightPlan -> startTimer) is the only real
+  // start path left. Matches on the exact old instant-start pattern so this
+  // can't silently come back disguised as a refactor.
+  assert(!/setInputFromSeconds\(minutes \* 60\);\s*clearAnyArmedPlan\(\);\s*startTimer\(minutes \* 60\);/.test(rendererSrc), 'Tonight duration chip must not instant-start again');
+  assert(!/setInputFromSeconds\(presets\[event\.key\] \* 60\);\s*clearAnyArmedPlan\(\);\s*startTimer\(presets\[event\.key\] \* 60\);/.test(rendererSrc), 'number-key shortcut must not instant-start again');
+  assert(!/setInputFromSeconds\(Number\(item\.dataset\.minutes\) \* 60\);\s*clearAnyArmedPlan\(\);\s*startTimer\(Number\(item\.dataset\.minutes\) \* 60\);/.test(rendererSrc), 'quick-preset menu item must not instant-start again');
+
+  // The armed-plan clear button must stay generic now that it clears an
+  // armed custom timer as well as an armed Night Mode -- was "Remove night
+  // mode selection", which didn't make sense for the custom-timer case.
+  assertMatch(htmlSrc, /id="armed-mode-clear" title="Clear armed plan" aria-label="Clear armed plan"/, 'armed-mode-clear label must be generic, not Night-Mode-specific wording');
 });
 
 check('arm-model: armed custom timer persists and restores the same way as armed Night Mode', () => {

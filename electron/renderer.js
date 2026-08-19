@@ -2228,11 +2228,13 @@ function clearArmedCustomTimer() {
   persistArmedCustomTimer();
 }
 
-// Phase 5F-C: shared by every instant-start call site (chips, quick-preset
-// menu items, number-key shortcuts) and the clear (×) button -- mutual
-// exclusivity guarantees at most one of these is ever truthy, so this is
-// never a double-clear, just one call site instead of duplicating the
-// if/else-if at every caller.
+// Phase 5F-C: shared by the clear (x) button and any other caller that
+// means "drop the armed plan outright." Phase 5I-B moved chips/quick-preset
+// menu items/number-key shortcuts off this (they now only select a
+// duration and call checkArmedModeMatch(), which invalidates conditionally
+// instead of unconditionally) -- see the chip handler's comment. Mutual
+// exclusivity guarantees at most one of armedNightMode/armedCustomTimer is
+// ever truthy, so this is never a double-clear.
 function clearAnyArmedPlan() {
   if (state.armedNightMode) clearArmedNightMode();
   if (state.armedCustomTimer) clearArmedCustomTimer();
@@ -3651,11 +3653,12 @@ if (els.btnClearReceipts) {
         return;
       }
 
+      // Phase 5I-B: matches the Tonight chip fix -- see its comment.
       if (item.dataset.minutes) {
         state.unit = 'min';
         setInputFromSeconds(Number(item.dataset.minutes) * 60);
-        clearAnyArmedPlan();
-        startTimer(Number(item.dataset.minutes) * 60);
+        checkArmedModeMatch();
+        notify(`Duration set: ${item.dataset.minutes} min`, 'info');
         return;
       }
 
@@ -3698,13 +3701,23 @@ if (els.btnClearReceipts) {
     });
   });
 
+  // Phase 5I-B: chips used to start the timer the instant you clicked them
+  // (see the removed data-ns-help/caption copy in index.html) -- that
+  // predates Arm Tonight/Start Now being real, separate commit actions, and
+  // became the one control surface that still silently skipped both. Chips
+  // now only select a duration, exactly like applyTonightCard()'s Quick
+  // Plans cards already do. checkArmedModeMatch() (not clearAnyArmedPlan())
+  // is the same invalidation call every other duration control already uses
+  // (±buttons, direct typing) -- it only clears an armed plan if the new
+  // duration/action no longer matches what was armed, so clicking a chip
+  // that happens to match an already-armed plan leaves it armed.
   document.querySelectorAll('.chip').forEach(chip => {
     chip.addEventListener('click', () => {
       const minutes = Number(chip.dataset.min);
       state.unit = 'min';
       setInputFromSeconds(minutes * 60);
-      clearAnyArmedPlan();
-      startTimer(minutes * 60);
+      checkArmedModeMatch();
+      notify(`Duration set: ${chip.textContent.trim()}`, 'info');
     });
   });
 
@@ -4059,12 +4072,15 @@ if (els.btnClearReceipts) {
       return;
     }
 
+    // Phase 5I-B: matches the Tonight chip fix -- number keys select a
+    // duration now instead of instant-starting. See the chip handler above
+    // for why checkArmedModeMatch() replaces clearAnyArmedPlan() here.
     const presets = { '1': 5, '2': 10, '3': 15, '4': 30, '5': 60, '6': 120 };
     if (presets[event.key] && !state.running && !state.paused) {
       state.unit = 'min';
       setInputFromSeconds(presets[event.key] * 60);
-      clearAnyArmedPlan();
-      startTimer(presets[event.key] * 60);
+      checkArmedModeMatch();
+      notify(`Duration set: ${presets[event.key]} min`, 'info');
       return;
     }
 
