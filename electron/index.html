@@ -264,10 +264,16 @@
            since they're control-room concerns, not orientation. -->
       <div class="ns-main-panel" id="ns-panel-home">
 
-        <!-- Hero: brand + one state-aware entry point. Choose/Start/Continue
-             Tonight is decided in renderHome() (renderer.js) from real
-             session/plan state -- never three separate buttons on screen at
-             once, never a fabricated state. -->
+        <!-- Phase 5F-B: Tonight Command Card -- the former hero (brand +
+             CTA) and the former separate Tonight recap card merged into
+             one dominant card, instead of two equal-weight sections
+             competing for attention. Choose/Start/Continue Tonight is
+             still decided in renderHome() (renderer.js) from real
+             session/plan state -- never three separate buttons on screen
+             at once, never a fabricated state. Every field below (status
+             row, plan, time, action) is the same already-computed data
+             the old hero/Tonight-card/footer/Tonight-clock already read;
+             this pass adds no new fetch. -->
         <section class="ns-home-hero">
           <div class="ns-home-hero-bg" aria-hidden="true"></div>
           <div class="ns-home-brand">
@@ -277,10 +283,37 @@
               <div class="ns-home-brand-tag">Control the end of your day.</div>
             </div>
           </div>
-          <button class="ns-home-cta" id="ns-home-cta" aria-label="Enter tonight">
-            <span class="ns-home-cta-icon" id="ns-home-cta-icon" aria-hidden="true"></span>
-            <span class="ns-home-cta-label" id="ns-home-cta-label">Start Tonight</span>
-          </button>
+
+          <!-- Real state only -- Dry Run/Live Ready always shown (always a
+               real value), Companion always shown (its real value, even
+               "Off"), First Light/Next action omitted entirely rather than
+               shown as a fabricated placeholder when nothing is real. -->
+          <div class="ns-home-command-status" id="ns-home-command-status"></div>
+
+          <div class="ns-home-command-plan">
+            <div class="ns-home-tonight-plan" id="ns-home-tonight-plan">Custom Timer</div>
+            <div class="ns-home-tonight-meta">
+              <span id="ns-home-tonight-time">Ends 11:58 PM</span>
+              <span class="ns-home-meta-sep">&middot;</span>
+              <span id="ns-home-tonight-action">Sleep</span>
+            </div>
+          </div>
+
+          <div class="ns-home-command-actions">
+            <button class="ns-home-cta" id="ns-home-cta" aria-label="Enter tonight">
+              <span class="ns-home-cta-icon" id="ns-home-cta-icon" aria-hidden="true"></span>
+              <span class="ns-home-cta-label" id="ns-home-cta-label">Start Tonight</span>
+            </button>
+            <!-- Same id/action as before (was "Open Tonight" in the
+                 separate Tonight card) -- relabeled to fit the new
+                 secondary-actions row, behavior unchanged. -->
+            <button class="ns-home-tonight-open" id="ns-home-tonight-open">Edit Tonight</button>
+            <!-- Same destination as "Browse Library" in the Night Modes
+                 section below (both call handleSidebarNavigation('modes'))
+                 -- a second entry point here so the command card is
+                 self-contained, not a rerouted duplicate of that link. -->
+            <button class="ns-home-tonight-open" id="ns-home-choose-mode">Choose Mode</button>
+          </div>
         </section>
 
         <!-- Trust bar: orientation, not control -- kept from the original
@@ -318,25 +351,6 @@
             </div>
           </div>
         </div>
-
-        <!-- Tonight: compact recap of what's actually configured right now
-             (plan / target time / action) with one neutral link into the
-             control room -- distinct from the hero CTA above, which can
-             start something; this just opens Tonight to review or adjust. -->
-        <section class="ns-home-card ns-home-card-primary ns-home-tonight-card" id="ns-home-tonight-card">
-          <div class="ns-home-card-label">TONIGHT</div>
-          <div class="ns-home-tonight-row">
-            <div class="ns-home-tonight-main">
-              <div class="ns-home-tonight-plan" id="ns-home-tonight-plan">Custom Timer</div>
-              <div class="ns-home-tonight-meta">
-                <span id="ns-home-tonight-time">Ends 11:58 PM</span>
-                <span class="ns-home-meta-sep">&middot;</span>
-                <span id="ns-home-tonight-action">Sleep</span>
-              </div>
-            </div>
-            <button class="ns-home-tonight-open" id="ns-home-tonight-open">Open Tonight</button>
-          </div>
-        </section>
 
         <!-- Night Modes: high-level discovery, not the full library -- 3-4
              tiles (real catalogue data, rendered by

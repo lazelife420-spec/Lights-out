@@ -2011,6 +2011,45 @@ check('settings-context: Save/Cancel and return-tab behavior untouched', () => {
   assertMatch(htmlSrc, /id="btn-save-opt"/, 'the global Save button must still exist -- dirty-state Save/Close is a separate, later pass');
 });
 
+check('home-command: hero and Tonight card are merged into one command card, not duplicated', () => {
+  // The old separate #ns-home-tonight-card must not come back -- that
+  // would recreate the "two equal-weight sections" problem this pass
+  // fixed, and/or duplicate the plan/time/action ids.
+  assert(!/id="ns-home-tonight-card"/.test(htmlSrc), 'the old separate Tonight card must not return');
+  assertMatch(htmlSrc, /id="ns-home-command-status"/, 'command-card status row is missing');
+  assertMatch(htmlSrc, /class="ns-home-command-plan"/, 'command-card plan wrapper is missing');
+  assertMatch(htmlSrc, /class="ns-home-command-actions"/, 'command-card actions row is missing');
+  // Plan/time/action ids are unchanged (same source of truth, just moved).
+  assertMatch(htmlSrc, /id="ns-home-tonight-plan"/, 'plan id must be preserved');
+  assertMatch(htmlSrc, /id="ns-home-tonight-time"/, 'time id must be preserved');
+  assertMatch(htmlSrc, /id="ns-home-tonight-action"/, 'action id must be preserved');
+  // Exactly one of each id in the whole document (no accidental duplicate
+  // left behind by an incomplete merge).
+  for (const id of ['ns-home-tonight-plan', 'ns-home-tonight-time', 'ns-home-tonight-action', 'ns-home-command-status']) {
+    const count = (htmlSrc.match(new RegExp(`id="${id}"`, 'g')) || []).length;
+    assert(count === 1, `expected exactly one #${id}, found ${count}`);
+  }
+});
+
+check('home-command: secondary actions present, primary CTA labels unchanged (no fake arming)', () => {
+  assertMatch(htmlSrc, /id="ns-home-tonight-open">Edit Tonight</, '"Edit Tonight" secondary action is missing');
+  assertMatch(htmlSrc, /id="ns-home-choose-mode">Choose Mode</, '"Choose Mode" secondary action is missing');
+  assertMatch(rendererSrc, /document\.getElementById\('ns-home-choose-mode'\)\?\.addEventListener\('click', \(\) => handleSidebarNavigation\('modes'\)\)/, 'Choose Mode must route the same place Browse Library already does');
+  // Phase 5F-B explicitly does not implement custom-timer arming -- the
+  // CTA must keep its existing, behavior-accurate labels (Start Tonight
+  // really does start immediately in the 'start' state; relabeling it to
+  // something like "Arm Tonight" without changing that behavior would
+  // misrepresent an instant-start action as a safe arm step).
+  assertMatch(rendererSrc, /mode === 'continue' \? 'Continue Tonight' : mode === 'start' \? 'Start Tonight' : 'Choose Tonight'/, 'CTA labels must stay accurate to existing (unarmed-custom-timer) behavior -- no "Arm Tonight" relabel without implementing arming');
+});
+
+check('home-command: status row reuses real synced state, no new fetch, no fabricated placeholders', () => {
+  assertMatch(rendererSrc, /const items = \[state\.dryRun \? 'Dry Run' : 'Live Ready'\];/, 'Dry Run/Live Ready must always show a real value, matching the footer status pill wording');
+  assertMatch(rendererSrc, /getElementById\('ta-companion-status'\)\?\.textContent\?\.trim\(\)/, 'Companion status must read the same already-synced element Home/Devices already show');
+  assertMatch(rendererSrc, /alarmText && alarmText !== 'Not set'/, 'First Light must be omitted, not shown as "Not set", when nothing real is configured');
+  assertMatch(rendererSrc, /typeof calNextEvent !== 'undefined' && calNextEvent/, 'Next action must reuse the real calNextEvent Tonight\'s idle clock already computes, not a second source of truth');
+});
+
 check('nav: no timer/power/schedule-execution files touched by the Navigation Contract', () => {
   // Guards the Phase 5C-A non-goal boundary: this pass is renderer-layer
   // navigation ergonomics only. Fails loudly if nav-specific identifiers

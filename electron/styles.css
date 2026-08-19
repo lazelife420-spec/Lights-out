@@ -4970,6 +4970,11 @@ body.ns-lobby:not(.ns-on-tonight) .ns-wordmark-sub {
    discovery cards. See renderHome() in renderer.js for the state logic.
    ========================================================================== */
 
+/* Phase 5F-B: changed from a 2-item row (brand left, CTA right, "justify-
+   content: space-between" with dead air between them) to a vertical
+   command-card stack -- brand, status row, current plan, then the action
+   row -- now that the hero also carries the former separate Tonight
+   card's content. */
 .ns-home-hero {
   position: relative;
   overflow: hidden;
@@ -4977,13 +4982,12 @@ body.ns-lobby:not(.ns-on-tonight) .ns-wordmark-sub {
   border: 1px solid rgba(74,158,255,0.22);
   background:
     linear-gradient(160deg, rgba(19,28,52,0.97) 0%, rgba(8,11,21,0.98) 78%);
-  padding: 42px 36px;
+  padding: 36px 36px 30px;
   margin-bottom: 12px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 18px;
   box-shadow: 0 18px 48px rgba(4,8,20,0.4);
 }
 
@@ -5035,6 +5039,34 @@ body.ns-lobby:not(.ns-on-tonight) .ns-wordmark-sub {
   color: var(--accent-cyan);
   font-weight: 600;
   margin-top: 2px;
+}
+
+/* Phase 5F-B: command-card status row (Dry Run/Live · Companion · First
+   Light · Next action) -- plain text, middle-dot separated, matching the
+   same restrained style already used for .ns-home-tonight-meta and the
+   armed-mode banner's meta line, not a new chip/badge system. */
+.ns-home-command-status {
+  position: relative;
+  z-index: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  letter-spacing: 0.02em;
+}
+.ns-home-command-status:empty { display: none; }
+
+.ns-home-command-plan {
+  position: relative;
+  z-index: 1;
+}
+
+.ns-home-command-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .ns-home-cta {
@@ -5181,13 +5213,6 @@ body.ns-lobby:not(.ns-on-tonight) .ns-wordmark-sub {
 .ns-home-card-header .ns-home-card-label { margin-bottom: 0; }
 
 /* Tonight recap card */
-.ns-home-tonight-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-}
 .ns-home-tonight-plan {
   font-size: 17px;
   font-weight: 700;
