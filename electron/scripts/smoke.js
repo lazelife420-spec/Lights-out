@@ -2516,7 +2516,32 @@ check('night-modes: armed mode banner shows ritual state (presentation only)', (
 
 check('night-modes: normal-mode minimum width supports library detail panel', () => {
   const windowGeometrySrc = fs.readFileSync(path.join(root, 'windowGeometry.js'), 'utf8');
-  assertMatch(windowGeometrySrc, /NORMAL_MINIMUM = Object\.freeze\(\{ width: 900/, 'NORMAL_MINIMUM width too small for library');
+  assertMatch(windowGeometrySrc, /NORMAL_MINIMUM = Object\.freeze\(\{ width: 1024/, 'NORMAL_MINIMUM width too small for library');
+});
+
+// Phase 5H-C: the shell-size audit found the requested default (520) was
+// narrower than the enforced minimum (900) -- Electron silently clamped
+// every real launch up to the minimum, so the "default" in the source was
+// never what a fresh user actually saw. Pins two things so that class of
+// bug can't quietly reappear: the default can never again be narrower than
+// the minimum, and both main.js and windowGeometry.js's own exitMiniMode
+// fallback pull from the same NORMAL_DEFAULT constant instead of each
+// keeping a separate literal that can drift.
+check('window sizing: default size is never narrower than the enforced minimum', () => {
+  const windowGeometrySrc = fs.readFileSync(path.join(root, 'windowGeometry.js'), 'utf8');
+  const defaultMatch = windowGeometrySrc.match(/NORMAL_DEFAULT = Object\.freeze\(\{ width: (\d+), height: (\d+) \}\)/);
+  const minimumMatch = windowGeometrySrc.match(/NORMAL_MINIMUM = Object\.freeze\(\{ width: (\d+), height: (\d+) \}\)/);
+  assert(defaultMatch, 'NORMAL_DEFAULT constant missing from windowGeometry.js');
+  assert(minimumMatch, 'NORMAL_MINIMUM constant missing from windowGeometry.js');
+  const [, defaultWidth, defaultHeight] = defaultMatch.map(Number);
+  const [, minWidth, minHeight] = minimumMatch.map(Number);
+  assert(defaultWidth >= minWidth, `NORMAL_DEFAULT width (${defaultWidth}) is narrower than NORMAL_MINIMUM width (${minWidth}) -- Electron would silently clamp every fresh launch, hiding the real default`);
+  assert(defaultHeight >= minHeight, `NORMAL_DEFAULT height (${defaultHeight}) is shorter than NORMAL_MINIMUM height (${minHeight})`);
+
+  assertMatch(mainSrc, /width: windowGeometry\.NORMAL_DEFAULT\.width,\s*height: windowGeometry\.NORMAL_DEFAULT\.height,/, 'main.js normal window must use the shared NORMAL_DEFAULT, not its own literal');
+  assert(!/width: 520,\s*height: 800,/.test(mainSrc), 'stale 520x800 literal must not return to main.js');
+  assertMatch(windowGeometrySrc, /win\.setSize\(NORMAL_DEFAULT\.width, NORMAL_DEFAULT\.height\)/, "exitMiniMode's no-saved-bounds fallback must use the shared NORMAL_DEFAULT, not its own literal");
+  assert(!/win\.setSize\(520, 720\)/.test(windowGeometrySrc), 'stale 520x720 literal must not return to windowGeometry.js');
 });
 
 // Cleanup.

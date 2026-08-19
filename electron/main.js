@@ -286,8 +286,12 @@ function createWindow() {
     alwaysOnTop: true,
     resizable: true
   } : {
-    width: 520,
-    height: 800,
+    // Phase 5H-C: was width:520/height:800 -- narrower than NORMAL_MINIMUM
+    // even claimed, so Electron silently clamped every fresh launch up to
+    // the minimum instead of this literal. NORMAL_DEFAULT is now the real,
+    // honest default: a control-center canvas, not a narrow-utility one.
+    width: windowGeometry.NORMAL_DEFAULT.width,
+    height: windowGeometry.NORMAL_DEFAULT.height,
     minWidth: windowGeometry.NORMAL_MINIMUM.width,
     minHeight: windowGeometry.NORMAL_MINIMUM.height,
     alwaysOnTop: false,

@@ -1,4 +1,14 @@
-const NORMAL_MINIMUM = Object.freeze({ width: 900, height: 640 });
+// Phase 5H-C: 900 used to be both the enforced minimum AND wider than the
+// requested default (520) -- Electron clamps a new window up to minWidth at
+// construction, so 520 was never the real default a fresh user saw; the
+// real fresh-launch width was ~900, not 520. Raised so the shell has a real
+// control-center canvas (Settings' rail+content split, Devices' cards, etc.
+// all need real width to not read as cramped) instead of a narrow-utility
+// floor: 1024 (up from 900), with NORMAL_DEFAULT now a single source of
+// truth so main.js and exitMiniMode's fallback can't drift apart the way
+// 520 (main.js) and 720 (this file's own exitMiniMode fallback) already had.
+const NORMAL_MINIMUM = Object.freeze({ width: 1024, height: 640 });
+const NORMAL_DEFAULT = Object.freeze({ width: 1180, height: 760 });
 const MINI_GEOMETRY = Object.freeze({ width: 260, height: 320 });
 
 function validBounds(bounds) {
@@ -71,7 +81,7 @@ function exitMiniMode(win, screenApi) {
   win.setMinimumSize(minimum[0], minimum[1]);
 
   const restoredBounds = applyNormalBounds(win, win.normalModeBounds, screenApi);
-  if (!restoredBounds) win.setSize(520, 720);
+  if (!restoredBounds) win.setSize(NORMAL_DEFAULT.width, NORMAL_DEFAULT.height);
   if (win.wasMaximizedBeforeMini) win.maximize();
 
   win.normalModeBounds = null;
@@ -81,6 +91,7 @@ function exitMiniMode(win, screenApi) {
 
 module.exports = {
   NORMAL_MINIMUM,
+  NORMAL_DEFAULT,
   MINI_GEOMETRY,
   clampNormalBounds,
   applyNormalBounds,
