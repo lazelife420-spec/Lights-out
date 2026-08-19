@@ -63,10 +63,19 @@ async function applyAppSettings(app, { skipNavigation = false } = {}) {
     ? app.armedNightMode
     : null;
   if (app.armedNightMode !== undefined) state.armedNightMode = restoredArmedMode;
-  if (restoredArmedMode) {
+  // Phase 5F-C: same restore for an armed custom timer, mutually exclusive
+  // with restoredArmedMode -- if a Night Mode was armed at last save, that
+  // takes priority (matches armCustomTimer()/armNightMode()'s own
+  // mutual-exclusivity guarantee, so this should never actually see both
+  // truthy at once, but the guard is here defensively).
+  const restoredArmedCustomTimer = !restoredArmedMode && app.armedCustomTimer && typeof app.armedCustomTimer === 'object'
+    ? app.armedCustomTimer
+    : null;
+  if (app.armedCustomTimer !== undefined) state.armedCustomTimer = restoredArmedCustomTimer;
+  if (restoredArmedMode || restoredArmedCustomTimer) {
     // The selected plan is authoritative over stale custom controls. Main
     // still canonicalizes nightModeId plus execution values before starting.
-    state.action = restoredArmedMode.action;
+    state.action = (restoredArmedMode || restoredArmedCustomTimer).action;
     state.unit = 'min';
   } else {
     if (app.action) state.action = app.action;
@@ -81,7 +90,7 @@ async function applyAppSettings(app, { skipNavigation = false } = {}) {
   if (Array.isArray(app.focusBlocklist)) {
     if (els.focusBlocklist) els.focusBlocklist.value = app.focusBlocklist.join(',');
   }
-  const restoredDuration = restoredArmedMode?.durationSeconds ?? app.durationSeconds;
+  const restoredDuration = restoredArmedMode?.durationSeconds ?? restoredArmedCustomTimer?.durationSeconds ?? app.durationSeconds;
   if (Number.isFinite(Number(restoredDuration)) && Number(restoredDuration) > 0 && !state.running) {
     state.remainingSeconds = Number(restoredDuration);
     setInputFromSeconds(state.remainingSeconds);

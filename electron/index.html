@@ -558,6 +558,12 @@
                shortcut already use -- no new start path, no engine
                change. -->
           <button class="btn-start-custom" id="btn-start-custom" data-ns-help="Starts the duration and action configured above. Respects Dry Run mode and existing safety confirmations.">Start Custom Timer</button>
+          <!-- Phase 5F-C: commits the current duration/action as the plan
+               without starting anything -- calls armCustomTimer() only,
+               never the shared start command or the timer engine. Same
+               arm-without-starting pattern Use Tonight already proves for
+               Night Modes (see LIGHTS_OUT_PHASE5F_C_ARM_MODEL_SOURCE_AUDIT.md). -->
+          <button class="btn-secondary" id="btn-arm-custom" style="margin-top:8px;font-size:11px;padding:6px 14px;border-radius:8px;opacity:0.85" data-ns-help="Commits this duration and action as tonight's plan without starting it -- Start Custom Timer still runs it when you're ready.">Arm Tonight</button>
           <button class="btn-secondary" id="btn-ritual" style="margin-top:8px;font-size:11px;padding:6px 14px;border-radius:8px;opacity:0.85" title="Guided bedtime ritual: breathing → block → timer → lights" data-ns-help="A separate guided wind-down (breathing, then block, then timer, then lights) -- not the same as Start Custom Timer.">&#x1F319; Begin Ritual</button>
         </div>
       </section>

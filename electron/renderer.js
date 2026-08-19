@@ -875,7 +875,14 @@ const state = {
   // Armed Night Mode: set by Use Tonight, cleared on any lobby edit or non-PLAY start.
   // Contains { nightModeId, nightModeTitle, durationSeconds, action } or null.
   // This is untrusted presentation state; main is authoritative at START time.
-  armedNightMode: null
+  armedNightMode: null,
+  // Phase 5F-C: armed *custom* timer -- the plain-duration-and-action
+  // equivalent of armedNightMode, set by armCustomTimer() (Arm Tonight
+  // button), cleared the same way (lobby edit, non-PLAY start, or arming
+  // a Night Mode instead). Contains { durationSeconds, action } or null.
+  // Mutually exclusive with armedNightMode -- arming one always clears
+  // the other. Same untrusted-presentation-state status as armedNightMode.
+  armedCustomTimer: null
 };
 
 if (previewMode) {
@@ -2180,6 +2187,13 @@ function clearArmedNightMode() {
 }
 
 function armNightMode(mode) { // eslint-disable-line no-unused-vars -- called from renderer-night-modes.js
+  // Phase 5F-C: mutually exclusive with armedCustomTimer -- arming a Night
+  // Mode always clears any armed custom timer first, so the banner/Home
+  // CTA never has to reconcile two conflicting armed plans at once.
+  if (state.armedCustomTimer) {
+    state.armedCustomTimer = null;
+    persistArmedCustomTimer();
+  }
   state.armedNightMode = {
     nightModeId: mode.nightModeId,
     nightModeTitle: mode.nightModeTitle,
@@ -2189,6 +2203,51 @@ function armNightMode(mode) { // eslint-disable-line no-unused-vars -- called fr
   };
   renderArmedModeBanner();
   persistArmedNightMode();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Armed Custom Timer (Phase 5F-C): the same arm-without-starting pattern as
+// Armed Night Mode above, for a plain typed duration/action instead of a
+// Night Mode. Neither function here calls startTimer()/api.startTimer() or
+// touches state.dryRun -- confirmed by the source audit
+// (LIGHTS_OUT_PHASE5F_C_ARM_MODEL_SOURCE_AUDIT.md) that the Night Mode
+// pattern this mirrors has neither, and this pattern doesn't add either.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function persistArmedCustomTimer() {
+  try {
+    await api.saveAppSettings({ app: { armedCustomTimer: state.armedCustomTimer } });
+  } catch (e) {
+    console.error('persistArmedCustomTimer failed:', e);
+  }
+}
+
+function clearArmedCustomTimer() {
+  state.armedCustomTimer = null;
+  renderArmedModeBanner();
+  persistArmedCustomTimer();
+}
+
+// Phase 5F-C: shared by every instant-start call site (chips, quick-preset
+// menu items, number-key shortcuts) and the clear (×) button -- mutual
+// exclusivity guarantees at most one of these is ever truthy, so this is
+// never a double-clear, just one call site instead of duplicating the
+// if/else-if at every caller.
+function clearAnyArmedPlan() {
+  if (state.armedNightMode) clearArmedNightMode();
+  if (state.armedCustomTimer) clearArmedCustomTimer();
+}
+
+function armCustomTimer() {
+  // Mutually exclusive with armedNightMode -- reuses the existing safe
+  // clear path rather than duplicating its state/render/persist steps.
+  if (state.armedNightMode) clearArmedNightMode();
+  state.armedCustomTimer = {
+    durationSeconds: inputSeconds(),
+    action: state.action
+  };
+  renderArmedModeBanner();
+  persistArmedCustomTimer();
 }
 
 // Home's hero CTA: exactly one of three real states, never fabricated --
@@ -2203,7 +2262,9 @@ function armNightMode(mode) { // eslint-disable-line no-unused-vars -- called fr
 //              navigates to Tonight; it never starts a second timer.
 function homeCtaState() {
   if (state.running || state.paused) return 'continue';
-  if (state.armedNightMode || state.currentProfileId) return 'start';
+  // Phase 5F-C: an armed custom timer is now also a real, committed plan --
+  // same treatment as an armed Night Mode or a loaded saved profile.
+  if (state.armedNightMode || state.armedCustomTimer || state.currentProfileId) return 'start';
   return 'choose';
 }
 
@@ -2229,12 +2290,16 @@ function renderHome() {
   if (!ctaLabelEl && !ctaIconEl) return; // Home markup not present (e.g. some tests' minimal fixtures)
 
   const armed = state.armedNightMode;
-  const profile = !armed && state.currentProfileId
+  // Phase 5F-C: an armed custom timer reads its own frozen snapshot, same
+  // as an armed Night Mode -- not the live inputSeconds()/state.action the
+  // plain unarmed fallback below uses.
+  const armedCustom = !armed ? state.armedCustomTimer : null;
+  const profile = !armed && !armedCustom && state.currentProfileId
     ? state.profiles?.find(p => p.id === state.currentProfileId)
     : null;
   const planTitle = armed ? armed.nightModeTitle : (profile ? profile.name : 'Custom Timer');
-  const durationSeconds = armed ? armed.durationSeconds : inputSeconds();
-  const planActionLabel = armed ? actionLabel(armed.action) : actionLabel();
+  const durationSeconds = armed ? armed.durationSeconds : armedCustom ? armedCustom.durationSeconds : inputSeconds();
+  const planActionLabel = armed ? actionLabel(armed.action) : armedCustom ? actionLabel(armedCustom.action) : actionLabel();
   const icons = window.NS_HOME_ICONS || {};
 
   const mode = homeCtaState();
@@ -2316,12 +2381,25 @@ function renderArmedModeBanner() {
   banner.style.display = '';
 
   const m = state.armedNightMode;
+  const c = state.armedCustomTimer;
   if (m) {
     const durMin = Math.round(m.durationSeconds / 60);
     const ritualLabel = m.ritualId === 'standard' ? 'Standard ritual' : 'Direct';
     if (labelEl) labelEl.textContent = 'NIGHT MODE';
     if (titleEl) titleEl.textContent = m.nightModeTitle;
     if (metaEl) metaEl.textContent = `${durMin} min \u00B7 ${actionLabelMap[m.action] || m.action} \u00B7 ${ritualLabel}`;
+    if (clearBtn) clearBtn.style.display = '';
+  } else if (c) {
+    // Phase 5F-C: armed custom timer shows the FROZEN values captured at
+    // arm time (c.durationSeconds/c.action), not the live inputSeconds()/
+    // state.action the unarmed fallback below reads -- checkArmedModeMatch()
+    // already guarantees these can never drift apart while armed (editing
+    // either field clears the arm), but reading the frozen snapshot here
+    // is the honest source for "what was actually committed".
+    const durMin = Math.round(c.durationSeconds / 60);
+    if (labelEl) labelEl.textContent = 'ARMED';
+    if (titleEl) titleEl.textContent = 'Custom Timer';
+    if (metaEl) metaEl.textContent = `${durMin} min \u00B7 ${actionLabelMap[c.action] || c.action}`;
     if (clearBtn) clearBtn.style.display = '';
   } else {
     const durMin = Math.max(1, Math.round(inputSeconds() / 60));
@@ -2362,11 +2440,25 @@ function renderTonightPlanFeatures() {
 // Check whether the current lobby values still match the armed mode's canonical values.
 // If not, the user has edited the execution → clear the armed mode.
 function checkArmedModeMatch() {
-  if (!state.armedNightMode) return;
-  const armed = state.armedNightMode;
-  const currentSeconds = inputSeconds();
-  if (currentSeconds !== armed.durationSeconds || state.action !== armed.action) {
-    clearArmedNightMode();
+  if (state.armedNightMode) {
+    const armed = state.armedNightMode;
+    const currentSeconds = inputSeconds();
+    if (currentSeconds !== armed.durationSeconds || state.action !== armed.action) {
+      clearArmedNightMode();
+    }
+    return;
+  }
+  // Phase 5F-C: same invalidation rule for an armed custom timer -- editing
+  // duration or action away from the values committed at arm time clears
+  // the arm, exactly like editing away from an armed Night Mode already
+  // does. Arming means committing to a specific plan, not tracking
+  // whatever the fields currently say.
+  if (state.armedCustomTimer) {
+    const armed = state.armedCustomTimer;
+    const currentSeconds = inputSeconds();
+    if (currentSeconds !== armed.durationSeconds || state.action !== armed.action) {
+      clearArmedCustomTimer();
+    }
   }
 }
 
@@ -3272,6 +3364,9 @@ refreshAutopilotStatus();
 // exact same shared command the Home hero CTA and Space shortcut already
 // use, so this is a third caller of the existing path, not a new one.
 document.getElementById('btn-start-custom')?.addEventListener('click', () => startTonightPlan());
+// Phase 5F-C: commits the plan, never starts it -- armCustomTimer() alone,
+// not the shared start command or the timer engine directly.
+document.getElementById('btn-arm-custom')?.addEventListener('click', () => armCustomTimer());
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Ritual Mode: guided bedtime ritual flow
@@ -3559,7 +3654,7 @@ if (els.btnClearReceipts) {
       if (item.dataset.minutes) {
         state.unit = 'min';
         setInputFromSeconds(Number(item.dataset.minutes) * 60);
-        clearArmedNightMode();
+        clearAnyArmedPlan();
         startTimer(Number(item.dataset.minutes) * 60);
         return;
       }
@@ -3608,7 +3703,7 @@ if (els.btnClearReceipts) {
       const minutes = Number(chip.dataset.min);
       state.unit = 'min';
       setInputFromSeconds(minutes * 60);
-      clearArmedNightMode();
+      clearAnyArmedPlan();
       startTimer(minutes * 60);
     });
   });
@@ -3671,8 +3766,8 @@ if (els.btnClearReceipts) {
     tile.addEventListener('click', () => spec.onClick(tile));
   });
 
-  // Armed Night Mode clear button.
-  document.getElementById('armed-mode-clear')?.addEventListener('click', clearArmedNightMode);
+  // Armed Night Mode / Armed Custom Timer clear button.
+  document.getElementById('armed-mode-clear')?.addEventListener('click', clearAnyArmedPlan);
 
   // Home streak callout jumps to Proof > Activity for the full breakdown
   // (Streaks now lives there, not under Schedule).
@@ -3968,7 +4063,7 @@ if (els.btnClearReceipts) {
     if (presets[event.key] && !state.running && !state.paused) {
       state.unit = 'min';
       setInputFromSeconds(presets[event.key] * 60);
-      clearArmedNightMode();
+      clearAnyArmedPlan();
       startTimer(presets[event.key] * 60);
       return;
     }

@@ -2068,6 +2068,65 @@ check('home-command: Dry Run/Live badge has its own visual weight, not equal to 
   assertMatch(factsBlock, /color: var\(--text-muted\)/, 'facts line must be visually muted relative to the badge');
 });
 
+check('arm-model: armCustomTimer() never starts anything or touches Dry Run', () => {
+  // The exact invariant the source audit confirmed for armNightMode() --
+  // extracted precisely so a future edit can't silently add a start call
+  // or a dryRun write without this failing loudly.
+  const armFnMatch = rendererSrc.match(/function armCustomTimer\(\) \{[\s\S]*?\n\}/);
+  assert(armFnMatch, 'armCustomTimer() function not found');
+  const armFnBody = armFnMatch[0];
+  assert(!/startTimer\(/.test(armFnBody), 'armCustomTimer() must never call startTimer()');
+  assert(!/api\.startTimer/.test(armFnBody), 'armCustomTimer() must never call api.startTimer');
+  assert(!/state\.dryRun\s*=/.test(armFnBody), 'armCustomTimer() must never assign state.dryRun');
+  assert(!/state\.running\s*=/.test(armFnBody), 'armCustomTimer() must never assign state.running');
+});
+
+check('arm-model: state and functions exist, mutually exclusive with armed Night Mode', () => {
+  assertMatch(rendererSrc, /armedCustomTimer: null/, 'armedCustomTimer state init missing');
+  assertMatch(rendererSrc, /function clearArmedCustomTimer\(\)/, 'clearArmedCustomTimer function missing');
+  assertMatch(rendererSrc, /function armCustomTimer\(\)/, 'armCustomTimer function missing');
+  assertMatch(rendererSrc, /function clearAnyArmedPlan\(\)/, 'clearAnyArmedPlan helper missing');
+  // Mutual exclusivity: arming one clears the other.
+  assertMatch(rendererSrc, /function armNightMode\(mode\) \{[\s\S]*?if \(state\.armedCustomTimer\) \{/, 'armNightMode must clear an armed custom timer first');
+  assertMatch(rendererSrc, /function armCustomTimer\(\) \{[\s\S]*?if \(state\.armedNightMode\) clearArmedNightMode\(\);/, 'armCustomTimer must clear an armed Night Mode first');
+});
+
+check('arm-model: Home CTA and current-plan banner treat an armed custom timer as a real plan', () => {
+  assertMatch(rendererSrc, /if \(state\.armedNightMode \|\| state\.armedCustomTimer \|\| state\.currentProfileId\) return 'start';/, 'homeCtaState must enter start state for an armed custom timer');
+  assertMatch(rendererSrc, /const armedCustom = !armed \? state\.armedCustomTimer : null;/, 'renderHome must read the armed custom timer snapshot');
+  assertMatch(rendererSrc, /if \(labelEl\) labelEl\.textContent = 'ARMED';/, 'the current-plan banner must show a distinct ARMED label for an armed custom timer');
+});
+
+check('arm-model: invalidation clears an armed custom timer on edit, same rule as armed Night Mode', () => {
+  assertMatch(rendererSrc, /if \(state\.armedCustomTimer\) \{\s*const armed = state\.armedCustomTimer;\s*const currentSeconds = inputSeconds\(\);\s*if \(currentSeconds !== armed\.durationSeconds \|\| state\.action !== armed\.action\) \{\s*clearArmedCustomTimer\(\);/, 'checkArmedModeMatch must invalidate an armed custom timer when duration/action are edited away from it');
+});
+
+check('arm-model: Start Custom Timer still uses the existing shared start path, unchanged', () => {
+  assertMatch(rendererSrc, /document\.getElementById\('btn-start-custom'\)\?\.addEventListener\('click', \(\) => startTonightPlan\(\)\)/, 'Start Custom Timer must still call the existing shared start command');
+  assertMatch(rendererSrc, /document\.getElementById\('btn-arm-custom'\)\?\.addEventListener\('click', \(\) => armCustomTimer\(\)\)/, 'Arm Tonight must call armCustomTimer(), not the start path');
+});
+
+check('arm-model: instant-start chips/presets/shortcuts clear any armed plan (Night Mode or custom timer) before starting', () => {
+  // Every real startTimer() call site outside startTonightPlan() must call
+  // the shared clear helper (or an equivalent explicit clear of both
+  // fields) immediately before starting -- confirmed for all three
+  // non-startTonightPlan call sites found in the source audit.
+  const instantStartSites = [
+    ['quick-preset menu item', /clearAnyArmedPlan\(\);\s*\n\s*startTimer\(Number\(item\.dataset\.minutes\) \* 60\);/],
+    ['Tonight duration chip', /clearAnyArmedPlan\(\);\s*\n\s*startTimer\(minutes \* 60\);/],
+    ['number-key shortcut', /clearAnyArmedPlan\(\);\s*\n\s*startTimer\(presets\[event\.key\] \* 60\);/],
+  ];
+  for (const [name, pattern] of instantStartSites) {
+    assertMatch(rendererSrc, pattern, `${name} must clear any armed plan before instant-starting`);
+  }
+});
+
+check('arm-model: armed custom timer persists and restores the same way as armed Night Mode', () => {
+  assertMatch(rendererSrc, /async function persistArmedCustomTimer\(\) \{[\s\S]*?saveAppSettings\(\{ app: \{ armedCustomTimer: state\.armedCustomTimer \} \}\)/, 'persistArmedCustomTimer must save via the same settings-persistence path as armedNightMode');
+  const settingsSrc = fs.readFileSync(path.join(root, 'renderer-settings.js'), 'utf8');
+  assertMatch(settingsSrc, /const restoredArmedCustomTimer = !restoredArmedMode && app\.armedCustomTimer/, 'applyAppSettings must restore an armed custom timer on load, same as armed Night Mode');
+});
+
 check('nav: no timer/power/schedule-execution files touched by the Navigation Contract', () => {
   // Guards the Phase 5C-A non-goal boundary: this pass is renderer-layer
   // navigation ergonomics only. Fails loudly if nav-specific identifiers
@@ -2330,7 +2389,11 @@ check('night-modes: armed mode state replaces window.__nightModeSelection', () =
   assertMatch(rendererSrc, /function checkArmedModeMatch\(\)/, 'checkArmedModeMatch function missing');
   assert(!rendererSrc.includes('window.__nightModeSelection'), 'renderer.js still uses window.__nightModeSelection');
   assert(!/const result = await api\.startTimer\([\s\S]{0,700}clearArmedNightMode\(\);/.test(rendererSrc), 'starting the selected plan must not erase restart restoration');
-  assertMatch(rendererSrc, /const restoredArmedMode = app\.armedNightMode[\s\S]*state\.action = restoredArmedMode\.action;[\s\S]*const restoredDuration = restoredArmedMode\?\.durationSeconds \?\? app\.durationSeconds;/s, 'restored selected plan must override stale custom action/duration controls');
+  // Phase 5F-C: an armed custom timer restores the same way, mutually
+  // exclusive with an armed Night Mode (Night Mode takes priority if both
+  // were somehow present) -- state.action and restoredDuration must
+  // consider both, not just restoredArmedMode.
+  assertMatch(rendererSrc, /const restoredArmedMode = app\.armedNightMode[\s\S]*state\.action = \(restoredArmedMode \|\| restoredArmedCustomTimer\)\.action;[\s\S]*const restoredDuration = restoredArmedMode\?\.durationSeconds \?\? restoredArmedCustomTimer\?\.durationSeconds \?\? app\.durationSeconds;/s, 'restored selected plan (Night Mode or custom timer) must override stale custom action/duration controls');
 });
 
 check('night-modes: armed mode banner in HTML', () => {
