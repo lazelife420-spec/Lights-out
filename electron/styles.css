@@ -5041,19 +5041,47 @@ body.ns-lobby:not(.ns-on-tonight) .ns-wordmark-sub {
   margin-top: 2px;
 }
 
-/* Phase 5F-B: command-card status row (Dry Run/Live · Companion · First
-   Light · Next action) -- plain text, middle-dot separated, matching the
-   same restrained style already used for .ns-home-tonight-meta and the
-   armed-mode banner's meta line, not a new chip/badge system. */
-.ns-home-command-status {
+/* Phase 5F-B2: was one plain text line (Dry Run/Live · Companion · First
+   Light · Next action) with every fact at equal size/color -- the single
+   safety-critical fact (Dry Run vs Live) read as no more important than
+   "Companion Off". Split into a real badge (pill, bold, its own color per
+   state -- same color language as the footer status pill's
+   .dryrun/.live-ready) plus a plain secondary facts line for everything
+   else, matching .ns-home-tonight-meta's existing restrained style. */
+.ns-home-command-status-row {
   position: relative;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ns-home-run-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: rgba(118,201,255,0.14);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(118,201,255,0.35);
+}
+.ns-home-run-badge.live {
+  background: rgba(76,175,80,0.14);
+  color: var(--accent-green);
+  border-color: rgba(76,175,80,0.35);
+}
+.ns-home-run-badge:empty { display: none; }
+.ns-home-command-facts {
   font-size: 12px;
   font-weight: 600;
-  color: var(--accent-cyan);
+  color: var(--text-muted);
   letter-spacing: 0.02em;
 }
-.ns-home-command-status:empty { display: none; }
+.ns-home-command-facts:empty { display: none; }
 
 .ns-home-command-plan {
   position: relative;
@@ -5103,12 +5131,18 @@ body.ns-lobby:not(.ns-on-tonight) .ns-wordmark-sub {
 }
 .ns-home-cta-icon svg { width: 100%; height: 100%; }
 
-/* ── Trust badge bar: orientation, not control. ── */
+/* ── Trust badge bar: orientation, not control. ──
+   Phase 5F-B2: light demotion only (more separation from the command
+   card above, slightly reduced opacity) so it reads as background
+   reassurance, not a second thing competing with the command card for
+   attention -- still fully legible, nothing removed. */
 .ns-trust-bar {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;
+  margin-top: 14px;
   margin-bottom: 20px;
+  opacity: 0.88;
 }
 
 .ns-trust-badge {
@@ -5231,7 +5265,10 @@ body.ns-lobby:not(.ns-on-tonight) .ns-wordmark-sub {
   border-radius: 8px;
   color: var(--accent-cyan);
   font-size: 12px;
-  font-weight: 700;
+  /* Phase 5F-B2: was 700, the same weight as .ns-home-cta's primary
+     label -- color/fill already marked these secondary, but equal text
+     weight undercut that at a glance. */
+  font-weight: 600;
   cursor: pointer;
   transition: background 0.15s;
   flex-shrink: 0;

@@ -284,11 +284,19 @@
             </div>
           </div>
 
-          <!-- Real state only -- Dry Run/Live Ready always shown (always a
-               real value), Companion always shown (its real value, even
-               "Off"), First Light/Next action omitted entirely rather than
-               shown as a fabricated placeholder when nothing is real. -->
-          <div class="ns-home-command-status" id="ns-home-command-status"></div>
+          <!-- Phase 5F-B2: split the single status line into a prominent
+               Dry Run/Live Ready badge (the safety-critical fact, deserves
+               its own visual weight, not the same size/color as
+               "Companion Off") plus a secondary facts line for everything
+               else. Real state only -- Dry Run/Live Ready always shown
+               (always a real value), Companion always shown (its real
+               value, even "Off"), First Light/Next action omitted
+               entirely rather than shown as a fabricated placeholder when
+               nothing is real. -->
+          <div class="ns-home-command-status-row">
+            <span class="ns-home-run-badge" id="ns-home-run-badge"></span>
+            <span class="ns-home-command-facts" id="ns-home-command-facts"></span>
+          </div>
 
           <div class="ns-home-command-plan">
             <div class="ns-home-tonight-plan" id="ns-home-tonight-plan">Custom Timer</div>

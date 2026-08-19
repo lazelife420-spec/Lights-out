@@ -2016,7 +2016,11 @@ check('home-command: hero and Tonight card are merged into one command card, not
   // would recreate the "two equal-weight sections" problem this pass
   // fixed, and/or duplicate the plan/time/action ids.
   assert(!/id="ns-home-tonight-card"/.test(htmlSrc), 'the old separate Tonight card must not return');
-  assertMatch(htmlSrc, /id="ns-home-command-status"/, 'command-card status row is missing');
+  // Phase 5F-B2: the single status line split into a badge (safety state)
+  // + a facts line (everything else) -- #ns-home-command-status itself is
+  // gone, replaced by these two.
+  assertMatch(htmlSrc, /id="ns-home-run-badge"/, 'command-card run-mode badge is missing');
+  assertMatch(htmlSrc, /id="ns-home-command-facts"/, 'command-card facts line is missing');
   assertMatch(htmlSrc, /class="ns-home-command-plan"/, 'command-card plan wrapper is missing');
   assertMatch(htmlSrc, /class="ns-home-command-actions"/, 'command-card actions row is missing');
   // Plan/time/action ids are unchanged (same source of truth, just moved).
@@ -2025,7 +2029,7 @@ check('home-command: hero and Tonight card are merged into one command card, not
   assertMatch(htmlSrc, /id="ns-home-tonight-action"/, 'action id must be preserved');
   // Exactly one of each id in the whole document (no accidental duplicate
   // left behind by an incomplete merge).
-  for (const id of ['ns-home-tonight-plan', 'ns-home-tonight-time', 'ns-home-tonight-action', 'ns-home-command-status']) {
+  for (const id of ['ns-home-tonight-plan', 'ns-home-tonight-time', 'ns-home-tonight-action', 'ns-home-run-badge', 'ns-home-command-facts']) {
     const count = (htmlSrc.match(new RegExp(`id="${id}"`, 'g')) || []).length;
     assert(count === 1, `expected exactly one #${id}, found ${count}`);
   }
@@ -2044,10 +2048,24 @@ check('home-command: secondary actions present, primary CTA labels unchanged (no
 });
 
 check('home-command: status row reuses real synced state, no new fetch, no fabricated placeholders', () => {
-  assertMatch(rendererSrc, /const items = \[state\.dryRun \? 'Dry Run' : 'Live Ready'\];/, 'Dry Run/Live Ready must always show a real value, matching the footer status pill wording');
+  assertMatch(rendererSrc, /badgeEl\.textContent = state\.dryRun \? 'Dry Run' : 'Live Ready';/, 'Dry Run/Live Ready must always show a real value, matching the footer status pill wording');
   assertMatch(rendererSrc, /getElementById\('ta-companion-status'\)\?\.textContent\?\.trim\(\)/, 'Companion status must read the same already-synced element Home/Devices already show');
   assertMatch(rendererSrc, /alarmText && alarmText !== 'Not set'/, 'First Light must be omitted, not shown as "Not set", when nothing real is configured');
   assertMatch(rendererSrc, /typeof calNextEvent !== 'undefined' && calNextEvent/, 'Next action must reuse the real calNextEvent Tonight\'s idle clock already computes, not a second source of truth');
+});
+
+check('home-command: Dry Run/Live badge has its own visual weight, not equal to secondary facts', () => {
+  // Phase 5F-B2's actual goal: the safety-critical fact must not read as
+  // equal-weight to "Companion Off" -- confirmed via distinct CSS rules
+  // for the badge vs. the facts line, not just "some text exists".
+  const stylesSrc = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  assertMatch(stylesSrc, /\.ns-home-run-badge \{/, 'run-mode badge must have its own CSS rule');
+  assertMatch(stylesSrc, /\.ns-home-run-badge\.live \{/, 'live-mode badge color must be distinct from dry-run');
+  assertMatch(stylesSrc, /\.ns-home-command-facts \{/, 'facts line must have its own (secondary) CSS rule');
+  const badgeBlock = stylesSrc.match(/\.ns-home-run-badge \{[^}]*\}/s)?.[0] || '';
+  const factsBlock = stylesSrc.match(/\.ns-home-command-facts \{[^}]*\}/s)?.[0] || '';
+  assertMatch(badgeBlock, /font-weight: 800/, 'badge must be visually heavier than the facts line');
+  assertMatch(factsBlock, /color: var\(--text-muted\)/, 'facts line must be visually muted relative to the badge');
 });
 
 check('nav: no timer/power/schedule-execution files touched by the Navigation Contract', () => {

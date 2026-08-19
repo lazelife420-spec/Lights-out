@@ -2261,30 +2261,37 @@ function renderHome() {
     }
   }
 
-  // Phase 5F-B: command-card status row. Every item reads an already-real,
-  // already-synced value -- Dry Run/Live wording matches the footer status
-  // pill (Phase 5D-B) exactly; Companion/First Light text is the same
-  // already-updated glance-tile text Home's own "Tonight at a glance" row
-  // and Devices already show; the next-action time is the same real
-  // calNextEvent Tonight's idle-clock label (Phase 5B-A) already computes.
-  // No new fetch. Dry Run/Companion always show a real value (even "Off");
-  // First Light/Next action are omitted entirely rather than shown as a
-  // fabricated placeholder when nothing real exists yet.
-  const statusEl = document.getElementById('ns-home-command-status');
-  if (statusEl) {
-    const items = [state.dryRun ? 'Dry Run' : 'Live Ready'];
+  // Phase 5F-B2: Dry Run/Live Ready split out into its own prominent badge
+  // -- it was previously the same size/color as "Companion Off" in one
+  // joined line, undervaluing the single most safety-relevant fact on the
+  // page. Wording matches the footer status pill (Phase 5D-B) exactly;
+  // Companion/First Light/next-action text is the same already-synced
+  // data the rest of Home, Devices, and Tonight's idle clock already read
+  // -- no new fetch, just split into badge (safety state) + facts
+  // (everything else, secondary). Dry Run/Companion always show a real
+  // value (even "Off"); First Light/Next action are omitted entirely
+  // rather than shown as a fabricated placeholder when nothing real
+  // exists yet.
+  const badgeEl = document.getElementById('ns-home-run-badge');
+  if (badgeEl) {
+    badgeEl.textContent = state.dryRun ? 'Dry Run' : 'Live Ready';
+    badgeEl.classList.toggle('live', !state.dryRun);
+  }
+  const factsEl = document.getElementById('ns-home-command-facts');
+  if (factsEl) {
+    const facts = [];
     const companionText = document.getElementById('ta-companion-status')?.textContent?.trim();
-    if (companionText) items.push(`Companion ${companionText}`);
+    if (companionText) facts.push(`Companion ${companionText}`);
     // ta-alarm-status's own text already reads "First Light at 09:31" (or
     // "Not set") -- it self-describes, unlike ta-companion-status, so no
     // "First Light " prefix here or it doubles up.
     const alarmText = document.getElementById('ta-alarm-status')?.textContent?.trim();
-    if (alarmText && alarmText !== 'Not set') items.push(alarmText);
+    if (alarmText && alarmText !== 'Not set') facts.push(alarmText);
     if (typeof calNextEvent !== 'undefined' && calNextEvent) {
       const evTime = formatIdleClockTime(new Date(calNextEvent.start), false);
-      items.push(`Next action ${evTime}`);
+      facts.push(`Next action ${evTime}`);
     }
-    statusEl.textContent = items.join(' · ');
+    factsEl.textContent = facts.join(' · ');
   }
 }
 
