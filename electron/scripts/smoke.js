@@ -2149,6 +2149,25 @@ check('layout: main scroll area has enough bottom clearance to clear the footer'
   assertMatch(dashboardBlock, /padding-bottom: 56px;/, '.dashboard must keep enough bottom clearance for the footer, not regress to the old insufficient 30px');
 });
 
+check('layout: timer-name moved out of the cramped centered clock stack, same element/behavior', () => {
+  // Phase 5F-D: "LAST CALL" (the real, contenteditable session-name field)
+  // used to be the first line inside .timer-display, which is absolutely
+  // centered inside the ring -- close enough to the ring's inner top edge
+  // to read as cramped/overlapping. Now a plain caption above the ring.
+  // Same id, same contenteditable, same default text/placeholder --
+  // position only.
+  const ringSectionMatch = htmlSrc.match(/<section class="timer-section">[\s\S]*?<\/section>/);
+  assert(ringSectionMatch, '.timer-section not found');
+  const ringSection = ringSectionMatch[0];
+  const nameIndex = ringSection.indexOf('id="timer-name"');
+  const ringContainerIndex = ringSection.indexOf('class="ring-container"');
+  const timerDisplayIndex = ringSection.indexOf('class="timer-display"');
+  assert(nameIndex > -1 && ringContainerIndex > -1 && timerDisplayIndex > -1, 'expected elements not found in .timer-section');
+  assert(nameIndex < ringContainerIndex, '#timer-name must appear before .ring-container (caption above the ring, not inside it)');
+  assert(nameIndex < timerDisplayIndex, '#timer-name must no longer be nested inside .timer-display');
+  assertMatch(htmlSrc, /id="timer-name" contenteditable="true" spellcheck="false" data-placeholder="Name this session">Last Call</, '#timer-name must keep its exact existing attributes/default text -- this is a real editable feature, not decorative text to simplify away');
+});
+
 check('nav: no timer/power/schedule-execution files touched by the Navigation Contract', () => {
   // Guards the Phase 5C-A non-goal boundary: this pass is renderer-layer
   // navigation ergonomics only. Fails loudly if nav-specific identifiers

@@ -476,13 +476,21 @@
 
       <!-- Timer Ring Section -->
       <section class="timer-section">
+        <!-- Phase 5F-D: moved out of .timer-display (which is absolutely
+             centered inside the ring) -- as the first line of that
+             centered stack it sat close enough to the ring's inner top
+             edge to read as cramped/overlapping. Same element, same id,
+             same contenteditable session-naming behavior (a real feature,
+             not decorative text) -- only its position changed, to a plain
+             caption above the ring where .timer-section's own flex layout
+             (column, centered, 16px gap) places and spaces it for free. -->
+        <div class="timer-name" id="timer-name" contenteditable="true" spellcheck="false" data-placeholder="Name this session">Last Call</div>
         <div class="ring-container">
           <svg class="timer-ring" viewBox="0 0 200 200">
             <circle class="ring-bg" cx="100" cy="100" r="90"/>
             <circle class="ring-progress" cx="100" cy="100" r="90"/>
           </svg>
           <div class="timer-display">
-            <div class="timer-name" id="timer-name" contenteditable="true" spellcheck="false" data-placeholder="Name this session">Last Call</div>
             <svg class="analog-clock" id="analog-clock" viewBox="0 0 100 100" style="display:none" tabindex="0" role="img" aria-label="Current time -- not a timer" data-ns-help="Current time -- not a timer. Switches to a live countdown once you start tonight's plan.">
               <circle class="analog-rim" cx="50" cy="50" r="46.5"/>
               <g class="analog-ticks" id="analog-ticks"></g>
