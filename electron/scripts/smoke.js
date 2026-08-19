@@ -2029,6 +2029,14 @@ check('settings-context: data-ta-source lives with the element it describes, not
   }
 });
 
+check('quick-controls: Quick Controls drawer and trigger exist', () => {
+  assertMatch(htmlSrc, /id="open-quick-controls"/, 'Quick Controls menu item missing');
+  assertMatch(htmlSrc, /id="qc-drawer"/, 'Quick Controls drawer missing');
+  assertMatch(htmlSrc, /id="status-pill"[^>]*aria-controls="qc-drawer"/, 'Footer pill must control the QC drawer');
+  assertMatch(rendererSrc, /toggleQuickControls/, 'toggleQuickControls function missing in renderer');
+  assertMatch(rendererSrc, /els\.statusPill\.addEventListener\('click'/, 'Status pill must be wired to toggleQuickControls');
+});
+
 check('settings-context: the dead #firstlight-hero-btn now has a real handler', () => {
   // Confirmed dead before this pass: had data-ta-target matching the
   // .ta-edit-btn pattern but no class="ta-edit-btn" and no dedicated

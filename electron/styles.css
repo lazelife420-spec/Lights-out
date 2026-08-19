@@ -1492,6 +1492,72 @@ input[type="datetime-local"] {
   color: var(--text-primary);
 }
 
+/* Phase 5I-A Commit 3: Quick Controls Drawer */
+.qc-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 90;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  backdrop-filter: blur(2px);
+}
+.qc-drawer-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.qc-drawer {
+  position: fixed;
+  bottom: 46px; /* slightly above footer */
+  left: 16px;
+  width: 320px;
+  background: var(--bg-primary);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  transform: translateY(20px);
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+}
+.qc-drawer.open {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+.qc-drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+.qc-drawer-header h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.qc-drawer-content {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.qc-plan-card {
+  margin-top: 4px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
 /* Footer */
 .app-footer {
   display: flex;
@@ -1530,6 +1596,24 @@ input[type="datetime-local"] {
   font-weight: 500;
   color: var(--text-muted);
   transition: all 0.4s ease;
+  cursor: pointer;
+  user-select: none;
+}
+.status-pill:hover, .status-pill:focus-visible {
+  background: var(--card-border);
+  outline: none;
+}
+.status-pill:focus-visible {
+  box-shadow: 0 0 0 2px rgba(107, 211, 255, 0.4);
+}
+.status-chevron {
+  font-size: 8px;
+  opacity: 0.5;
+  transition: transform 0.3s ease;
+  margin-left: 2px;
+}
+.status-pill[aria-expanded="true"] .status-chevron {
+  transform: rotate(180deg);
 }
 .status-dot {
   width: 8px;

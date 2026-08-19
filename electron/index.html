@@ -195,6 +195,10 @@
               <span>Graceful Close</span>
               <span class="toggle-indicator">ON</span>
             </div>
+            <!-- Phase 5I-A Commit 3: Quick Controls drawer link -->
+            <div class="submenu-item" role="menuitem" tabindex="-1" id="open-quick-controls" data-ta-source="Status &amp; Safety &middot; Quick Controls">
+              <span>Quick Controls / Status</span>
+            </div>
             <!-- Phase 5E-C: previously opened Settings on its General
                  default with no connection to why -- this menu is where
                  Dry Run Mode lives, so it now lands on Power & Safety
@@ -2188,12 +2192,36 @@
 
     </main>
 
+    <!-- Phase 5I-A Commit 3: Quick Controls Drawer -->
+    <div class="qc-drawer-overlay" id="qc-drawer-overlay" aria-hidden="true"></div>
+    <div class="qc-drawer" id="qc-drawer" aria-hidden="true">
+      <div class="qc-drawer-header">
+        <h3>Quick Controls</h3>
+        <button class="btn-icon" id="btn-close-qc" aria-label="Close drawer" tabindex="-1">&times;</button>
+      </div>
+      <div class="qc-drawer-content">
+        <div class="ns-home-command-status-row">
+          <span class="ns-home-run-badge" id="qc-run-badge"></span>
+          <span class="ns-home-command-facts" id="qc-command-facts"></span>
+        </div>
+        <div class="ns-home-command-plan qc-plan-card">
+          <div class="ns-home-tonight-plan" id="qc-tonight-plan">Idle</div>
+          <div class="ns-home-tonight-meta">
+            <span id="qc-tonight-time"></span>
+            <span class="ns-home-meta-sep" id="qc-tonight-sep" style="display:none">&middot;</span>
+            <span id="qc-tonight-action"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Footer -->
     <footer class="app-footer">
       <div class="footer-left">
-        <span class="status-pill" id="status-pill">
+        <span class="status-pill" id="status-pill" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-controls="qc-drawer" title="Open Quick Controls">
           <span class="status-dot" id="status-dot"></span>
           <span class="status-text" id="status-text">Idle</span>
+          <span class="status-chevron" aria-hidden="true">&#x25B2;</span>
         </span>
         <span class="footer-branding">Forged by The Proof Foundry™</span>
       </div>

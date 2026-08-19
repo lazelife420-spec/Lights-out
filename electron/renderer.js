@@ -379,6 +379,15 @@ const els = {
   chkDryRun: document.getElementById('chk-dryrun'),
   // Status pill (replaces old badges)
   statusPill: document.getElementById('status-pill'),
+  qcDrawer: document.getElementById('qc-drawer'),
+  qcDrawerOverlay: document.getElementById('qc-drawer-overlay'),
+  btnCloseQc: document.getElementById('btn-close-qc'),
+  qcRunBadge: document.getElementById('qc-run-badge'),
+  qcCommandFacts: document.getElementById('qc-command-facts'),
+  qcTonightPlan: document.getElementById('qc-tonight-plan'),
+  qcTonightTime: document.getElementById('qc-tonight-time'),
+  qcTonightAction: document.getElementById('qc-tonight-action'),
+  qcTonightSep: document.getElementById('qc-tonight-sep'),
   batteryLevel: document.getElementById('battery-level'),
   powerPlan: document.getElementById('power-plan'),
   actionName: document.getElementById('action-name'),
@@ -2348,22 +2357,46 @@ function renderHome() {
     badgeEl.textContent = state.dryRun ? 'Dry Run' : 'Live Ready';
     badgeEl.classList.toggle('live', !state.dryRun);
   }
-  const factsEl = document.getElementById('ns-home-command-facts');
-  if (factsEl) {
-    const facts = [];
-    const companionText = document.getElementById('ta-companion-status')?.textContent?.trim();
-    if (companionText) facts.push(`Companion ${companionText}`);
-    // ta-alarm-status's own text already reads "First Light at 09:31" (or
-    // "Not set") -- it self-describes, unlike ta-companion-status, so no
-    // "First Light " prefix here or it doubles up.
-    const alarmText = document.getElementById('ta-alarm-status')?.textContent?.trim();
-    if (alarmText && alarmText !== 'Not set') facts.push(alarmText);
-    if (typeof calNextEvent !== 'undefined' && calNextEvent) {
-      const evTime = formatIdleClockTime(new Date(calNextEvent.start), false);
-      facts.push(`Next action ${evTime}`);
-    }
-    factsEl.textContent = facts.join(' · ');
+  if (els.qcRunBadge) {
+    els.qcRunBadge.textContent = state.dryRun ? 'Dry Run' : 'Live Ready';
+    els.qcRunBadge.classList.toggle('live', !state.dryRun);
   }
+  
+  const factsEl = document.getElementById('ns-home-command-facts');
+  const facts = [];
+  const companionText = document.getElementById('ta-companion-status')?.textContent?.trim();
+  if (companionText) facts.push(`Companion ${companionText}`);
+  // ta-alarm-status's own text already reads "First Light at 09:31" (or
+  // "Not set") -- it self-describes, unlike ta-companion-status, so no
+  // "First Light " prefix here or it doubles up.
+  const alarmText = document.getElementById('ta-alarm-status')?.textContent?.trim();
+  if (alarmText && alarmText !== 'Not set') facts.push(alarmText);
+  if (typeof calNextEvent !== 'undefined' && calNextEvent) {
+    const evTime = formatIdleClockTime(new Date(calNextEvent.start), false);
+    facts.push(`Next action ${evTime}`);
+  }
+  const factsStr = facts.join(' · ');
+  
+  if (factsEl) {
+    factsEl.textContent = factsStr;
+  }
+  if (els.qcCommandFacts) {
+    els.qcCommandFacts.textContent = factsStr;
+  }
+
+  if (els.qcTonightPlan) els.qcTonightPlan.textContent = planTitle;
+  if (els.qcTonightAction) els.qcTonightAction.textContent = planActionLabel;
+  if (els.qcTonightTime) {
+    if (state.paused) {
+      els.qcTonightTime.textContent = 'Paused';
+    } else if (state.running) {
+      els.qcTonightTime.textContent = `Ends ${formatEndTime(state.endsAt)}`;
+    } else {
+      const wouldEndAt = new Date(Date.now() + durationSeconds * 1000).toISOString();
+      els.qcTonightTime.textContent = `Would end ${formatEndTime(wouldEndAt)}`;
+    }
+  }
+  if (els.qcTonightSep) els.qcTonightSep.style.display = planActionLabel ? 'inline' : 'none';
 }
 
 // Phase 5A (Tonight Session Coherence Pass): previously this banner was
@@ -3693,6 +3726,11 @@ if (els.btnClearReceipts) {
         setSidebarSelection('set');
         return;
       }
+      
+      if (item.id === 'open-quick-controls') {
+        toggleQuickControls();
+        return;
+      }
 
       if (item.id === 'open-about') {
         openHelpPanel();
@@ -4048,7 +4086,9 @@ if (els.btnClearReceipts) {
 
     if (event.key === 'Escape') {
       // Close the topmost active modal/drawer.
-      if (state.fullscreenClock) {
+      if (els.qcDrawer?.classList.contains('open')) {
+        toggleQuickControls(false);
+      } else if (state.fullscreenClock) {
         exitFullscreenClock();
       } else if (els.panelSet && els.panelSet.style.display !== 'none') {
         await discardSettingsPanelChanges();
@@ -4120,6 +4160,37 @@ if (els.btnClearReceipts) {
       els.btnMinus.click();
     }
   });
+  
+  function toggleQuickControls(force) {
+    if (!els.qcDrawer || !els.statusPill) return;
+    const isOpening = force !== undefined ? force : !els.qcDrawer.classList.contains('open');
+    els.qcDrawer.classList.toggle('open', isOpening);
+    if (els.qcDrawerOverlay) els.qcDrawerOverlay.classList.toggle('open', isOpening);
+    els.statusPill.setAttribute('aria-expanded', isOpening ? 'true' : 'false');
+    if (isOpening) {
+      els.qcDrawer.setAttribute('aria-hidden', 'false');
+      if (els.qcDrawerOverlay) els.qcDrawerOverlay.setAttribute('aria-hidden', 'false');
+    } else {
+      els.qcDrawer.setAttribute('aria-hidden', 'true');
+      if (els.qcDrawerOverlay) els.qcDrawerOverlay.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  if (els.statusPill) {
+    els.statusPill.addEventListener('click', () => toggleQuickControls());
+    els.statusPill.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleQuickControls();
+      }
+    });
+  }
+  if (els.btnCloseQc) {
+    els.btnCloseQc.addEventListener('click', () => toggleQuickControls(false));
+  }
+  if (els.qcDrawerOverlay) {
+    els.qcDrawerOverlay.addEventListener('click', () => toggleQuickControls(false));
+  }
 
   document.addEventListener('contextmenu', event => {
     if (previewMode) return; // browser fallback: leave the native menu alone
