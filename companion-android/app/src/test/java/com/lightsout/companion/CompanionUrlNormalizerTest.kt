@@ -81,4 +81,53 @@ class CompanionUrlNormalizerTest {
         )
         assertEquals("(redacted URL)", CompanionUrlNormalizer.redactForLog("not a url?t=abc123"))
     }
+
+    @Test
+    fun `hostOf reads the host out of a companion URL`() {
+        assertEquals("192.168.1.50", CompanionUrlNormalizer.hostOf("http://192.168.1.50:58732/?t=abc123"))
+    }
+
+    @Test
+    fun `hostOf returns null for blank or malformed input`() {
+        assertNull(CompanionUrlNormalizer.hostOf(null))
+        assertNull(CompanionUrlNormalizer.hostOf(""))
+        assertNull(CompanionUrlNormalizer.hostOf("not a url"))
+    }
+
+    @Test
+    fun `shouldInvalidateStaleToken is false when the URL carries its own token`() {
+        // A fresh pairing always wins regardless of what host it targets.
+        assertEquals(
+            false,
+            CompanionUrlNormalizer.shouldInvalidateStaleToken("192.168.1.99", "newtoken", "192.168.1.50")
+        )
+    }
+
+    @Test
+    fun `shouldInvalidateStaleToken is false for a token-less reconnect to the same host`() {
+        // Restart-time reconnect and subnet-scan/UDP rediscovery of the *same*
+        // pairing both pass the matching host through explicitly.
+        assertEquals(
+            false,
+            CompanionUrlNormalizer.shouldInvalidateStaleToken("192.168.1.50", null, "192.168.1.50")
+        )
+    }
+
+    @Test
+    fun `shouldInvalidateStaleToken is true for a token-less connect to a different host`() {
+        // e.g. the bare-host auto-detect flow pairing to a second PC -- the
+        // stored token belongs to a different pairing and must not carry over.
+        assertEquals(
+            true,
+            CompanionUrlNormalizer.shouldInvalidateStaleToken("192.168.1.99", null, "192.168.1.50")
+        )
+    }
+
+    @Test
+    fun `shouldInvalidateStaleToken is false when there is no stored token to invalidate`() {
+        assertEquals(
+            false,
+            CompanionUrlNormalizer.shouldInvalidateStaleToken("192.168.1.99", null, null)
+        )
+    }
 }

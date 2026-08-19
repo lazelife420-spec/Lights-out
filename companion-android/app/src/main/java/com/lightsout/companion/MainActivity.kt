@@ -77,6 +77,19 @@ class MainActivity : AppCompatActivity() {
     // failing no matter which host answers -- can't turn into a busy loop.
     private var lastScanAttemptAt = 0L
 
+    // Bumped on every user/system-driven navigation (showWeb, showSetup) and
+    // on onPause. A subnet scan captures the current value before it starts;
+    // if the value has moved on by the time the scan's async callback fires,
+    // the scan result is stale -- either the user has since navigated away
+    // manually (e.g. opened "Change PC / URL" while a scan from an earlier
+    // failure was still running) or the Activity has backgrounded -- and
+    // must not be allowed to yank the screen back or touch paused UI state.
+    // SubnetScanner itself is untouched here (no early-exit for in-flight
+    // probes) -- this guard only prevents the stale result from being acted
+    // on once it arrives, which is the correctness bug; cutting the scan
+    // short early is a separate efficiency concern for another pass.
+    private var scanGeneration = 0
+
     private val prefs by lazy { getSharedPreferences("lightsout", MODE_PRIVATE) }
 
     // Scanner returns the pairing URL; persist it and connect.
@@ -173,7 +186,7 @@ class MainActivity : AppCompatActivity() {
                     // companion page's localStorage. Mirror it into native
                     // preferences after a successful load so those users also
                     // gain IP-change recovery without having to pair again.
-                    capturePersistedPageToken(view)
+                    capturePersistedPageToken(view, url)
                 }
                 super.onPageFinished(view, url)
             }
@@ -253,6 +266,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun showWeb(url: String) {
         mainHandler.removeCallbacks(loadTimeout)
+        // This call supersedes any subnet scan kicked off by an earlier
+        // failure -- whatever it finds is no longer relevant to what's about
+        // to be shown. See scanGeneration / handleLoadFailure.
+        scanGeneration++
         lastRequestedUrl = url
         mainFrameLoadFailed = false
         // Captured here, at the moment a URL is actually provided (QR scan,
@@ -261,8 +278,16 @@ class MainActivity : AppCompatActivity() {
         // bar via history.replaceState almost immediately after load, so by
         // the time onPageFinished's callback reports a URL, the token is
         // already gone from it. See CompanionUrlNormalizer.extractToken.
-        CompanionUrlNormalizer.extractToken(url)?.let { token ->
-            prefs.edit().putString(KEY_TOKEN, token).apply()
+        val host = CompanionUrlNormalizer.hostOf(url)
+        val tokenInUrl = CompanionUrlNormalizer.extractToken(url)
+        if (tokenInUrl != null) {
+            prefs.edit().putString(KEY_TOKEN, tokenInUrl).putString(KEY_TOKEN_HOST, host).apply()
+        } else if (CompanionUrlNormalizer.shouldInvalidateStaleToken(host, tokenInUrl, prefs.getString(KEY_TOKEN_HOST, null))) {
+            // Token-less URL against a host the stored token wasn't captured
+            // for (e.g. the bare-host auto-detect flow pairing to a second
+            // PC) -- drop it so a later load failure doesn't scan-reconnect
+            // this new pairing using a different PC's token.
+            prefs.edit().remove(KEY_TOKEN).remove(KEY_TOKEN_HOST).apply()
         }
         setup.visibility = View.GONE
         webView.visibility = View.VISIBLE
@@ -273,12 +298,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun showSetup(prefill: String?) {
         mainHandler.removeCallbacks(loadTimeout)
+        scanGeneration++ // see showWeb
         webView.visibility = View.GONE
         setup.visibility = View.VISIBLE
         if (prefill != null) urlInput.setText(prefill)
     }
 
-    private fun capturePersistedPageToken(view: WebView?) {
+    private fun capturePersistedPageToken(view: WebView?, pageUrl: String?) {
         view?.evaluateJavascript(
             "(function(){try{return localStorage.getItem('$PAGE_TOKEN_KEY')||''}catch(e){return ''}})()"
         ) { encodedValue ->
@@ -288,7 +314,12 @@ class MainActivity : AppCompatActivity() {
                 null
             }
             if (token != null) {
-                prefs.edit().putString(KEY_TOKEN, token).apply()
+                // KEY_TOKEN_HOST must always describe whichever host KEY_TOKEN
+                // was captured for, regardless of which of the two capture
+                // paths (a token-bearing URL in showWeb, or this localStorage
+                // mirror) actually wrote it -- otherwise shouldInvalidateStaleToken
+                // would compare a fresh token against a stale/mismatched host.
+                prefs.edit().putString(KEY_TOKEN, token).putString(KEY_TOKEN_HOST, CompanionUrlNormalizer.hostOf(pageUrl)).apply()
             }
         }
     }
@@ -322,9 +353,22 @@ class MainActivity : AppCompatActivity() {
             // Never leave the user staring at an empty WebView while the
             // bounded subnet recovery scan runs in the background.
             showSetup(url ?: prefs.getString(KEY_URL, null))
+            // Captured *after* showSetup() -- showSetup() bumps scanGeneration
+            // itself (it's a navigation like any other), so capturing here
+            // means this scan's own result is only ever treated as stale by a
+            // navigation that happens after this point, not by the setup
+            // screen this same recovery flow just put up to run the scan
+            // behind. Capturing before showSetup() would make the guard below
+            // always reject this scan's own result, even on success.
+            val myGeneration = scanGeneration
             Toast.makeText(this, R.string.reconnecting, Toast.LENGTH_SHORT).show()
             SubnetScanner.findCompanion(applicationContext) { foundHost ->
                 runOnUiThread {
+                    // Superseded by a manual navigation (or the Activity paused,
+                    // see onPause) since this scan started -- acting on it now
+                    // would yank the user back to a connection attempt they've
+                    // already moved past, or touch UI state that's gone stale.
+                    if (scanGeneration != myGeneration) return@runOnUiThread
                     if (foundHost != null && foundHost != ip) {
                         Log.i("LightsOutApp", "Subnet scan found companion at $foundHost after $ip failed to load")
                         showWeb(CompanionUrlNormalizer.buildUrl(foundHost, token))
@@ -351,6 +395,9 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         stopUdpDiscovery()
+        // Invalidate any in-flight subnet scan (see handleLoadFailure/scanGeneration)
+        // so it doesn't call back into paused UI state.
+        scanGeneration++
     }
 
     override fun onDestroy() {
@@ -462,6 +509,7 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val KEY_URL = "companion_url"
         private const val KEY_TOKEN = "companion_token"
+        private const val KEY_TOKEN_HOST = "companion_token_host"
         private const val PAGE_TOKEN_KEY = "lightsout_pair_token"
         private const val SCAN_COOLDOWN_MS = 20_000L
         private const val MAIN_FRAME_TIMEOUT_MS = 8_000L
