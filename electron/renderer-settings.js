@@ -102,6 +102,10 @@ async function applyAppSettings(app, { skipNavigation = false } = {}) {
   if (els.chkCalendarAutostart) els.chkCalendarAutostart.checked = !!app.calendarAutoStart;
   if (els.chkNightlightDim) els.chkNightlightDim.checked = !!app.nightLightOnDim;
   if (els.chkPauseMediaDim) els.chkPauseMediaDim.checked = !!app.pauseMediaOnDim;
+  // Phase 5I-C: real value only, same pattern as taLightsStatus/taWifiStatus
+  // -- "On"/"Off" mirrors the checkbox exactly, no separate fetch, no fake
+  // "configured" state for a plain boolean toggle.
+  if (els.taMediaStatus) els.taMediaStatus.textContent = app.pauseMediaOnDim ? 'On' : 'Off';
   if (els.chkLockoutDim) els.chkLockoutDim.checked = !!app.lockoutOnDim;
   if (els.chkClockMode) els.chkClockMode.checked = app.clockMode !== false;
   state.clockMode = app.clockMode !== false;

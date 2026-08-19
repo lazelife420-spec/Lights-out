@@ -2002,6 +2002,7 @@ check('settings-context: data-ta-source lives with the element it describes, not
     ['Home · First Light', /id="ta-glance-alarm"[^>]*data-ta-source="Home &middot; First Light"/],
     ['Home · Smart Lights', /id="ta-glance-lights"[^>]*data-ta-source="Home &middot; Smart Lights"/],
     ['Home · Wi-Fi Guard', /id="ta-glance-wifi"[^>]*data-ta-source="Home &middot; Wi-Fi Guard"/],
+    ['Home · Media Pause', /id="ta-glance-media"[^>]*data-ta-source="Home &middot; Media Pause"/],
     ['Schedule · Autopilot Bedtime', /data-ta-target="automations" data-ta-source="Schedule &middot; Autopilot Bedtime"/],
     ['Schedule · Content Blocker', /data-ta-target="protection" data-ta-source="Schedule &middot; Content Blocker"/],
     ['Schedule · First Light', /id="firstlight-hero-btn" data-ta-target="automations" data-ta-source="Schedule &middot; First Light"/],
@@ -2170,6 +2171,33 @@ check('arm-model: duration presets (chips/quick-preset menu items/number keys) s
   // armed custom timer as well as an armed Night Mode -- was "Remove night
   // mode selection", which didn't make sense for the custom-timer case.
   assertMatch(htmlSrc, /id="armed-mode-clear" title="Clear armed plan" aria-label="Clear armed plan"/, 'armed-mode-clear label must be generic, not Night-Mode-specific wording');
+});
+
+// Phase 5I-C: media pause used to fire with zero advance disclosure -- no
+// glance tile, no plan-summary chip, only a toast fired after the pause
+// already happened (see LIGHTS_OUT_PHASE5I_A_CONTROL_MODEL_QUICK_CONTROLS_AUDIT.md,
+// section 3). This does not change the pause mechanism -- only makes it
+// visible before the user commits to a plan.
+check('media-pause: disclosed on Home glance and in the pre-start Tonight plan summary, from real settings state', () => {
+  const settingsSrc = fs.readFileSync(path.join(root, 'renderer-settings.js'), 'utf8');
+  // Home "Tonight at a glance" tile -- same pattern as the lights/wifi/companion
+  // tiles beside it, real On/Off value only.
+  assertMatch(htmlSrc, /id="ta-glance-media" data-ta-target="wind-down" data-ta-source="Home &middot; Media Pause" data-ns-help="[^"]+"/, 'Home glance is missing a Media Pause tile');
+  assertMatch(htmlSrc, /<span class="ns-home-glance-status" id="ta-media-status">Off<\/span>/, 'ta-media-status element missing or has a non-"Off" static default');
+
+  // Wired from the real settings value, same call site that already
+  // restores the checkbox -- not a second, divergent source of truth.
+  assertMatch(settingsSrc, /if \(els\.chkPauseMediaDim\) els\.chkPauseMediaDim\.checked = !!app\.pauseMediaOnDim;\s*\n[\s\S]{0,220}if \(els\.taMediaStatus\) els\.taMediaStatus\.textContent = app\.pauseMediaOnDim \? 'On' : 'Off';/, 'ta-media-status must be set from the same app.pauseMediaOnDim value that restores the Settings checkbox');
+  assertMatch(rendererSrc, /taMediaStatus: document\.getElementById\('ta-media-status'\)/, 'els.taMediaStatus must be cached like the other glance-tile elements');
+
+  // Tonight plan summary (renderTonightPlanFeatures, shown before Start
+  // Now/Arm Tonight) -- gated on the real value, not fabricated.
+  assertMatch(rendererSrc, /const media = readText\('ta-media-status'\);\s*\n\s*if \(media === 'On'\) chips\.push\(\{ icon: icons\.media, label: 'Media Pause[^']*On', help: '[^']+' \}\);/, 'renderTonightPlanFeatures must show a Media Pause chip when the setting is on');
+
+  // Settings copy discloses the actual mechanism (system media key + Space
+  // to browsers), not just the feature name -- this is what makes it
+  // plausible that a YouTube tab gets paused.
+  assertMatch(htmlSrc, /id="chk-pausemedia-dim">\s*Auto-pause media players during wind-down\s*<\/label>\s*<!--[\s\S]*?-->\s*<span[^>]*>Sends the system media-pause key, plus Space to Chrome\/Edge\/Firefox/, 'Settings checkbox must disclose the actual pause mechanism, not just the feature name');
 });
 
 check('arm-model: armed custom timer persists and restores the same way as armed Night Mode', () => {

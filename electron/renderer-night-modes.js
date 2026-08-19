@@ -55,7 +55,9 @@ const NS_GLANCE_ICONS = {
   alarm: `<svg ${SVG_OPEN}><path d="M12 2v7"/><path d="m4.22 10.22 1.42 1.42"/><path d="M1 18h2"/><path d="M21 18h2"/><path d="m18.36 11.64 1.42-1.42"/><path d="M23 22H1"/><path d="m16 6-4 4-4-4"/><path d="M8 18a4 4 0 1 1 8 0"/></svg>`,
   companion: `<svg ${SVG_OPEN}><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>`,
   lights: NS_MODE_ICONS['lights-down'],
-  wifi: `<svg ${SVG_OPEN}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`
+  wifi: `<svg ${SVG_OPEN}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
+  // Phase 5I-C: media pause glance tile + Tonight plan-summary chip.
+  media: `<svg ${SVG_OPEN}><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`
 };
 
 // Also shared: Home's hero CTA and Tonight-card icons.

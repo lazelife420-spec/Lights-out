@@ -415,6 +415,16 @@
                 <span class="ns-home-glance-label">Wi-Fi Guard <span class="status-pill status-local ta-experimental-pill">EXPERIMENTAL</span></span>
                 <span class="ns-home-glance-status" id="ta-wifi-status">Not configured</span>
               </button>
+              <!-- Phase 5I-C: media pause used to be invisible -- no glance
+                   tile, no plan-summary chip, only a toast after it already
+                   fired. Same tile pattern as the three above, same real-
+                   value-only rule: "On"/"Off" mirrors the Settings checkbox
+                   exactly (applyAppSettings() in renderer-settings.js). -->
+              <button type="button" class="ns-home-glance-tile" id="ta-glance-media" data-ta-target="wind-down" data-ta-source="Home &middot; Media Pause" data-ns-help="Sends the system media-pause key (and Space to browsers) when wind-down starts -- may pause YouTube/video if a browser has focus. Configured in Settings &rarr; Wind-Down.">
+                <span class="ns-home-glance-icon" aria-hidden="true"></span>
+                <span class="ns-home-glance-label">Media Pause</span>
+                <span class="ns-home-glance-status" id="ta-media-status">Off</span>
+              </button>
             </div>
           </section>
 
@@ -1374,6 +1384,11 @@
               <input type="checkbox" id="chk-pausemedia-dim">
               Auto-pause media players during wind-down
             </label>
+            <!-- Phase 5I-C: this is a blind system media-key + Space
+                 keystroke, not a targeted per-app/per-tab action -- say so,
+                 since that's exactly why it can pause a focused browser
+                 tab (e.g. YouTube) along with real media apps. -->
+            <span style="font-size:9px;color:var(--text-muted)">Sends the system media-pause key, plus Space to Chrome/Edge/Firefox -- may pause whatever has focus, including a browser tab playing video.</span>
           </div>
           <div class="option-group">
             <label class="checkbox-label">

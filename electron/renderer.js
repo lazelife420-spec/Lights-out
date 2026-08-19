@@ -732,6 +732,10 @@ const els = {
   // mirrored the same way updateDevicePlanCards() already mirrors
   // taLightsStatus/taWifiStatus from the Devices-panel configs.
   taCompanionStatus: document.getElementById('ta-companion-status'),
+  // Phase 5I-C: media pause never showed up on Tonight/Home before, so it
+  // fired as an invisible side effect with only a post-hoc toast. Mirrored
+  // the same way taLightsStatus/taWifiStatus are mirrored from real config.
+  taMediaStatus: document.getElementById('ta-media-status'),
   asAutopilotStatus: document.getElementById('as-autopilot-status'),
   asContentBlockerStatus: document.getElementById('as-content-blocker-status'),
   // Schedule > Automations: real First Light feature card.
@@ -2432,6 +2436,12 @@ function renderTonightPlanFeatures() {
   if (wifi && wifi !== 'Not configured') chips.push({ icon: icons.wifi, label: `WiFi Guard \u00B7 ${wifi}`, help: 'Configured in Settings \u2192 Protection. Experimental -- see Settings for real limitations.' });
   const companion = readText('ta-companion-status');
   if (companion && companion !== 'Off') chips.push({ icon: icons.companion, label: `Companion \u00B7 ${companion}`, help: 'Your phone can control this session over the same Wi-Fi network. Configured in Settings \u2192 Phone Companion.' });
+  // Phase 5I-C: media pause used to fire with zero advance disclosure --
+  // only a post-hoc toast after it already paused something. Same
+  // real-value-only rule as the three chips above: only shown when actually
+  // on, reads the same ta-media-status value the Home glance tile shows.
+  const media = readText('ta-media-status');
+  if (media === 'On') chips.push({ icon: icons.media, label: 'Media Pause \u00B7 On', help: 'Sends the system media-pause key (and Space to browsers) when wind-down starts -- may pause YouTube/video if a browser has focus. Configured in Settings \u2192 Wind-Down.' });
   // Phase 5B-A: tabindex + data-ns-help so each chip explains itself on
   // hover/focus (renderer-help.js) -- these already only render when the
   // underlying system is actually configured, so the tooltip never claims
