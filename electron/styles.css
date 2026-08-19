@@ -963,6 +963,36 @@ input:disabled {
   box-shadow: 0 4px 16px rgba(26,79,214,0.4);
   transition: all 0.15s ease;
 }
+/* Arm Tonight follow-up: was reusing .btn-secondary's tiny/muted style,
+   the same visual weight as the tertiary Begin Ritual button -- reading
+   as disabled/unimportant for what is now a real product action (commit
+   the plan, distinct from Start Now's immediate-run). Sized/weighted to
+   match .btn-start-custom (full width, same font-size/weight/radius) but
+   outlined rather than filled, so it reads as "second, but real and
+   active" -- not a smaller color swap, a genuinely different tier from
+   Begin Ritual below it. No behavior change; visual only. */
+.btn-arm-custom {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: 8px;
+  padding: 11px 20px;
+  background: rgba(91,140,255,0.1);
+  border: 1.5px solid var(--accent-blue);
+  border-radius: 10px;
+  color: var(--accent-blue);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-arm-custom:hover {
+  background: rgba(91,140,255,0.18);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
 .btn-start-custom:hover {
   background: linear-gradient(135deg, #2055e0, #1470e0);
   box-shadow: 0 6px 20px rgba(26,79,214,0.55);

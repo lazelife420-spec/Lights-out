@@ -2101,9 +2101,22 @@ check('arm-model: invalidation clears an armed custom timer on edit, same rule a
   assertMatch(rendererSrc, /if \(state\.armedCustomTimer\) \{\s*const armed = state\.armedCustomTimer;\s*const currentSeconds = inputSeconds\(\);\s*if \(currentSeconds !== armed\.durationSeconds \|\| state\.action !== armed\.action\) \{\s*clearArmedCustomTimer\(\);/, 'checkArmedModeMatch must invalidate an armed custom timer when duration/action are edited away from it');
 });
 
-check('arm-model: Start Custom Timer still uses the existing shared start path, unchanged', () => {
-  assertMatch(rendererSrc, /document\.getElementById\('btn-start-custom'\)\?\.addEventListener\('click', \(\) => startTonightPlan\(\)\)/, 'Start Custom Timer must still call the existing shared start command');
+check('arm-model: Start Now (#btn-start-custom) still uses the existing shared start path, unchanged', () => {
+  assertMatch(rendererSrc, /document\.getElementById\('btn-start-custom'\)\?\.addEventListener\('click', \(\) => startTonightPlan\(\)\)/, 'Start Now must still call the existing shared start command');
   assertMatch(rendererSrc, /document\.getElementById\('btn-arm-custom'\)\?\.addEventListener\('click', \(\) => armCustomTimer\(\)\)/, 'Arm Tonight must call armCustomTimer(), not the start path');
+});
+
+check('arm-model: Arm Tonight has its own visible, active styling -- not the tertiary Begin Ritual treatment', () => {
+  // Visual-only follow-up: Arm Tonight previously reused .btn-secondary
+  // with the same tiny/muted inline styles as Begin Ritual, reading as
+  // disabled for what is now a real product action. No behavior change --
+  // only confirms the button has a real, distinct, non-tertiary style.
+  assertMatch(htmlSrc, /class="btn-arm-custom" id="btn-arm-custom"/, 'Arm Tonight must use its own dedicated class, not .btn-secondary');
+  assert(!/class="btn-secondary" id="btn-arm-custom"/.test(htmlSrc), 'Arm Tonight must not revert to the tertiary .btn-secondary treatment');
+  const stylesSrc = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  assertMatch(stylesSrc, /\.btn-arm-custom \{/, '.btn-arm-custom must have its own CSS rule');
+  const armBtnBlock = stylesSrc.match(/\.btn-arm-custom \{[^}]*\}/s)?.[0] || '';
+  assertMatch(armBtnBlock, /font-weight: 700/, 'Arm Tonight must match Start Now\'s visual weight (700), not a muted secondary weight');
 });
 
 check('arm-model: instant-start chips/presets/shortcuts clear any armed plan (Night Mode or custom timer) before starting', () => {
