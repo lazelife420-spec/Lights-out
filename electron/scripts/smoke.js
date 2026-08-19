@@ -543,6 +543,18 @@ check('calendar: bedtime matching and notifications use normalized event titles'
   assertMatch(mainSrc, /showNativeNotification\('Lights Out', `Auto-started from calendar: \$\{getEventTitle\(event\) \|\| 'Bedtime'\}`\);/, 'calendar notification should use normalized event title');
 });
 
+// Phase 5I-D: "Start" on a listed calendar occurrence starts a real, live
+// countdown right now for however long until that occurrence -- clicking
+// it on a multi-day-out entry silently began a ~48-hour countdown, with no
+// warning that's what it does. Restricted to the nearest/next occurrence
+// only, where "start early instead of waiting" is a sensible action.
+check('calendar: the per-event Start button only appears on the nearest upcoming occurrence', () => {
+  const calSrc = fs.readFileSync(path.join(root, 'renderer-calendar.js'), 'utf8');
+  assertMatch(calSrc, /upcoming\.map\(\(e, index\) => \{/, 'renderCalendarEvents must track each event\'s index in the upcoming list');
+  assertMatch(calSrc, /const startBtn = index === 0\s*\n\s*\? `<button class="btn-secondary btn-sm event-start-btn"[^`]+`\s*\n\s*: '';/, 'Start button must be gated to index === 0 (the nearest occurrence) only');
+  assert(!/<button class="btn-secondary btn-sm event-start-btn" data-uid="\$\{escapeHtml\(e\.uid\)\}">Start<\/button>\s*\n\s*<\/div>`;\s*\n\s*\}\)\.join/.test(calSrc), 'Start button must not unconditionally render for every upcoming occurrence again');
+});
+
 check('first-light: morning briefing uses live calendar and sleep-debt APIs', () => {
   assertMatch(mainSrc, /const events = await calProviders\.fetchAllEvents\(calSettings, new Date\(\), 1\);/, 'First Light briefing should fetch live calendar events');
   assertMatch(mainSrc, /sleepDebt: sleepDebt\.getDebtSummary\(\)/, 'First Light briefing should use getDebtSummary');

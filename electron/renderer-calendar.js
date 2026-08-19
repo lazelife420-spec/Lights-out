@@ -313,17 +313,29 @@ function renderCalendarEvents() {
 
   calNextEvent = upcoming[0];
 
-  els.calendarEvents.innerHTML = upcoming.map(e => {
+  // Phase 5I-D: "Start" used to appear on every listed occurrence, up to 10
+  // days out -- clicking it doesn't schedule anything, it starts a real,
+  // live countdown right now for however long until that occurrence (see
+  // the click handler below), so clicking "Start" on a 2-day-out entry
+  // silently began a ~48-hour countdown. Restricted to the nearest/next
+  // occurrence only, where "start this early instead of waiting" is an
+  // actual sensible action -- the built-in schedule already auto-starts
+  // itself near the real time regardless (main.js), so this button was
+  // always just "start it early," never "activate this future rule."
+  els.calendarEvents.innerHTML = upcoming.map((e, index) => {
     const start = new Date(e.start);
     const timeStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
     const dateStr = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const sourceIcons = { builtin: '\u{1F4C5}', ical: '\u{1F5D3}', google: '\u{1F4E7}', outlook: '\u{1F4E9}', calendly: '\u{1F517}' };
+    const startBtn = index === 0
+      ? `<button class="btn-secondary btn-sm event-start-btn" data-uid="${escapeHtml(e.uid)}" title="Start this now instead of waiting">Start</button>`
+      : '';
     return `<div class="calendar-event" data-uid="${escapeHtml(e.uid)}">
       <div class="event-info">
         <div class="event-name">${escapeHtml(e.summary)}</div>
         <div class="event-meta">${dateStr} at ${timeStr} ${sourceIcons[e.source] || ''}</div>
       </div>
-      <button class="btn-secondary btn-sm event-start-btn" data-uid="${escapeHtml(e.uid)}">Start</button>
+      ${startBtn}
     </div>`;
   }).join('');
 
