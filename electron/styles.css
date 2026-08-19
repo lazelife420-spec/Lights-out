@@ -5386,10 +5386,23 @@ body.ns-lobby:not(.ns-on-tonight) .ns-wordmark-sub {
 }
 
 /* Tonight at a glance tiles */
+/* Phase 5I-C follow-up: auto-fit with a 140px minimum only fit 4 tracks at
+   this app's real operating width -- adding a 5th tile (Media Pause) left
+   it stranded alone in a second row with 3 empty tracks beside it. This is
+   a fixed set of 5 named tiles, not an open-ended list, so a hard 5-column
+   template is the correct fix (always one balanced row) instead of tuning
+   auto-fit's minimum width to happen to fit 5 at today's window sizes --
+   the media query below is the actual responsive fallback, for windows
+   narrow enough that 5 real columns would truncate their labels. */
 .ns-home-glance-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
+}
+@media (max-width: 720px) {
+  .ns-home-glance-grid {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
 }
 .ns-home-glance-tile {
   display: flex;

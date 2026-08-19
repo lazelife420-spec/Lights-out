@@ -2200,6 +2200,19 @@ check('media-pause: disclosed on Home glance and in the pre-start Tonight plan s
   assertMatch(htmlSrc, /id="chk-pausemedia-dim">\s*Auto-pause media players during wind-down\s*<\/label>\s*<!--[\s\S]*?-->\s*<span[^>]*>Sends the system media-pause key, plus Space to Chrome\/Edge\/Firefox/, 'Settings checkbox must disclose the actual pause mechanism, not just the feature name');
 });
 
+// Phase 5I-C follow-up: adding the 5th (Media Pause) tile above regressed
+// real-use layout -- auto-fit with a 140px minimum only fit 4 tracks at
+// this app's real window width, so the 5th tile stranded alone in a second
+// row with empty space beside it (caught from an actual screenshot, not a
+// theoretical review). Fixed set of 5 named tiles -> hard 5-column
+// template, not a magic auto-fit minimum tuned to happen to fit today.
+check('layout: Tonight at a glance is a fixed 5-column grid, not an auto-fit width that can strand a tile alone', () => {
+  const cssSrc = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  assertMatch(cssSrc, /\.ns-home-glance-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\);/, 'glance grid must use a hard 5-column template, not auto-fit sized to a width that may not fit 5');
+  assert(!/\.ns-home-glance-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(140px/.test(cssSrc), 'the old auto-fit(140px) template that stranded the 5th tile must not return');
+  assertMatch(cssSrc, /@media \(max-width: 720px\) \{\s*\.ns-home-glance-grid \{\s*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(120px, 1fr\)\);/, 'narrow-window fallback for the glance grid is missing');
+});
+
 check('arm-model: armed custom timer persists and restores the same way as armed Night Mode', () => {
   assertMatch(rendererSrc, /async function persistArmedCustomTimer\(\) \{[\s\S]*?saveAppSettings\(\{ app: \{ armedCustomTimer: state\.armedCustomTimer \} \}\)/, 'persistArmedCustomTimer must save via the same settings-persistence path as armedNightMode');
   const settingsSrc = fs.readFileSync(path.join(root, 'renderer-settings.js'), 'utf8');
