@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Fixed
+- Android companion recovery scans now stop when navigation or Activity pause
+  makes their result stale, avoiding unnecessary LAN probing and late UI
+  callbacks.
 - Updated the transitive build-time `tar` resolution from 7.5.19 to 7.5.22,
   resolving `GHSA-r292-9mhp-454m` without broad dependency updates.
 - Automated Electron proof runs no longer create real Windows notification-area

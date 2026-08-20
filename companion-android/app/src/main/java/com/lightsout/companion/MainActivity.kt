@@ -84,11 +84,9 @@ class MainActivity : AppCompatActivity() {
     // manually (e.g. opened "Change PC / URL" while a scan from an earlier
     // failure was still running) or the Activity has backgrounded -- and
     // must not be allowed to yank the screen back or touch paused UI state.
-    // SubnetScanner itself is untouched here (no early-exit for in-flight
-    // probes) -- this guard only prevents the stale result from being acted
-    // on once it arrives, which is the correctness bug; cutting the scan
-    // short early is a separate efficiency concern for another pass.
-    private var scanGeneration = 0
+    // SubnetScanner also polls this generation while dispatching and running
+    // probes, so superseded scans stop early as well as dropping stale results.
+    @Volatile private var scanGeneration = 0
 
     private val prefs by lazy { getSharedPreferences("lightsout", MODE_PRIVATE) }
 
@@ -362,7 +360,10 @@ class MainActivity : AppCompatActivity() {
             // always reject this scan's own result, even on success.
             val myGeneration = scanGeneration
             Toast.makeText(this, R.string.reconnecting, Toast.LENGTH_SHORT).show()
-            SubnetScanner.findCompanion(applicationContext) { foundHost ->
+            SubnetScanner.findCompanion(
+                applicationContext,
+                isCancelled = { scanGeneration != myGeneration }
+            ) { foundHost ->
                 runOnUiThread {
                     // Superseded by a manual navigation (or the Activity paused,
                     // see onPause) since this scan started -- acting on it now
@@ -396,7 +397,8 @@ class MainActivity : AppCompatActivity() {
         super.onPause()
         stopUdpDiscovery()
         // Invalidate any in-flight subnet scan (see handleLoadFailure/scanGeneration)
-        // so it doesn't call back into paused UI state.
+        // so it stops spending battery/network budget and cannot call back
+        // into paused UI state.
         scanGeneration++
     }
 

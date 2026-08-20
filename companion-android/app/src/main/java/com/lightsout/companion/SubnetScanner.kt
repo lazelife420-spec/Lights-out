@@ -95,20 +95,31 @@ internal object SubnetScanner {
     // first match found, or null if nothing responded within the timeout.
     // Does its own threading internally -- safe to call from the UI thread,
     // but `onResult` fires on a background thread, not the caller's thread.
-    fun findCompanion(context: Context, onResult: (String?) -> Unit) {
+    // Cancellation is polled before dispatching and running probes, then once
+    // more before the callback, so a superseded Activity scan stops doing LAN
+    // work and never reports a stale result.
+    fun findCompanion(
+        context: Context,
+        isCancelled: () -> Boolean = { false },
+        onResult: (String?) -> Unit
+    ) {
         Thread({
             val base = ownSubnetBase(context)
-            if (base == null) {
-                onResult(null)
+            if (base == null || isCancelled()) {
+                if (!isCancelled()) onResult(null)
                 return@Thread
             }
             val executor = Executors.newFixedThreadPool(MAX_CONCURRENT)
             val found = AtomicReference<String?>(null)
             val latch = CountDownLatch(254)
             for (i in 1..254) {
+                if (isCancelled()) {
+                    repeat(255 - i) { latch.countDown() }
+                    break
+                }
                 executor.submit {
                     try {
-                        if (found.get() == null) {
+                        if (found.get() == null && !isCancelled()) {
                             val host = "$base$i"
                             if (probe(host)) found.compareAndSet(null, host)
                         }
@@ -126,7 +137,7 @@ internal object SubnetScanner {
             }
             executor.shutdownNow()
             Log.i(TAG, "Subnet scan of ${base}0/24 finished: ${found.get() ?: "no match"}")
-            onResult(found.get())
+            if (!isCancelled()) onResult(found.get())
         }, "LightsOutSubnetScan").start()
     }
 }
