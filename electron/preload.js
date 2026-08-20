@@ -149,6 +149,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onBrowserWarning: (callback) => {
     ipcRenderer.on('browser-warning', (event, data) => callback(data));
   },
+  onRemoteAction: (callback) => {
+    ipcRenderer.on('remote-action', (event, data) => callback(data));
+  },
 
   // First Light (wake-up alarm)
   scheduleWakeAlarm: (alarmTime) => ipcRenderer.invoke('schedule-wake-alarm', alarmTime),

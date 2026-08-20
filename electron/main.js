@@ -503,6 +503,13 @@ function showNativeNotification(title, body) {
   return notification;
 }
 
+function notifyRemoteAction(message) {
+  showNativeNotification('Lights Out', message);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('remote-action', { message });
+  }
+}
+
 function setTaskbarProgress(percent, mode = 'normal') {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (mode === 'none') {
@@ -1289,12 +1296,17 @@ function handleCompanionMessage(msg, client) {
       // carries a dryRun field (validateCompanionMessage strips it), so this
       // reads the desktop's own persisted setting rather than trusting the client.
       const appSettings = settingsStore.getSection('app') || {};
-      startTimer({
-        durationSeconds: msg.durationSeconds || 1800,
-        action: msg.timerAction || 'shutdown',
+      const durationSeconds = msg.durationSeconds || 1800;
+      const timerAction = msg.timerAction || 'shutdown';
+      const result = startTimer({
+        durationSeconds,
+        action: timerAction,
         source: 'remote',
         dryRun: Boolean(appSettings.dryRun)
       });
+      if (result.success) {
+        notifyRemoteAction(`${formatAction(timerAction)} started from your phone (${Math.round(durationSeconds / 60)} min)`);
+      }
       break;
     }
     case 'startNightMode': {
@@ -1305,12 +1317,15 @@ function handleCompanionMessage(msg, client) {
       // Desktop remains authoritative over Dry Run (see note above) — the phone
       // supplies only the canonical nightModeId; policy comes from settingsStore.
       const appSettings = settingsStore.getSection('app') || {};
-      startTimer({
+      const result = startTimer({
         ...resolution.resolved,
         source: 'remote',
         startOrigin: 'companion-night-mode',
         dryRun: Boolean(appSettings.dryRun)
       });
+      if (result.success) {
+        notifyRemoteAction(`${resolution.resolved.nightModeTitle} started from your phone (${Math.round(resolution.resolved.durationSeconds / 60)} min)`);
+      }
       break;
     }
     case 'getNightModes':
@@ -1320,15 +1335,27 @@ function handleCompanionMessage(msg, client) {
       }
       break;
     case 'togglePause':
-      if (timerState.paused) resumeTimer();
-      else if (timerState.running) pauseTimer();
+      if (timerState.paused) {
+        if (resumeTimer().success) notifyRemoteAction('Timer resumed from your phone');
+      } else if (timerState.running) {
+        if (pauseTimer().success) notifyRemoteAction('Timer paused from your phone');
+      }
       break;
-    case 'snooze':
-      snoozeTimer(msg.seconds || 300);
+    case 'snooze': {
+      const seconds = msg.seconds || 300;
+      if (snoozeTimer(seconds).success) {
+        notifyRemoteAction(`Timer snoozed from your phone (+${Math.round(seconds / 60)} min)`);
+      }
       break;
-    case 'cancel':
+    }
+    case 'cancel': {
+      const wasActive = timerState.running || timerState.paused;
       cancelTimer();
+      if (wasActive) {
+        notifyRemoteAction('Timer cancelled from your phone');
+      }
       break;
+    }
   }
   // Immediately broadcast updated state after action.
   setTimeout(broadcastCompanionState, 300);
