@@ -23,7 +23,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '22.13.0'
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
@@ -57,10 +57,13 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '22.13.0'
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
+
+      - name: Provision Electron runtime
+        run: npm run electron:provision
 
       - name: Regenerate icons
         run: npm run icons
@@ -71,7 +74,7 @@ jobs:
       - name: Night Modes Electron runtime proof
         run: npm run test:night-modes-runtime
 
-      - name: Build portable + installer
+      - name: Build portable ZIP
         run: npm run build
 
       - name: Packaged runtime smoke
@@ -82,8 +85,7 @@ jobs:
         with:
           name: lights-out-windows
           path: |
-            dist/LightsOut.exe
-            dist/Lights Out Setup *.exe
+            dist-native/Lights-Out-Portable-v*-win-x64.zip
           if-no-files-found: error
 
   release:
@@ -98,12 +100,12 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: lights-out-windows
-          path: dist
+          path: dist-native
 
       - name: Generate SHA256 checksums
-        working-directory: ${{ github.workspace }}/dist
+        working-directory: ${{ github.workspace }}/dist-native
         run: |
-          sha256sum LightsOut.exe "Lights Out Setup "*.exe > SHA256SUMS.txt
+          sha256sum Lights-Out-Portable-v*-win-x64.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Create GitHub Release
@@ -111,7 +113,6 @@ jobs:
         with:
           make_latest: true
           files: |
-            dist/LightsOut.exe
-            dist/Lights Out Setup *.exe
-            dist/SHA256SUMS.txt
+            dist-native/Lights-Out-Portable-v*-win-x64.zip
+            dist-native/SHA256SUMS.txt
           generate_release_notes: true

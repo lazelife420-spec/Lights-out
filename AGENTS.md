@@ -92,11 +92,18 @@ These are intentional product constraints. Do not casually remove them.
 
 ## Files To Treat Carefully
 
+- `dist-native\`
+  Canonical Windows build output from `electron\scripts\package-native-windows.ps1`.
+  It contains the unpacked native app and the portable ZIP. Do not hand-edit it.
+
 - `dist\`
-  Electron build output. Do not hand-edit files here.
+  Proof/review staging and historical electron-builder output. It is not the
+  current release artifact location. Do not hand-edit files here.
 
 - `LightsOut.exe` (root)
-  **Does not exist.** The only valid portable build is `dist\LightsOut.exe`.
+  **Does not exist.** The canonical unpacked launcher is
+  `dist-native\win-unpacked\Lights Out.exe`; the primary distributable is the
+  versioned portable ZIP under `dist-native\`.
 
 - `archive\`, `system-tune-backup-*`
   Historical backups / reference material. Do not edit unless the user explicitly asks.

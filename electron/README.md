@@ -75,7 +75,7 @@ electron/
 
 ## Building Executable
 
-To create a standalone `.exe`:
+To create the canonical Windows portable package:
 
 ```bash
 cd electron
@@ -84,7 +84,12 @@ npm run electron:provision
 npm run build
 ```
 
-Output will be in `dist/` folder.
+Output is written at the repository root under `dist-native/`:
+
+- `dist-native/win-unpacked/Lights Out.exe` — unpacked runtime used by native proofs
+- `dist-native/Lights-Out-Portable-v<version>-win-x64.zip` — primary distributable
+
+The `build` command does not currently produce or certify an installer.
 
 ## How It Works
 

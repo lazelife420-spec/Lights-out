@@ -20,7 +20,7 @@ function freePort() {
 }
 
 const root = path.resolve(__dirname, '..', '..');
-const executable = path.join(root, 'dist', 'win-unpacked', 'Lights Out.exe');
+const executable = path.join(root, 'dist-native', 'win-unpacked', 'Lights Out.exe');
 const artifactDir = process.env.LIGHTS_OUT_WALKTHROUGH_DIR
   ? path.resolve(process.env.LIGHTS_OUT_WALKTHROUGH_DIR)
   : fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-native-walkthrough-'));
@@ -199,7 +199,7 @@ async function main() {
 
     fs.writeFileSync(path.join(artifactDir, 'walkthrough-manifest.json'), JSON.stringify({
       status: 'passed',
-      runtime: 'dist/win-unpacked/Lights Out.exe',
+      runtime: 'dist-native/win-unpacked/Lights Out.exe',
       dryRun: true,
       resolutions: ['1280x720', '1920x1080', '2560x1080'],
       screenshots: captures
