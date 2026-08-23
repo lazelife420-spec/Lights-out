@@ -14,8 +14,10 @@ const root = path.resolve(__dirname, '..', '..');
 const executable = process.env.LIGHTS_OUT_PACKAGED_EXE
   ? path.resolve(process.env.LIGHTS_OUT_PACKAGED_EXE)
   : path.join(root, 'dist-native', 'win-unpacked', 'Lights Out.exe');
-const proofDir = path.join(root, 'dist', 'review-proof');
-const androidPackage = 'com.lightsout.companion';
+const proofDir = process.env.LIGHTS_OUT_PHONE_PROOF_DIR
+  ? path.resolve(process.env.LIGHTS_OUT_PHONE_PROOF_DIR)
+  : path.join(root, 'dist', 'review-proof');
+const androidPackage = process.env.LIGHTS_OUT_ANDROID_PACKAGE || 'com.lightsout.companion';
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -196,7 +198,7 @@ async function main() {
   let phone;
   let phoneForward;
   let wifiDisabled = false;
-  const commandCounts = { pause: 0, resume: 0, addFive: 0, cancel: 0 };
+  const commandCounts = { rejectedStart: 0, pause: 0, resume: 0, addFive: 0, cancel: 0 };
   try {
     const target = await waitFor(async () => {
       const targets = await fetchJson(`http://127.0.0.1:${debugPort}/json/list`);
@@ -247,6 +249,26 @@ async function main() {
     await new Promise(resolve => setTimeout(resolve, 1300));
     const updateTwo = await waitFor(() => phone.evaluate(`latestState?.remainingSeconds < ${updateOne} ? latestState.remainingSeconds : 0`));
     assert.ok(updateTwo < updateOne);
+
+    // F-05 regression: an authenticated phone must receive a truthful,
+    // structured rejection if it tries to start over an active run. The
+    // existing countdown and its single receipt must remain authoritative.
+    const receiptsBeforeRejectedStart = await desktop.evaluate(`electronAPI.listReceipts(20).then(items => items.length)`);
+    await phone.evaluate(`window.confirm = () => true; lastCommandResult = null; startTimer(60); true`);
+    commandCounts.rejectedStart++;
+    const rejectedStart = await waitFor(() => phone.evaluate(`lastCommandResult?.code === 'RUN_ACTIVE' ? ({
+      result: lastCommandResult,
+      message: document.getElementById('pending-status')?.textContent,
+      isError: document.getElementById('pending-status')?.classList.contains('error'),
+      remainingSeconds: latestState?.remainingSeconds
+    }) : null`));
+    assert.equal(rejectedStart.result.success, false);
+    assert.equal(rejectedStart.result.action, 'start');
+    assert.equal(rejectedStart.isError, true);
+    assert.match(rejectedStart.message, /already active/i);
+    assert.ok(rejectedStart.remainingSeconds > 500, 'active countdown must not be replaced by the rejected 60-second start');
+    const receiptsAfterRejectedStart = await desktop.evaluate(`electronAPI.listReceipts(20).then(items => items.length)`);
+    assert.equal(receiptsAfterRejectedStart, receiptsBeforeRejectedStart, 'rejected duplicate start must not create a receipt');
 
     await phone.evaluate(`document.getElementById('btn-pause').click(); true`);
     commandCounts.pause++;
