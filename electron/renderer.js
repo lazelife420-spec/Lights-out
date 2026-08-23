@@ -3059,6 +3059,50 @@ function closeAllTopMenus() {
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Keyboard ownership helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+function isModalOrDrawerOpen() {
+  return !!(els.qcDrawer?.classList.contains('open') ||
+    state.fullscreenClock ||
+    (els.panelSet && els.panelSet.style.display !== 'none') ||
+    els.profilesModal?.classList.contains('active') ||
+    els.receiptsModal?.classList.contains('active') ||
+    els.aboutModal?.classList.contains('active') ||
+    document.getElementById('notif-drawer')?.classList.contains('active') ||
+    document.getElementById('ritual-overlay')?.classList.contains('active') ||
+    document.getElementById('warning-modal')?.classList.contains('active') ||
+    document.getElementById('override-modal')?.classList.contains('active') ||
+    document.getElementById('snooze-tax-modal')?.classList.contains('active') ||
+    document.getElementById('lan-warning-modal')?.classList.contains('active') ||
+    document.getElementById('streak-celebration-modal')?.classList.contains('active') ||
+    document.querySelector('.menu-item.open'));
+}
+
+function keyboardFocusOwnsEvent(event) {
+  if (event.defaultPrevented) return true;
+
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return false;
+
+  // Text inputs, selects, and textareas own their own keys.
+  const tag = target.tagName;
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return true;
+  if (target.isContentEditable || target.closest('[contenteditable]')) return true;
+
+  // Buttons, links, and ARIA widgets are focused interactive controls.
+  const role = target.getAttribute('role');
+  const interactiveRoles = ['button', 'link', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'option', 'slider', 'switch', 'tab', 'radio', 'checkbox'];
+  if (tag === 'BUTTON' || tag === 'A' || (role && interactiveRoles.includes(role))) return true;
+
+  // Roving-tabindex navigation groups own directional and activation keys;
+  // native buttons inside them own Space/Enter activation.
+  if (target.closest('[data-ns-navgroup]')) return true;
+
+  return false;
+}
+
 function wireTopMenus() {
   const menus = Array.from(document.querySelectorAll('.menu-item'));
   if (!menus.length) return;
@@ -4072,20 +4116,16 @@ if (els.btnClearReceipts) {
   document.addEventListener('keydown', async event => {
     if (event.defaultPrevented) return;
 
-    if (event.target.tagName === 'INPUT' || event.target.tagName === 'SELECT') {
+    // Focused text inputs own the keyboard; Escape just blurs them so a
+    // second Escape can close the surrounding surface.
+    const targetTag = event.target.tagName;
+    if (targetTag === 'INPUT' || targetTag === 'SELECT' || targetTag === 'TEXTAREA') {
       if (event.key === 'Escape') event.target.blur();
       return;
     }
 
-    if (event.key === ' ' || event.code === 'Space') {
-      event.preventDefault();
-      if (state.running || state.paused) togglePause();
-      else startTonightPlan();
-      return;
-    }
-
+    // Escape always closes the most-specific active surface first.
     if (event.key === 'Escape') {
-      // Close the topmost active modal/drawer.
       if (els.qcDrawer?.classList.contains('open')) {
         toggleQuickControls(false);
       } else if (state.fullscreenClock) {
@@ -4122,19 +4162,11 @@ if (els.btnClearReceipts) {
       return;
     }
 
-    // Phase 5I-B: matches the Tonight chip fix -- number keys select a
-    // duration now instead of instant-starting. See the chip handler above
-    // for why checkArmedModeMatch() replaces clearAnyArmedPlan() here.
-    const presets = { '1': 5, '2': 10, '3': 15, '4': 30, '5': 60, '6': 120 };
-    if (presets[event.key] && !state.running && !state.paused) {
-      state.unit = 'min';
-      setInputFromSeconds(presets[event.key] * 60);
-      checkArmedModeMatch();
-      notify(`Duration set: ${presets[event.key]} min`, 'info');
-      return;
-    }
-
+    // Ctrl/Meta shortcuts are app-level global shortcuts; they are only
+    // blocked when a modal/menu/drawer/panel is open so Escape/Back can close
+    // the surface first.
     if (event.ctrlKey || event.metaKey) {
+      if (isModalOrDrawerOpen()) return;
       switch (event.key.toLowerCase()) {
         case 'm':
           event.preventDefault();
@@ -4149,6 +4181,31 @@ if (els.btnClearReceipts) {
           api.closeWindow();
           break;
       }
+      return;
+    }
+
+    // Space, number presets, and timer arrows are global navigation shortcuts.
+    // They yield to any focused interactive control or open surface so the
+    // ownership order is: control -> modal/menu/context -> scoped navigation
+    // (data-ns-navgroup) -> global navigation.
+    if (isModalOrDrawerOpen() || keyboardFocusOwnsEvent(event)) return;
+
+    if (event.key === ' ' || event.code === 'Space') {
+      event.preventDefault();
+      if (state.running || state.paused) togglePause();
+      else startTonightPlan();
+      return;
+    }
+
+    // Phase 5I-B: matches the Tonight chip fix -- number keys select a
+    // duration now instead of instant-starting. See the chip handler above
+    // for why checkArmedModeMatch() replaces clearAnyArmedPlan() here.
+    const presets = { '1': 5, '2': 10, '3': 15, '4': 30, '5': 60, '6': 120 };
+    if (presets[event.key] && !state.running && !state.paused) {
+      state.unit = 'min';
+      setInputFromSeconds(presets[event.key] * 60);
+      checkArmedModeMatch();
+      notify(`Duration set: ${presets[event.key]} min`, 'info');
       return;
     }
 

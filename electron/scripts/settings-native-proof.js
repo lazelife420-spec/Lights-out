@@ -12,7 +12,9 @@ const path = require('path');
 const http = require('http');
 const WebSocket = require('ws');
 
-const EXE_PATH = path.resolve(__dirname, '..', '..', 'dist', 'win-unpacked', 'Lights Out.exe');
+const EXE_PATH = process.env.LIGHTS_OUT_NATIVE_EXE
+  ? path.resolve(process.env.LIGHTS_OUT_NATIVE_EXE)
+  : path.resolve(__dirname, '..', '..', 'dist-native', 'win-unpacked', 'Lights Out.exe');
 const ROOT_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-settings-native-proof-'));
 const SCREENSHOTS_DIR = path.join(ROOT_DIR, 'screenshots');
 fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
@@ -136,12 +138,20 @@ class CdpSession {
   }
 
   async ensureSettingsOpen() {
-    const open = await this.eval(`(document.getElementById('ns-panel-set')?.style.display !== 'none')`);
+    let open = await this.eval(`(document.getElementById('ns-panel-set')?.style.display !== 'none')`);
     if (!open) {
       await this.click('[data-ns-tab="set"]');
       await wait(250);
-      const stillClosed = await this.eval(`(document.getElementById('ns-panel-set')?.style.display === 'none')`);
-      if (stillClosed) throw new Error('Could not open Settings panel');
+      open = await this.eval(`(document.getElementById('ns-panel-set')?.style.display !== 'none')`);
+      if (!open) {
+        // Fallback: top-bar Settings menu -> Options.
+        await this.click('#menu-settings');
+        await wait(120);
+        await this.click('#open-options');
+        await wait(250);
+        open = await this.eval(`(document.getElementById('ns-panel-set')?.style.display !== 'none')`);
+        if (!open) throw new Error('Could not open Settings panel');
+      }
     }
     const current = await this.eval(`(document.querySelector('.settings-rail-btn.active')?.dataset?.settingsCategory || '')`);
     if (current !== 'general') {
@@ -168,7 +178,7 @@ async function spawnApp(userDataDir, settingsSeed = {}) {
   const defaults = {
     app: {
       dryRun: true,
-      nsActiveTab: 'lib',
+      nsActiveTab: 'home',
       onboarded: true
     }
   };
@@ -233,7 +243,7 @@ function stopApp({ child, session }) {
 }
 
 const helpers = {
-  isLibActive: `document.querySelector('.ns-nav-item[data-ns-tab="lib"]')?.classList.contains('active') === true`,
+  isHomeActive: `document.querySelector('.ns-nav-item[data-ns-tab="home"]')?.classList.contains('active') === true`,
   isSetVisible: `document.getElementById('ns-panel-set')?.style.display !== 'none'`,
   isSetHidden: `document.getElementById('ns-panel-set')?.style.display === 'none'`,
   isAboutActive: `document.getElementById('about-modal')?.classList.contains('active') === true`,
@@ -244,7 +254,7 @@ const helpers = {
   runLoginValue: `document.getElementById('chk-run-login')?.checked || false`,
   dryRunValue: `document.getElementById('chk-dryrun')?.checked || false`,
   graceValue: `document.getElementById('grace-minutes')?.value || ''`,
-  panelLibVisible: `document.getElementById('ns-panel-lib')?.style.display !== 'none'`,
+  panelHomeVisible: `document.getElementById('ns-panel-home')?.style.display !== 'none'`,
   panelSetVisible: `document.getElementById('ns-panel-set')?.style.display !== 'none'`,
 };
 
@@ -261,10 +271,10 @@ async function runStartupProof(seed, label) {
 
   let result = { label, passed: [], failed: [] };
   try {
-    const libActive = await app.session.eval(helpers.isLibActive);
+    const homeActive = await app.session.eval(helpers.isHomeActive);
     const setHidden = await app.session.eval(helpers.isSetHidden);
     const aboutActive = await app.session.eval(helpers.isAboutActive);
-    if (libActive) result.passed.push('sidebar Tonight active'); else result.failed.push('sidebar Tonight not active');
+    if (homeActive) result.passed.push('sidebar Home active'); else result.failed.push('sidebar Home not active');
     if (setHidden) result.passed.push('Settings panel hidden'); else result.failed.push('Settings panel visible at startup');
     if (!aboutActive) result.passed.push('About/Help not active'); else result.failed.push('About/Help active at startup');
 
@@ -293,8 +303,6 @@ async function main() {
   const report = {
     build: {
       exe: EXE_PATH,
-      portable: path.resolve(__dirname, '..', '..', 'dist', 'LightsOut.exe'),
-      installer: path.resolve(__dirname, '..', '..', 'dist', 'Lights Out Setup 11.1.2.exe'),
       unpackedExe: EXE_PATH,
     },
     screenshots: [],
@@ -331,7 +339,7 @@ async function main() {
   // 4. Settings interactions
   console.log('\n--- Settings controls proof ---');
   const controlsDir = path.join(ROOT_DIR, 'controls');
-  const app = await spawnApp(controlsDir, { app: { dryRun: true, nsActiveTab: 'lib' } });
+  const app = await spawnApp(controlsDir, { app: { dryRun: true, nsActiveTab: 'home' } });
 
   const controlsResult = { label: 'settings-controls', passed: [], failed: [], screenshots: [] };
 
@@ -346,11 +354,11 @@ async function main() {
     if (await app.session.eval(helpers.activeRail) === 'general') controlsResult.passed.push('default category is General');
     else controlsResult.failed.push('default category not General: ' + await app.session.eval(helpers.activeRail));
 
-    // return to Tonight via Back
+    // return to Home via Back
     await app.session.click('#modal-close');
     await wait(300);
-    if (await app.session.eval(helpers.isSetHidden) && await app.session.eval(helpers.panelLibVisible)) controlsResult.passed.push('Back returns to Tonight');
-    else controlsResult.failed.push('Back did not return to Tonight');
+    if (await app.session.eval(helpers.isSetHidden) && await app.session.eval(helpers.panelHomeVisible)) controlsResult.passed.push('Back returns to Home');
+    else controlsResult.failed.push('Back did not return to Home');
 
     // open via top menu
     await app.session.click('#menu-settings');
@@ -435,7 +443,7 @@ async function main() {
     controlsResult.debug.cancel = {
       persistedBeforeCancel,
       panelHiddenAfter: await app.session.eval(helpers.isSetHidden),
-      libVisibleAfter: await app.session.eval(helpers.panelLibVisible)
+      homeVisibleAfter: await app.session.eval(helpers.panelHomeVisible)
     };
 
     await app.session.ensureSettingsOpen();
@@ -463,7 +471,7 @@ async function main() {
     const afterBackBlocklist = await app.session.eval(helpers.focusBlocklistValue);
     const afterBackDryRun = await app.session.eval(helpers.dryRunValue);
     if (afterBackBlocklist === origBlocklist3 && afterBackDryRun === origDryRun) {
-      controlsResult.passed.push('Back to Tonight discarded both changes');
+      controlsResult.passed.push('Back to Home discarded both changes');
     } else {
       controlsResult.failed.push(`Back discard failed: blocklist=${afterBackBlocklist} vs ${origBlocklist3}, dryRun=${afterBackDryRun} vs ${origDryRun}`);
     }
@@ -477,8 +485,8 @@ async function main() {
     await app.session.click(`.settings-rail-btn[data-settings-category="advanced"]`);
     await app.session.key('Escape', 'Escape', 27);
     await wait(500);
-    if (await app.session.eval(helpers.isSetHidden) && await app.session.eval(helpers.panelLibVisible)) {
-      controlsResult.passed.push('Escape closes Settings to Tonight');
+    if (await app.session.eval(helpers.isSetHidden) && await app.session.eval(helpers.panelHomeVisible)) {
+      controlsResult.passed.push('Escape closes Settings to Home');
     } else {
       controlsResult.failed.push('Escape did not close Settings');
     }
@@ -487,6 +495,59 @@ async function main() {
     const afterEscape = await app.session.eval(helpers.focusBlocklistValue);
     if (afterEscape === origBlocklist4) controlsResult.passed.push('Escape discarded the edit');
     else controlsResult.failed.push(`Escape did not discard: ${afterEscape} vs ${origBlocklist4}`);
+
+    // Keyboard ownership regression tests
+    await app.session.ensureSettingsOpen();
+    await app.session.click('.settings-rail-btn[data-settings-category="general"]');
+    await wait(120);
+
+    // Space on a focused rail button should activate that category, not start the timer.
+    await app.session.eval(`document.querySelector('.settings-rail-btn[data-settings-category="appearance"]').focus()`);
+    await wait(120);
+    const railSpaceBefore = await app.session.eval(`({ running: state.running, paused: state.paused, category: document.querySelector('.settings-rail-btn.active')?.dataset?.settingsCategory || '' })`);
+    await app.session.key(' ', 'Space', 32, ' ');
+    await wait(200);
+    const railSpaceAfter = await app.session.eval(`({ running: state.running, paused: state.paused, category: document.querySelector('.settings-rail-btn.active')?.dataset?.settingsCategory || '', settingsVisible: document.getElementById('ns-panel-set')?.style.display !== 'none' })`);
+    if (railSpaceAfter.settingsVisible && !railSpaceAfter.running && !railSpaceAfter.paused && railSpaceAfter.category === 'appearance') {
+      controlsResult.passed.push('Space on focused rail button activates category, does not start timer');
+    } else {
+      controlsResult.failed.push(`rail Space ownership failed: ${JSON.stringify({ before: railSpaceBefore, after: railSpaceAfter })}`);
+    }
+
+    // Arrow keys on rail buttons should navigate focus between categories without
+    // adjusting the timer or leaking to global shortcuts.
+    await app.session.click('.settings-rail-btn[data-settings-category="general"]');
+    await wait(120);
+    await app.session.eval(`document.querySelector('.settings-rail-btn[data-settings-category="general"]').focus()`);
+    await wait(120);
+    const railArrowBefore = await app.session.eval(`({ focusedCategory: document.activeElement?.dataset?.settingsCategory || document.activeElement?.textContent || '', timerValue: document.getElementById('timer-input')?.value || '' })`);
+    await app.session.key('ArrowDown', 'ArrowDown', 40);
+    await wait(200);
+    const railArrowAfter = await app.session.eval(`({ focusedCategory: document.activeElement?.dataset?.settingsCategory || document.activeElement?.textContent || '', timerValue: document.getElementById('timer-input')?.value || '' })`);
+    if (railArrowAfter.focusedCategory !== railArrowBefore.focusedCategory && railArrowAfter.timerValue === railArrowBefore.timerValue) {
+      controlsResult.passed.push('ArrowDown on rail navigates focus without changing timer');
+    } else {
+      controlsResult.failed.push(`rail ArrowDown ownership failed: ${JSON.stringify({ before: railArrowBefore, after: railArrowAfter })}`);
+    }
+
+    // With a modal open, arrow and Space keys must not leak to global shortcuts.
+    await app.session.click('#menu-help');
+    await wait(100);
+    await app.session.click('#open-about');
+    await wait(300);
+    const modalKeyBefore = await app.session.eval(`({ aboutActive: document.getElementById('about-modal')?.classList.contains('active') === true, running: state.running, paused: state.paused })`);
+    await app.session.key('ArrowDown', 'ArrowDown', 40);
+    await app.session.key(' ', 'Space', 32, ' ');
+    await wait(200);
+    const modalKeyAfter = await app.session.eval(`({ aboutActive: document.getElementById('about-modal')?.classList.contains('active') === true, running: state.running, paused: state.paused })`);
+    if (modalKeyAfter.aboutActive && modalKeyAfter.running === modalKeyBefore.running && modalKeyAfter.paused === modalKeyBefore.paused) {
+      controlsResult.passed.push('keys with About modal open do not leak to global shortcuts');
+    } else {
+      controlsResult.failed.push(`modal key ownership failed: ${JSON.stringify({ before: modalKeyBefore, after: modalKeyAfter })}`);
+    }
+    // Use the modal close button to avoid leaving focus on a top-menu item.
+    await app.session.click('#about-modal-close');
+    await wait(300);
 
     // 10-cycle regression: behavior and state stability
     const baseline = await app.session.eval(`(async () => ({
@@ -509,13 +570,13 @@ async function main() {
       }
       await wait(250);
       if (!await app.session.eval(helpers.isSetHidden)) {
-        cycleErrors.push(`cycle ${i} did not return to Tonight`);
+        cycleErrors.push(`cycle ${i} did not return to Home`);
         await app.session.click('#modal-close');
         await wait(200);
       }
     }
 
-    if (cycleErrors.length === 0) controlsResult.passed.push('ten cycles all returned to Tonight');
+    if (cycleErrors.length === 0) controlsResult.passed.push('ten cycles all returned to Home');
     else controlsResult.failed.push(...cycleErrors);
 
     // After ten cycles, a single category click must still produce exactly one transition.
@@ -591,7 +652,7 @@ async function main() {
     ];
 
     const views = [
-      ['tonight', '[data-ns-tab="lib"]'],
+      ['home', '[data-ns-tab="home"]'],
       ['general', `.settings-rail-btn[data-settings-category="general"]`],
       ['power-safety', `.settings-rail-btn[data-settings-category="power-safety"]`],
       ['protection', `.settings-rail-btn[data-settings-category="protection"]`],
@@ -630,8 +691,8 @@ async function main() {
       const focusedShot = await app.session.screenshot(`${size.name}-focused-general.png`);
       const focusedMetrics = await app.session.metrics();
       controlsResult.screenshots.push({ name: `${size.name}-focused-general`, path: focusedShot.path, size: focusedShot.size, dimensions: focusedMetrics });
-      // restore Tonight before next size
-      await app.session.click('[data-ns-tab="lib"]');
+      // restore Home before next size
+      await app.session.click('[data-ns-tab="home"]');
       await wait(120);
     }
 
