@@ -208,6 +208,32 @@ async function runElectronProof() {
     });
   }
 
+  async function sendRealWebSocketFrameForReply(message, replyType) {
+    assert(typeof NodeWebSocket === 'function', 'Node WebSocket client is unavailable');
+    return new Promise((resolve, reject) => {
+      const client = new NodeWebSocket(`ws://127.0.0.1:${port}/?t=${encodeURIComponent(token)}`);
+      const timeout = setTimeout(() => {
+        try { client.close(); } catch {}
+        reject(new Error(`authenticated command did not return ${replyType}`));
+      }, 5000);
+      client.addEventListener('open', () => {
+        client.send(JSON.stringify(message));
+      }, { once: true });
+      client.addEventListener('message', event => {
+        let data;
+        try { data = JSON.parse(String(event.data)); } catch { return; }
+        if (data.type !== replyType) return;
+        clearTimeout(timeout);
+        try { client.close(); } catch {}
+        resolve(data);
+      });
+      client.addEventListener('error', () => {
+        clearTimeout(timeout);
+        reject(new Error('authenticated command WebSocket failed'));
+      }, { once: true });
+    });
+  }
+
   await waitFor(() => companion.getStatus().running, 'ephemeral companion server did not start');
   const phone = new BrowserWindow({
     width: 390,
@@ -935,6 +961,25 @@ async function runElectronProof() {
     const after = receipts.listReceipts().length;
     assert(value.running && value.action === 'sleep' && value.remaining <= 900, JSON.stringify(value));
     assert(after === before + 1, `expected exactly one new receipt, got ${after - before}`);
+    await ensureIdle();
+  });
+
+  await check('F-05: authenticated duplicate generic start is rejected without superseding the active run', async () => {
+    await ensureIdle();
+    const initial = await desktopEval(`window.electronAPI.startTimer(${JSON.stringify({ durationSeconds: 600, action: 'shutdown', dryRun: true, source: 'manual' })})`);
+    assert(initial.success === true, JSON.stringify(initial));
+    await waitFor(() => desktopEval('state.running === true && !state.paused'), 'desktop did not start F-05 baseline run');
+    const before = await desktopEval('({ remaining: state.remainingSeconds, total: state.totalSeconds, action: state.action, dryRun: state.dryRun })');
+    const receiptsBefore = receipts.listReceipts().length;
+    const reply = await sendRealWebSocketFrameForReply({ action: 'start', durationSeconds: 60, timerAction: 'shutdown' }, 'commandResult');
+    await wait(400);
+    const after = await desktopEval('({ running: state.running, paused: state.paused, remaining: state.remainingSeconds, total: state.totalSeconds, action: state.action, dryRun: state.dryRun })');
+    const receiptsAfter = receipts.listReceipts().length;
+    assert(reply.success === false && reply.code === 'RUN_ACTIVE', JSON.stringify(reply));
+    assert(reply.state && reply.state.running === true && reply.state.totalSeconds === 600, JSON.stringify(reply.state));
+    assert(after.running && !after.paused && after.total === before.total && after.action === before.action && after.dryRun === before.dryRun, JSON.stringify({ before, after }));
+    assert(after.remaining <= before.remaining && after.remaining > before.remaining - 3, JSON.stringify({ before, after }));
+    assert(receiptsAfter === receiptsBefore, `duplicate start created ${receiptsAfter - receiptsBefore} receipt(s)`);
     await ensureIdle();
   });
 

@@ -923,6 +923,8 @@ check('companion C2: Night Mode picker and detail overlay exist in PWA', () => {
 
 check('companion C2: main handles startNightMode and getNightModes', () => {
   assertMatch(mainSrc, /case 'startNightMode':/, 'handleCompanionMessage missing startNightMode case');
+  assertMatch(mainSrc, /code: 'RUN_ACTIVE'/, 'remote generic start does not return structured RUN_ACTIVE rejection');
+  assertMatch(mainSrc, /timerState\.running \|\| timerState\.paused \|\| ritualActive/, 'remote generic start does not reject while a run is active');
   assertMatch(mainSrc, /case 'getNightModes':/, 'handleCompanionMessage missing getNightModes case');
   assertMatch(mainSrc, /companion\.sendToClient\(client, \{ type: 'nightModes', modes: nmCatalogue \}\)/, 'getNightModes does not send catalogue via sendToClient');
 });

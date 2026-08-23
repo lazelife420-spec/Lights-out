@@ -496,6 +496,7 @@
     let latestState = null;
     let lastStateReceivedAt = 0;
     let pendingOperation = null;
+    let lastCommandResult = null;
     let pendingTimeout = null;
     let pendingErrorTimeout = null;
     let nmCatalogue = [];
@@ -1005,6 +1006,16 @@
         pairToken = '';
         setConnectionState('expired', 'Pairing expired');
         showPairing('Pairing changed on the desktop. Scan the new QR or enter the current code.');
+        return;
+      }
+      if (data.type === 'commandResult') {
+        lastCommandResult = data;
+        if (data.success === false && pendingOperation?.kind === data.action) {
+          clearPending();
+          setPendingMessage(data.message || 'The PC rejected the request', true);
+          if (pendingErrorTimeout) clearTimeout(pendingErrorTimeout);
+          pendingErrorTimeout = setTimeout(() => setPendingMessage(''), 3500);
+        }
         return;
       }
       if (data.type === 'state') {

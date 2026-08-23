@@ -1368,6 +1368,30 @@ function handleCompanionMessage(msg, client) {
 
   switch (msg.action) {
     case 'start': {
+      const ritualActive = ritualMode.getState().active;
+      if (timerState.running || timerState.paused || ritualActive) {
+        if (client) {
+          companion.sendToClient(client, {
+            type: 'commandResult',
+            action: 'start',
+            success: false,
+            code: 'RUN_ACTIVE',
+            message: 'A Lights Out run is already active. Stop it before starting another.',
+            state: {
+              running: timerState.running,
+              paused: timerState.paused,
+              ritualActive,
+              remainingSeconds: timerState.remainingSeconds,
+              totalSeconds: timerState.totalSeconds,
+              action: timerState.action,
+              dryRun: timerState.dryRun,
+              nightModeId: timerState.nightModeId,
+              nightModeTitle: timerState.nightModeTitle
+            }
+          });
+        }
+        break;
+      }
       // Desktop remains authoritative over Dry Run: the phone protocol never
       // carries a dryRun field (validateCompanionMessage strips it), so this
       // reads the desktop's own persisted setting rather than trusting the client.
@@ -1382,6 +1406,14 @@ function handleCompanionMessage(msg, client) {
       });
       if (result.success) {
         notifyRemoteAction(`${formatAction(timerAction)} started from your phone (${Math.round(durationSeconds / 60)} min)`);
+      } else if (client) {
+        companion.sendToClient(client, {
+          type: 'commandResult',
+          action: 'start',
+          success: false,
+          code: 'START_REJECTED',
+          message: result.error || 'The desktop rejected the start request.'
+        });
       }
       break;
     }
