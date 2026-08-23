@@ -14,6 +14,7 @@
     "smoke:packaged": "node scripts/packaged-smoke.js && node scripts/packaged-truth-smoke.js",
     "smoke:native": "node scripts/native-packaged-truth-smoke.js",
     "smoke:reliability": "node scripts/reliability-crash-policy-proof.js",
+    "smoke:performance": "node scripts/performance-resize-gate.js",
     "smoke:phone": "node scripts/packaged-phone-smoke.js",
     "test:uninstall-matrix": "powershell -ExecutionPolicy Bypass -File scripts/uninstall-matrix.ps1",
     "smoke:network": "node scripts/packaged-network-smoke.js",
