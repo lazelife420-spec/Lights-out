@@ -23,6 +23,21 @@ let globalPort = 9351;
 
 function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+async function waitUntil(predicate, { timeoutMs = 5000, intervalMs = 75, label = 'condition' } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError = null;
+  while (Date.now() < deadline) {
+    try {
+      if (await predicate()) return;
+    } catch (error) {
+      lastError = error;
+    }
+    await wait(intervalMs);
+  }
+  const suffix = lastError ? `: ${lastError.message || lastError}` : '';
+  throw new Error(`Timed out waiting for ${label}${suffix}`);
+}
+
 async function httpGet(url) {
   return new Promise((resolve, reject) => {
     http.get(url, res => {
@@ -437,7 +452,7 @@ async function main() {
     await app.session.eval(`document.getElementById('focus-blocklist').value = 'not,saved'`);
     await app.session.eval(`document.getElementById('chk-run-login').checked = ${!origRunLogin}`);
     await app.session.click('#btn-cancel-opt');
-    await wait(500);
+    await waitUntil(() => app.session.eval(helpers.isSetHidden), { label: 'Cancel to close Settings' });
 
     controlsResult.debug = controlsResult.debug || {};
     controlsResult.debug.cancel = {
@@ -464,7 +479,7 @@ async function main() {
     await app.session.eval(`document.getElementById('focus-blocklist').value = 'back,not,saved'`);
     await app.session.eval(`document.getElementById('chk-dryrun').checked = ${!origDryRun}`);
     await app.session.click('#modal-close');
-    await wait(400);
+    await waitUntil(() => app.session.eval(helpers.isSetHidden), { label: 'Back to close Settings after discard' });
 
     await app.session.ensureSettingsOpen();
     await app.session.click(`.settings-rail-btn[data-settings-category="advanced"]`);
@@ -484,7 +499,7 @@ async function main() {
     // Move focus out of the input so the global Escape handler closes Settings.
     await app.session.click(`.settings-rail-btn[data-settings-category="advanced"]`);
     await app.session.key('Escape', 'Escape', 27);
-    await wait(500);
+    await waitUntil(() => app.session.eval(helpers.isSetHidden), { label: 'Escape to close Settings after discard' });
     if (await app.session.eval(helpers.isSetHidden) && await app.session.eval(helpers.panelHomeVisible)) {
       controlsResult.passed.push('Escape closes Settings to Home');
     } else {

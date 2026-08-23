@@ -2662,6 +2662,11 @@ check('gate6 settings: desktop category rail and narrow fallback are both explic
   assertMatch(stylesSrc, /@media \(max-width: 820px\)[\s\S]*\.settings-panel \.modal-body \{ flex-direction: column; \}/, 'Settings narrow-window fallback is missing');
 });
 
+check('gate6 feedback: status toasts never intercept nearby controls', () => {
+  const stylesSrc = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  assertMatch(stylesSrc, /\.toast\s*\{[\s\S]*?pointer-events:\s*none;/, 'status toasts can intercept controls beneath them');
+});
+
 check('gate6 microcopy: unproven universal timer-safety claim is removed', () => {
   assert(!/shutdown timer is still safe/i.test(mainSrc), 'fault copy still claims universal timer safety beyond the proven renderer-crash path');
   assertMatch(mainSrc, /Reopen Lights Out to check the current timer status/, 'fault copy does not give a truthful recovery action');

@@ -1514,7 +1514,8 @@ input[type="datetime-local"] {
 }
 .qc-drawer-overlay.open {
   opacity: 1;
-  pointer-events: auto;
+  /* Status-only feedback must never cover a nearby actionable control. */
+  pointer-events: none;
 }
 
 .qc-drawer {
