@@ -1514,8 +1514,7 @@ input[type="datetime-local"] {
 }
 .qc-drawer-overlay.open {
   opacity: 1;
-  /* Status-only feedback must never cover a nearby actionable control. */
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .qc-drawer {
@@ -2227,7 +2226,8 @@ body.phase-lastlight .cockpit {
   opacity: 0;
   transform: translateX(18px);
   transition: opacity 0.2s ease, transform 0.2s ease;
-  pointer-events: auto;
+  /* Status-only feedback must never cover a nearby actionable control. */
+  pointer-events: none;
 }
 
 .toast.visible {

@@ -2664,7 +2664,7 @@ check('gate6 settings: desktop category rail and narrow fallback are both explic
 
 check('gate6 feedback: status toasts never intercept nearby controls', () => {
   const stylesSrc = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
-  assertMatch(stylesSrc, /\.toast\s*\{[\s\S]*?pointer-events:\s*none;/, 'status toasts can intercept controls beneath them');
+  assertMatch(stylesSrc, /(?:^|\n)\.toast\s*\{[^}]*pointer-events:\s*none;/, 'status toasts can intercept controls beneath them');
 });
 
 check('gate6 microcopy: unproven universal timer-safety claim is removed', () => {
