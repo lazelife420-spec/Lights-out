@@ -170,6 +170,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Auto-update
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
+  downloadPortableUpdate: () => ipcRenderer.invoke('download-portable-update'),
   getUpdateStatus: () => ipcRenderer.invoke('get-update-status'),
   onUpdateAvailable: (callback) => {
     ipcRenderer.on('update-available', (event, data) => callback(data));

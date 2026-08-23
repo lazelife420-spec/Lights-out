@@ -2061,6 +2061,11 @@ ipcMain.handle('check-for-update', async () => {
 ipcMain.handle('get-update-status', async () => {
   return updater.getLastCheckResult();
 });
+ipcMain.handle('download-portable-update', async () => {
+  const result = await updater.downloadPortableUpdate(app.getPath('downloads'));
+  if (result.success && result.filePath) shell.showItemInFolder(result.filePath);
+  return result;
+});
 
 // App version. Single source of truth is electron/package.json (via updater.currentVersion)
 // so the UI never carries a second, driftable copy of the version string.
