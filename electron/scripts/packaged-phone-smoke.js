@@ -11,7 +11,9 @@ const { promisify } = require('node:util');
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(__dirname, '..', '..');
-const executable = path.join(root, 'dist', 'win-unpacked', 'Lights Out.exe');
+const executable = process.env.LIGHTS_OUT_PACKAGED_EXE
+  ? path.resolve(process.env.LIGHTS_OUT_PACKAGED_EXE)
+  : path.join(root, 'dist-native', 'win-unpacked', 'Lights Out.exe');
 const proofDir = path.join(root, 'dist', 'review-proof');
 const androidPackage = 'com.lightsout.companion';
 
