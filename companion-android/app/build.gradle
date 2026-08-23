@@ -55,6 +55,13 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Keep local proof builds installable beside the production-signed
+            // companion. This avoids touching the irreplaceable release key or
+            // wiping the user's saved production pairing during device tests.
+            applicationIdSuffix '.debug'
+            versionNameSuffix '-debug'
+        }
         release {
             if (hasReleaseSigning) {
                 signingConfig signingConfigs.release

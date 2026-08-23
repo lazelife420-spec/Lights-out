@@ -15,6 +15,10 @@
     <string name="camera_needed">Camera permission is needed to scan the QR code.</string>
     <string name="connection_failed">Couldn\'t reach that PC. Check the link, Wi-Fi, and that Remote Control is enabled.</string>
     <string name="reconnecting">Looking for your PC on this network…</string>
+    <string name="connecting_title">Reconnecting to your PC</string>
+    <string name="connecting_detail">Trying the saved Lights Out connection…</string>
+    <string name="reconnecting_detail">That address did not answer. Looking for your paired PC on this Wi-Fi…</string>
+    <string name="use_another_link">Use another link</string>
     <string name="detected_pc_title">✨ PC Found on Wi-Fi</string>
     <string name="detected_pc_hint">Connect to %1$s</string>
     <string name="proof_foundry_footer">Forged by The Proof Foundry™</string>

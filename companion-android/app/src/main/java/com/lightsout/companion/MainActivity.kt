@@ -48,13 +48,15 @@ import org.json.JSONArray
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
+    private lateinit var connecting: View
+    private lateinit var connectingDetail: TextView
     private lateinit var setup: View
     private lateinit var urlInput: EditText
     private var lastRequestedUrl: String? = null
     private var mainFrameLoadFailed = false
     private val mainHandler = Handler(Looper.getMainLooper())
     private val loadTimeout = Runnable {
-        if (!mainFrameLoadFailed && webView.visibility == View.VISIBLE) {
+        if (!mainFrameLoadFailed && connecting.visibility == View.VISIBLE) {
             handleLoadFailure(lastRequestedUrl, "Connection timed out")
         }
     }
@@ -117,10 +119,15 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         webView = findViewById(R.id.webview)
+        connecting = findViewById(R.id.connecting)
+        connectingDetail = findViewById(R.id.connecting_detail)
         setup = findViewById(R.id.setup)
         urlInput = findViewById(R.id.url_input)
         val connectBtn = findViewById<Button>(R.id.connect_button)
         val scanBtn = findViewById<Button>(R.id.scan_button)
+        findViewById<Button>(R.id.connecting_change_pc).setOnClickListener {
+            showSetup(lastRequestedUrl ?: prefs.getString(KEY_URL, null))
+        }
 
         // Auto-detect UI hooks
         autoDetectCard = findViewById(R.id.auto_detect_card)
@@ -185,6 +192,7 @@ class MainActivity : AppCompatActivity() {
                     // preferences after a successful load so those users also
                     // gain IP-change recovery without having to pair again.
                     capturePersistedPageToken(view, url)
+                    showConnectedPage()
                 }
                 super.onPageFinished(view, url)
             }
@@ -247,6 +255,8 @@ class MainActivity : AppCompatActivity() {
             override fun handleOnBackPressed() {
                 if (webView.visibility == View.VISIBLE && webView.canGoBack()) {
                     webView.goBack()
+                } else if (connecting.visibility == View.VISIBLE) {
+                    showSetup(lastRequestedUrl ?: prefs.getString(KEY_URL, null))
                 } else {
                     isEnabled = false
                     onBackPressedDispatcher.onBackPressed()
@@ -287,8 +297,7 @@ class MainActivity : AppCompatActivity() {
             // this new pairing using a different PC's token.
             prefs.edit().remove(KEY_TOKEN).remove(KEY_TOKEN_HOST).apply()
         }
-        setup.visibility = View.GONE
-        webView.visibility = View.VISIBLE
+        showConnecting(R.string.connecting_detail)
         autoDetectCard.visibility = View.GONE
         webView.loadUrl(url)
         mainHandler.postDelayed(loadTimeout, MAIN_FRAME_TIMEOUT_MS)
@@ -298,8 +307,22 @@ class MainActivity : AppCompatActivity() {
         mainHandler.removeCallbacks(loadTimeout)
         scanGeneration++ // see showWeb
         webView.visibility = View.GONE
+        connecting.visibility = View.GONE
         setup.visibility = View.VISIBLE
         if (prefill != null) urlInput.setText(prefill)
+    }
+
+    private fun showConnecting(detailRes: Int) {
+        webView.visibility = View.GONE
+        setup.visibility = View.GONE
+        connectingDetail.setText(detailRes)
+        connecting.visibility = View.VISIBLE
+    }
+
+    private fun showConnectedPage() {
+        connecting.visibility = View.GONE
+        setup.visibility = View.GONE
+        webView.visibility = View.VISIBLE
     }
 
     private fun capturePersistedPageToken(view: WebView?, pageUrl: String?) {
@@ -348,16 +371,12 @@ class MainActivity : AppCompatActivity() {
         val now = System.currentTimeMillis()
         if (token != null && now - lastScanAttemptAt > SCAN_COOLDOWN_MS) {
             lastScanAttemptAt = now
-            // Never leave the user staring at an empty WebView while the
-            // bounded subnet recovery scan runs in the background.
-            showSetup(url ?: prefs.getString(KEY_URL, null))
-            // Captured *after* showSetup() -- showSetup() bumps scanGeneration
-            // itself (it's a navigation like any other), so capturing here
-            // means this scan's own result is only ever treated as stale by a
-            // navigation that happens after this point, not by the setup
-            // screen this same recovery flow just put up to run the scan
-            // behind. Capturing before showSetup() would make the guard below
-            // always reject this scan's own result, even on success.
+            // Keep a truthful, cancellable reconnect surface visible while
+            // the bounded subnet recovery scan runs in the background.
+            scanGeneration++
+            showConnecting(R.string.reconnecting_detail)
+            // Captured after entering the reconnect surface, so any later
+            // user navigation invalidates this result.
             val myGeneration = scanGeneration
             Toast.makeText(this, R.string.reconnecting, Toast.LENGTH_SHORT).show()
             SubnetScanner.findCompanion(
