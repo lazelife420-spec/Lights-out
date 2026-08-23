@@ -23,6 +23,12 @@ const unpackedRoot = path.join(distRoot, 'win-unpacked');
 const appRoot = path.join(unpackedRoot, 'resources', 'app');
 const exePath = path.join(unpackedRoot, 'Lights Out.exe');
 const zipPath = path.join(distRoot, `Lights-Out-Portable-v${packageJson.version}-win-x64.zip`);
+const windowsPowerShell = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+const windowsPowerShellModulePath = [
+  path.join(process.env.USERPROFILE || '', 'Documents', 'WindowsPowerShell', 'Modules'),
+  path.join(process.env.ProgramFiles || 'C:\\Program Files', 'WindowsPowerShell', 'Modules'),
+  path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'Modules')
+].join(';');
 
 function sha256File(filePath) {
   const hash = crypto.createHash('sha256');
@@ -66,9 +72,10 @@ function git(...args) {
 }
 
 function powershellJson(command) {
-  const raw = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], {
+  const raw = execFileSync(windowsPowerShell, ['-NoProfile', '-NonInteractive', '-Command', `$ErrorActionPreference='Stop'; ${command}`], {
     encoding: 'utf8',
-    windowsHide: true
+    windowsHide: true,
+    env: { ...process.env, PSModulePath: windowsPowerShellModulePath }
   }).trim();
   return JSON.parse(raw);
 }
