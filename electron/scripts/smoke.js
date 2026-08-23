@@ -2645,6 +2645,28 @@ check('window sizing: default size is never narrower than the enforced minimum',
   assert(!/win\.setSize\(520, 720\)/.test(windowGeometrySrc), 'stale 520x720 literal must not return to windowGeometry.js');
 });
 
+check('gate6 brand: real mark is selective session identity, not a functional icon replacement', () => {
+  const htmlSrc = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const nightModeRenderer = fs.readFileSync(path.join(root, 'renderer-night-modes.js'), 'utf8');
+  assertMatch(htmlSrc, /ns-home-wordmark[^>]*lights-out-wordmark-transparent\.svg|lights-out-wordmark-transparent\.svg[^>]*ns-home-wordmark/, 'Home must use the real Lights Out wordmark');
+  assertMatch(htmlSrc, /class="armed-mode-mark"/, 'Tonight armed state is missing its selective product mark');
+  assertMatch(htmlSrc, /class="btn-secondary btn-begin-ritual"/, 'Begin Ritual is missing its restrained product identity treatment');
+  assertMatch(rendererSrc, /lights-out-icon-small\.svg/, 'state-aware Home CTA is missing the real product mark');
+  assertMatch(nightModeRenderer, /lights-out-icon-small\.svg/, 'Use Tonight is missing the real product mark');
+  assertMatch(htmlSrc, /class="icon semantic-icon"/, 'ordinary functional surfaces must retain semantic icons');
+});
+
+check('gate6 settings: desktop category rail and narrow fallback are both explicit', () => {
+  const stylesSrc = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  assertMatch(stylesSrc, /\.settings-panel \.modal-body \{ flex-direction: row; \}/, 'desktop Settings rail/content direction is not pinned to a row');
+  assertMatch(stylesSrc, /@media \(max-width: 820px\)[\s\S]*\.settings-panel \.modal-body \{ flex-direction: column; \}/, 'Settings narrow-window fallback is missing');
+});
+
+check('gate6 microcopy: unproven universal timer-safety claim is removed', () => {
+  assert(!/shutdown timer is still safe/i.test(mainSrc), 'fault copy still claims universal timer safety beyond the proven renderer-crash path');
+  assertMatch(mainSrc, /Reopen Lights Out to check the current timer status/, 'fault copy does not give a truthful recovery action');
+});
+
 // Cleanup.
 try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
 

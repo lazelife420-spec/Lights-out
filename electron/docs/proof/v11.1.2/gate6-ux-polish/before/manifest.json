@@ -1,0 +1,133 @@
+{
+  "exePath": "C:\\Users\\KickA\\Desktop\\Lights Out\\dist-native\\win-unpacked\\Lights Out.exe",
+  "exeSha256": "2A630319C42CC33074B10EEBADBCDFEECCA13FA1EEFCAE746442ED52693E5E87",
+  "outDir": "docs/proof/v11.1.2/gate6-ux-polish/before",
+  "captures": [
+    {
+      "name": "01-home",
+      "file": "docs\\proof\\v11.1.2\\gate6-ux-polish\\before\\01-home.png",
+      "sha256": "0AB08005DF4EA5334FD152D10D877E42F8D66401E0CB8BDB586CD5D2B94CFE3C",
+      "bytes": 327638
+    },
+    {
+      "name": "02-tonight",
+      "file": "docs\\proof\\v11.1.2\\gate6-ux-polish\\before\\02-tonight.png",
+      "sha256": "6628CE09470286100578FE9F42E7F8B2857187770F453C3DD0E3F50B2ED58338",
+      "bytes": 194656
+    },
+    {
+      "name": "02-library",
+      "file": "docs\\proof\\v11.1.2\\gate6-ux-polish\\before\\02-library.png",
+      "sha256": "7C0A913E873C212FDE545F42AE2A51214BDF21B85C506FF7F63E7DB0E6106F74",
+      "bytes": 228627
+    },
+    {
+      "name": "02-schedule",
+      "file": "docs\\proof\\v11.1.2\\gate6-ux-polish\\before\\02-schedule.png",
+      "sha256": "4AAF6DE5D52DF5033BA4DF8DE78CE6521CC85D7DE7306828891F1BB348B8BF9C",
+      "bytes": 90744
+    },
+    {
+      "name": "02-devices",
+      "file": "docs\\proof\\v11.1.2\\gate6-ux-polish\\before\\02-devices.png",
+      "sha256": "A065132DA2C09447A973710BBFACE179C7E45F9D4A4BEDB5A8A341B46EE8AE3B",
+      "bytes": 255882
+    },
+    {
+      "name": "02-proof",
+      "file": "docs\\proof\\v11.1.2\\gate6-ux-polish\\before\\02-proof.png",
+      "sha256": "26F7059CFB33882EBD320CA270B4AC9813F9F31626EEF5534BBB7B2452F159B5",
+      "bytes": 113817
+    },
+    {
+      "name": "02-settings",
+      "file": "docs\\proof\\v11.1.2\\gate6-ux-polish\\before\\02-settings.png",
+      "sha256": "76808777D1135BC425B87E3DD658D674FBB48ABA3A7C37067B3E6B2B63C26AA8",
+      "bytes": 75982
+    },
+    {
+      "name": "02-help",
+      "file": "docs\\proof\\v11.1.2\\gate6-ux-polish\\before\\02-help.png",
+      "sha256": "D8C584636A81E70F430A5D9E18BF15BC0B3191A31CBD0F09BBB28A263B3B510F",
+      "bytes": 103240
+    },
+    {
+      "name": "03-settings-general",
+      "file": "docs\\proof\\v11.1.2\\gate6-ux-polish\\before\\03-settings-general.png",
+      "sha256": "4EF9BBB4D39FA8E9A9638B89EABDA406EDC86729346FFEDA205C63E65F8C944E",
+      "bytes": 85964
+    },
+    {
+      "name": "03-settings-appearance",
+      "file": "docs\\proof\\v11.1.2\\gate6-ux-polish\\before\\03-settings-appearance.png",
+      "sha256": "E6D6BAD57F2A8FECBB743582A6BB3E52100D3CDA1DCF489EEFB192270CCCE223",
+      "bytes": 85553
+    },
+    {
+      "name": "03-settings-power-safety",
+      "file": "docs\\proof\\v11.1.2\\gate6-ux-polish\\before\\03-settings-power-safety.png",
+      "sha256": "DB2ACFFEFC06910039F2A63B704DFA361BC0E4E022856EA1414840B33D940A82",
+      "bytes": 81902
+    },
+    {
+      "name": "03-settings-protection",
+      "file": "docs\\proof\\v11.1.2\\gate6-ux-polish\\before\\03-settings-protection.png",
+      "sha256": "D2A274B86F4C80C8AE28759A444AEE9C77C071F7CE8BA40BD8ABC13A7AFEED7A",
+      "bytes": 88142
+    },
+    {
+      "name": "03-settings-wind-down",
+      "file": "docs\\proof\\v11.1.2\\gate6-ux-polish\\before\\03-settings-wind-down.png",
+      "sha256": "D0E735B44B5A627EFE181EF5CB843C4C4C9460E862A8B1EC4C0CE18B25B0848B",
+      "bytes": 87296
+    },
+    {
+      "name": "03-settings-automations",
+      "file": "docs\\proof\\v11.1.2\\gate6-ux-polish\\before\\03-settings-automations.png",
+      "sha256": "9DDA0AB7A7C66B5A46D824EC515854EA96128F58DF664BDBB9DDC1EB24117736",
+      "bytes": 80370
+    },
+    {
+      "name": "03-settings-phone",
+      "file": "docs\\proof\\v11.1.2\\gate6-ux-polish\\before\\03-settings-phone.png",
+      "sha256": "9BEBF04E394A02C7E28147A93C771452E4F02B64C70231DD0D4B0876B28D4E5C",
+      "bytes": 91414
+    },
+    {
+      "name": "03-settings-accountability",
+      "file": "docs\\proof\\v11.1.2\\gate6-ux-polish\\before\\03-settings-accountability.png",
+      "sha256": "D46259A62FA379B84B78715C1F9F19B849A57C838B7386307196B04C69867091",
+      "bytes": 87446
+    },
+    {
+      "name": "03-settings-advanced",
+      "file": "docs\\proof\\v11.1.2\\gate6-ux-polish\\before\\03-settings-advanced.png",
+      "sha256": "19D115FB487863C366CD6A478CD025D58DA6258FC4DD01C29548FB95EF5C1925",
+      "bytes": 73551
+    },
+    {
+      "name": "04-home-minimum",
+      "file": "docs\\proof\\v11.1.2\\gate6-ux-polish\\before\\04-home-minimum.png",
+      "sha256": "100E5CDF273F70BD709F1543829E5629B87676C03A5EF5E3410FB38B287A299F",
+      "bytes": 278185
+    },
+    {
+      "name": "05-lib-minimum",
+      "file": "docs\\proof\\v11.1.2\\gate6-ux-polish\\before\\05-lib-minimum.png",
+      "sha256": "AEF8A34898CE457A17CC75ACB9B772393B5BA5ACB043A6A09EE56B88874A8632",
+      "bytes": 167700
+    },
+    {
+      "name": "06-proof-empty",
+      "file": "docs\\proof\\v11.1.2\\gate6-ux-polish\\before\\06-proof-empty.png",
+      "sha256": "7E595B05ED3C2159B482D809AA57FB84A92575FBAFFFC4363554AB61DCACD009",
+      "bytes": 106108
+    },
+    {
+      "name": "07-help-menu",
+      "file": "docs\\proof\\v11.1.2\\gate6-ux-polish\\before\\07-help-menu.png",
+      "sha256": "6C514659C8B26106C672172656C8EBE7EC7A91F400EFA8DA83FE9CE4314C6A00",
+      "bytes": 117056
+    }
+  ]
+}
