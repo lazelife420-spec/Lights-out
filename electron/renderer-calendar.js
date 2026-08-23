@@ -326,14 +326,14 @@ function renderCalendarEvents() {
     const start = new Date(e.start);
     const timeStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
     const dateStr = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    const sourceIcons = { builtin: '\u{1F4C5}', ical: '\u{1F5D3}', google: '\u{1F4E7}', outlook: '\u{1F4E9}', calendly: '\u{1F517}' };
+    const sourceLabels = { builtin: 'Lights Out', ical: 'iCal', google: 'Google', outlook: 'Outlook', calendly: 'Calendly' };
     const startBtn = index === 0
       ? `<button class="btn-secondary btn-sm event-start-btn" data-uid="${escapeHtml(e.uid)}" title="Start this now instead of waiting">Start</button>`
       : '';
     return `<div class="calendar-event" data-uid="${escapeHtml(e.uid)}">
       <div class="event-info">
         <div class="event-name">${escapeHtml(e.summary)}</div>
-        <div class="event-meta">${dateStr} at ${timeStr} ${sourceIcons[e.source] || ''}</div>
+        <div class="event-meta">${dateStr} at ${timeStr} <span class="event-source">${escapeHtml(sourceLabels[e.source] || 'Calendar')}</span></div>
       </div>
       ${startBtn}
     </div>`;

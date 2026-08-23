@@ -248,7 +248,9 @@ async function renderFeatured(mode) {
 
   const btn = document.getElementById('nm-btn-use-tonight');
   btn.disabled = mode.status !== 'ready';
-  btn.textContent = mode.status === 'ready' ? 'Use Tonight' : 'Not Available';
+  btn.innerHTML = mode.status === 'ready'
+    ? '<img src="assets/brand/lights-out-icon-small.svg" alt="" draggable="false"><span>Use Tonight</span>'
+    : '<span>Not Available</span>';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

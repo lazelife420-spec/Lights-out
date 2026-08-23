@@ -93,7 +93,7 @@ function notifyFault(title, body, extra) {
 process.on('uncaughtException', (err) => {
   notifyFault(
     'Lights Out encountered a problem',
-    'Your shutdown timer is still safe in the background. If anything looks wrong, reopen Lights Out.',
+    'Reopen Lights Out to check the current timer status and confirm everything looks right.',
     { event: 'uncaughtException', message: err && err.message, stack: err && err.stack }
   );
 });
@@ -101,7 +101,7 @@ process.on('unhandledRejection', (reason) => {
   const err = reason instanceof Error ? reason : new Error(String(reason));
   notifyFault(
     'Lights Out encountered a problem',
-    'Your shutdown timer is still safe in the background. If anything looks wrong, reopen Lights Out.',
+    'Reopen Lights Out to check the current timer status and confirm everything looks right.',
     { event: 'unhandledRejection', message: err.message, stack: err.stack }
   );
 });
@@ -412,7 +412,7 @@ function createWindow() {
       if (!rendererReadyReceived) {
         notifyFault(
           'Lights Out display did not initialize',
-          'Your shutdown timer is still safe if one is running. Try reopening the window.',
+          'Reopen the window to check the current timer status.',
           { event: 'renderer-ready-timeout' }
         );
       }
@@ -421,7 +421,7 @@ function createWindow() {
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
     notifyFault(
       'Lights Out failed to load',
-      'The window could not be shown. Your shutdown timer is still safe if one is running.',
+      'The window could not be shown. Reopen Lights Out to check the current timer status.',
       { event: 'did-fail-load', errorCode, errorDescription, validatedURL }
     );
   });

@@ -1558,6 +1558,7 @@ function applyMainPanelVisibility(panel) {
 // Intentional empty state: explains what Proof is and offers one real,
 // existing action (navigate to Tonight) instead of a bare "no data" line.
 const PROOF_EMPTY_STATE_HTML = `
+  <img src="assets/brand/lights-out-icon.svg" alt="" class="proof-empty-mark" draggable="false">
   <p class="empty-state-title">Nothing recorded yet.</p>
   <p class="empty-state">Complete or Dry Run a Lights Out session and the result will show up here.</p>
   <button type="button" class="btn-secondary btn-sm" id="btn-proof-go-tonight">Go to Tonight</button>
@@ -1580,9 +1581,15 @@ function renderLastRunSummary(mostRecent) {
   const when = mostRecent.startedAt ? new Date(mostRecent.startedAt).toLocaleString() : '—';
   const dryRunBadge = mostRecent.dryRun ? ' <span class="status-pill status-local">Dry Run</span>' : '';
   els.proofLastRunSummary.innerHTML = `
-    <div class="status-row"><span>When</span><span>${escapeHtml(when)}</span></div>
-    <div class="status-row"><span>Result</span><span>${escapeHtml(humanizeReceiptResult(mostRecent.result))}${dryRunBadge}</span></div>
-    <div class="status-row"><span>Action</span><span>${escapeHtml(humanizeReceiptAction(mostRecent.action))}</span></div>
+    <div class="proof-result-heading">
+      <img src="assets/brand/lights-out-icon.svg" alt="" class="proof-result-mark" draggable="false">
+      <div><span class="proof-result-eyebrow">Lights Out receipt</span><strong>Session recorded</strong></div>
+    </div>
+    <div class="proof-result-grid">
+      <div class="status-row"><span>When</span><span>${escapeHtml(when)}</span></div>
+      <div class="status-row"><span>Result</span><span>${escapeHtml(humanizeReceiptResult(mostRecent.result))}${dryRunBadge}</span></div>
+      <div class="status-row"><span>Action</span><span>${escapeHtml(humanizeReceiptAction(mostRecent.action))}</span></div>
+    </div>
   `;
 }
 
@@ -2322,8 +2329,13 @@ function renderHome() {
     ctaLabelEl.textContent = mode === 'continue' ? 'Continue Tonight' : mode === 'start' ? 'Start Tonight' : 'Choose Tonight';
   }
   if (ctaIconEl) {
-    ctaIconEl.innerHTML = mode === 'start' ? (icons.play || '') : (icons.arrow || '');
+    ctaIconEl.innerHTML = mode === 'choose'
+      ? (icons.arrow || '')
+      : '<img src="assets/brand/lights-out-icon-small.svg" alt="" draggable="false">';
   }
+
+  const heroEl = document.querySelector('.ns-home-hero');
+  if (heroEl) heroEl.dataset.sessionState = mode === 'continue' ? 'running' : mode === 'start' ? 'armed' : 'ready';
 
   const planEl = document.getElementById('ns-home-tonight-plan');
   const timeEl = document.getElementById('ns-home-tonight-time');
@@ -2417,10 +2429,19 @@ function renderArmedModeBanner() {
   const metaEl = document.getElementById('armed-mode-meta');
   const labelEl = document.getElementById('armed-mode-label');
   const clearBtn = document.getElementById('armed-mode-clear');
+  const sessionStatus = document.getElementById('tonight-session-status');
   banner.style.display = '';
 
   const m = state.armedNightMode;
   const c = state.armedCustomTimer;
+  const isArmed = Boolean(m || c);
+  const isRunning = Boolean(state.running || state.paused);
+  banner.classList.toggle('is-armed', isArmed && !isRunning);
+  banner.classList.toggle('is-running', isRunning);
+  if (sessionStatus) {
+    sessionStatus.textContent = state.paused ? 'Paused' : isRunning ? 'Running' : isArmed ? 'Armed' : 'Ready';
+    sessionStatus.dataset.state = state.paused ? 'paused' : isRunning ? 'running' : isArmed ? 'armed' : 'ready';
+  }
   if (m) {
     const durMin = Math.round(m.durationSeconds / 60);
     const ritualLabel = m.ritualId === 'standard' ? 'Standard ritual' : 'Direct';

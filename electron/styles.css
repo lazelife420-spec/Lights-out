@@ -3420,6 +3420,18 @@ body.mini-mode .action-btn {
   margin-bottom: 8px;
   transition: all 0.15s ease;
 }
+.event-source {
+  display: inline-flex;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--gate6-border-soft);
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 
 .calendar-event:hover {
   border-color: var(--accent-cyan);
@@ -6416,4 +6428,381 @@ body.fullscreen-clock-mode .fullscreen-clock-exit {
 .armed-mode-clear:focus-visible {
   outline: 2px solid rgba(107, 211, 255, 0.7);
   outline-offset: 2px;
+}
+
+/* ========================================================================== 
+   GATE 6 — PRODUCT COHERENCE AND SELECTIVE SESSION IDENTITY
+   The real Lights Out mark identifies the product/session. Functional
+   controls continue to use the semantic SVG family and state colors retain
+   their existing safety meanings.
+   ========================================================================== */
+:root {
+  --gate6-surface: rgba(255,255,255,0.025);
+  --gate6-surface-strong: rgba(20,26,36,0.94);
+  --gate6-border: rgba(149,168,198,0.16);
+  --gate6-border-soft: rgba(149,168,198,0.09);
+  --gate6-warm: #efbd63;
+  --gate6-warm-soft: rgba(239,189,99,0.14);
+  --gate6-page-max: 1180px;
+}
+
+body.ns-lobby .dashboard > .ns-main-panel {
+  width: 100%;
+  max-width: var(--gate6-page-max);
+  margin-inline: auto;
+}
+
+/* The title bar and labeled sidebar already carry persistent identity.
+   Secondary pages use their own product headings; the former tiny centered
+   logo repeated the brand without adding orientation. */
+body.ns-lobby .ns-header-wordmark { display: none; }
+
+.gate6-page-heading,
+.gate6-session-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 2px 0 4px;
+}
+.gate6-page-heading h2,
+.gate6-session-heading h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 24px;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+.gate6-page-heading p,
+.gate6-session-heading p {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.gate6-page-eyebrow,
+.proof-result-eyebrow {
+  color: var(--gate6-warm);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+.gate6-session-heading {
+  justify-content: flex-start;
+  padding: 6px 20px 0;
+}
+.gate6-session-copy { flex: 1; min-width: 0; }
+.gate6-session-mark {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 0 10px rgba(239,189,99,0.18));
+}
+.gate6-session-status {
+  flex: 0 0 auto;
+  border: 1px solid var(--gate6-border);
+  border-radius: 999px;
+  padding: 5px 11px;
+  color: var(--text-secondary);
+  background: var(--gate6-surface);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.gate6-session-status[data-state="armed"] {
+  color: var(--gate6-warm);
+  border-color: rgba(239,189,99,0.34);
+  background: var(--gate6-warm-soft);
+}
+.gate6-session-status[data-state="running"] {
+  color: var(--accent-green);
+  border-color: rgba(76,175,80,0.34);
+  background: rgba(76,175,80,0.12);
+}
+.gate6-session-status[data-state="paused"] {
+  color: var(--accent-amber);
+  border-color: rgba(212,165,10,0.36);
+  background: rgba(212,165,10,0.12);
+}
+
+/* Home is the one full-wordmark surface. */
+.ns-home-brand {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+.ns-home-wordmark {
+  width: min(330px, 68vw);
+  max-height: 76px;
+  object-fit: contain;
+  object-position: left center;
+  filter: drop-shadow(0 6px 18px rgba(32,216,199,0.16));
+}
+.ns-home-brand-tag {
+  margin: 0 0 0 4px;
+  color: #a9b8ca;
+  letter-spacing: 0.03em;
+}
+.ns-home-hero[data-session-state="armed"] {
+  border-color: rgba(239,189,99,0.34);
+  box-shadow: 0 18px 48px rgba(4,8,20,0.4), inset 0 1px 0 rgba(239,189,99,0.06);
+}
+.ns-home-hero[data-session-state="running"] {
+  border-color: rgba(76,175,80,0.32);
+}
+.ns-home-cta-icon img,
+.nm-btn-use-tonight img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: brightness(1.35) saturate(0.85);
+}
+.ns-home-hero[data-session-state="armed"] .ns-home-cta-icon img {
+  filter: drop-shadow(0 0 6px rgba(239,189,99,0.38)) brightness(1.25);
+}
+.ns-home-hero[data-session-state="running"] .ns-home-cta-icon img {
+  animation: gate6-session-breathe 3.2s ease-in-out infinite;
+}
+
+/* Tonight's plan banner becomes the bridge between identity and the real
+   runtime controls, with no change to what is armed or started. */
+.armed-mode-banner {
+  border-radius: 14px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(91,140,255,0.09), rgba(16,21,31,0.72));
+}
+.armed-mode-banner.is-armed {
+  border-color: rgba(239,189,99,0.34);
+  background: linear-gradient(135deg, rgba(239,189,99,0.10), rgba(16,21,31,0.78));
+}
+.armed-mode-banner.is-running {
+  border-color: rgba(76,175,80,0.30);
+  background: linear-gradient(135deg, rgba(76,175,80,0.09), rgba(16,21,31,0.78));
+}
+.armed-mode-mark {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  opacity: 0.72;
+  filter: saturate(0.75);
+}
+.armed-mode-banner.is-armed .armed-mode-mark {
+  opacity: 1;
+  filter: drop-shadow(0 0 7px rgba(239,189,99,0.30)) brightness(1.15);
+}
+.armed-mode-banner.is-running .armed-mode-mark {
+  opacity: 1;
+  animation: gate6-session-breathe 3.2s ease-in-out infinite;
+}
+.btn-begin-ritual {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 9px;
+  padding: 7px 14px;
+  border-radius: 9px;
+  font-size: 11px;
+  opacity: 0.9;
+}
+.btn-begin-ritual img { width: 16px; height: 16px; opacity: 0.78; }
+
+/* Core component normalization. */
+.status-card,
+.tabs-section,
+.settings-panel,
+.calendar-section,
+.ns-context-band {
+  border-radius: 14px;
+  border-color: var(--gate6-border);
+}
+.status-card { background: linear-gradient(155deg, rgba(28,33,39,0.94), rgba(18,22,27,0.94)); }
+.btn-primary,
+.btn-secondary,
+.btn-danger,
+.btn-start-custom,
+.btn-arm-custom,
+.nm-btn-use-tonight { min-height: 38px; border-radius: 9px; }
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea { min-height: 36px; border-radius: 8px; }
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid rgba(107,211,255,0.76);
+  outline-offset: 1px;
+}
+.semantic-icon {
+  display: inline-flex;
+  width: 17px;
+  height: 17px;
+  color: var(--accent-cyan);
+  flex: 0 0 auto;
+}
+.semantic-icon svg,
+.sch-next-icon svg { width: 100%; height: 100%; }
+
+/* Settings: restore the intended desktop rail/content relationship. */
+.settings-panel .modal-body { flex-direction: row; }
+.settings-panel { max-width: var(--gate6-page-max); }
+.settings-rail {
+  flex-basis: 214px;
+  background: rgba(8,12,18,0.28);
+}
+.settings-rail-btn { min-height: 40px; border-radius: 8px; }
+.settings-rail-btn.active {
+  box-shadow: inset 3px 0 0 var(--accent-cyan);
+  background: rgba(118,201,255,0.10);
+}
+.settings-categories { padding: 22px 24px; }
+.settings-category-summary {
+  background: linear-gradient(135deg, rgba(118,201,255,0.055), rgba(255,255,255,0.018));
+  border-color: var(--gate6-border);
+}
+
+/* Schedule: foreground intent and make the legacy tools read as a supporting
+   system rather than one continuous developer panel. */
+#ns-panel-sch { background: transparent; border: none; }
+#ns-panel-sch > .tabs-header,
+#ns-panel-stats > .tabs-header {
+  border: 1px solid var(--gate6-border);
+  border-radius: 12px 12px 0 0;
+  overflow: hidden;
+}
+#ns-panel-sch > .tabs-content,
+#ns-panel-stats > .tabs-content {
+  border: 1px solid var(--gate6-border);
+  border-top: 0;
+  border-radius: 0 0 14px 14px;
+  background: rgba(18,22,27,0.78);
+}
+.sch-next-summary {
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(239,189,99,0.08), rgba(255,255,255,0.025));
+  border-color: rgba(239,189,99,0.20);
+}
+.sch-next-icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  color: var(--gate6-warm);
+}
+.calendar-section { background: rgba(8,12,18,0.34); }
+.calendar-header { min-height: 42px; }
+.calendar-event {
+  border-radius: 11px;
+  border: 1px solid var(--gate6-border-soft);
+  background: rgba(255,255,255,0.025);
+}
+
+/* Devices: readiness cards in a balanced capability grid. */
+.dev-status-section {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 14px;
+}
+.dev-status-section > .dev-section-header,
+.dev-status-section > .dev-pc-card { grid-column: 1 / -1; }
+.dev-status-section .status-card { min-width: 0; }
+.dev-status-section .card-header { min-height: 20px; }
+.dev-note { font-size: 11px; line-height: 1.5; }
+.device-actions .btn-secondary { width: auto; }
+
+/* Proof: honest data stays central; branding only identifies the app-owned
+   empty/completed state and never replaces receipt fields. */
+#ns-panel-stats .dev-section-header { padding: 2px 2px 0; }
+#proof-last-run-summary,
+#stats-session-summary,
+#activity-empty-state .card-body {
+  position: relative;
+}
+#proof-last-run-summary:has(.proof-empty-mark),
+#stats-session-summary:has(.proof-empty-mark) {
+  min-height: 230px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px 22px;
+}
+.proof-empty-mark {
+  width: 54px;
+  height: 54px;
+  margin-bottom: 10px;
+  opacity: 0.22;
+  filter: grayscale(0.25) drop-shadow(0 0 14px rgba(118,201,255,0.12));
+}
+.proof-result-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 14px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--gate6-border-soft);
+}
+.proof-result-heading strong { display: block; color: var(--text-primary); font-size: 15px; }
+.proof-result-mark {
+  width: 38px;
+  height: 38px;
+  filter: drop-shadow(0 0 9px rgba(76,175,80,0.22));
+}
+.proof-result-grid { display: grid; gap: 2px; }
+
+.ns-home-lastnight { position: relative; overflow: hidden; }
+.ns-home-proof-stamp {
+  position: absolute;
+  right: 12px;
+  top: 10px;
+  width: 32px;
+  height: 32px;
+  opacity: 0.16;
+  filter: grayscale(0.25);
+}
+
+.nm-btn-use-tonight {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.nm-btn-use-tonight img { width: 18px; height: 18px; }
+
+@keyframes gate6-session-breathe {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(76,175,80,0.18)) brightness(1.05); }
+  50% { filter: drop-shadow(0 0 8px rgba(76,175,80,0.36)) brightness(1.24); }
+}
+
+@media (max-width: 1050px) {
+  .dev-status-section { grid-template-columns: 1fr; }
+  .dev-status-section > .dev-section-header,
+  .dev-status-section > .dev-pc-card { grid-column: auto; }
+  .settings-rail { flex-basis: 184px; }
+  .settings-categories { padding: 18px; }
+}
+
+@media (max-width: 820px) {
+  .settings-panel .modal-body { flex-direction: column; }
+  .settings-rail {
+    flex: 0 0 auto;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: 0;
+    border-bottom: 1px solid var(--gate6-border);
+  }
+  .settings-rail-group-label { display: none; }
+  .settings-rail-btn { flex: 0 0 auto; white-space: nowrap; }
+  .settings-rail-btn.active { box-shadow: inset 0 -3px 0 var(--accent-cyan); }
+  .gate6-session-heading { padding-inline: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ns-home-hero[data-session-state="running"] .ns-home-cta-icon img,
+  .armed-mode-banner.is-running .armed-mode-mark { animation: none; }
 }

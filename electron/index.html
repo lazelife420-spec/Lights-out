@@ -281,11 +281,8 @@
         <section class="ns-home-hero">
           <div class="ns-home-hero-bg" aria-hidden="true"></div>
           <div class="ns-home-brand">
-            <img src="assets/brand/lights-out-icon.svg" alt="" class="ns-home-brand-icon">
-            <div class="ns-home-brand-text">
-              <div class="ns-home-brand-title">LIGHTS OUT</div>
-              <div class="ns-home-brand-tag">Control the end of your day.</div>
-            </div>
+            <img src="assets/brand/lights-out-wordmark-transparent.svg" alt="Lights Out" class="ns-home-wordmark" draggable="false">
+            <div class="ns-home-brand-tag">Control the end of your day.</div>
           </div>
 
           <!-- Phase 5F-B2: split the single status line into a prominent
@@ -437,6 +434,7 @@
                keeps this hidden otherwise. Icons are SVG, not emoji. -->
           <section class="ns-home-card ns-home-card-secondary ns-home-lastnight" id="morning-proof-section" style="display:none">
             <div class="ns-home-card-label">LAST NIGHT</div>
+            <img src="assets/brand/lights-out-icon-small.svg" alt="" class="ns-home-proof-stamp" draggable="false">
             <div class="ns-home-lastnight-row">
               <div class="ns-home-lastnight-main">
                 <span class="ns-home-lastnight-icon" id="proof-icon" aria-hidden="true"></span>
@@ -460,6 +458,15 @@
 
       <!-- LIB: Tonight (control room) -->
       <div class="ns-main-panel" id="ns-panel-lib" style="display:none">
+      <div class="gate6-session-heading">
+        <img src="assets/brand/lights-out-icon.svg" alt="" class="gate6-session-mark" draggable="false">
+        <div class="gate6-session-copy">
+          <div class="gate6-page-eyebrow">Tonight</div>
+          <h2>Session room</h2>
+          <p>Set the plan, arm it for later, or begin when you are ready.</p>
+        </div>
+        <span class="gate6-session-status" id="tonight-session-status">Ready</span>
+      </div>
 <!-- Tonight's current-plan banner. Originally only appeared when Use
            Tonight armed a Night Mode (hidden otherwise, leaving Tonight
            with no plan summary at all for a plain custom timer -- a real
@@ -473,6 +480,7 @@
       <div class="armed-mode-banner" id="armed-mode-banner" style="display:none" role="status" aria-live="polite">
         <div class="armed-mode-row">
           <div class="armed-mode-info" tabindex="0" data-ns-help="This is the plan that runs when you press Start -- either a custom timer or an armed Night Mode.">
+            <img src="assets/brand/lights-out-icon.svg" alt="" class="armed-mode-mark" draggable="false">
             <span class="armed-mode-label" id="armed-mode-label">NIGHT MODE</span>
             <span class="armed-mode-title" id="armed-mode-title"></span>
             <span class="armed-mode-meta" id="armed-mode-meta"></span>
@@ -600,7 +608,7 @@
                despite being a real product action -- now its own
                dedicated .btn-arm-custom style, sized to match Start Now. -->
           <button class="btn-arm-custom" id="btn-arm-custom" data-ns-help="Commits this duration and action as tonight's plan without starting it -- Start Now still runs it when you're ready.">Arm Tonight</button>
-          <button class="btn-secondary" id="btn-ritual" style="margin-top:8px;font-size:11px;padding:6px 14px;border-radius:8px;opacity:0.85" title="Guided bedtime ritual: breathing → block → timer → lights" data-ns-help="A separate guided wind-down (breathing, then block, then timer, then lights) -- not the same as Start Now.">&#x1F319; Begin Ritual</button>
+          <button class="btn-secondary btn-begin-ritual" id="btn-ritual" title="Guided bedtime ritual: breathing → block → timer → lights" data-ns-help="A separate guided wind-down (breathing, then block, then timer, then lights) -- not the same as Start Now."><img src="assets/brand/lights-out-icon-small.svg" alt="" draggable="false">Begin Ritual</button>
         </div>
       </section>
 
@@ -751,6 +759,14 @@
       <!-- SCH: Schedule panel (duration/clock mode, calendar controls) -->
       <section class="tabs-section ns-main-panel" id="ns-panel-sch" style="display:none">
 
+        <div class="gate6-page-heading">
+          <div>
+            <div class="gate6-page-eyebrow">Plan ahead</div>
+            <h2>Schedule</h2>
+            <p>Bedtime rules, First Light, and optional automations in one place.</p>
+          </div>
+        </div>
+
         <!-- Next tonight: always-visible truthful summary regardless of which
              sub-tab is open below. Mirrors state that Automations/Calendar
              already compute -- no second source of truth. -->
@@ -758,15 +774,15 @@
           <div class="sch-next-label">Next tonight</div>
           <div class="sch-next-rows">
             <div class="sch-next-row">
-              <span class="sch-next-icon" aria-hidden="true">&#x1F319;</span>
+              <span class="sch-next-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>
               <span id="sch-next-bedtime">No bedtime rule set</span>
             </div>
             <div class="sch-next-row">
-              <span class="sch-next-icon" aria-hidden="true">&#x1F305;</span>
+              <span class="sch-next-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 18a5 5 0 0 0-10 0"/><line x1="12" y1="2" x2="12" y2="9"/><line x1="4.22" y1="10.22" x2="5.64" y2="11.64"/><line x1="1" y1="18" x2="3" y2="18"/><line x1="21" y1="18" x2="23" y2="18"/><line x1="18.36" y1="11.64" x2="19.78" y2="10.22"/><line x1="3" y1="22" x2="21" y2="22"/></svg></span>
               <span id="sch-next-firstlight">First Light: not set</span>
             </div>
             <div class="sch-next-row">
-              <span class="sch-next-icon" aria-hidden="true">&#x1F916;</span>
+              <span class="sch-next-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="16" height="12" rx="2"/><path d="M9 11h.01M15 11h.01M8 15h8M12 7V4M9 4h6"/></svg></span>
               <span id="sch-next-autopilot">Autopilot: off</span>
             </div>
           </div>
@@ -811,7 +827,7 @@
             <!-- Calendar Import Section -->
             <div class="calendar-section">
               <div class="calendar-header">
-                <span class="icon">&#x1F4C5;</span>
+                <span class="icon semantic-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
                 <span>Calendar</span>
                 <select id="sel-calendar-provider" class="cal-provider-select">
                   <option value="builtin">Lights Out Calendar</option>
@@ -939,7 +955,7 @@
                of truth, no new configuration UI. -->
           <div class="tab-panel" id="tab-automations">
             <div class="automation-hero-card" id="firstlight-hero-card">
-              <div class="ah-icon" aria-hidden="true">&#x1F305;</div>
+              <div class="ah-icon semantic-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 18a5 5 0 0 0-10 0"/><line x1="12" y1="2" x2="12" y2="9"/><line x1="4.22" y1="10.22" x2="5.64" y2="11.64"/><line x1="1" y1="18" x2="3" y2="18"/><line x1="21" y1="18" x2="23" y2="18"/><line x1="18.36" y1="11.64" x2="19.78" y2="10.22"/><line x1="3" y1="22" x2="21" y2="22"/></svg></div>
               <div class="ah-body">
                 <div class="ah-title">First Light</div>
                 <div class="ah-state" id="firstlight-hero-state">No morning alarm set</div>
@@ -983,7 +999,7 @@
           <div class="tab-panel" id="tab-focus">
             <div class="focus-panel">
               <div class="focus-hero">
-                <div class="focus-icon">&#x1F3AF;</div>
+                <div class="focus-icon semantic-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg></div>
                 <h3>Focus Session</h3>
                 <p style="font-size:11px;color:var(--text-muted);margin:4px 0 12px">Pomodoro-style deep work. Same ring, same sounds.</p>
               </div>
@@ -1046,7 +1062,7 @@
 
           <div class="status-card dev-pc-card">
             <div class="card-header">
-              <span class="icon">&#x1F4BB;</span>
+              <span class="icon semantic-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>
               <span>This PC</span>
             </div>
             <div class="card-body">
@@ -1059,7 +1075,7 @@
 
           <div class="status-card dev-companion-card">
             <div class="card-header">
-              <span class="icon">&#x1F4F1;</span>
+              <span class="icon semantic-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></span>
               <span>Phone Companion</span>
             </div>
             <div class="card-body">
@@ -1076,7 +1092,7 @@
 
           <div class="status-card dev-family-card">
             <div class="card-header">
-              <span class="icon">&#x1F3E0;</span>
+              <span class="icon semantic-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></svg></span>
               <span>Family LAN</span>
             </div>
             <div class="card-body">
@@ -1092,7 +1108,7 @@
 
           <div class="status-card dev-lights-card">
             <div class="card-header">
-              <span class="icon">&#x1F4A1;</span>
+              <span class="icon semantic-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4"/><path d="M8.5 14.5A7 7 0 1 1 15.5 14.5c-1.1.8-1.5 1.7-1.5 3.5h-4c0-1.8-.4-2.7-1.5-3.5z"/></svg></span>
               <span>Smart Lights</span>
             </div>
             <div class="card-body">
@@ -1107,7 +1123,7 @@
 
           <div class="status-card dev-wifi-card">
             <div class="card-header">
-              <span class="icon">&#x1F6E1;&#xFE0F;</span>
+              <span class="icon semantic-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg></span>
               <span>WiFi Guard <span class="status-pill status-local" style="font-size:8px">EXPERIMENTAL</span></span>
             </div>
             <div class="card-body">
@@ -1139,10 +1155,11 @@
           <div class="tab-panel active" id="tab-proof-last">
             <div class="status-card">
               <div class="card-header">
-                <span class="icon">&#x1F31E;</span>
+                <span class="icon semantic-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l2.5 2.5L16 9"/></svg></span>
                 <span>Last Run</span>
               </div>
               <div class="card-body" id="proof-last-run-summary">
+                <img src="assets/brand/lights-out-icon.svg" alt="" class="proof-empty-mark" draggable="false">
                 <p class="empty-state-title">Nothing recorded yet.</p>
                 <p class="empty-state">Complete or Dry Run a Lights Out session and the result will show up here.</p>
                 <button type="button" class="btn-secondary btn-sm" id="btn-proof-last-go-tonight">Go to Tonight</button>
@@ -1153,7 +1170,7 @@
           <div class="tab-panel" id="tab-proof-history">
             <div class="status-card">
               <div class="card-header">
-                <span class="icon">&#x1F4CB;</span>
+                <span class="icon semantic-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h6M9 9h6M9 13h4"/><rect x="5" y="2" width="14" height="20" rx="2"/></svg></span>
                 <span>Session History</span>
               </div>
               <div class="card-body" id="stats-session-summary">
@@ -1179,6 +1196,7 @@
                    PROOF_EMPTY_STATE_HTML for Last Run/History. -->
               <div class="status-card" id="activity-empty-state">
                 <div class="card-body" style="text-align:center;padding:24px 16px">
+                  <img src="assets/brand/lights-out-icon.svg" alt="" class="proof-empty-mark" draggable="false">
                   <p class="empty-state-title">No completed nights yet.</p>
                   <p class="empty-state">Run or Dry Run a Lights Out session tonight -- once you've completed 1, this page will start tracking your streak, routine score, and history. The full picture unlocks after 3+ completed runs.</p>
                   <button type="button" class="btn-secondary btn-sm" id="btn-activity-go-tonight">Go to Tonight</button>
@@ -1193,7 +1211,7 @@
                      full-width heroes. -->
                 <div class="status-card activity-summary-card">
                   <div class="card-header">
-                    <span class="icon">&#x1F4CA;</span>
+                    <span class="icon semantic-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
                     <span>Activity Summary</span>
                   </div>
                   <div class="activity-summary-body">
@@ -1376,7 +1394,7 @@
 
         <!-- Wind-down System Actions -->
         <div class="option-section" data-settings-category="wind-down">
-          <h3>&#x1F319; Wind-down system actions</h3>
+          <h3>Wind-down system actions</h3>
           <div class="option-group">
             <label class="checkbox-label">
               <input type="checkbox" id="chk-nightlight-dim">
@@ -1408,7 +1426,7 @@
           <p class="settings-category-affects">Affects tonight: only if Smart Lights is configured, or a wind-down action below is turned on -- all default off.</p>
         </div>
         <div class="option-section lights-section" data-settings-category="wind-down">
-          <h3>&#x1F4A1; Smart Lights <span class="status-pill status-local" style="font-size:8px">REQUIRES SETUP</span></h3>
+          <h3>Smart Lights <span class="status-pill status-local" style="font-size:8px">REQUIRES SETUP</span></h3>
           <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Nothing is controlled until you configure and successfully test the available Philips Hue or HTTP integration.</p>
           
           <div class="option-group">
@@ -1495,7 +1513,7 @@
           <p class="settings-category-affects">Affects tonight: Autopilot only if enabled; First Light only if a wake time is set below.</p>
         </div>
         <div class="option-section alarm-section" data-settings-category="automations">
-          <h3>&#x1F305; First Light</h3>
+          <h3>First Light</h3>
 
           <div class="option-group">
             <label class="checkbox-label">
@@ -1530,7 +1548,7 @@
         </div>
         <div class="option-section remote-control-section" data-settings-category="phone">
           <div style="display:flex;justify-content:space-between;align-items:center">
-            <h3>&#x1F4F1; Phone Companion</h3>
+            <h3>Phone Companion</h3>
             <span id="companion-status-pill" class="status-pill status-off">Off</span>
           </div>
           <div id="companion-connected-badge" class="companion-connected-badge" style="display:none"></div>
@@ -1607,7 +1625,7 @@
 
         <!-- Family Mode Section -->
         <div class="option-section family-section" data-settings-category="phone">
-          <h3>&#x1F468;&#x200D;&#x1F469;&#x200D;&#x1F467;&#x200D;&#x1F466; Family Mode</h3>
+          <h3>Family Mode</h3>
           <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Controls another PC only when that PC is running Lights Out with Family LAN enabled and the same pairing token. Discovery alone does not configure a peer.</p>
           <div class="option-group">
             <button type="button" id="btn-family-scan" class="btn-secondary">Scan for Peers</button>
@@ -1622,7 +1640,7 @@
           <p class="settings-category-affects">Affects tonight: only if configured. Neither runs unless explicitly set up and tested below.</p>
         </div>
         <div class="option-section wifi-guard-section" data-settings-category="protection">
-          <h3>&#x1F6E1;&#xFE0F; WiFi Guard <span class="status-pill status-local" style="font-size:8px">EXPERIMENTAL</span></h3>
+          <h3>WiFi Guard <span class="status-pill status-local" style="font-size:8px">EXPERIMENTAL</span></h3>
           <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Requires a compatible router or your own webhook. Windows Firewall on this PC cannot block a different phone or tablet on the LAN.</p>
 
           <div class="option-group">
@@ -1704,7 +1722,7 @@
 
         <!-- Content Blocker Section -->
         <div class="option-section content-blocker-section" data-settings-category="protection">
-          <h3>&#x1F6AB; Content Blocker <span class="status-pill status-local" style="font-size:8px">HOSTS FILE</span></h3>
+          <h3>Content Blocker <span class="status-pill status-local" style="font-size:8px">HOSTS FILE</span></h3>
           <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Edits the Windows hosts file and may require administrator approval. Secure DNS, VPNs, and cached browser connections can bypass it.</p>
 
           <div class="option-group">
@@ -1794,7 +1812,7 @@
           <p class="settings-category-affects">Affects tonight: only if you enable one of these below. No message is sent until a partner webhook exists.</p>
         </div>
         <div class="option-section accountability-section" data-settings-category="accountability">
-          <h3>&#x1F91D; Accountability Partner</h3>
+          <h3>Accountability Partner</h3>
           <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Sends JSON to a webhook you configure and test below. No message is sent until a partner webhook exists.</p>
 
           <div class="option-group">
@@ -1849,7 +1867,7 @@
 
         <!-- Override Tax Section -->
         <div class="option-section override-tax-section" data-settings-category="accountability">
-          <h3>&#x23F0; Override Tax</h3>
+          <h3>Override Tax</h3>
           <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Escalating cost for hitting snooze. Makes it harder to stay up the more you try.</p>
 
           <div class="option-group">
@@ -1893,7 +1911,7 @@
 
         <!-- Autopilot Bedtime Section -->
         <div class="option-section autopilot-section" data-settings-category="automations">
-          <h3>&#x1F916; Autopilot Bedtime</h3>
+          <h3>Autopilot Bedtime</h3>
           <p style="font-size:10px;color:var(--text-muted);margin:4px 0 8px">Learns your pattern and auto-starts the timer at your habitual bedtime. You get a 5-minute warning.</p>
 
           <div class="option-group">
@@ -1937,7 +1955,7 @@
           <p class="settings-category-affects">Affects tonight: presentation only. Never changes what actually happens.</p>
         </div>
         <div class="option-section customize-section" data-settings-category="appearance">
-          <h3>&#x1F3A8; Customize</h3>
+          <h3>Customize</h3>
 
           <div class="option-group">
             <label>Accent Color</label>
@@ -2124,7 +2142,7 @@
 
         <!-- Last Light Section -->
         <div class="option-section lastlight-section" data-settings-category="appearance">
-          <h3>&#x1F319; Last Light</h3>
+          <h3>Last Light</h3>
 
           <div class="option-group">
             <label class="checkbox-label">
@@ -2480,7 +2498,7 @@
       </div>
       <div class="modal-body about-body">
         <img class="about-wordmark" src="assets/brand/lights-out-wordmark-transparent.svg" alt="Lights Out" draggable="false">
-        <p class="about-tagline">Bedtime shutdown timer for Windows.</p>
+        <p class="about-tagline">Night control for Windows.</p>
         <p class="about-version" id="about-version">Version 11.1.2</p>
         <div class="about-updater" id="about-updater">
           <div class="updater-status" id="updater-status" data-state="idle">
