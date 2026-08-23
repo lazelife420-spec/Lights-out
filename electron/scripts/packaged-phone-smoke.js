@@ -232,7 +232,7 @@ async function main() {
       const state = await desktop.evaluate(`electronAPI.getRemoteControl()`);
       return state.connected && state.clients === 1 ? state : null;
     }, 30000);
-    assert.equal(connected.lanIp, '192.168.0.11');
+    assert.match(connected.lanIp, /^192\.168\.0\.\d+$/, 'desktop must expose the current private-LAN address');
 
     ({ client: phone, port: phoneForward } = await connectPhoneCdp());
     await waitFor(() => phone.evaluate(`document.getElementById('status-text')?.textContent === 'Connected'`));
