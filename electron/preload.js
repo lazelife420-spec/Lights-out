@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 const DESKTOP_UX_PROOF = process.argv.includes('--desktop-ux-proof') || process.env.LIGHTS_OUT_DESKTOP_UX_GATE === '1' || process.env.LIGHTS_OUT_DESKTOP_UX_GATE === 'true';
+const RELIABILITY_PROOF = process.env.LIGHTS_OUT_RELIABILITY_PROOF === '1';
 
 // Secure IPC bridge
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -291,6 +292,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('open-settings', () => callback());
   },
 
+  // Lifecycle signal so main can distinguish "renderer loaded" from
+  // "preload/window failed silently".
+  rendererReady: () => ipcRenderer.send('renderer-ready'),
+
   // Native desktop UX proof bridge. The renderer owns the public readiness
   // object so it can mark ready only after its complete async bootstrap.
   ...(DESKTOP_UX_PROOF ? {
@@ -300,6 +305,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
       getStartInvocations: () => ipcRenderer.invoke('get-start-invocations'),
       clearStartInvocations: () => ipcRenderer.invoke('clear-start-invocations'),
       getRealPowerActions: () => ipcRenderer.invoke('get-real-power-actions')
+    }
+  } : {}),
+
+  // Reliability/crash-policy proof bridge (gated; not present in production).
+  ...(RELIABILITY_PROOF ? {
+    reliabilityProof: {
+      crashRenderer: () => ipcRenderer.invoke('__reliability-crash-renderer'),
+      throwMain: () => ipcRenderer.invoke('__reliability-throw-main'),
+      getStartupLog: () => ipcRenderer.invoke('__reliability-startup-log')
     }
   } : {})
 });

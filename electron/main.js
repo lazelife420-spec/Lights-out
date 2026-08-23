@@ -64,6 +64,22 @@ function writeStartupLog(message, extra) {
   }
 }
 
+let faultNotificationShown = false;
+function notifyFault(title, body, extra) {
+  // Always record the fault with process context so startup.log remains useful
+  // even if the OS notification path is unavailable.
+  writeStartupLog(title, { ...extra, processType: 'main' });
+  if (faultNotificationShown) return;
+  faultNotificationShown = true;
+  try {
+    if (Notification.isSupported()) {
+      new Notification({ title, body, icon: APP_ICON }).show();
+    }
+  } catch {
+    // Notification is best-effort; never let it throw.
+  }
+}
+
 // Without these, an uncaught exception or unhandled promise rejection anywhere
 // in the main process (a timer callback, a fire-and-forget network call, a
 // stray `await` outside an IPC handler's own try/catch) crashes the entire
@@ -75,11 +91,19 @@ function writeStartupLog(message, extra) {
 // in, say, the calendar-fetch code." Log-and-continue is deliberately chosen
 // over log-and-exit for that reason.
 process.on('uncaughtException', (err) => {
-  writeStartupLog('uncaughtException', { message: err && err.message, stack: err && err.stack });
+  notifyFault(
+    'Lights Out encountered a problem',
+    'Your shutdown timer is still safe in the background. If anything looks wrong, reopen Lights Out.',
+    { event: 'uncaughtException', message: err && err.message, stack: err && err.stack }
+  );
 });
 process.on('unhandledRejection', (reason) => {
   const err = reason instanceof Error ? reason : new Error(String(reason));
-  writeStartupLog('unhandledRejection', { message: err.message, stack: err.stack });
+  notifyFault(
+    'Lights Out encountered a problem',
+    'Your shutdown timer is still safe in the background. If anything looks wrong, reopen Lights Out.',
+    { event: 'unhandledRejection', message: err.message, stack: err.stack }
+  );
 });
 
 function getPortableExtractionRoot() {
@@ -249,9 +273,26 @@ function getRestoredWindowState() {
   };
 }
 
+let rendererReadyReceived = false;
+let rendererReadyTimeout = null;
+ipcMain.on('renderer-ready', (event) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) return;
+  rendererReadyReceived = true;
+  if (rendererReadyTimeout) {
+    clearTimeout(rendererReadyTimeout);
+    rendererReadyTimeout = null;
+  }
+  writeStartupLog('Renderer ready', { timerRunning: timerState.running, timerPaused: timerState.paused });
+});
+
 function createWindow() {
   let startupActionsApplied = false;
   let saveWindowStateTimer = null;
+  rendererReadyReceived = false;
+  if (rendererReadyTimeout) {
+    clearTimeout(rendererReadyTimeout);
+    rendererReadyTimeout = null;
+  }
 
   function applyLaunchPresentation(source) {
     if (!mainWindow || mainWindow.isDestroyed() || startupActionsApplied) return;
@@ -362,15 +403,50 @@ function createWindow() {
   mainWindow.webContents.once('did-finish-load', () => {
     writeStartupLog('Renderer finished load');
     setTimeout(() => applyLaunchPresentation('did-finish-load-fallback'), 150);
+    // If a timer is already running in main (e.g., after a renderer crash reload),
+    // push the authoritative state to the fresh renderer so the UI is consistent.
+    if (timerState.running || timerState.paused) {
+      emitTimerUpdate(timerState.paused ? 'paused' : 'started');
+    }
+    rendererReadyTimeout = setTimeout(() => {
+      if (!rendererReadyReceived) {
+        notifyFault(
+          'Lights Out display did not initialize',
+          'Your shutdown timer is still safe if one is running. Try reopening the window.',
+          { event: 'renderer-ready-timeout' }
+        );
+      }
+    }, 10000);
   });
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
-    writeStartupLog('Renderer failed load', { errorCode, errorDescription, validatedURL });
+    notifyFault(
+      'Lights Out failed to load',
+      'The window could not be shown. Your shutdown timer is still safe if one is running.',
+      { event: 'did-fail-load', errorCode, errorDescription, validatedURL }
+    );
   });
   mainWindow.webContents.on('render-process-gone', (event, details) => {
-    writeStartupLog('Renderer process gone', details);
+    const activeTimer = timerState.running || timerState.paused;
+    notifyFault(
+      activeTimer ? 'Lights Out window restarted' : 'Lights Out window restarted',
+      activeTimer
+        ? 'Your shutdown timer is still running in the background. The window is reloading.'
+        : 'The window is reloading after a display problem.',
+      { event: 'render-process-gone', ...details, activeTimer }
+    );
+    if (!app.isQuitting && mainWindow && !mainWindow.isDestroyed()) {
+      // Defer reload one task so the renderer teardown notification finishes
+      // before we navigate, avoiding a re-entrancy crash on older Electron 43.x.
+      setImmediate(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.reload();
+      });
+    }
   });
   mainWindow.webContents.on('unresponsive', () => {
-    writeStartupLog('Renderer unresponsive');
+    writeStartupLog('Renderer unresponsive', { timerRunning: timerState.running, timerPaused: timerState.paused });
+  });
+  mainWindow.webContents.on('responsive', () => {
+    writeStartupLog('Renderer responsive again');
   });
 
   setTimeout(() => {
@@ -2834,6 +2910,28 @@ function setupRitualCallbacks() {
     if (runToken) profileRitualContext.clearIfOwned(runToken);
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('ritual-complete', state);
+    }
+  });
+}
+
+// Reliability/crash-policy proof helpers: gated behind an explicit env var so
+// production users never see these diagnostic surfaces.
+if (process.env.LIGHTS_OUT_RELIABILITY_PROOF === '1') {
+  ipcMain.handle('__reliability-crash-renderer', () => {
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
+      mainWindow.webContents.forcefullyCrashRenderer?.();
+    }
+    return true;
+  });
+  ipcMain.handle('__reliability-throw-main', () => {
+    setImmediate(() => { throw new Error('Lights Out reliability proof: simulated main uncaught exception'); });
+    return true;
+  });
+  ipcMain.handle('__reliability-startup-log', () => {
+    try {
+      return fs.readFileSync(path.join(app.getPath('userData'), 'startup.log'), 'utf8');
+    } catch (error) {
+      return '';
     }
   });
 }

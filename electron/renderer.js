@@ -4585,8 +4585,10 @@ async function loadInitialData() {
     try { loadStreaks(); } catch (e) { console.error('loadStreaks failed:', e); }
     try { if (typeof initNightModes === 'function') await initNightModes(); } catch (e) { console.error('initNightModes failed:', e); }
 
-    // Offer recovery of an interrupted timer
-    if (appSettings.recoverableTimer) {
+    // Offer recovery of an interrupted timer, but only if main has not already
+    // told us a timer is active (e.g., after a renderer crash reload where the
+    // timer continued running in main).
+    if (appSettings.recoverableTimer && !state.running && !state.paused) {
       promptTimerRecovery(appSettings.recoverableTimer);
     }
 
@@ -4758,6 +4760,11 @@ void (async function initializeRenderer() {
   // restored state before proof automation is allowed to interact.
   await new Promise(resolve => requestAnimationFrame(() => resolve()));
   markDesktopUxProofReady();
+  // Notify main that the renderer has finished bootstrap so it can distinguish
+  // a healthy load from a silent preload/window failure.
+  if (!previewMode && typeof api.rendererReady === 'function') {
+    try { api.rendererReady(); } catch (_) {}
+  }
 })().catch(error => {
   console.error('Renderer initialization failed:', error);
   setDesktopUxProofPhase('initialization-failed', error);
