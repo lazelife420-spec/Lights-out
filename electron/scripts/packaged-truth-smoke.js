@@ -26,7 +26,9 @@ const {
 const execFileAsync = promisify(execFile);
 
 const root = path.resolve(__dirname, '..', '..');
-const executable = path.join(root, 'dist', 'win-unpacked', 'Lights Out.exe');
+const executable = process.env.LIGHTS_OUT_PACKAGED_EXE
+  ? path.resolve(process.env.LIGHTS_OUT_PACKAGED_EXE)
+  : path.join(root, 'dist-native', 'win-unpacked', 'Lights Out.exe');
 const proofDir = path.join(root, 'dist', 'review-proof');
 const lifecycleStartedAt = Date.now();
 const lifecycle = [];
@@ -621,7 +623,7 @@ async function main() {
       return {
         topSettings, restored, sideSettings,
         selected: document.querySelector('.ns-nav-item[aria-current="page"]')?.dataset.nsTab,
-        modeTitles: [...document.querySelectorAll('.nm-card .nm-card-title')].map(el => el.textContent.trim()),
+        modeTitles: [...document.querySelectorAll('.nm-tile .nm-tile-title')].map(el => el.textContent.trim()),
         hardStopPresent: document.body.textContent.includes('HARD STOP')
       };
     })()`);

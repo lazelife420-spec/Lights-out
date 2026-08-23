@@ -19,10 +19,9 @@ const os = require('os');
  */
 
 const root = path.join(__dirname, '..');
-const distDir = process.env.LIGHTS_OUT_DIST_DIR
-  ? path.resolve(root, process.env.LIGHTS_OUT_DIST_DIR)
-  : path.join(root, '..', 'dist');
-const exePath = path.join(distDir, 'LightsOut.exe');
+const exePath = process.env.LIGHTS_OUT_PACKAGED_EXE
+  ? path.resolve(process.env.LIGHTS_OUT_PACKAGED_EXE)
+  : path.join(root, '..', 'dist-native', 'win-unpacked', 'Lights Out.exe');
 
 let passed = 0;
 let failed = 0;
