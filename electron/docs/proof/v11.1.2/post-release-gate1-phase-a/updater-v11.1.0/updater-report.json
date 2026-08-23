@@ -1,0 +1,27 @@
+{
+  "mode": "updater",
+  "exe": "C:\\Users\\KickA\\AppData\\Local\\Temp\\lightsout-post-v1112-phasea-faf93ed1dad545f2b9859f8f0fb52e0b\\older-v11.1.0\\LightsOut.exe",
+  "exeSha256": "12DEB2B8A99B72E4B3D913D453AB3CF3A915E10A133E1AF6EDFBB7DFCCCABFC5",
+  "userData": "C:\\Users\\KickA\\AppData\\Local\\Temp\\lightsout-phasea-updater-XQnNN9",
+  "screenshots": [
+    {
+      "file": "C:\\Users\\KickA\\Desktop\\Lights Out\\electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\updater-v11.1.0\\v11.1.0-updater-result.png",
+      "bytes": 156059,
+      "sha256": "8D7E9308FF98272670EE0ECC8B6E8D2A48635E3A379506DBDC62593647E448A3"
+    }
+  ],
+  "observations": {
+    "update": {
+      "available": false,
+      "error": "HTTP 404"
+    },
+    "runtimeVersion": "11.1.0",
+    "visibleVersion": "Version 11.1.0",
+    "updaterText": "Couldn't check for updates",
+    "downloadHref": "file:///C:/Users/KickA/AppData/Local/Temp/3Gb1DPxoZcgJQqSjTEs3EC26slE/resources/app.asar/index.html#",
+    "downloadVisible": "none"
+  },
+  "realPowerActions": 0,
+  "startupMs": 5407,
+  "events": []
+}

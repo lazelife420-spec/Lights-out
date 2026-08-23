@@ -1,0 +1,7 @@
+W/LightsOutApp( 6702): Failed to load companion URL http://192.168.0.16:49558/ [query redacted]: Connection timed out
+D/AndroidRuntime( 6922): >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+I/AndroidRuntime( 6922): Using default boot image
+I/AndroidRuntime( 6922): Leaving lock profiling enabled
+D/AndroidRuntime( 6922): addProductProperty not brand or 7
+D/AndroidRuntime( 6922): Calling main entry com.android.commands.uiautomator.Launcher
+D/AndroidRuntime( 6922): Shutting down VM

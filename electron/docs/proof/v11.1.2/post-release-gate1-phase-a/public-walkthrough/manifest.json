@@ -1,0 +1,169 @@
+{
+  "exePath": "C:\\Users\\KickA\\AppData\\Local\\Temp\\lightsout-post-v1112-phasea-faf93ed1dad545f2b9859f8f0fb52e0b\\public-v11.1.2\\extracted\\Lights Out.exe",
+  "exeSha256": "2A630319C42CC33074B10EEBADBCDFEECCA13FA1EEFCAE746442ED52693E5E87",
+  "packagedApp": {
+    "root": "C:\\Users\\KickA\\AppData\\Local\\Temp\\lightsout-post-v1112-phasea-faf93ed1dad545f2b9859f8f0fb52e0b\\public-v11.1.2\\extracted\\resources\\app",
+    "fileCount": 498,
+    "sha256": "73B11804C54F101781D48B2BFC1516187DF6164242D45844CA874A60D9FD894F"
+  },
+  "realPowerActions": 0,
+  "outDir": "electron/docs/proof/v11.1.2/post-release-gate1-phase-a/public-walkthrough",
+  "captures": [
+    {
+      "name": "01-home",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\01-home.png",
+      "sha256": "F7D020033490E801F2BA6648ADCC46CF8E61F5F92904674C59EC4A3C23448B3B",
+      "bytes": 343462
+    },
+    {
+      "name": "02-tonight",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\02-tonight.png",
+      "sha256": "F30A3DB95708D38120A1DE0C57635972454DA158979BC93047FD4319F827A845",
+      "bytes": 226976
+    },
+    {
+      "name": "02-library",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\02-library.png",
+      "sha256": "B9E01AAAD30AD9BF0AFB08D9DE68E2DDCEC0A0BAEE49E274BD33053F0058D7B6",
+      "bytes": 234879
+    },
+    {
+      "name": "02-schedule",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\02-schedule.png",
+      "sha256": "0F60BD88AA70290E8E27AA3B2898652415FDB51D606C3F51810BB18E623B6130",
+      "bytes": 128514
+    },
+    {
+      "name": "02-devices",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\02-devices.png",
+      "sha256": "08F01A3779406C5A107F9589C9D6F45A40320346E6171E25243593EA6F4EE2B4",
+      "bytes": 308206
+    },
+    {
+      "name": "02-proof",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\02-proof.png",
+      "sha256": "7BF2CD673C5494D8FA1039293ABAC83A943F0CDEFC46B4FF91899F32B8053644",
+      "bytes": 146734
+    },
+    {
+      "name": "02-settings",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\02-settings.png",
+      "sha256": "28A7BEB6598AD3E1FE2216E20D705CBEC0C2CC6A9BBC97A2B8478A127938DFAD",
+      "bytes": 104273
+    },
+    {
+      "name": "02-help",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\02-help.png",
+      "sha256": "6A4EBCA9270D6B272425E02AABD9FAFDB9D93FD82611D480485B937D5A2AAB90",
+      "bytes": 114083
+    },
+    {
+      "name": "03-settings-general",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\03-settings-general.png",
+      "sha256": "B21307DC5AA137352F4563592FD187D50AE93F25907BA2310030DF933D1577C8",
+      "bytes": 113434
+    },
+    {
+      "name": "03-settings-appearance",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\03-settings-appearance.png",
+      "sha256": "3357D436D4C152ADB61111B1951A5D60C9147EFC39BE698A55FDF3CC693A4784",
+      "bytes": 117664
+    },
+    {
+      "name": "03-settings-power-safety",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\03-settings-power-safety.png",
+      "sha256": "07C936AA82194DB37E2D36C664D368A598D345D669AD5C0650FE7E4BD1557BB1",
+      "bytes": 117055
+    },
+    {
+      "name": "03-settings-protection",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\03-settings-protection.png",
+      "sha256": "398FA2A9B91C655F8D892499946D1899167391EB8C6D2958E189879E6877BDDC",
+      "bytes": 112919
+    },
+    {
+      "name": "03-settings-wind-down",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\03-settings-wind-down.png",
+      "sha256": "478914135842DB1AA8D409D6A1DFD078088FE1D448A80835D7E771097C02F800",
+      "bytes": 128830
+    },
+    {
+      "name": "03-settings-automations",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\03-settings-automations.png",
+      "sha256": "FA73E638A3D71DE1931E8E03F3D67CD5AE4F4D2E1D0B8D695A967FFC0D17F876",
+      "bytes": 105519
+    },
+    {
+      "name": "03-settings-phone",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\03-settings-phone.png",
+      "sha256": "1BD0BDF2296A8CE9B84BCCA2E2AABC59490BFAD8607BDDA974E02F8FBB8A657B",
+      "bytes": 117112
+    },
+    {
+      "name": "03-settings-accountability",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\03-settings-accountability.png",
+      "sha256": "5A48985BFA7F8BB553DBE3487EF262FB9302569F1F0F02A1C9199211B4A16889",
+      "bytes": 123281
+    },
+    {
+      "name": "03-settings-advanced",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\03-settings-advanced.png",
+      "sha256": "D0B74C9CC156B06831F0D6B645374853CF095915089F306E5D8CF8A3333F867A",
+      "bytes": 101469
+    },
+    {
+      "name": "03-schedule-first-light",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\03-schedule-first-light.png",
+      "sha256": "6064997491FA3E7161E4EAECDFA6790E042D6E83BC0849D8C93308FA9F89B3D0",
+      "bytes": 153660
+    },
+    {
+      "name": "03-proof-history",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\03-proof-history.png",
+      "sha256": "1489B18157B47F3880E9C71FF315A988D711CC9AA6D21ED5B37D9B66A6B62A4F",
+      "bytes": 149966
+    },
+    {
+      "name": "03-proof-activity",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\03-proof-activity.png",
+      "sha256": "77E80AC94D07579425968AF2325063ECDF83286C3009F208BC3247F00D2C4CA5",
+      "bytes": 149760
+    },
+    {
+      "name": "03-tonight-armed-dry-run",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\03-tonight-armed-dry-run.png",
+      "sha256": "131CE06768294EEB10B4150A3315E634C556ECD3AAFF43F89883E8C4495718E1",
+      "bytes": 235018
+    },
+    {
+      "name": "03-tonight-running-dry-run",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\03-tonight-running-dry-run.png",
+      "sha256": "908533525DBFE9DBD87AD3EC25E099393E076CB6C7C35132F32A0DEF272BD43E",
+      "bytes": 246606
+    },
+    {
+      "name": "04-home-minimum",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\04-home-minimum.png",
+      "sha256": "4C6EF78E6968C9A31794921490CC53ADEBDDB10C6DEB3893B4AABFA0DD44BC0E",
+      "bytes": 308559
+    },
+    {
+      "name": "05-lib-minimum",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\05-lib-minimum.png",
+      "sha256": "BA8F5C1E8D209F3DA6A4B59012367328937E85C3FB8B1407B38212DD354B57A3",
+      "bytes": 210394
+    },
+    {
+      "name": "06-proof-empty",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\06-proof-empty.png",
+      "sha256": "ACE17721C59C094F498E12C64009E21E237C31AA59F4F4FF45D363DB2981CF83",
+      "bytes": 128857
+    },
+    {
+      "name": "07-help-menu",
+      "file": "electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-walkthrough\\07-help-menu.png",
+      "sha256": "3C08F5A98E7358946DB69C87E57A38F59A843227471A61CAB57BBC8BC603AABB",
+      "bytes": 138188
+    }
+  ]
+}

@@ -1,0 +1,176 @@
+{
+  "mode": "first-launch",
+  "exe": "C:\\Users\\KickA\\AppData\\Local\\Temp\\lightsout-post-v1112-phasea-faf93ed1dad545f2b9859f8f0fb52e0b\\public-v11.1.2\\extracted\\Lights Out.exe",
+  "exeSha256": "2A630319C42CC33074B10EEBADBCDFEECCA13FA1EEFCAE746442ED52693E5E87",
+  "userData": "C:\\Users\\KickA\\AppData\\Local\\Temp\\lightsout-phasea-first-jjp8DB",
+  "screenshots": [
+    {
+      "file": "C:\\Users\\KickA\\Desktop\\Lights Out\\electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-first-launch-final\\01-genuine-first-launch.png",
+      "bytes": 59879,
+      "sha256": "AC61873383E8DEE5FD9B5CF8DE222DDF62A17766529ACEE8EAAC6F508561A48E"
+    },
+    {
+      "file": "C:\\Users\\KickA\\Desktop\\Lights Out\\electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-first-launch-final\\02-onboarding-focus.png",
+      "bytes": 39040,
+      "sha256": "50DC38B4BABC038FF7E5D2C572BAE1706C634CAA6DB5A51BEBB1B9595E288476"
+    },
+    {
+      "file": "C:\\Users\\KickA\\Desktop\\Lights Out\\electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-first-launch-final\\03-onboarding-ritual.png",
+      "bytes": 39920,
+      "sha256": "18D1C1C5461CEF9FE808D9082EBB563BF300EB33822C5DD9215B3A677B63A3D9"
+    },
+    {
+      "file": "C:\\Users\\KickA\\Desktop\\Lights Out\\electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-first-launch-final\\04-first-home.png",
+      "bytes": 356390,
+      "sha256": "6F1F17F4DAE38F43A56B291AEF4875D667263CA5DBE91E190F670C1CA2DD30C0"
+    },
+    {
+      "file": "C:\\Users\\KickA\\Desktop\\Lights Out\\electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\public-first-launch-final\\05-relaunch-persisted.png",
+      "bytes": 355991,
+      "sha256": "816DB0128B432327A85EFE98E384D9A4F8D2495BB25B5CF00518CC2E269CCF5A"
+    }
+  ],
+  "observations": {
+    "attachedAfterColdStartup": false,
+    "firstStartupMs": 443,
+    "firstLaunch": {
+      "title": "Lights Out",
+      "onboardingDisplay": "flex",
+      "onboardingHeading": "When do you go to bed?",
+      "onboardingCopy": "We'll set a gentle reminder so you never miss your window.",
+      "nextLabel": "Continue",
+      "version": "v11.1.2",
+      "nav": [
+        "Home",
+        "Tonight",
+        "Library",
+        "Schedule",
+        "Devices",
+        "Proof",
+        "Settings",
+        "Help"
+      ],
+      "bodyOverflow": "hidden"
+    },
+    "afterOnboarding": {
+      "onboardingDisplay": "none",
+      "version": "v11.1.2",
+      "activeRoute": "home",
+      "running": false,
+      "bodyTextHasMissing": false
+    },
+    "firstEvents": [],
+    "relaunchStartupMs": 429,
+    "relaunch": {
+      "onboardingDisplay": "none",
+      "version": "v11.1.2",
+      "settings": {
+        "runAtLogin": false,
+        "startupBehavior": "Starts minimized and idle",
+        "app": {
+          "action": "shutdown",
+          "unit": "min",
+          "durationSeconds": 1680,
+          "sound": true,
+          "gracefulClose": true,
+          "forceShutdown": false,
+          "muteSystem": false,
+          "graceMinutes": 2,
+          "dryRun": false,
+          "focusBlocklist": [],
+          "onboarded": true,
+          "bedtime": "22:00",
+          "timerName": "Last Call",
+          "bedtimeReminderEnabled": true,
+          "bedtimeReminderMinutes": 15,
+          "idleDetectionEnabled": false,
+          "idleThresholdSeconds": 300,
+          "calendarAutoStart": false,
+          "autopilotEnabled": false,
+          "autopilotBedtime": null,
+          "nightLightOnDim": false,
+          "pauseMediaOnDim": false,
+          "lockoutOnDim": false,
+          "clockMode": true,
+          "clockFace": "hybrid",
+          "clockStyle": "modern",
+          "clockDial": "bars",
+          "clockFormat": "24h",
+          "clockScale": 1,
+          "clockShowDate": false,
+          "clockHandColor": "#76c9ff",
+          "clockSeconds": true,
+          "clockSweep": true,
+          "nsActiveTab": "home",
+          "nsSelectedMode": "",
+          "widgetVisible": false,
+          "lastSelectedProfileId": null
+        },
+        "customization": {
+          "accent": "#5b8cff",
+          "theme": "midnight",
+          "ringStyle": "glow",
+          "opacity": 1,
+          "volume": 1,
+          "warmShift": true,
+          "soundscape": "off",
+          "ambientVisual": "off"
+        },
+        "lastLight": {
+          "enabled": false,
+          "sequence": "ClassicFade",
+          "sound": "Off",
+          "customSequences": [],
+          "lastLightEnabled": true,
+          "lastLightSequence": "ClassicFade",
+          "lastLightSound": "Off"
+        },
+        "calendar": {
+          "enabled": true,
+          "provider": "builtin",
+          "syncIntervalMin": 30,
+          "autoStartFromEvents": false,
+          "builtin": {
+            "enabled": true,
+            "rules": [
+              {
+                "id": "default",
+                "label": "Bedtime",
+                "time": "22:30",
+                "days": [
+                  "sun",
+                  "mon",
+                  "tue",
+                  "wed",
+                  "thu",
+                  "fri",
+                  "sat"
+                ],
+                "action": "shutdown",
+                "durationMinutes": 60,
+                "enabled": true
+              }
+            ]
+          },
+          "ical": {
+            "url": ""
+          },
+          "google": {
+            "apiKey": "",
+            "calendarId": ""
+          },
+          "outlook": {
+            "accessToken": ""
+          },
+          "calendly": {
+            "personalToken": ""
+          }
+        },
+        "recoverableTimer": null
+      },
+      "running": false
+    },
+    "secondEvents": []
+  },
+  "realPowerActions": 0
+}

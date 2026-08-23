@@ -1,0 +1,27 @@
+{
+  "mode": "updater",
+  "exe": "C:\\Users\\KickA\\AppData\\Local\\Temp\\lightsout-post-v1112-phasea-faf93ed1dad545f2b9859f8f0fb52e0b\\public-v11.1.2\\extracted\\Lights Out.exe",
+  "exeSha256": "2A630319C42CC33074B10EEBADBCDFEECCA13FA1EEFCAE746442ED52693E5E87",
+  "userData": "C:\\Users\\KickA\\AppData\\Local\\Temp\\lightsout-phasea-updater-15hnpa",
+  "screenshots": [
+    {
+      "file": "C:\\Users\\KickA\\Desktop\\Lights Out\\electron\\docs\\proof\\v11.1.2\\post-release-gate1-phase-a\\updater-v11.1.2-current\\v11.1.0-updater-result.png",
+      "bytes": 189094,
+      "sha256": "81684606B52D3FDD69ECC589E55754312160448BA33C578FA49758374C5AAC43"
+    }
+  ],
+  "observations": {
+    "update": {
+      "available": false,
+      "error": "HTTP 404"
+    },
+    "runtimeVersion": "11.1.2",
+    "visibleVersion": "Version 11.1.2",
+    "updaterText": "Couldn't check for updates",
+    "downloadHref": "file:///C:/Users/KickA/AppData/Local/Temp/lightsout-post-v1112-phasea-faf93ed1dad545f2b9859f8f0fb52e0b/public-v11.1.2/extracted/resources/app/index.html#",
+    "downloadVisible": "none"
+  },
+  "realPowerActions": 0,
+  "startupMs": 469,
+  "events": []
+}
