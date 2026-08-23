@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 // Real Electron Main/Preload/IPC/DOM proof for Night Modes.
+// Updated for the v5 Home/Lib/Modes redesign: Night Modes are now tile-based
+// (.nm-tile with data-mode-id), and the shared Start CTA is #btn-start-custom.
+// Retired selectors: .nm-card, #ns-play-btn.
 // Runs with isolated userData, Dry Run enabled, and a proof-process-only
 // accelerated 1-second timer interval. No production hooks or power actions.
 
@@ -88,13 +91,13 @@ windowReady.then(async mainWindow => {
   const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
   async function armMode(id) {
-    const selector = '.nm-card[data-mode-id="' + id + '"]';
+    const selector = '.nm-tile[data-mode-id="' + id + '"]';
     return evaluate(\`(async () => {
       state.dryRun = true;
       document.querySelector('[data-ns-tab="modes"]').click();
-      const card = document.querySelector(\${JSON.stringify(selector)});
-      if (!card) throw new Error('mode card missing: ' + \${JSON.stringify(id)});
-      card.click();
+      const tile = document.querySelector(\${JSON.stringify(selector)});
+      if (!tile) throw new Error('mode tile missing: ' + \${JSON.stringify(id)});
+      tile.click();
       document.getElementById('nm-btn-use-tonight').click();
       await new Promise(resolve => setTimeout(resolve, 80));
       return {
@@ -108,7 +111,7 @@ windowReady.then(async mainWindow => {
 
   async function clickStart() {
     await evaluate(\`(async () => {
-      document.getElementById('ns-play-btn').click();
+      document.getElementById('btn-start-custom').click();
       await new Promise(resolve => setTimeout(resolve, 80));
     })()\`);
   }
@@ -125,14 +128,14 @@ windowReady.then(async mainWindow => {
     const loaded = await evaluate(\`({
       title: document.title,
       api: typeof window.electronAPI,
-      start: Boolean(document.getElementById('ns-play-btn')),
-      cards: document.querySelectorAll('.nm-card').length,
+      start: Boolean(document.getElementById('btn-start-custom')),
+      tiles: document.querySelectorAll('.nm-tile').length,
       running: state.running
     })\`);
     assert(loaded.title, 'document title missing');
     assert(loaded.api === 'object', 'preload bridge missing');
     assert(loaded.start, 'start button missing');
-    assert(loaded.cards === 6, 'expected 6 rendered cards, got ' + loaded.cards);
+    assert(loaded.tiles === 6, 'expected 6 rendered mode tiles, got ' + loaded.tiles);
     assert(!loaded.running, 'timer auto-started');
   });
 
@@ -218,7 +221,7 @@ windowReady.then(async mainWindow => {
     await armMode('quick-sleep');
     const unavailable = await evaluate(\`(async () => {
       document.querySelector('[data-ns-tab="modes"]').click();
-      document.querySelector('.nm-card[data-mode-id="quiet-house"]').click();
+      document.querySelector('.nm-tile[data-mode-id="quiet-house"]').click();
       await new Promise(resolve => setTimeout(resolve, 50));
       return {
         armed: state.armedNightMode,

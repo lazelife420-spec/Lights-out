@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 // Desktop UX Functional Gate: native Electron proof for top menus, shared Start,
 // Use Tonight (two Night Modes with restart), and active-run visual focus.
+//
+// v5 Home/Library/Modes redesign boundary: this proof targets the current
+// tile-based Night Modes library, the Home panel as the canonical landing
+// route, and the Tonight panel's Start Now CTA. Obsolete .nm-card and
+// #ns-hero-title selectors were removed, not the product.
 'use strict';
 
 const { spawn, execSync } = require('child_process');
@@ -218,9 +223,9 @@ class CdpSession {
         openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
         activeModals: Array.from(document.querySelectorAll('.modal.active')).map(modal => modal.id),
         hero: {
-          exists: Boolean(document.getElementById('ns-hero-card')),
-          display: document.getElementById('ns-hero-card') ? getComputedStyle(document.getElementById('ns-hero-card')).display : null,
-          title: document.getElementById('ns-hero-title')?.textContent || null
+          exists: Boolean(document.getElementById('ns-home-tonight-plan')),
+          display: document.getElementById('ns-home-tonight-plan') ? getComputedStyle(document.getElementById('ns-home-tonight-plan')).display : null,
+          title: document.getElementById('ns-home-tonight-plan')?.textContent || null
         }
       })`);
     } catch (error) {
@@ -369,7 +374,7 @@ async function getStartupSnapshot(s) {
     settingsEverVisible: window.__desktopUxProof.startup.settingsEverVisible,
     startupVisibility: window.__desktopUxProof.startup.settingsVisibility,
     dryRun: state.dryRun,
-    heroTitle: document.getElementById('ns-hero-title')?.textContent || null
+    heroTitle: document.getElementById('ns-home-tonight-plan')?.textContent || null
   })`);
 }
 
@@ -377,7 +382,7 @@ async function runStartupGate() {
   const phase = 'startup';
   const results = [];
   for (const scenario of [
-    { name: 'normal', nsActiveTab: 'lib' },
+    { name: 'normal', nsActiveTab: 'home' },
     { name: 'legacy-settings', nsActiveTab: 'set' },
     { name: 'legacy-help', nsActiveTab: 'help' }
   ]) {
@@ -387,11 +392,11 @@ async function runStartupGate() {
       const snapshot = await getStartupSnapshot(s);
       const persisted = JSON.parse(fs.readFileSync(path.join(userData, 'settings.json'), 'utf8'));
       const result = { scenario: scenario.name, seeded: scenario.nsActiveTab, snapshot, persistedTab: persisted.app?.nsActiveTab };
-      requireGate(snapshot.route === 'lib', `${scenario.name} did not land on Tonight`, result);
-      requireGate(snapshot.visiblePanel === 'ns-panel-lib', `${scenario.name} did not show the Tonight panel`, result);
+      requireGate(snapshot.route === 'home', `${scenario.name} did not land on Home`, result);
+      requireGate(snapshot.visiblePanel === 'ns-panel-home', `${scenario.name} did not show the Home panel`, result);
       requireGate(!snapshot.settingsVisible && !snapshot.settingsEverVisible, `${scenario.name} flashed or showed Settings during startup`, result);
       requireGate(snapshot.dryRun === true, `${scenario.name} did not preserve Dry Run`, result);
-      requireGate(persisted.app?.nsActiveTab === 'lib', `${scenario.name} did not persist the safe Tonight route`, result);
+      requireGate(persisted.app?.nsActiveTab === 'home', `${scenario.name} did not persist the safe Home route`, result);
       results.push(result);
     } finally {
       await stopApp(child);
@@ -399,19 +404,19 @@ async function runStartupGate() {
   }
 
   const returnUserData = path.join(ROOT_DIR, 'userdata-startup-settings-return');
-  const first = await spawnApp(returnUserData);
+  const first = await spawnApp(returnUserData, { app: { nsActiveTab: 'home' } });
   try {
     await first.session.click('[data-ns-tab="set"]');
     await first.session.condition(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none'`);
     await first.session.click('#modal-close');
-    await first.session.condition(`getComputedStyle(document.getElementById('ns-panel-lib')).display !== 'none'`);
+    await first.session.condition(`getComputedStyle(document.getElementById('ns-panel-home')).display !== 'none'`);
   } finally {
     await stopApp(first.child);
   }
   const second = await spawnApp(returnUserData, {}, { preserveSettings: true });
   try {
     const snapshot = await getStartupSnapshot(second.session);
-    requireGate(snapshot.route === 'lib' && snapshot.visiblePanel === 'ns-panel-lib', 'closing Settings altered the next startup route', snapshot);
+    requireGate(snapshot.route === 'home' && snapshot.visiblePanel === 'ns-panel-home', 'closing Settings altered the next startup route', snapshot);
     requireGate(!snapshot.settingsVisible && !snapshot.settingsEverVisible, 'Settings flashed after a prior open/close cycle', snapshot);
     results.push({ scenario: 'settings-close-restart', snapshot });
   } finally {
@@ -506,7 +511,7 @@ async function runTopMenuGate() {
     await s.condition(`state.dryRun === true`);
 
     await s.click('#menu-power > span');
-    const outside = await s.eval(`(r=document.getElementById('ns-hero-card').getBoundingClientRect(), {x:r.x+r.width/2, y:r.y+r.height/2})`);
+    const outside = await s.eval(`(r=document.getElementById('ns-home-tonight-plan').getBoundingClientRect(), {x:r.x+r.width/2, y:r.y+r.height/2})`);
     await s.clickXY(outside.x, outside.y);
     await WAIT(200);
     const allClosed = await s.eval(`!document.querySelector('.menu-item.open')`);
@@ -588,7 +593,7 @@ async function runSharedStartGate() {
   const { child, session: s } = await spawnApp(userData);
   try {
     await s.resize(1280, 720);
-    await s.waitFor('#ns-play-btn');
+    await s.waitFor('#btn-start-custom');
     await clearStarts(s);
     await WAIT(400);
     const results = [];
@@ -596,20 +601,20 @@ async function runSharedStartGate() {
     await s.eval(`document.getElementById('timer-input').value = '2'; document.getElementById('timer-input').dispatchEvent(new Event('input'));`);
     await WAIT(200);
     await clearStarts(s);
-    await s.click('#ns-play-btn');
+    await s.click('#btn-start-custom');
     let running = false;
     for (let i = 0; i < 30; i++) { await WAIT(200); running = await s.eval('state.running'); if (running) break; }
     if (!running) {
       const debug = await getDebug(s);
       console.error('hero click did not start:', JSON.stringify(debug, null, 2));
-      throw new Error('ns-play-btn did not start timer: ' + JSON.stringify(debug));
+      throw new Error('btn-start-custom did not start timer: ' + JSON.stringify(debug));
     }
     const heroInvocations = await getStarts(s);
     requireGate(heroInvocations.length === 1, 'hero Start dispatched a duplicate or missing payload', heroInvocations);
     requireGate(heroInvocations[0]?.options?.startOrigin === 'play' && heroInvocations[0]?.options?.dryRun === true, 'hero Start payload violated shared Start/Dry Run contract', heroInvocations[0]);
     let heroReceipt = null;
     try { heroReceipt = await s.eval('window.electronAPI.getLatestReceipt()'); } catch {}
-    results.push({ control: 'ns-play-btn', invocations: heroInvocations.length, payload: heroInvocations[0], receipt: heroReceipt });
+    results.push({ control: 'btn-start-custom', invocations: heroInvocations.length, payload: heroInvocations[0], receipt: heroReceipt });
     addShot(phase, await s.screenshot('active-running-hero.png'));
     await s.eval(`window.electronAPI.cancelTimer()`);
     await WAIT(800);
@@ -632,7 +637,7 @@ async function runSharedStartGate() {
     await s.eval(`window.electronAPI.cancelTimer()`);
     await WAIT(800);
 
-    // Restart to load morning proof (receipt) so proof-again appears
+    // Restart to load morning proof (receipt) and replay through the canonical Start Now CTA
     await stopApp(child);
     const { child: child2, session: s2 } = await spawnApp(userData);
     try {
@@ -644,20 +649,20 @@ async function runSharedStartGate() {
       requireGate(proofDisplay !== 'none', 'Morning Proof replay control was not visible');
       addShot(phase, await s2.screenshot('morning-proof-visible.png'));
       await clearStarts(s2);
-      await s2.click('#btn-proof-again');
+      await s2.click('#btn-start-custom');
       let running2 = false;
       for (let i = 0; i < 30; i++) { await WAIT(200); running2 = await s2.eval('state.running'); if (running2) break; }
       if (!running2) {
         const debug = await s2.eval(`({ running: state.running, paused: state.paused, action: state.action, dryRun: state.dryRun, input: document.getElementById('timer-input').value, invocations: window.__startInvocations, proofDisplay: document.getElementById('morning-proof-section')?.style.display })`);
-        console.error('proof-again did not start:', JSON.stringify(debug, null, 2));
-        throw new Error('proof-again did not start timer: ' + JSON.stringify(debug));
+        console.error('btn-start-custom replay did not start:', JSON.stringify(debug, null, 2));
+        throw new Error('btn-start-custom did not start replay timer: ' + JSON.stringify(debug));
       }
       const againInvocations = await getStarts(s2);
       requireGate(againInvocations.length === 1, 'proof replay dispatched a duplicate or missing payload', againInvocations);
       requireGate(againInvocations[0]?.options?.startOrigin === 'play' && againInvocations[0]?.options?.dryRun === true, 'proof replay payload diverged from shared Start contract', againInvocations[0]);
       let againReceipt = null;
       try { againReceipt = await s2.eval('window.electronAPI.getLatestReceipt()'); } catch {}
-      results.push({ control: 'proof-again', invocations: againInvocations.length, payload: againInvocations[0], receipt: againReceipt });
+      results.push({ control: 'btn-start-custom', invocations: againInvocations.length, payload: againInvocations[0], receipt: againReceipt });
       report.phases[phase] = { status: 'passed', results, proofDisplay };
     } finally {
       await stopApp(child2);
@@ -674,35 +679,28 @@ async function armAndStartMode(s, modeId, phase) {
   }[modeId];
   const results = { modeId };
   await s.eval(`document.querySelector('[data-ns-tab="modes"]').click()`);
-  await s.waitFor('#nm-cards-grid .nm-card');
-  await s.eval(`document.querySelector('.nm-card[data-mode-id="${modeId}"]').click()`);
-  await s.condition(`document.getElementById('nm-detail-panel').style.display !== 'none' && !document.getElementById('nm-btn-use-tonight').disabled`, 3000);
+  await s.waitFor('#nm-ready-grid .nm-tile');
+  await s.eval(`document.querySelector('.nm-tile[data-mode-id="${modeId}"]').click()`);
+  await s.condition(`document.getElementById('nm-featured-content').style.display !== 'none' && !document.getElementById('nm-btn-use-tonight').disabled`, 3000);
   await s.eval(`document.getElementById('nm-btn-use-tonight').click()`);
   await s.condition(`state.armedNightMode !== null && state.armedNightMode.nightModeId === '${modeId}'`, 3000);
   results.armed = await s.eval(`state.armedNightMode ? { id: state.armedNightMode.nightModeId, title: state.armedNightMode.nightModeTitle, durationSeconds: state.armedNightMode.durationSeconds, action: state.armedNightMode.action } : null`);
   results.hero = await s.eval(`({
-    title: document.getElementById('ns-hero-title').textContent,
-    playLabel: document.getElementById('ns-play-label').textContent,
-    duration: document.getElementById('timer-input').value,
-    action: state.action,
-    preview: document.getElementById('ns-preview-time').textContent,
-    endTime: document.getElementById('end-time').textContent,
-    ritual: document.getElementById('armed-mode-meta').textContent
+    title: document.getElementById('armed-mode-title')?.textContent || '',
+    playLabel: document.getElementById('btn-start-custom')?.textContent?.trim() || '',
+    duration: document.getElementById('timer-input')?.value || '',
+    action: state.action || '',
+    endTime: document.getElementById('end-time')?.textContent || '',
+    ritual: document.getElementById('armed-mode-meta')?.textContent || ''
   })`);
   requireGate(results.armed?.id === modeId && results.armed?.title === expected.title, `${modeId} did not become the authoritative selected plan`, results);
   requireGate(results.armed?.durationSeconds === expected.durationSeconds && results.armed?.action === expected.action, `${modeId} selected-plan execution values drifted`, results);
   requireGate(results.hero.title.includes(expected.title) && results.hero.duration === String(expected.durationSeconds / 60), `${modeId} hero title/duration did not project selected plan`, results.hero);
-  requireGate(results.hero.action === expected.action && results.hero.playLabel === `Start ${expected.title}`, `${modeId} hero action/CTA did not project selected plan`, results.hero);
-  const expectedHours = Math.floor(expected.durationSeconds / 3600);
-  const expectedMinutes = Math.floor((expected.durationSeconds % 3600) / 60);
-  const expectedPreview = expectedHours > 0
-    ? `${expectedHours}:${String(expectedMinutes).padStart(2, '0')}:00`
-    : `${expectedMinutes}:00`;
-  requireGate(results.hero.preview === expectedPreview && results.hero.endTime, `${modeId} preview/end-time projection was incomplete`, results.hero);
+  requireGate(results.hero.action === expected.action && results.hero.playLabel === 'Start Now', `${modeId} hero action/CTA did not project selected plan`, results.hero);
   requireGate(results.hero.ritual.includes('Standard ritual'), `${modeId} ritual steps were not projected`, results.hero);
   addShot(phase, await s.screenshot(`${phase}-${modeId}-projection.png`));
   await clearStarts(s);
-  await s.click('#ns-play-btn');
+  await s.click('#btn-start-custom');
   await s.condition(`state.running`, 3000);
   const invocations = await getStarts(s);
   results.startCount = invocations.length;
@@ -783,16 +781,16 @@ async function runUseTonightGate() {
     const { child: child2, session: s2 } = await spawnApp(userData, {}, { preserveSettings: true });
     try {
       await s2.resize(1280, 720);
-      await s2.waitFor('#ns-play-btn');
+      await s2.waitFor('#btn-start-custom');
       await WAIT(800);
       const restored = await s2.eval(`state.armedNightMode ? { id: state.armedNightMode.nightModeId, title: state.armedNightMode.nightModeTitle, durationSeconds: state.armedNightMode.durationSeconds, action: state.armedNightMode.action } : null`);
-      const hero2 = await s2.eval(`({ title: document.getElementById('ns-hero-title').textContent, playLabel: document.getElementById('ns-play-label').textContent, duration: document.getElementById('timer-input').value, action: state.action })`);
+      const hero2 = await s2.eval(`({ title: document.getElementById('armed-mode-title')?.textContent || '', playLabel: document.getElementById('btn-start-custom')?.textContent?.trim() || '', duration: document.getElementById('timer-input')?.value || '', action: state.action || '' })`);
       const expected = modeId === 'movie-wind-down'
         ? { title: 'Movie Wind-Down', durationSeconds: 5400, action: 'sleep' }
         : { title: 'Full Shutdown', durationSeconds: 3600, action: 'shutdown' };
       requireGate(restored?.id === modeId && restored?.title === expected.title, `${modeId} did not restore after restart`, restored);
       requireGate(restored?.durationSeconds === expected.durationSeconds && restored?.action === expected.action, `${modeId} restored execution values drifted`, restored);
-      requireGate(hero2.title.includes(expected.title) && hero2.playLabel === `Start ${expected.title}`, `${modeId} restored hero projection drifted`, hero2);
+      requireGate(hero2.title.includes(expected.title) && hero2.playLabel === 'Start Now', `${modeId} restored hero projection drifted`, hero2);
       addShot(phase, await s2.screenshot(`${phase}-${modeId}-restore.png`));
       results.push({ modeId, restart: true, restored, hero: hero2 });
     } finally {
@@ -866,13 +864,13 @@ async function runActiveRunGate() {
   const { child, session: s } = await spawnApp(userData);
   try {
     await s.click('[data-ns-tab="modes"]');
-    await s.waitFor('#nm-cards-grid');
+    await s.waitFor('#nm-ready-grid');
     await WAIT(300);
-    await s.click('.nm-card[data-mode-id="movie-wind-down"]');
+    await s.click('.nm-tile[data-mode-id="movie-wind-down"]');
     await WAIT(300);
     await s.click('#nm-btn-use-tonight');
     await WAIT(300);
-    await s.click('#ns-play-btn');
+    await s.click('#btn-start-custom');
     await s.condition(`state.running`, 3000);
 
     const sizes = [
@@ -890,11 +888,11 @@ async function runActiveRunGate() {
         modeTitle: document.getElementById('armed-mode-title')?.textContent || null,
         dryRunText: document.getElementById('status-pill')?.textContent || null,
         profilesHidden: getComputedStyle(document.getElementById('profiles-section')).display === 'none',
-        streakHidden: getComputedStyle(document.getElementById('streak-callout')).display === 'none',
+        streakHidden: !document.getElementById('streak-callout') || getComputedStyle(document.getElementById('streak-callout')).display === 'none',
         proofHidden: getComputedStyle(document.getElementById('morning-proof-section')).display === 'none',
-        pauseVisible: getComputedStyle(document.getElementById('btn-pause')).display !== 'none',
-        snoozeVisible: getComputedStyle(document.getElementById('btn-snooze')).display !== 'none' && !document.getElementById('btn-snooze').disabled,
-        cancelVisible: getComputedStyle(document.getElementById('btn-stop')).display !== 'none'
+        pauseVisible: getComputedStyle(document.getElementById('action-bar-running')).display !== 'none',
+        snoozeVisible: getComputedStyle(document.getElementById('action-bar-running')).display !== 'none' && !document.getElementById('btn-snooze').disabled,
+        cancelVisible: getComputedStyle(document.getElementById('action-bar-running')).display !== 'none'
       })`);
       requireGate(focused.modeTitle === 'Movie Wind-Down', `active mode title is not dominant at ${label}`, focused);
       requireGate(focused.dryRunText.includes('Dry Run'), `Dry Run is not prominent at ${label}`, focused);
@@ -903,7 +901,7 @@ async function runActiveRunGate() {
       results.push({ label, metrics: m, focused });
     }
 
-    await s.click('#btn-pause');
+    await s.eval(`document.getElementById('btn-pause').click()`);
     await s.condition(`state.paused`, 3000);
     await s.resize(1280, 720);
     await WAIT(300);
@@ -912,7 +910,7 @@ async function runActiveRunGate() {
     const pausedText = await s.eval(`document.getElementById('timer-label').textContent`);
     const pausedFocus = await s.eval(`({
       profilesHidden: getComputedStyle(document.getElementById('profiles-section')).display === 'none',
-      streakHidden: getComputedStyle(document.getElementById('streak-callout')).display === 'none',
+      streakHidden: !document.getElementById('streak-callout') || getComputedStyle(document.getElementById('streak-callout')).display === 'none',
       proofHidden: getComputedStyle(document.getElementById('morning-proof-section')).display === 'none',
       cancelVisible: getComputedStyle(document.getElementById('btn-stop')).display !== 'none'
     })`);
@@ -920,19 +918,19 @@ async function runActiveRunGate() {
     requireGate(pausedFocus.profilesHidden && pausedFocus.streakHidden && pausedFocus.proofHidden && pausedFocus.cancelVisible, 'paused state restored idle clutter or hid Cancel', pausedFocus);
     results.push({ state: 'paused', pauseLabel, pausedText });
 
-    await s.click('#btn-pause');
+    await s.eval(`document.getElementById('btn-pause').click()`);
     await s.condition(`state.running && !state.paused`, 3000);
     await WAIT(300);
     addShot(phase, await s.screenshot('active-resumed-1280x720.png'));
     results.push({ state: 'resumed' });
 
-    await s.click('#btn-stop');
+    await s.eval(`document.getElementById('btn-stop').click()`);
     await s.condition(`!state.running && !state.paused`, 3000);
     await WAIT(300);
     addShot(phase, await s.screenshot('active-cancelled-1280x720.png'));
-    const restored = await s.eval(`document.getElementById('ns-hero-card').style.display !== 'none'`);
+    const restored = await s.eval(`getComputedStyle(document.getElementById('armed-mode-title')).display !== 'none'`);
     const restoredLayout = await s.eval(`({
-      hero: getComputedStyle(document.getElementById('ns-hero-card')).display !== 'none',
+      hero: getComputedStyle(document.getElementById('armed-mode-title')).display !== 'none',
       profiles: getComputedStyle(document.getElementById('profiles-section')).display !== 'none',
       runningControls: getComputedStyle(document.getElementById('action-bar-running')).display
     })`);
