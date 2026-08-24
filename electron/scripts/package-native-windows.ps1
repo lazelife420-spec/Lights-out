@@ -157,7 +157,8 @@ if (-not $SkipZip) {
     Normalize-ZipTimestamps -Root $UnpackedDir
     $zipName = "Lights-Out-Portable-v$Version-win-x64.zip"
     $zipPath = Join-Path $OutputRoot $zipName
-    Compress-Archive -Path "$UnpackedDir\*" -DestinationPath $zipPath -Force
+    $portableZipScript = Join-Path $PSScriptRoot 'new-portable-zip.ps1'
+    & $portableZipScript -SourceRoot $UnpackedDir -DestinationPath $zipPath -RootFolderName $PackageName
     Write-Host "Portable ZIP: $zipPath" -ForegroundColor Cyan
 }
 

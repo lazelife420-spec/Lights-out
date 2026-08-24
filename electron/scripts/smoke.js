@@ -70,6 +70,14 @@ check('package: renderer <script src> files are included in the build', () => {
   }
 });
 
+check('package: portable ZIP keeps one Lights Out extraction root', () => {
+  const packagingSrc = fs.readFileSync(path.join(root, 'scripts', 'package-native-windows.ps1'), 'utf8');
+  const portableZipSrc = fs.readFileSync(path.join(root, 'scripts', 'new-portable-zip.ps1'), 'utf8');
+  assertMatch(packagingSrc, /new-portable-zip\.ps1[\s\S]*-RootFolderName \$PackageName/, 'native packaging does not call the guarded portable ZIP writer');
+  assert(!packagingSrc.includes('Compress-Archive -Path "$UnpackedDir\\*"'), 'native packaging still flattens win-unpacked into archive root');
+  assertMatch(portableZipSrc, /\$entryPath = "\$RootFolderName\//, 'portable ZIP entries do not share the selected product folder');
+});
+
 // 2. Mock electron so main-process modules load under plain Node.
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-smoke-'));
 const origLoad = Module._load;
