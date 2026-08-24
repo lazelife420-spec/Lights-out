@@ -1,0 +1,123 @@
+{
+  "name": "Lights Out Current Local CI",
+  "projectRoots": [
+    "electron"
+  ],
+  "workspaceInputs": [
+    "dist-native"
+  ],
+  "steps": [
+    {
+      "name": "Offline dependency restore",
+      "command": "npm",
+      "args": ["ci", "--offline", "--prefix", "electron"],
+      "timeoutMs": 300000
+    },
+    {
+      "name": "Offline Electron provision",
+      "command": "npm",
+      "args": ["run", "electron:provision", "--prefix", "electron"],
+      "timeoutMs": 120000
+    },
+    {
+      "name": "Electron provision verification",
+      "command": "npm",
+      "args": ["run", "electron:verify", "--prefix", "electron"]
+    },
+    {
+      "name": "Syntax — main",
+      "command": "node",
+      "args": ["--check", "electron/main.js"]
+    },
+    {
+      "name": "Syntax — renderer",
+      "command": "node",
+      "args": ["--check", "electron/renderer.js"]
+    },
+    {
+      "name": "Syntax — preload",
+      "command": "node",
+      "args": ["--check", "electron/preload.js"]
+    },
+    {
+      "name": "ESLint",
+      "command": "npm",
+      "args": ["run", "lint", "--prefix", "electron"]
+    },
+    {
+      "name": "Unit tests",
+      "command": "npm",
+      "args": ["test", "--prefix", "electron"]
+    },
+    {
+      "name": "Static smoke",
+      "command": "npm",
+      "args": ["run", "smoke", "--prefix", "electron"]
+    },
+    {
+      "name": "Companion static smoke",
+      "command": "npm",
+      "args": ["run", "smoke:companion", "--prefix", "electron"]
+    },
+    {
+      "name": "Packaged smoke and truth",
+      "command": "npm",
+      "args": ["run", "smoke:packaged", "--prefix", "electron"],
+      "timeoutMs": 120000
+    },
+    {
+      "name": "Native packaged truth",
+      "command": "npm",
+      "args": ["run", "smoke:native", "--prefix", "electron"],
+      "timeoutMs": 120000
+    },
+    {
+      "name": "Packaged network",
+      "command": "npm",
+      "args": ["run", "smoke:network", "--prefix", "electron"],
+      "timeoutMs": 120000
+    },
+    {
+      "name": "Packaged phone simulation",
+      "command": "npm",
+      "args": ["run", "smoke:phone", "--prefix", "electron"],
+      "timeoutMs": 120000
+    },
+    {
+      "name": "Companion V2 runtime",
+      "command": "npm",
+      "args": ["run", "test:companion-v2-runtime", "--prefix", "electron"],
+      "timeoutMs": 180000
+    },
+    {
+      "name": "Night Modes runtime",
+      "command": "npm",
+      "args": ["run", "test:night-modes-runtime", "--prefix", "electron"],
+      "timeoutMs": 120000
+    },
+    {
+      "name": "Receipt recovery",
+      "command": "npm",
+      "args": ["run", "test:receipt-recovery-runtime", "--prefix", "electron"],
+      "timeoutMs": 120000
+    },
+    {
+      "name": "Reliability and crash policy",
+      "command": "npm",
+      "args": ["run", "smoke:reliability", "--prefix", "electron"],
+      "timeoutMs": 120000
+    },
+    {
+      "name": "Performance and resize",
+      "command": "npm",
+      "args": ["run", "smoke:performance", "--prefix", "electron"],
+      "timeoutMs": 240000
+    },
+    {
+      "name": "Window geometry",
+      "command": "npm",
+      "args": ["run", "test:geometry", "--prefix", "electron"],
+      "timeoutMs": 120000
+    }
+  ]
+}
