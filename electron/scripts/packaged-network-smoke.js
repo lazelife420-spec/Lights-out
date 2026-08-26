@@ -13,7 +13,9 @@ const companionNetwork = require('../companionNetwork');
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(__dirname, '..', '..');
-const executable = path.join(root, 'dist-native', 'win-unpacked', 'Lights Out.exe');
+const executable = process.env.LIGHTS_OUT_PACKAGED_EXE
+  ? path.resolve(process.env.LIGHTS_OUT_PACKAGED_EXE)
+  : path.join(root, 'dist-native', 'win-unpacked', 'Lights Out.exe');
 
 function freePort() {
   return new Promise((resolve, reject) => {
