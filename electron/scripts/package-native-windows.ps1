@@ -141,7 +141,7 @@ if (Test-Path $exe) {
 # 7. Stamp Lights Out Windows identity on the staged executable
 $stampScript = Join-Path $PSScriptRoot 'stamp-windows-identity.ps1'
 if (Test-Path $stampScript) {
-    & $stampScript -SourceRoot $SourceRoot -ExePath $newExe -IconPath (Join-Path $SourceRoot 'assets\icon.ico')
+    & $stampScript -SourceRoot $SourceRoot -ExePath $newExe -IconPath (Join-Path $SourceRoot 'assets\icon.ico') -FileVersion "$Version.0" -ProductVersion $Version
 } else {
     Write-Warning 'stamp-windows-identity.ps1 not found; executable branding skipped.'
 }
@@ -149,7 +149,7 @@ if (Test-Path $stampScript) {
 # 8. Verify the executable identity
 $verifyScript = Join-Path $PSScriptRoot 'verify-windows-identity.ps1'
 if (Test-Path $verifyScript) {
-    & $verifyScript -ExePath $newExe
+    & $verifyScript -ExePath $newExe -ExpectedFileVersion "$Version.0" -ExpectedProductVersion $Version
 }
 
 # 9. Produce portable ZIP
