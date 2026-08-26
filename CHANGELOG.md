@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v11.1.3 — Companion and Reliability Fixes (2026-08-26)
+
+Desktop: 11.1.3
+Android Companion: 11.1.1, unchanged
+
 ### Fixed
 - Android companion recovery scans now stop when navigation or Activity pause
   makes their result stale, avoiding unnecessary LAN probing and late UI
