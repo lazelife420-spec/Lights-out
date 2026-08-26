@@ -15,14 +15,18 @@ const distNative = process.env.LIGHTS_OUT_PACKAGED_EXE
 const executable = process.env.LIGHTS_OUT_PACKAGED_EXE
   ? path.resolve(process.env.LIGHTS_OUT_PACKAGED_EXE)
   : path.join(distNative, 'Lights Out.exe');
+// Same philosophy as package-native-windows.ps1's build-stamping fix: derive
+// the expected Windows version metadata from the package identity instead of
+// hardcoding it, so this assertion doesn't go stale on the next version bump.
+const packageVersion = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
 const expected = {
   CompanyName: 'The Proof Foundry',
   FileDescription: 'Lights Out',
-  FileVersion: '11.1.2.0',
+  FileVersion: `${packageVersion}.0`,
   InternalName: 'Lights Out',
   OriginalFilename: 'Lights Out.exe',
   ProductName: 'Lights Out',
-  ProductVersion: '11.1.2',
+  ProductVersion: packageVersion,
   LegalCopyright: 'Copyright (C) 2026 The Proof Foundry. All rights reserved.'
 };
 
