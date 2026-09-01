@@ -2333,6 +2333,22 @@ check('ux: disabled button styling defined', () => {
   assertMatch(cssSrc, /button\[aria-disabled="true"\][\s\S]*cursor: not-allowed/, 'disabled button cursor missing');
 });
 
+check('ux: navigation rail stays reachable while a timer is running or paused', () => {
+  // Compact icon rail replaces the lobby rail for RUNNING/PAUSED -- same
+  // buttons, same handlers; mini mode and fullscreen clock keep hiding it.
+  assertMatch(cssSrc, /body\.is-running \.ns-sidebar,\s*body\.is-paused \.ns-sidebar\s*\{[^}]*display:\s*flex/, 'running/paused rail visibility rule missing');
+  assertMatch(cssSrc, /body\.is-running,\s*body\.is-paused\s*\{[^}]*--ns-sidebar-width:\s*var\(--ns-sidebar-collapse-width\)/, 'running/paused compact rail width rule missing');
+  assertMatch(cssSrc, /body\.is-running:not\(\.mini-mode\):not\(\.fullscreen-clock-mode\) \.dashboard[\s\S]*?padding-left:\s*calc\(var\(--ns-sidebar-width\) \+ var\(--section-gap\)\)/, 'running/paused dashboard rail clearance missing');
+  // The lobby rail rule and the renderer body-class contract must stay intact.
+  assertMatch(cssSrc, /body\.ns-lobby \.ns-sidebar\s*\{\s*display:\s*flex;\s*\}/, 'lobby rail visibility rule regressed');
+  assertMatch(rendererSrc, /els\.body\.classList\.toggle\('is-running', state\.running\)/, 'is-running body class contract regressed');
+  assertMatch(rendererSrc, /els\.body\.classList\.toggle\('is-paused', state\.paused\)/, 'is-paused body class contract regressed');
+  assertMatch(rendererSrc, /document\.body\.classList\.toggle\('ns-lobby', isIdle\)/, 'ns-lobby body class contract regressed');
+  // Focused-mode hiding must remain !important so it beats the new rule.
+  assertMatch(cssSrc, /body\.mini-mode \.ns-sidebar,[\s\S]*?display:\s*none\s*!important/, 'mini-mode rail hiding must stay !important');
+  assertMatch(cssSrc, /body\.fullscreen-clock-mode \.ns-sidebar,[\s\S]*?display:\s*none\s*!important/, 'fullscreen rail hiding must stay !important');
+});
+
 check('warning: dialog timing and emergency cancel', () => {
   assertMatch(mainSrc, /if \(timerState\.gracePeriod > 0 && timerState\.remainingSeconds === timerState\.gracePeriod \* 60\) \{/, 'warning dialog trigger timing regressed');
   assertMatch(mainSrc, /emitTimerUpdate\('warning', \{[\s\S]*message: `\$\{formatAction\(timerState\.action\)\} in \$\{timerState\.gracePeriod\} minutes`/s, 'warning message content regressed');

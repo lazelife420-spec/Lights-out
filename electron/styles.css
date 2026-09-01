@@ -4913,6 +4913,51 @@ body.ns-lobby .dashboard {
   padding-left: calc(var(--ns-sidebar-width) + var(--section-gap));
 }
 
+/* ── Running/paused: compact icon rail. Navigation stays reachable while a
+   session runs, without turning the run screen back into the lobby: the
+   rail reuses the existing narrow-window icon-rail treatment below, and
+   the render()-side focused-active-run rules keep idle-only lobby clutter
+   hidden. Mini mode and fullscreen clock keep their own !important hiding
+   rules (they must win over the new display:flex here) and are scoped out
+   of the dashboard clearance so their centered layouts are untouched. ── */
+body.is-running,
+body.is-paused {
+  --ns-sidebar-width: var(--ns-sidebar-collapse-width);
+}
+body.is-running .ns-sidebar,
+body.is-paused .ns-sidebar {
+  display: flex;
+  align-items: center;
+  padding: 14px 8px;
+}
+body.is-running .ns-sidebar-logo,
+body.is-paused .ns-sidebar-logo {
+  flex-direction: column;
+  gap: 4px;
+  padding: 0;
+}
+body.is-running .ns-sidebar-wordmark,
+body.is-paused .ns-sidebar-wordmark {
+  display: none;
+}
+body.is-running .ns-nav-item,
+body.is-paused .ns-nav-item {
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 8px 4px;
+}
+body.is-running .ns-nav-label,
+body.is-paused .ns-nav-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+body.is-running:not(.mini-mode):not(.fullscreen-clock-mode) .dashboard,
+body.is-paused:not(.mini-mode):not(.fullscreen-clock-mode) .dashboard {
+  padding-left: calc(var(--ns-sidebar-width) + var(--section-gap));
+}
+
 .ns-sidebar-logo {
   display: flex;
   align-items: center;
