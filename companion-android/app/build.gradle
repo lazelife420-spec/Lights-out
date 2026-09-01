@@ -39,8 +39,11 @@ android {
         applicationId 'com.lightsout.companion'
         minSdk 26
         targetSdk 34
-        versionCode 2
-        versionName '11.1.1'
+        // Post-RC3 alignment: versionName tracks the desktop v11.1.3
+        // development line; versionCode keeps the established monotonic
+        // +1-per-release convention (1 = '1.0', 2 = '11.1.1').
+        versionCode 3
+        versionName '11.1.3'
     }
 
     signingConfigs {

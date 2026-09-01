@@ -2617,6 +2617,38 @@ body.mini-mode .action-btn {
   padding: 8px 12px;
 }
 
+/* Mini-mode exit: fixed-position compact control in the mini window's
+   free top-right corner -- same pattern as .fullscreen-clock-exit (which
+   also lives directly under .cockpit so no transformed ancestor can
+   mislocate it). Hidden outside mini mode so the normal window and the
+   fitWindowHeight measurement are untouched; visible only when
+   body.mini-mode hides the chrome header that owns the entry toggle. */
+.mini-exit {
+  display: none;
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 2000;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.mini-exit:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+body.mini-mode .mini-exit {
+  display: flex;
+}
+
 @media (max-width: 500px) {
   .chrome-header {
     padding: 0 8px;

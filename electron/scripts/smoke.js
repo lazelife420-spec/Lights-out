@@ -2348,6 +2348,21 @@ check('ux: navigation rail stays reachable while a timer is running or paused', 
   assertMatch(cssSrc, /body\.mini-mode \.ns-sidebar,[\s\S]*?display:\s*none\s*!important/, 'mini-mode rail hiding must stay !important');
   assertMatch(cssSrc, /body\.fullscreen-clock-mode \.ns-sidebar,[\s\S]*?display:\s*none\s*!important/, 'fullscreen rail hiding must stay !important');
 });
+check('ux: mini mode exposes a mouse exit wired to the existing toggle', () => {
+  // Mini mode hides .chrome-header -- btn-mini's own parent -- so without a
+  // dedicated exit control Ctrl+M was the only way back out. The exit must
+  // exist, stay hidden outside mini mode (keeping normal layout and the
+  // fitWindowHeight measurement untouched), and reuse the SAME
+  // toggleMiniMode handler as the entry toggle: no second mode-toggle path.
+  assertMatch(htmlSrc, /id="btn-mini-exit"/, 'mini exit button missing');
+  assertMatch(htmlSrc, /id="btn-mini-exit"[^>]*aria-label="Exit mini mode"/, 'mini exit aria-label missing');
+  assertMatch(cssSrc, /\.mini-exit\s*\{[^}]*display:\s*none/, 'mini exit must stay hidden outside mini mode');
+  assertMatch(cssSrc, /body\.mini-mode \.mini-exit\s*\{[^}]*display:\s*flex/, 'mini exit visibility rule missing');
+  assertMatch(rendererSrc, /btnMiniExit: document\.getElementById\('btn-mini-exit'\)/, 'mini exit element binding missing');
+  assertMatch(rendererSrc, /els\.btnMiniExit\?\.addEventListener\('click', toggleMiniMode\)/, 'mini exit must reuse the existing toggleMiniMode handler');
+  // The chrome header (and with it the entry toggle) keeps hiding in mini mode.
+  assertMatch(cssSrc, /body\.mini-mode \.chrome-header,/, 'mini-mode chrome-header hiding rule regressed');
+});
 
 check('warning: dialog timing and emergency cancel', () => {
   assertMatch(mainSrc, /if \(timerState\.gracePeriod > 0 && timerState\.remainingSeconds === timerState\.gracePeriod \* 60\) \{/, 'warning dialog trigger timing regressed');

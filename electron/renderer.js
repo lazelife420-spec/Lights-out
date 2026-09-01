@@ -363,6 +363,7 @@ const els = {
   btnMaximize: document.getElementById('btn-maximize'),
   btnClose: document.getElementById('btn-close'),
   btnMini: document.getElementById('btn-mini'),
+  btnMiniExit: document.getElementById('btn-mini-exit'),
   btnPlus: document.getElementById('btn-plus'),
   btnMinus: document.getElementById('btn-minus'),
   panelSet: document.getElementById('ns-panel-set'),
@@ -3188,6 +3189,11 @@ function wireEvents() {
   els.btnMaximize?.addEventListener('click', () => api.toggleMaximizeWindow());
   els.btnClose.addEventListener('click', () => api.closeWindow());
   els.btnMini?.addEventListener('click', toggleMiniMode);
+  // Mini-mode exit affordance: same handler as the header entry toggle --
+  // there is exactly one mini-mode toggle implementation (toggleMiniMode ->
+  // 'toggle-mini-mode' IPC -> main.js state machine); this is only a
+  // second mouse-reachable way to reach it while the header is hidden.
+  els.btnMiniExit?.addEventListener('click', toggleMiniMode);
   els.btnFullscreenClock?.addEventListener('click', enterFullscreenClock);
   els.btnFullscreenClockExit?.addEventListener('click', exitFullscreenClock);
   api.onFullScreenChanged?.(applyFullscreenClockState);

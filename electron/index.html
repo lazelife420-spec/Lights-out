@@ -102,6 +102,14 @@
          the viewport, which would scale and mislocate the button. -->
     <button class="fullscreen-clock-exit" id="btn-fullscreen-clock-exit" title="Exit full screen (Esc)" aria-label="Exit full screen">&#x2715;</button>
 
+    <!-- Mini-mode exit: mini mode hides .chrome-header (btn-mini's parent),
+         which used to leave Ctrl+M as the only way back out -- a one-way
+         trap for mouse users. This compact control is hidden except in
+         mini mode and calls the SAME toggleMiniMode() handler as btn-mini;
+         no second toggle implementation, no window state of its own (mini
+         geometry still lives entirely in windowGeometry.js via main.js). -->
+    <button class="mini-exit" id="btn-mini-exit" title="Exit Mini Mode (Ctrl+M)" aria-label="Exit mini mode">&#x2922;</button>
+
     <!-- Northstar left sidebar (icon rail) -->
     <aside class="ns-sidebar" aria-label="Navigation" data-ns-navgroup="vertical">
       <div class="ns-sidebar-logo">
