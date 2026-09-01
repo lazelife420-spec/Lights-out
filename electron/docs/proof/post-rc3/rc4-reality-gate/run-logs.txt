@@ -1,0 +1,3196 @@
+Initializing isolated CI workspace (Git Clone & Checkout): C:\Users\KickA\Projects\Active\OfflineForge_Sovereign_V2\.claude\worktrees\lights-out-runroom-gate\cache\ci\workspaces\6b67a712-33ba-4cd6-9c4a-81e66f056750
+
+--- Step: Offline dependency restore (npm) ---
+npm warn deprecated rcedit@5.0.2: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+
+added 123 packages in 1s
+
+Step passed.
+
+--- Step: Offline Electron provision (npm) ---
+
+> lights-out-electron@11.1.3 electron:provision
+> install-electron --no
+
+
+Step passed.
+
+--- Step: Electron provision verification (npm) ---
+
+> lights-out-electron@11.1.3 electron:verify
+> node scripts/verify-electron-provisioning.js
+
+Electron v43.1.0 provisioned at C:\Users\KickA\Projects\Active\OfflineForge_Sovereign_V2\.claude\worktrees\lights-out-runroom-gate\cache\ci\workspaces\6b67a712-33ba-4cd6-9c4a-81e66f056750\electron\node_modules\electron\dist\electron.exe
+
+Step passed.
+
+--- Step: Syntax — main (node) ---
+
+Step passed.
+
+--- Step: Syntax — renderer (node) ---
+
+Step passed.
+
+--- Step: Syntax — preload (node) ---
+
+Step passed.
+
+--- Step: ESLint (npm) ---
+
+> lights-out-electron@11.1.3 lint
+> eslint .
+
+
+C:\Users\KickA\Projects\Active\OfflineForge_Sovereign_V2\.claude\worktrees\lights-out-runroom-gate\cache\ci\workspaces\6b67a712-33ba-4cd6-9c4a-81e66f056750\electron\scripts\performance-resize-gate.js
+  252:16  warning  'routeNames' is defined but never used. Allowed unused vars must match /^_/u  no-unused-vars
+
+✖ 1 problem (0 errors, 1 warning)
+
+
+Step passed.
+
+--- Step: Unit tests (npm) ---
+
+> lights-out-electron@11.1.3 test
+> node --test
+
+TAP version 13
+# Subtest: expandIcsLines folds continuation lines (leading space/tab) into the prior line
+ok 1 - expandIcsLines folds continuation lines (leading space/tab) into the prior line
+  ---
+  duration_ms: 2.4413
+  type: 'test'
+  ...
+# Subtest: expandIcsLines drops blank lines and trims
+ok 2 - expandIcsLines drops blank lines and trims
+  ---
+  duration_ms: 0.2768
+  type: 'test'
+  ...
+# Subtest: expandIcsLines treats a leading continuation (nothing to fold into) as a standalone trimmed line
+ok 3 - expandIcsLines treats a leading continuation (nothing to fold into) as a standalone trimmed line
+  ---
+  duration_ms: 0.1771
+  type: 'test'
+  ...
+# Subtest: convertFromIcsDateTime parses a date-only value as local midnight
+ok 4 - convertFromIcsDateTime parses a date-only value as local midnight
+  ---
+  duration_ms: 0.9288
+  type: 'test'
+  ...
+# Subtest: convertFromIcsDateTime parses a local date-time (no Z) deterministically
+ok 5 - convertFromIcsDateTime parses a local date-time (no Z) deterministically
+  ---
+  duration_ms: 0.456
+  type: 'test'
+  ...
+# Subtest: convertFromIcsDateTime handles a UTC (Z) value and hyphenated forms without throwing
+ok 6 - convertFromIcsDateTime handles a UTC (Z) value and hyphenated forms without throwing
+  ---
+  duration_ms: 0.4924
+  type: 'test'
+  ...
+# Subtest: convertFromIcsDateTime returns null for empty / unparseable input
+ok 7 - convertFromIcsDateTime returns null for empty / unparseable input
+  ---
+  duration_ms: 0.3902
+  type: 'test'
+  ...
+# Subtest: parseIcsContent extracts a VEVENT with unescaped summary/location
+ok 8 - parseIcsContent extracts a VEVENT with unescaped summary/location
+  ---
+  duration_ms: 0.7196
+  type: 'test'
+  ...
+# Subtest: parseIcsContent skips a VEVENT with no DTSTART
+ok 9 - parseIcsContent skips a VEVENT with no DTSTART
+  ---
+  duration_ms: 0.4772
+  type: 'test'
+  ...
+# Subtest: parseIcsContent defaults end to start + 1h and generates a uid when absent
+ok 10 - parseIcsContent defaults end to start + 1h and generates a uid when absent
+  ---
+  duration_ms: 0.6814
+  type: 'test'
+  ...
+# Subtest: parseIcsContent returns [] for empty input and ignores non-event lines
+ok 11 - parseIcsContent returns [] for empty input and ignores non-event lines
+  ---
+  duration_ms: 0.2501
+  type: 'test'
+  ...
+# Subtest: parseIcsContent reads multiple events
+ok 12 - parseIcsContent reads multiple events
+  ---
+  duration_ms: 0.1878
+  type: 'test'
+  ...
+# Subtest: importIcsFromText throws without a VCALENDAR header
+ok 13 - importIcsFromText throws without a VCALENDAR header
+  ---
+  duration_ms: 0.5918
+  type: 'test'
+  ...
+# Subtest: importIcsFromText returns { source, events, count }
+ok 14 - importIcsFromText returns { source, events, count }
+  ---
+  duration_ms: 0.1891
+  type: 'test'
+  ...
+# Subtest: testCalendarFeedUrl accepts only trimmed, space-free https URLs
+ok 15 - testCalendarFeedUrl accepts only trimmed, space-free https URLs
+  ---
+  duration_ms: 0.1716
+  type: 'test'
+  ...
+# Subtest: getProviders returns all five providers; getProvider looks up by id
+ok 16 - getProviders returns all five providers; getProvider looks up by id
+  ---
+  duration_ms: 3.0301
+  type: 'test'
+  ...
+# Subtest: getDefaultCalendarEvents emits Bedtime events with the right shape (legacy single-schedule shape)
+ok 17 - getDefaultCalendarEvents emits Bedtime events with the right shape (legacy single-schedule shape)
+  ---
+  duration_ms: 1.5092
+  type: 'test'
+  ...
+# Subtest: getDefaultCalendarEvents filters to the configured weekdays only
+ok 18 - getDefaultCalendarEvents filters to the configured weekdays only
+  ---
+  duration_ms: 0.4177
+  type: 'test'
+  ...
+# Subtest: getDefaultCalendarEvents parses a non-default bedtime and default action
+ok 19 - getDefaultCalendarEvents parses a non-default bedtime and default action
+  ---
+  duration_ms: 0.4503
+  type: 'test'
+  ...
+# Subtest: getDefaultCalendarEvents falls back to all-week / 22:30 when schedule is empty
+ok 20 - getDefaultCalendarEvents falls back to all-week / 22:30 when schedule is empty
+  ---
+  duration_ms: 0.3654
+  type: 'test'
+  ...
+# Subtest: getDefaultCalendarEvents returns nothing when no valid days are given
+ok 21 - getDefaultCalendarEvents returns nothing when no valid days are given
+  ---
+  duration_ms: 0.228
+  type: 'test'
+  ...
+# Subtest: getDefaultCalendarEvents honors the withinDays cutoff
+ok 22 - getDefaultCalendarEvents honors the withinDays cutoff
+  ---
+  duration_ms: 0.341
+  type: 'test'
+  ...
+# Subtest: getDefaultCalendarEvents emits events for every rule, each with its own label/time/action/duration
+ok 23 - getDefaultCalendarEvents emits events for every rule, each with its own label/time/action/duration
+  ---
+  duration_ms: 0.6645
+  type: 'test'
+  ...
+# Subtest: getDefaultCalendarEvents skips a disabled rule entirely
+ok 24 - getDefaultCalendarEvents skips a disabled rule entirely
+  ---
+  duration_ms: 0.5564
+  type: 'test'
+  ...
+# Subtest: getDefaultCalendarEvents returns nothing for an explicit empty rules array (user deleted every rule)
+ok 25 - getDefaultCalendarEvents returns nothing for an explicit empty rules array (user deleted every rule)
+  ---
+  duration_ms: 0.5456
+  type: 'test'
+  ...
+# Subtest: getDefaultCalendarEvents events are sorted chronologically across rules
+ok 26 - getDefaultCalendarEvents events are sorted chronologically across rules
+  ---
+  duration_ms: 0.3444
+  type: 'test'
+  ...
+# Subtest: WiFi Guard webhook reports real configured success and HTTP failure
+ok 27 - WiFi Guard webhook reports real configured success and HTTP failure
+  ---
+  duration_ms: 47.468
+  type: 'test'
+  ...
+# Subtest: Accountability webhook reports real configured success and HTTP failure
+ok 28 - Accountability webhook reports real configured success and HTTP failure
+  ---
+  duration_ms: 40.2581
+  type: 'test'
+  ...
+# Subtest: WiFi Guard cannot look enabled without its provider setup
+ok 29 - WiFi Guard cannot look enabled without its provider setup
+  ---
+  duration_ms: 2.9627
+  type: 'test'
+  ...
+# Subtest: Content Blocker needs either its grounded default list or explicit sites
+ok 30 - Content Blocker needs either its grounded default list or explicit sites
+  ---
+  duration_ms: 0.3314
+  type: 'test'
+  ...
+# Subtest: Accountability cannot look enabled without a valid webhook partner
+ok 31 - Accountability cannot look enabled without a valid webhook partner
+  ---
+  duration_ms: 0.3407
+  type: 'test'
+  ...
+# Subtest: firewall creation is private-only, program-scoped, and grouped as app-owned
+ok 32 - firewall creation is private-only, program-scoped, and grouped as app-owned
+  ---
+  duration_ms: 1.8884
+  type: 'test'
+  ...
+# Subtest: firewall rollback and removal target only the app-owned group
+ok 33 - firewall rollback and removal target only the app-owned group
+  ---
+  duration_ms: 0.324
+  type: 'test'
+  ...
+# Subtest: firewall command rejects unsafe ports and escapes executable paths
+ok 34 - firewall command rejects unsafe ports and escapes executable paths
+  ---
+  duration_ms: 0.3635
+  type: 'test'
+  ...
+# Subtest: firewall snapshot is limited to the app-owned group
+ok 35 - firewall snapshot is limited to the app-owned group
+  ---
+  duration_ms: 0.5355
+  type: 'test'
+  ...
+# Subtest: encodeFrame: small payload uses a 2-byte header, FIN + opcode set
+ok 36 - encodeFrame: small payload uses a 2-byte header, FIN + opcode set
+  ---
+  duration_ms: 1.6895
+  type: 'test'
+  ...
+# Subtest: encodeFrame: 126..65535 payload uses 16-bit extended length
+ok 37 - encodeFrame: 126..65535 payload uses 16-bit extended length
+  ---
+  duration_ms: 0.287
+  type: 'test'
+  ...
+# Subtest: encodeFrame: >65535 payload uses 64-bit extended length
+ok 38 - encodeFrame: >65535 payload uses 64-bit extended length
+  ---
+  duration_ms: 0.2405
+  type: 'test'
+  ...
+# Subtest: consumeFrames: a valid masked text frame yields a validated message
+ok 39 - consumeFrames: a valid masked text frame yields a validated message
+  ---
+  duration_ms: 1.8058
+  type: 'test'
+  ...
+# Subtest: consumeFrames: malformed JSON is ignored, not crashed on
+ok 40 - consumeFrames: malformed JSON is ignored, not crashed on
+  ---
+  duration_ms: 0.3913
+  type: 'test'
+  ...
+# Subtest: consumeFrames: a message failing validation is dropped
+ok 41 - consumeFrames: a message failing validation is dropped
+  ---
+  duration_ms: 0.3351
+  type: 'test'
+  ...
+# Subtest: consumeFrames: an unmasked client frame is a protocol error (close 1002)
+ok 42 - consumeFrames: an unmasked client frame is a protocol error (close 1002)
+  ---
+  duration_ms: 0.4294
+  type: 'test'
+  ...
+# Subtest: consumeFrames: a frame over MAX_MESSAGE is rejected (close 1009)
+ok 43 - consumeFrames: a frame over MAX_MESSAGE is rejected (close 1009)
+  ---
+  duration_ms: 1.2256
+  type: 'test'
+  ...
+# Subtest: consumeFrames: a ping is answered with a pong carrying the same payload
+ok 44 - consumeFrames: a ping is answered with a pong carrying the same payload
+  ---
+  duration_ms: 0.537
+  type: 'test'
+  ...
+# Subtest: consumeFrames: a close frame from the client tears the connection down
+ok 45 - consumeFrames: a close frame from the client tears the connection down
+  ---
+  duration_ms: 0.6061
+  type: 'test'
+  ...
+# Subtest: consumeFrames: a frame split across two chunks is reassembled
+ok 46 - consumeFrames: a frame split across two chunks is reassembled
+  ---
+  duration_ms: 0.34
+  type: 'test'
+  ...
+# Subtest: consumeFrames: two back-to-back frames in one chunk both dispatch
+ok 47 - consumeFrames: two back-to-back frames in one chunk both dispatch
+  ---
+  duration_ms: 0.2524
+  type: 'test'
+  ...
+# Companion PWA bound on 127.0.0.1:50670; verifying HTTP and WebSocket readiness.
+# Subtest: Companion integration: Off mode (no listener)
+ok 48 - Companion integration: Off mode (no listener)
+  ---
+  duration_ms: 2.0152
+  type: 'test'
+  ...
+# Companion PWA ready on 127.0.0.1:50670
+# Subtest: Companion integration: Token authentication
+ok 49 - Companion integration: Token authentication
+  ---
+  duration_ms: 52.3037
+  type: 'test'
+  ...
+# Companion PWA port 50680 is already in use - companion features disabled for this instance.
+# Companion PWA bound on 127.0.0.1:50681; verifying HTTP and WebSocket readiness.
+# Subtest: Companion integration: occupied port reports a truthful bind failure
+ok 50 - Companion integration: occupied port reports a truthful bind failure
+  ---
+  duration_ms: 5.4287
+  type: 'test'
+  ...
+# Companion PWA ready on 127.0.0.1:50681
+# Companion PWA bound on 127.0.0.1:50681; verifying HTTP and WebSocket readiness.
+# Companion PWA ready on 127.0.0.1:50681
+# Subtest: Companion integration: Pair-check reports stale and rotated tokens
+# Companion PWA bound on 127.0.0.1:50696; verifying HTTP and WebSocket readiness.
+ok 51 - Companion integration: Pair-check reports stale and rotated tokens
+  ---
+  duration_ms: 26.3271
+  type: 'test'
+  ...
+# Companion PWA ready on 127.0.0.1:50696
+# Companion PWA bound on 0.0.0.0:50696; verifying HTTP and WebSocket readiness.
+# Companion PWA ready on 0.0.0.0:50696
+# Subtest: Companion integration: Host binding (Local vs LAN)
+# Companion PWA bound on 127.0.0.1:50706; verifying HTTP and WebSocket readiness.
+ok 52 - Companion integration: Host binding (Local vs LAN)
+  ---
+  duration_ms: 231.7269
+  type: 'test'
+  ...
+# Companion PWA Readiness check failed: controlled HTTP_HEALTH_FAILED
+# Companion PWA bound on 127.0.0.1:50707; verifying HTTP and WebSocket readiness.
+# Subtest: Companion integration: HTTP_HEALTH_FAILED blocks readiness
+# Companion PWA Readiness check failed: controlled PAIR_CHECK_FAILED
+ok 53 - Companion integration: HTTP_HEALTH_FAILED blocks readiness
+  ---
+  duration_ms: 2.3099
+  type: 'test'
+  ...
+# Companion PWA bound on 127.0.0.1:50708; verifying HTTP and WebSocket readiness.
+# Companion PWA Readiness check failed: controlled WEBSOCKET_UPGRADE_FAILED
+# Subtest: Companion integration: PAIR_CHECK_FAILED blocks readiness
+ok 54 - Companion integration: PAIR_CHECK_FAILED blocks readiness
+  ---
+  duration_ms: 2.4341
+  type: 'test'
+  ...
+# Companion PWA bound on 127.0.0.1:50709; verifying HTTP and WebSocket readiness.
+# Subtest: Companion integration: WEBSOCKET_UPGRADE_FAILED blocks readiness
+ok 55 - Companion integration: WEBSOCKET_UPGRADE_FAILED blocks readiness
+  ---
+  duration_ms: 2.0775
+  type: 'test'
+  ...
+# Companion PWA ready on 127.0.0.1:50709
+# Companion PWA bound on 127.0.0.1:50709; verifying HTTP and WebSocket readiness.
+# Companion PWA ready on 127.0.0.1:50709
+# Companion PWA bound on 127.0.0.1:50709; verifying HTTP and WebSocket readiness.
+# Companion PWA ready on 127.0.0.1:50709
+# Companion PWA bound on 127.0.0.1:50709; verifying HTTP and WebSocket readiness.
+# Companion PWA ready on 127.0.0.1:50709
+# Companion PWA bound on 127.0.0.1:50709; verifying HTTP and WebSocket readiness.
+# Companion PWA ready on 127.0.0.1:50709
+# Subtest: Companion integration: repeated token-rotation restarts release the same port
+ok 56 - Companion integration: repeated token-rotation restarts release the same port
+  ---
+  duration_ms: 19.8636
+  type: 'test'
+  ...
+# Subtest: Companion integration: sendToClient encodes a text frame for a client
+ok 57 - Companion integration: sendToClient encodes a text frame for a client
+  ---
+  duration_ms: 1.2385
+  type: 'test'
+  ...
+# Subtest: Companion integration: sendToClient marks client dead on socket write error
+ok 58 - Companion integration: sendToClient marks client dead on socket write error
+  ---
+  duration_ms: 0.3102
+  type: 'test'
+  ...
+# Subtest: selectLanIp preserves a preferred address only while it is still present
+ok 59 - selectLanIp preserves a preferred address only while it is still present
+  ---
+  duration_ms: 1.6963
+  type: 'test'
+  ...
+# Subtest: selectLanIp prefers the current routed source over a stale assigned preference
+ok 60 - selectLanIp prefers the current routed source over a stale assigned preference
+  ---
+  duration_ms: 0.2237
+  type: 'test'
+  ...
+# Subtest: selectLanIp reports no LAN endpoint instead of substituting loopback
+ok 61 - selectLanIp reports no LAN endpoint instead of substituting loopback
+  ---
+  duration_ms: 1.5233
+  type: 'test'
+  ...
+# Subtest: networkFingerprint detects address-set changes but ignores enumeration order
+ok 62 - networkFingerprint detects address-set changes but ignores enumeration order
+  ---
+  duration_ms: 0.4129
+  type: 'test'
+  ...
+# Subtest: normalizeCandidateIps trims, deduplicates, and drops invalid values
+ok 63 - normalizeCandidateIps trims, deduplicates, and drops invalid values
+  ---
+  duration_ms: 0.2083
+  type: 'test'
+  ...
+# Subtest: 1&2. connected adapter is selected by observed state, not display name -- swapping names changes nothing
+ok 64 - 1&2. connected adapter is selected by observed state, not display name -- swapping names changes nothing
+  ---
+  duration_ms: 0.5097
+  type: 'test'
+  ...
+# Subtest: 3. the disconnected adapter is never selected as the LAN endpoint
+ok 65 - 3. the disconnected adapter is never selected as the LAN endpoint
+  ---
+  duration_ms: 0.2843
+  type: 'test'
+  ...
+# Subtest: 4. an adapter reporting connected but with no usable IPv4 is rejected as a connected candidate
+ok 66 - 4. an adapter reporting connected but with no usable IPv4 is rejected as a connected candidate
+  ---
+  duration_ms: 0.1746
+  type: 'test'
+  ...
+# Subtest: 5. loopback is never selected for either role
+ok 67 - 5. loopback is never selected for either role
+  ---
+  duration_ms: 0.4785
+  type: 'test'
+  ...
+# Subtest: 6. a virtual adapter ranks below a valid physical LAN adapter
+ok 68 - 6. a virtual adapter ranks below a valid physical LAN adapter
+  ---
+  duration_ms: 0.637
+  type: 'test'
+  ...
+# Subtest: 6b. a virtual adapter is used when it is the only connected candidate
+ok 69 - 6b. a virtual adapter is used when it is the only connected candidate
+  ---
+  duration_ms: 0.2614
+  type: 'test'
+  ...
+# Subtest: 7. the default-route adapter wins when multiple physical connected candidates exist
+ok 70 - 7. the default-route adapter wins when multiple physical connected candidates exist
+  ---
+  duration_ms: 0.1659
+  type: 'test'
+  ...
+# Subtest: 8. total adapter disappearance produces a truthful degraded state, not a stale/fake selection
+ok 71 - 8. total adapter disappearance produces a truthful degraded state, not a stale/fake selection
+  ---
+  duration_ms: 0.1472
+  type: 'test'
+  ...
+# Subtest: 9&10. connected -> disconnected -> reconnected is reflected by role selection and by the production fingerprint
+ok 72 - 9&10. connected -> disconnected -> reconnected is reflected by role selection and by the production fingerprint
+  ---
+  duration_ms: 0.1971
+  type: 'test'
+  ...
+# Subtest: computeAccept matches the canonical RFC 6455 example
+ok 73 - computeAccept matches the canonical RFC 6455 example
+  ---
+  duration_ms: 1.8965
+  type: 'test'
+  ...
+# Subtest: computeAccept is deterministic and base64-shaped
+ok 74 - computeAccept is deterministic and base64-shaped
+  ---
+  duration_ms: 0.512
+  type: 'test'
+  ...
+# Subtest: computeAccept changes with the key
+ok 75 - computeAccept changes with the key
+  ---
+  duration_ms: 0.3732
+  type: 'test'
+  ...
+# Subtest: pair-check distinguishes a valid token from missing or expired pairing
+ok 76 - pair-check distinguishes a valid token from missing or expired pairing
+  ---
+  duration_ms: 0.3665
+  type: 'test'
+  ...
+# Subtest: recordFailedAttempt increments the counter and records the source IP
+ok 77 - recordFailedAttempt increments the counter and records the source IP
+  ---
+  duration_ms: 0.3381
+  type: 'test'
+  ...
+# Subtest: recordFailedAttempt strips the IPv4-mapped IPv6 prefix from the source address
+ok 78 - recordFailedAttempt strips the IPv4-mapped IPv6 prefix from the source address
+  ---
+  duration_ms: 0.2093
+  type: 'test'
+  ...
+# Subtest: recordFailedAttempt tolerates a missing remoteAddress
+ok 79 - recordFailedAttempt tolerates a missing remoteAddress
+  ---
+  duration_ms: 0.3107
+  type: 'test'
+  ...
+# Subtest: exposes a non-empty default blocklist of clean hostnames
+ok 80 - exposes a non-empty default blocklist of clean hostnames
+  ---
+  duration_ms: 1.8218
+  type: 'test'
+  ...
+# Subtest: sanitizeSites drops newline-injection and non-hostname entries
+ok 81 - sanitizeSites drops newline-injection and non-hostname entries
+  ---
+  duration_ms: 2.0035
+  type: 'test'
+  ...
+# Subtest: sanitizeSites returns [] for non-array / empty input
+ok 82 - sanitizeSites returns [] for non-array / empty input
+  ---
+  duration_ms: 1.6004
+  type: 'test'
+  ...
+# Subtest: buildWriteHostsCommand round-trips multi-line content through base64, preserving real newlines
+ok 83 - buildWriteHostsCommand round-trips multi-line content through base64, preserving real newlines
+  ---
+  duration_ms: 0.4184
+  type: 'test'
+  ...
+# Subtest: buildWriteHostsCommand never embeds a raw single-quote from content (base64 alphabet is quote-free)
+ok 84 - buildWriteHostsCommand never embeds a raw single-quote from content (base64 alphabet is quote-free)
+  ---
+  duration_ms: 0.26
+  type: 'test'
+  ...
+# Subtest: permission denial reports failure and leaves an isolated prior hosts file intact
+ok 85 - permission denial reports failure and leaves an isolated prior hosts file intact
+  ---
+  duration_ms: 2.309
+  type: 'test'
+  ...
+# Subtest: isScheduleActive: same-day window is active only inside [start, end)
+ok 86 - isScheduleActive: same-day window is active only inside [start, end)
+  ---
+  duration_ms: 0.4213
+  type: 'test'
+  ...
+# Subtest: isScheduleActive: overnight window spans midnight correctly on both sides
+ok 87 - isScheduleActive: overnight window spans midnight correctly on both sides
+  ---
+  duration_ms: 0.2654
+  type: 'test'
+  ...
+# Subtest: isScheduleActive: overnight window does not leak into the wrong day-after
+ok 88 - isScheduleActive: overnight window does not leak into the wrong day-after
+  ---
+  duration_ms: 0.6491
+  type: 'test'
+  ...
+# Subtest: isScheduleActive: disabled, zero-length, and malformed inputs are all inactive
+ok 89 - isScheduleActive: disabled, zero-length, and malformed inputs are all inactive
+  ---
+  duration_ms: 1.211
+  type: 'test'
+  ...
+# Subtest: isScheduleActive: missing/empty days defaults to every day
+ok 90 - isScheduleActive: missing/empty days defaults to every day
+  ---
+  duration_ms: 1.412
+  type: 'test'
+  ...
+# Subtest: isAnyScheduleActive: true if any schedule in the list is active, false for empty/non-array
+ok 91 - isAnyScheduleActive: true if any schedule in the list is active, false for empty/non-array
+  ---
+  duration_ms: 0.2576
+  type: 'test'
+  ...
+# Subtest: live lockfile has only patched tar resolutions with introducing paths
+ok 92 - live lockfile has only patched tar resolutions with introducing paths
+  ---
+  duration_ms: 5.1504
+  type: 'test'
+  ...
+# Subtest: synthetic tar 7.5.19 and 7.5.20 resolutions fail with their parent paths
+ok 93 - synthetic tar 7.5.19 and 7.5.20 resolutions fail with their parent paths
+  ---
+  duration_ms: 2.3969
+  type: 'test'
+  ...
+# Subtest: synthetic tar 7.5.21 resolution passes
+ok 94 - synthetic tar 7.5.21 resolution passes
+  ---
+  duration_ms: 0.2026
+  type: 'test'
+  ...
+# Subtest: multiple fixed tar copies pass and one vulnerable copy fails
+ok 95 - multiple fixed tar copies pass and one vulnerable copy fails
+  ---
+  duration_ms: 0.7141
+  type: 'test'
+  ...
+# Subtest: tar resolutions without an introducing parent fail clearly
+ok 96 - tar resolutions without an introducing parent fail clearly
+  ---
+  duration_ms: 0.354
+  type: 'test'
+  ...
+# Subtest: real repository satisfies the explicit Electron 42+ installer contract
+ok 97 - real repository satisfies the explicit Electron 42+ installer contract
+  ---
+  duration_ms: 3.3658
+  type: 'test'
+  ...
+# Subtest: provisioning contract rejects missing declaration, lock entry, and incompatible version
+ok 98 - provisioning contract rejects missing declaration, lock entry, and incompatible version
+  ---
+  duration_ms: 5.2196
+  type: 'test'
+  ...
+# Subtest: provisioning contract rejects missing bin, scripts, resolved metadata, and integrity
+ok 99 - provisioning contract rejects missing bin, scripts, resolved metadata, and integrity
+  ---
+  duration_ms: 7.0921
+  type: 'test'
+  ...
+# Subtest: provisioning contract rejects automatic and direct installation commands but accepts absent lifecycle metadata
+ok 100 - provisioning contract rejects automatic and direct installation commands but accepts absent lifecycle metadata
+  ---
+  duration_ms: 2.9096
+  type: 'test'
+  ...
+# Subtest: verifier accepts normalized matching runtime output and rejects a mismatch
+ok 101 - verifier accepts normalized matching runtime output and rejects a mismatch
+  ---
+  duration_ms: 9.5366
+  type: 'test'
+  ...
+# Subtest: verifier rejects missing binary, path marker, and nonzero runtime exit
+ok 102 - verifier rejects missing binary, path marker, and nonzero runtime exit
+  ---
+  duration_ms: 17.3043
+  type: 'test'
+  ...
+# Subtest: verifier times out and cleans up its spawned process
+ok 103 - verifier times out and cleans up its spawned process
+  ---
+  duration_ms: 6.3355
+  type: 'test'
+  ...
+# Subtest: accepts a well-formed beacon and returns the peer
+ok 104 - accepts a well-formed beacon and returns the peer
+  ---
+  duration_ms: 2.5199
+  type: 'test'
+  ...
+# Subtest: ignores datagrams without the family magic prefix
+ok 105 - ignores datagrams without the family magic prefix
+  ---
+  duration_ms: 0.2929
+  type: 'test'
+  ...
+# Subtest: ignores a beacon with no label field
+ok 106 - ignores a beacon with no label field
+  ---
+  duration_ms: 0.1673
+  type: 'test'
+  ...
+# Subtest: ignores our own beacon (sender ip is a local ip)
+ok 107 - ignores our own beacon (sender ip is a local ip)
+  ---
+  duration_ms: 0.1662
+  type: 'test'
+  ...
+# Subtest: ignores a beacon with a missing sender address
+ok 108 - ignores a beacon with a missing sender address
+  ---
+  duration_ms: 0.1815
+  type: 'test'
+  ...
+# Subtest: accepts a raw Buffer datagram, not just a string
+ok 109 - accepts a raw Buffer datagram, not just a string
+  ---
+  duration_ms: 0.2432
+  type: 'test'
+  ...
+# Subtest: strips control characters from the untrusted label
+ok 110 - strips control characters from the untrusted label
+  ---
+  duration_ms: 0.1663
+  type: 'test'
+  ...
+# Subtest: caps an over-long label at MAX_LABEL_LEN
+ok 111 - caps an over-long label at MAX_LABEL_LEN
+  ---
+  duration_ms: 0.1649
+  type: 'test'
+  ...
+# Subtest: falls back to the sender ip when the label is empty after sanitizing
+ok 112 - falls back to the sender ip when the label is empty after sanitizing
+  ---
+  duration_ms: 0.518
+  type: 'test'
+  ...
+# Subtest: uses only the first field as the label, ignoring extra pipes
+ok 113 - uses only the first field as the label, ignoring extra pipes
+  ---
+  duration_ms: 0.5493
+  type: 'test'
+  ...
+# Subtest: family.filterAndRankLocalIPs
+    # Subtest: prefers 192.168 over virtual 172.21
+    ok 1 - prefers 192.168 over virtual 172.21
+      ---
+      duration_ms: 1.4029
+      type: 'test'
+      ...
+    # Subtest: prefers 10.x over invalid/loopback/link-local
+    ok 2 - prefers 10.x over invalid/loopback/link-local
+      ---
+      duration_ms: 0.2812
+      type: 'test'
+      ...
+    # Subtest: prefers 192.168 over 10.x and 172.16-31
+    ok 3 - prefers 192.168 over 10.x and 172.16-31
+      ---
+      duration_ms: 0.4081
+      type: 'test'
+      ...
+    # Subtest: rejects virtual adapter names
+    ok 4 - rejects virtual adapter names
+      ---
+      duration_ms: 0.25
+      type: 'test'
+      ...
+    1..4
+ok 114 - family.filterAndRankLocalIPs
+  ---
+  duration_ms: 4.1943
+  type: 'suite'
+  ...
+# Subtest: system volume command converts percentage to two-percent key steps
+ok 115 - system volume command converts percentage to two-percent key steps
+  ---
+  duration_ms: 1.9579
+  type: 'test'
+  ...
+# Subtest: system volume command clamps unsafe or out-of-range input
+ok 116 - system volume command clamps unsafe or out-of-range input
+  ---
+  duration_ms: 0.2425
+  type: 'test'
+  ...
+# Subtest: zero volume never emits an unguarded descending 1..0 range
+ok 117 - zero volume never emits an unguarded descending 1..0 range
+  ---
+  duration_ms: 0.3302
+  type: 'test'
+  ...
+# Subtest: pauseAllMedia sends VK_MEDIA_PLAY_PAUSE ([char]179) and not [char]174
+ok 118 - pauseAllMedia sends VK_MEDIA_PLAY_PAUSE ([char]179) and not [char]174
+  ---
+  duration_ms: 8.4238
+  type: 'test'
+  ...
+# Subtest: resumeAllMedia sends VK_MEDIA_PLAY_PAUSE ([char]179) and not [char]174
+ok 119 - resumeAllMedia sends VK_MEDIA_PLAY_PAUSE ([char]179) and not [char]174
+  ---
+  duration_ms: 1.3619
+  type: 'test'
+  ...
+# (node:2812) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Estimated Bedtime Deficit is explicitly an app-timer estimate
+ok 120 - Estimated Bedtime Deficit is explicitly an app-timer estimate
+  ---
+  duration_ms: 4.7128
+  type: 'test'
+  ...
+# Subtest: Completion count, completion streak, and routine score come only from app events
+ok 121 - Completion count, completion streak, and routine score come only from app events
+  ---
+  duration_ms: 3.0978
+  type: 'test'
+  ...
+# Subtest: Before 11 PM and weekly on-time use the real 23:00 boundary
+ok 122 - Before 11 PM and weekly on-time use the real 23:00 boundary
+  ---
+  duration_ms: 27.8664
+  type: 'test'
+  ...
+# Subtest: normalizeTimerOptions-equivalent: resolveNightModeStart accepts only nightModeId string
+ok 123 - normalizeTimerOptions-equivalent: resolveNightModeStart accepts only nightModeId string
+  ---
+  duration_ms: 3.2134
+  type: 'test'
+  ...
+# Subtest: resolveNightModeStart returns canonical title and version from catalogue
+ok 124 - resolveNightModeStart returns canonical title and version from catalogue
+  ---
+  duration_ms: 0.2372
+  type: 'test'
+  ...
+# Subtest: renderer-injected nightModeTitle is ignored by resolveNightModeStart
+ok 125 - renderer-injected nightModeTitle is ignored by resolveNightModeStart
+  ---
+  duration_ms: 0.233
+  type: 'test'
+  ...
+# Subtest: canonical Quick Sleep retains identity when execution matches
+ok 126 - canonical Quick Sleep retains identity when execution matches
+  ---
+  duration_ms: 0.1799
+  type: 'test'
+  ...
+# Subtest: Quick Sleep with modified duration clears mode identity
+ok 127 - Quick Sleep with modified duration clears mode identity
+  ---
+  duration_ms: 0.2637
+  type: 'test'
+  ...
+# Subtest: Quick Sleep with modified action clears mode identity
+ok 128 - Quick Sleep with modified action clears mode identity
+  ---
+  duration_ms: 0.1676
+  type: 'test'
+  ...
+# Subtest: Full Shutdown resolves with standard ritual for PR \#27 gateway
+ok 129 - Full Shutdown resolves with standard ritual for PR \#27 gateway
+  ---
+  duration_ms: 0.5214
+  type: 'test'
+  ...
+# Subtest: mode with standard ritual loses identity if duration is modified
+ok 130 - mode with standard ritual loses identity if duration is modified
+  ---
+  duration_ms: 0.1792
+  type: 'test'
+  ...
+# Subtest: resolveNightModeStart returns all three receipt identity fields
+ok 131 - resolveNightModeStart returns all three receipt identity fields
+  ---
+  duration_ms: 0.5035
+  type: 'test'
+  ...
+# Subtest: unknown nightModeId returns null identity
+ok 132 - unknown nightModeId returns null identity
+  ---
+  duration_ms: 0.566
+  type: 'test'
+  ...
+# Subtest: unavailable mode ID (quiet-house) cannot produce receipt identity
+ok 133 - unavailable mode ID (quiet-house) cannot produce receipt identity
+  ---
+  duration_ms: 0.2815
+  type: 'test'
+  ...
+# Subtest: no nightModeId in options returns null identity (quick-minute path)
+ok 134 - no nightModeId in options returns null identity (quick-minute path)
+  ---
+  duration_ms: 0.1558
+  type: 'test'
+  ...
+# Subtest: undefined nightModeId returns null identity (duration chip path)
+ok 135 - undefined nightModeId returns null identity (duration chip path)
+  ---
+  duration_ms: 0.14
+  type: 'test'
+  ...
+# Subtest: null nightModeId returns null identity (numeric preset path)
+ok 136 - null nightModeId returns null identity (numeric preset path)
+  ---
+  duration_ms: 0.1186
+  type: 'test'
+  ...
+# Subtest: profile-start without nightModeId remains mode-neutral
+ok 137 - profile-start without nightModeId remains mode-neutral
+  ---
+  duration_ms: 0.1205
+  type: 'test'
+  ...
+# Subtest: nightModes module is self-contained (no companion/remote/calendar exports)
+ok 138 - nightModes module is self-contained (no companion/remote/calendar exports)
+  ---
+  duration_ms: 0.193
+  type: 'test'
+  ...
+# Subtest: direct no-mode timer options produce null identity
+ok 139 - direct no-mode timer options produce null identity
+  ---
+  duration_ms: 0.1234
+  type: 'test'
+  ...
+# Subtest: mode version 1 is immutable across resolutions
+ok 140 - mode version 1 is immutable across resolutions
+  ---
+  duration_ms: 0.9943
+  type: 'test'
+  ...
+# Subtest: timer state without nightMode fields defaults to null
+ok 141 - timer state without nightMode fields defaults to null
+  ---
+  duration_ms: 0.135
+  type: 'test'
+  ...
+# Subtest: getCatalogue returns deep copies safe for renderer card rendering
+ok 142 - getCatalogue returns deep copies safe for renderer card rendering
+  ---
+  duration_ms: 1.7173
+  type: 'test'
+  ...
+# Subtest: disabled mode (school-night) cannot be resolved for execution or START
+ok 143 - disabled mode (school-night) cannot be resolved for execution or START
+  ---
+  duration_ms: 0.1775
+  type: 'test'
+  ...
+# Subtest: unavailable mode returns null from resolveNightModeStart even with matching values
+ok 144 - unavailable mode returns null from resolveNightModeStart even with matching values
+  ---
+  duration_ms: 0.1534
+  type: 'test'
+  ...
+# Subtest: resolveNightModeStart returns canonical ritualId for ritual modes
+ok 145 - resolveNightModeStart returns canonical ritualId for ritual modes
+  ---
+  duration_ms: 0.0998
+  type: 'test'
+  ...
+# Subtest: resolveNightModeStart returns none ritualId for direct modes
+ok 146 - resolveNightModeStart returns none ritualId for direct modes
+  ---
+  duration_ms: 0.1019
+  type: 'test'
+  ...
+# Subtest: resolveForExecution returns canonical ritualId for every ready mode
+ok 147 - resolveForExecution returns canonical ritualId for every ready mode
+  ---
+  duration_ms: 0.159
+  type: 'test'
+  ...
+#   PASS  assessSnoozeCost: first snooze is free
+#   PASS  assessSnoozeCost: second snooze has level 1 (logged + accountability)
+#   PASS  assessSnoozeCost: third snooze adds tighten penalty
+#   PASS  assessSnoozeCost: 4th snooze requires reason
+#   PASS  recordSnooze: increments session count and accumulates debt
+#   PASS  consumeDebt: returns and zeroes accumulated debt
+#   PASS  resetSession: zeroes session count without clearing debt
+#   PASS  config: maxTighten caps debt accumulation
+#   PASS  config: disabled means all snoozes are free
+#   PASS  getStats: returns current session and weekly summary
+#   PASS  history: prunes entries older than 90 days
+#   Override Tax: 11 passed, 0 failed
+# Subtest: test\\overrideTax.test.js
+ok 18 - test\\overrideTax.test.js
+  ---
+  duration_ms: 101.4986
+  type: 'test'
+  ...
+# Subtest: packaged proof waits through delayed renderer initialization
+ok 149 - packaged proof waits through delayed renderer initialization
+  ---
+  duration_ms: 1.4873
+  type: 'test'
+  ...
+# Subtest: packaged proof rejects stale generation and confirms the replacement
+ok 150 - packaged proof rejects stale generation and confirms the replacement
+  ---
+  duration_ms: 0.2798
+  type: 'test'
+  ...
+# Subtest: packaged proof cannot attach to the wrong CDP listener process
+ok 151 - packaged proof cannot attach to the wrong CDP listener process
+  ---
+  duration_ms: 1.457
+  type: 'test'
+  ...
+# Subtest: menu interaction starts only after readiness and proves open, pointer, Escape, and focus
+ok 152 - menu interaction starts only after readiness and proves open, pointer, Escape, and focus
+  ---
+  duration_ms: 1.524
+  type: 'test'
+  ...
+# Subtest: handled menu keys do not invoke timer shortcuts
+ok 153 - handled menu keys do not invoke timer shortcuts
+  ---
+  duration_ms: 0.4771
+  type: 'test'
+  ...
+# Subtest: profile-created failure removes the real temporary directory
+ok 154 - profile-created failure removes the real temporary directory
+  ---
+  duration_ms: 2.5493
+  type: 'test'
+  ...
+# Subtest: listener-created failure releases a real loopback port for immediate reuse
+ok 155 - listener-created failure releases a real loopback port for immediate reuse
+  ---
+  duration_ms: 22.3516
+  type: 'test'
+  ...
+# Subtest: child-process failure terminates the owned process
+ok 156 - child-process failure terminates the owned process
+  ---
+  duration_ms: 1090.3681
+  type: 'test'
+  ...
+# Subtest: combined partial initialization cleans profile, listener, and child
+ok 157 - combined partial initialization cleans profile, listener, and child
+  ---
+  duration_ms: 1050.4681
+  type: 'test'
+  ...
+# Subtest: cleanup errors are secondary and do not stop remaining cleanup
+ok 158 - cleanup errors are secondary and do not stop remaining cleanup
+  ---
+  duration_ms: 3.6711
+  type: 'test'
+  ...
+# Subtest: firewall cleanup dispatcher removes only exact owned rule names
+ok 159 - firewall cleanup dispatcher removes only exact owned rule names
+  ---
+  duration_ms: 0.537
+  type: 'test'
+  ...
+# Subtest: owned process tree excludes stale parent-PID collisions from before the proof run
+ok 160 - owned process tree excludes stale parent-PID collisions from before the proof run
+  ---
+  duration_ms: 0.1602
+  type: 'test'
+  ...
+# Subtest: failure evidence masks QR, URL/token, and short code, then restores the DOM
+ok 161 - failure evidence masks QR, URL/token, and short code, then restores the DOM
+  ---
+  duration_ms: 0.8249
+  type: 'test'
+  ...
+# Subtest: portable ZIP extracts into one Lights Out folder without mutating its source
+ok 162 - portable ZIP extracts into one Lights Out folder without mutating its source
+  ---
+  duration_ms: 302.378
+  type: 'test'
+  ...
+# Subtest: portable ZIP rejects an unsafe archive root before writing output
+ok 163 - portable ZIP rejects an unsafe archive root before writing output
+  ---
+  duration_ms: 172.5966
+  type: 'test'
+  ...
+# Subtest: canonical identity ignores a mismatched renderer name by accepting only an ID lookup
+ok 164 - canonical identity ignores a mismatched renderer name by accepting only an ID lookup
+  ---
+  duration_ms: 3.7198
+  type: 'test'
+  ...
+# Subtest: invalid explicit identity falls back to the persisted valid selection
+ok 165 - invalid explicit identity falls back to the persisted valid selection
+  ---
+  duration_ms: 0.2545
+  type: 'test'
+  ...
+# Subtest: missing or invalid identity resolves to an empty attribution
+ok 166 - missing or invalid identity resolves to an empty attribution
+  ---
+  duration_ms: 0.1807
+  type: 'test'
+  ...
+# Subtest: remote starts remain unattributed even with explicit and persisted valid IDs
+ok 167 - remote starts remain unattributed even with explicit and persisted valid IDs
+  ---
+  duration_ms: 0.451
+  type: 'test'
+  ...
+# Subtest: canonical values are safety-normalized only after lookup
+ok 168 - canonical values are safety-normalized only after lookup
+  ---
+  duration_ms: 0.3596
+  type: 'test'
+  ...
+# Subtest: reconcilePersistedSelection clears a deleted selection
+ok 169 - reconcilePersistedSelection clears a deleted selection
+  ---
+  duration_ms: 0.7604
+  type: 'test'
+  ...
+# Subtest: reconcilePersistedSelection preserves an existing selection
+ok 170 - reconcilePersistedSelection preserves an existing selection
+  ---
+  duration_ms: 0.3057
+  type: 'test'
+  ...
+# Subtest: eligible origins include play and profile-start only
+ok 171 - eligible origins include play and profile-start only
+  ---
+  duration_ms: 1.5097
+  type: 'test'
+  ...
+# Subtest: createContext stores a pending context and returns a token
+ok 172 - createContext stores a pending context and returns a token
+  ---
+  duration_ms: 1.1183
+  type: 'test'
+  ...
+# Subtest: createContext rejects null/undefined/non-object
+ok 173 - createContext rejects null/undefined/non-object
+  ---
+  duration_ms: 0.2579
+  type: 'test'
+  ...
+# Subtest: consume returns context only with matching token
+ok 174 - consume returns context only with matching token
+  ---
+  duration_ms: 0.2291
+  type: 'test'
+  ...
+# Subtest: consume with null token returns null (manual ritual has no token)
+ok 175 - consume with null token returns null (manual ritual has no token)
+  ---
+  duration_ms: 0.2686
+  type: 'test'
+  ...
+# Subtest: consume with undefined token returns null
+ok 176 - consume with undefined token returns null
+  ---
+  duration_ms: 0.1963
+  type: 'test'
+  ...
+# Subtest: consumeAny does not exist anywhere in the module
+ok 177 - consumeAny does not exist anywhere in the module
+  ---
+  duration_ms: 0.5196
+  type: 'test'
+  ...
+# Subtest: clearIfOwned clears only when token matches
+ok 178 - clearIfOwned clears only when token matches
+  ---
+  duration_ms: 0.2157
+  type: 'test'
+  ...
+# Subtest: clearIfOwned returns false when nothing pending
+ok 179 - clearIfOwned returns false when nothing pending
+  ---
+  duration_ms: 0.4336
+  type: 'test'
+  ...
+# Subtest: old run clearIfOwned cannot clear newer run context
+ok 180 - old run clearIfOwned cannot clear newer run context
+  ---
+  duration_ms: 0.5809
+  type: 'test'
+  ...
+# Subtest: clear removes pending context
+ok 181 - clear removes pending context
+  ---
+  duration_ms: 0.265
+  type: 'test'
+  ...
+# Subtest: createContext overwrites stale context (new ritual start)
+ok 182 - createContext overwrites stale context (new ritual start)
+  ---
+  duration_ms: 0.238
+  type: 'test'
+  ...
+# Subtest: double consume with same token returns null (one-use)
+ok 183 - double consume with same token returns null (one-use)
+  ---
+  duration_ms: 0.1484
+  type: 'test'
+  ...
+# Subtest: context preserves validated fields accurately
+ok 184 - context preserves validated fields accurately
+  ---
+  duration_ms: 0.1586
+  type: 'test'
+  ...
+# Subtest: stale token from a previous context cannot consume a newer context
+ok 185 - stale token from a previous context cannot consume a newer context
+  ---
+  duration_ms: 0.1475
+  type: 'test'
+  ...
+# Subtest: safe origin defaults: null, undefined, empty string are not eligible
+ok 186 - safe origin defaults: null, undefined, empty string are not eligible
+  ---
+  duration_ms: 0.1306
+  type: 'test'
+  ...
+# Subtest: getPendingToken returns null when empty
+ok 187 - getPendingToken returns null when empty
+  ---
+  duration_ms: 0.1196
+  type: 'test'
+  ...
+# Subtest: normalize fills in defaults for a minimal profile
+ok 188 - normalize fills in defaults for a minimal profile
+  ---
+  duration_ms: 2.3371
+  type: 'test'
+  ...
+# Subtest: normalize preserves only fixed-palette profile accents
+ok 189 - normalize preserves only fixed-palette profile accents
+  ---
+  duration_ms: 0.6935
+  type: 'test'
+  ...
+# Subtest: normalize preserves safe family identity metadata
+ok 190 - normalize preserves safe family identity metadata
+  ---
+  duration_ms: 0.2287
+  type: 'test'
+  ...
+# Subtest: normalize truncates avatars by Unicode code point without splitting emoji
+ok 191 - normalize truncates avatars by Unicode code point without splitting emoji
+  ---
+  duration_ms: 0.2018
+  type: 'test'
+  ...
+# Subtest: normalize returns null for missing/blank name
+ok 192 - normalize returns null for missing/blank name
+  ---
+  duration_ms: 0.165
+  type: 'test'
+  ...
+# Subtest: normalize rejects unknown action/mode values, falling back to safe defaults
+ok 193 - normalize rejects unknown action/mode values, falling back to safe defaults
+  ---
+  duration_ms: 0.2022
+  type: 'test'
+  ...
+# Subtest: normalize clamps seconds to a 60s floor
+ok 194 - normalize clamps seconds to a 60s floor
+  ---
+  duration_ms: 0.243
+  type: 'test'
+  ...
+# Subtest: normalize trims and length-caps notes, and defaults to empty
+ok 195 - normalize trims and length-caps notes, and defaults to empty
+  ---
+  duration_ms: 0.2882
+  type: 'test'
+  ...
+# Subtest: normalize truncates name to 32 chars
+ok 196 - normalize truncates name to 32 chars
+  ---
+  duration_ms: 0.4354
+  type: 'test'
+  ...
+# Subtest: normalize preserves an existing id/createdAt (update path) but always refreshes updatedAt
+ok 197 - normalize preserves an existing id/createdAt (update path) but always refreshes updatedAt
+  ---
+  duration_ms: 0.5241
+  type: 'test'
+  ...
+# Subtest: normalize defaults lastUsedAt to null and preserves it across re-normalization
+ok 198 - normalize defaults lastUsedAt to null and preserves it across re-normalization
+  ---
+  duration_ms: 0.2436
+  type: 'test'
+  ...
+# Subtest: getHint formats duration, clock, and calendar modes
+ok 199 - getHint formats duration, clock, and calendar modes
+  ---
+  duration_ms: 0.2371
+  type: 'test'
+  ...
+# Subtest: normalize defaults ritualId to none for legacy profiles
+ok 200 - normalize defaults ritualId to none for legacy profiles
+  ---
+  duration_ms: 0.1312
+  type: 'test'
+  ...
+# Subtest: normalize preserves valid ritualId standard
+ok 201 - normalize preserves valid ritualId standard
+  ---
+  duration_ms: 0.1579
+  type: 'test'
+  ...
+# Subtest: normalize rejects invalid ritualId values
+ok 202 - normalize rejects invalid ritualId values
+  ---
+  duration_ms: 0.194
+  type: 'test'
+  ...
+# Subtest: normalize drops arbitrary ritual step arrays from profile data
+ok 203 - normalize drops arbitrary ritual step arrays from profile data
+  ---
+  duration_ms: 0.2055
+  type: 'test'
+  ...
+# Subtest: normalize preserves ritualId across re-normalization (update path)
+ok 204 - normalize preserves ritualId across re-normalization (update path)
+  ---
+  duration_ms: 0.1762
+  type: 'test'
+  ...
+# Subtest: formatDuration renders hours+minutes or minutes-only
+ok 205 - formatDuration renders hours+minutes or minutes-only
+  ---
+  duration_ms: 1.128
+  type: 'test'
+  ...
+# Subtest: generateToken returns a 48-char hex string
+ok 206 - generateToken returns a 48-char hex string
+  ---
+  duration_ms: 1.9323
+  type: 'test'
+  ...
+# Subtest: generateToken is unique across calls
+ok 207 - generateToken is unique across calls
+  ---
+  duration_ms: 0.3018
+  type: 'test'
+  ...
+# Subtest: tokensMatch accepts identical non-empty tokens
+ok 208 - tokensMatch accepts identical non-empty tokens
+  ---
+  duration_ms: 0.2817
+  type: 'test'
+  ...
+# Subtest: tokensMatch rejects differing tokens
+ok 209 - tokensMatch rejects differing tokens
+  ---
+  duration_ms: 0.2259
+  type: 'test'
+  ...
+# Subtest: tokensMatch rejects empty / missing tokens
+ok 210 - tokensMatch rejects empty / missing tokens
+  ---
+  duration_ms: 0.1969
+  type: 'test'
+  ...
+# Subtest: tokensMatch rejects non-string and length-mismatched input
+ok 211 - tokensMatch rejects non-string and length-mismatched input
+  ---
+  duration_ms: 0.3006
+  type: 'test'
+  ...
+# Subtest: validateCommand rejects malformed input
+ok 212 - validateCommand rejects malformed input
+  ---
+  duration_ms: 0.2991
+  type: 'test'
+  ...
+# Subtest: validateCommand accepts a valid start and never forces shutdown
+ok 213 - validateCommand accepts a valid start and never forces shutdown
+  ---
+  duration_ms: 1.1387
+  type: 'test'
+  ...
+# Subtest: validateCommand defaults start action to shutdown
+ok 214 - validateCommand defaults start action to shutdown
+  ---
+  duration_ms: 0.5071
+  type: 'test'
+  ...
+# Subtest: validateCommand blocks dangerous actions (logout, hibernate)
+ok 215 - validateCommand blocks dangerous actions (logout, hibernate)
+  ---
+  duration_ms: 0.4166
+  type: 'test'
+  ...
+# Subtest: validateCommand enforces duration bounds
+ok 216 - validateCommand enforces duration bounds
+  ---
+  duration_ms: 0.2673
+  type: 'test'
+  ...
+# Subtest: validateCommand enforces snooze bounds
+ok 217 - validateCommand enforces snooze bounds
+  ---
+  duration_ms: 0.2642
+  type: 'test'
+  ...
+# Subtest: validateCommand strips extra fields from parameterless commands
+ok 218 - validateCommand strips extra fields from parameterless commands
+  ---
+  duration_ms: 0.8198
+  type: 'test'
+  ...
+# Subtest: validateCompanionMessage rejects unknown actions
+ok 219 - validateCompanionMessage rejects unknown actions
+  ---
+  duration_ms: 1.7627
+  type: 'test'
+  ...
+# Subtest: validateCompanionMessage validates a start and blocks bad actions
+ok 220 - validateCompanionMessage validates a start and blocks bad actions
+  ---
+  duration_ms: 0.1656
+  type: 'test'
+  ...
+# Subtest: validateCompanionMessage strips desktop-owned identity and safety fields
+ok 221 - validateCompanionMessage strips desktop-owned identity and safety fields
+  ---
+  duration_ms: 0.1765
+  type: 'test'
+  ...
+# Subtest: validateCompanionMessage keeps force shutdown, logout, and hibernate impossible
+ok 222 - validateCompanionMessage keeps force shutdown, logout, and hibernate impossible
+  ---
+  duration_ms: 0.1737
+  type: 'test'
+  ...
+# Subtest: validateCompanionMessage clamps snooze and passes through togglePause
+ok 223 - validateCompanionMessage clamps snooze and passes through togglePause
+  ---
+  duration_ms: 0.2632
+  type: 'test'
+  ...
+# Subtest: validateCompanionMessage accepts startNightMode with a valid nightModeId
+ok 224 - validateCompanionMessage accepts startNightMode with a valid nightModeId
+  ---
+  duration_ms: 0.1532
+  type: 'test'
+  ...
+# Subtest: validateCompanionMessage rejects startNightMode with missing or invalid id
+ok 225 - validateCompanionMessage rejects startNightMode with missing or invalid id
+  ---
+  duration_ms: 0.1307
+  type: 'test'
+  ...
+# Subtest: validateCompanionMessage strips smuggled fields from startNightMode
+ok 226 - validateCompanionMessage strips smuggled fields from startNightMode
+  ---
+  duration_ms: 0.162
+  type: 'test'
+  ...
+# Subtest: validateCompanionMessage passes through getNightModes
+ok 227 - validateCompanionMessage passes through getNightModes
+  ---
+  duration_ms: 0.193
+  type: 'test'
+  ...
+# Subtest: showing a standard ritual establishes the visible active modal state
+ok 228 - showing a standard ritual establishes the visible active modal state
+  ---
+  duration_ms: 3.2121
+  type: 'test'
+  ...
+# Subtest: main-process ritual step updates independently expose actionable controls
+ok 229 - main-process ritual step updates independently expose actionable controls
+  ---
+  duration_ms: 2.0753
+  type: 'test'
+  ...
+# Subtest: hide, completion, and repeated reset remove every visible modal state
+ok 230 - hide, completion, and repeated reset remove every visible modal state
+  ---
+  duration_ms: 1.2607
+  type: 'test'
+  ...
+# Subtest: Escape follows supported ritual cancellation and the shared hide lifecycle
+ok 231 - Escape follows supported ritual cancellation and the shared hide lifecycle
+  ---
+  duration_ms: 1.691
+  type: 'test'
+  ...
+# Subtest: standard Night Mode events converge on visibility without direct progression
+ok 232 - standard Night Mode events converge on visibility without direct progression
+  ---
+  duration_ms: 2.1541
+  type: 'test'
+  ...
+# Subtest: shutdown-labelled ritual state only changes overlay presentation
+ok 233 - shutdown-labelled ritual state only changes overlay presentation
+  ---
+  duration_ms: 2.1024
+  type: 'test'
+  ...
+# Failed to load settings: Cannot read properties of undefined (reading 'getPath')
+# Failed to save settings: Cannot read properties of undefined (reading 'getPath')
+# Subtest: ritualMode.startRitual stores immutable run metadata
+ok 234 - ritualMode.startRitual stores immutable run metadata
+  ---
+  duration_ms: 2.8664
+  type: 'test'
+  ...
+# Subtest: manual ritual has null runMeta (no profile token)
+ok 235 - manual ritual has null runMeta (no profile token)
+  ---
+  duration_ms: 0.3836
+  type: 'test'
+  ...
+# Subtest: onStep callback receives run-owned token via runMeta
+ok 236 - onStep callback receives run-owned token via runMeta
+  ---
+  duration_ms: 0.3777
+  type: 'test'
+  ...
+# Subtest: onComplete callback receives run-owned token via runMeta
+ok 237 - onComplete callback receives run-owned token via runMeta
+  ---
+  duration_ms: 0.3215
+  type: 'test'
+  ...
+# Subtest: each ritual run owns its own immutable token — different per run
+ok 238 - each ritual run owns its own immutable token — different per run
+  ---
+  duration_ms: 0.2961
+  type: 'test'
+  ...
+# Subtest: consume with run-owned token succeeds; wrong token fails
+ok 239 - consume with run-owned token succeeds; wrong token fails
+  ---
+  duration_ms: 0.2936
+  type: 'test'
+  ...
+# Subtest: old run callback cannot consume newer run context
+ok 240 - old run callback cannot consume newer run context
+  ---
+  duration_ms: 0.2649
+  type: 'test'
+  ...
+# Subtest: manual ritual (null token) cannot consume profile context
+ok 241 - manual ritual (null token) cannot consume profile context
+  ---
+  duration_ms: 0.1636
+  type: 'test'
+  ...
+# Subtest: clearIfOwned: old completion cannot clear newer context
+ok 242 - clearIfOwned: old completion cannot clear newer context
+  ---
+  duration_ms: 0.4624
+  type: 'test'
+  ...
+# Subtest: 1. Manual ritual receives a run ID
+ok 243 - 1. Manual ritual receives a run ID
+  ---
+  duration_ms: 1.3138
+  type: 'test'
+  ...
+# Subtest: 2. Profile ritual receives a different run ID plus its profile token
+ok 244 - 2. Profile ritual receives a different run ID plus its profile token
+  ---
+  duration_ms: 0.3017
+  type: 'test'
+  ...
+# Subtest: 3. Manual ritual step error cancels that manual run via cancelIfCurrent
+ok 245 - 3. Manual ritual step error cancels that manual run via cancelIfCurrent
+  ---
+  duration_ms: 0.2153
+  type: 'test'
+  ...
+# Subtest: 4. Profile ritual step error cancels that profile run and clears its context
+ok 246 - 4. Profile ritual step error cancels that profile run and clears its context
+  ---
+  duration_ms: 0.1825
+  type: 'test'
+  ...
+# Subtest: 5. Old run A error cannot cancel run B (full concurrency)
+ok 247 - 5. Old run A error cannot cancel run B (full concurrency)
+  ---
+  duration_ms: 0.3195
+  type: 'test'
+  ...
+# Subtest: 6. Old run A error cannot clear B's context
+ok 248 - 6. Old run A error cannot clear B's context
+  ---
+  duration_ms: 0.1644
+  type: 'test'
+  ...
+# Subtest: 7. Missing profile token does not prevent run-owned cancellation
+ok 249 - 7. Missing profile token does not prevent run-owned cancellation
+  ---
+  duration_ms: 0.1319
+  type: 'test'
+  ...
+# Subtest: 8. Stale auto-advance callback cannot advance a newer run
+ok 250 - 8. Stale auto-advance callback cannot advance a newer run
+  ---
+  duration_ms: 0.2844
+  type: 'test'
+  ...
+# Subtest: 9. Repeated cancellation is idempotent
+ok 251 - 9. Repeated cancellation is idempotent
+  ---
+  duration_ms: 0.1285
+  type: 'test'
+  ...
+# Subtest: 10. cancelIfCurrent returns false for stale/mismatched/null runId
+ok 252 - 10. cancelIfCurrent returns false for stale/mismatched/null runId
+  ---
+  duration_ms: 0.1393
+  type: 'test'
+  ...
+# Subtest: onStep callback receives runId as 4th argument
+ok 253 - onStep callback receives runId as 4th argument
+  ---
+  duration_ms: 0.1673
+  type: 'test'
+  ...
+# Subtest: onComplete callback receives runId as 3rd argument
+ok 254 - onComplete callback receives runId as 3rd argument
+  ---
+  duration_ms: 0.1664
+  type: 'test'
+  ...
+# Subtest: repeated consume with same token returns null (exact-once)
+ok 255 - repeated consume with same token returns null (exact-once)
+  ---
+  duration_ms: 0.1235
+  type: 'test'
+  ...
+# Subtest: direct supersession: ritual active + non-ritual start would cancel it
+ok 256 - direct supersession: ritual active + non-ritual start would cancel it
+  ---
+  duration_ms: 0.1502
+  type: 'test'
+  ...
+# Subtest: consumeAny does not exist in module exports
+ok 257 - consumeAny does not exist in module exports
+  ---
+  duration_ms: 0.1208
+  type: 'test'
+  ...
+# Subtest: remoteOrigin ritual completes synchronously, does not stay stuck active
+ok 258 - remoteOrigin ritual completes synchronously, does not stay stuck active
+  ---
+  duration_ms: 0.1666
+  type: 'test'
+  ...
+# Subtest: local (non-remote) ritual is unaffected: still requires an explicit advance for a non-auto step
+ok 259 - local (non-remote) ritual is unaffected: still requires an explicit advance for a non-auto step
+  ---
+  duration_ms: 0.1521
+  type: 'test'
+  ...
+# Subtest: remoteOrigin ritual fires every step's onStep callback while fast-forwarding
+ok 260 - remoteOrigin ritual fires every step's onStep callback while fast-forwarding
+  ---
+  duration_ms: 0.9307
+  type: 'test'
+  ...
+# Subtest: remoteOrigin ritual calls onComplete exactly once, with the correct runMeta and runId
+ok 261 - remoteOrigin ritual calls onComplete exactly once, with the correct runMeta and runId
+  ---
+  duration_ms: 0.1821
+  type: 'test'
+  ...
+# Subtest: remoteOrigin ritual marks every step completed (not skipped) -- side effects genuinely ran
+ok 262 - remoteOrigin ritual marks every step completed (not skipped) -- side effects genuinely ran
+  ---
+  duration_ms: 0.1549
+  type: 'test'
+  ...
+# Subtest: remoteOrigin ritual with a timed auto step does not wait for its duration
+ok 263 - remoteOrigin ritual with a timed auto step does not wait for its duration
+  ---
+  duration_ms: 0.1703
+  type: 'test'
+  ...
+# Subtest: remoteOrigin custom single-step ritual completes immediately, matching manual-completion semantics
+ok 264 - remoteOrigin custom single-step ritual completes immediately, matching manual-completion semantics
+  ---
+  duration_ms: 0.2258
+  type: 'test'
+  ...
+# Subtest: orphaned running receipt with no protected id becomes interrupted
+ok 265 - orphaned running receipt with no protected id becomes interrupted
+  ---
+  duration_ms: 9.0739
+  type: 'test'
+  ...
+# Subtest: receipt preserves original evidence through reconciliation
+ok 266 - receipt preserves original evidence through reconciliation
+  ---
+  duration_ms: 1.0472
+  type: 'test'
+  ...
+# Subtest: protected receipt id is left running (matching persisted/in-memory timer)
+ok 267 - protected receipt id is left running (matching persisted/in-memory timer)
+  ---
+  duration_ms: 1.1973
+  type: 'test'
+  ...
+# Subtest: multiple orphaned receipts are all reconciled deterministically
+ok 268 - multiple orphaned receipts are all reconciled deterministically
+  ---
+  duration_ms: 1.4876
+  type: 'test'
+  ...
+# Subtest: second reconciliation pass is a no-op (idempotent, no timestamp rewrite)
+ok 269 - second reconciliation pass is a no-op (idempotent, no timestamp rewrite)
+  ---
+  duration_ms: 0.7963
+  type: 'test'
+  ...
+# Subtest: already-terminal receipts are left unchanged by reconciliation
+ok 270 - already-terminal receipts are left unchanged by reconciliation
+  ---
+  duration_ms: 2.2595
+  type: 'test'
+  ...
+# Subtest: reconciliation does not change receipt count or drop history
+ok 271 - reconciliation does not change receipt count or drop history
+  ---
+  duration_ms: 1.1976
+  type: 'test'
+  ...
+# Subtest: getReceiptById returns null for an unknown id
+ok 272 - getReceiptById returns null for an unknown id
+  ---
+  duration_ms: 0.6031
+  type: 'test'
+  ...
+# Subtest: getMostRecentRunningReceiptId falls back correctly for pre-upgrade snapshots without receiptId
+ok 273 - getMostRecentRunningReceiptId falls back correctly for pre-upgrade snapshots without receiptId
+  ---
+  duration_ms: 1.3581
+  type: 'test'
+  ...
+# Subtest: getMostRecentRunningReceiptId returns null when nothing is running
+ok 274 - getMostRecentRunningReceiptId returns null when nothing is running
+  ---
+  duration_ms: 1.6719
+  type: 'test'
+  ...
+# Subtest: getReceiptStats is unaffected by reconciliation labeling (interrupted is not miscounted)
+ok 275 - getReceiptStats is unaffected by reconciliation labeling (interrupted is not miscounted)
+  ---
+  duration_ms: 0.9929
+  type: 'test'
+  ...
+# Subtest: settings merge contract
+    # Subtest: updateSection deep-merges app and preserves unrelated keys
+    ok 1 - updateSection deep-merges app and preserves unrelated keys
+      ---
+      duration_ms: 3.4143
+      type: 'test'
+      ...
+    # Subtest: legacy nsActiveTab "help" migration preserves sibling keys
+    ok 2 - legacy nsActiveTab "help" migration preserves sibling keys
+      ---
+      duration_ms: 1.0061
+      type: 'test'
+      ...
+    1..2
+ok 276 - settings merge contract
+  ---
+  duration_ms: 9.7123
+  type: 'suite'
+  ...
+# Subtest: Smart Lights cannot remain enabled without verification of the exact configuration
+ok 277 - Smart Lights cannot remain enabled without verification of the exact configuration
+  ---
+  duration_ms: 1.3613
+  type: 'test'
+  ...
+# Subtest: Smart Lights enables only after a real successful test and disables after configuration changes
+ok 278 - Smart Lights enables only after a real successful test and disables after configuration changes
+  ---
+  duration_ms: 36.4961
+  type: 'test'
+  ...
+# Subtest: fresh defaults
+ok 279 - fresh defaults
+  ---
+  duration_ms: 5.0655
+  type: 'test'
+  ...
+# Subtest: persisted sound settings remain authoritative
+ok 280 - persisted sound settings remain authoritative
+  ---
+  duration_ms: 6.3288
+  type: 'test'
+  ...
+# Subtest: executePowerAction does not manipulate volume
+ok 281 - executePowerAction does not manipulate volume
+  ---
+  duration_ms: 1.3885
+  type: 'test'
+  ...
+# Subtest: media source contract uses VK_MEDIA_PLAY_PAUSE (179) and keeps 174 out of play/pause paths
+ok 282 - media source contract uses VK_MEDIA_PLAY_PAUSE (179) and keeps 174 out of play/pause paths
+  ---
+  duration_ms: 0.7038
+  type: 'test'
+  ...
+# Failed to load settings: Cannot read properties of undefined (reading 'getPath')
+# Failed to save settings: Cannot read properties of undefined (reading 'getPath')
+# Subtest: Quick Sleep with no profile decides direct countdown
+ok 283 - Quick Sleep with no profile decides direct countdown
+  ---
+  duration_ms: 2.0366
+  type: 'test'
+  ...
+# Subtest: Quick Sleep overrides standard-profile ritual preference
+ok 284 - Quick Sleep overrides standard-profile ritual preference
+  ---
+  duration_ms: 0.3318
+  type: 'test'
+  ...
+# Subtest: Quick Sleep decision preserves both mode and profile identity for receipt
+ok 285 - Quick Sleep decision preserves both mode and profile identity for receipt
+  ---
+  duration_ms: 2.072
+  type: 'test'
+  ...
+# Subtest: Full Shutdown with no profile decides standard ritual gateway
+ok 286 - Full Shutdown with no profile decides standard ritual gateway
+  ---
+  duration_ms: 0.2431
+  type: 'test'
+  ...
+# Subtest: Full Shutdown overrides none-profile ritual preference
+ok 287 - Full Shutdown overrides none-profile ritual preference
+  ---
+  duration_ms: 0.2211
+  type: 'test'
+  ...
+# Subtest: Full Shutdown with standard profile decides exactly one ritual gateway
+ok 288 - Full Shutdown with standard profile decides exactly one ritual gateway
+  ---
+  duration_ms: 0.2046
+  type: 'test'
+  ...
+# Subtest: Full Shutdown identity is preserved in ritual context and receipt
+ok 289 - Full Shutdown identity is preserved in ritual context and receipt
+  ---
+  duration_ms: 0.8817
+  type: 'test'
+  ...
+# Subtest: Lights Down and Movie Wind-Down decide standard ritual
+ok 290 - Lights Down and Movie Wind-Down decide standard ritual
+  ---
+  duration_ms: 0.2396
+  type: 'test'
+  ...
+# Subtest: Modified Quick Sleep clears mode identity and falls back to profile semantics
+ok 291 - Modified Quick Sleep clears mode identity and falls back to profile semantics
+  ---
+  duration_ms: 0.3569
+  type: 'test'
+  ...
+# Subtest: Modified Full Shutdown with standard profile falls back to profile ritual
+ok 292 - Modified Full Shutdown with standard profile falls back to profile ritual
+  ---
+  duration_ms: 0.9895
+  type: 'test'
+  ...
+# Subtest: No-mode PLAY with standard profile decides profile ritual gateway
+ok 293 - No-mode PLAY with standard profile decides profile ritual gateway
+  ---
+  duration_ms: 0.1836
+  type: 'test'
+  ...
+# Subtest: No-mode PLAY with no profile decides direct countdown
+ok 294 - No-mode PLAY with no profile decides direct countdown
+  ---
+  duration_ms: 0.1013
+  type: 'test'
+  ...
+# Subtest: Unknown or disabled mode cannot control ritual semantics
+ok 295 - Unknown or disabled mode cannot control ritual semantics
+  ---
+  duration_ms: 0.1205
+  type: 'test'
+  ...
+# Subtest: resolveNightModeStart ignores renderer-supplied ritual/title/version
+ok 296 - resolveNightModeStart ignores renderer-supplied ritual/title/version
+  ---
+  duration_ms: 0.0971
+  type: 'test'
+  ...
+# Subtest: Standard mode ritual context is consumed exactly once
+ok 297 - Standard mode ritual context is consumed exactly once
+  ---
+  duration_ms: 0.1055
+  type: 'test'
+  ...
+# Subtest: Direct mode decision does not create or consume ritual context
+ok 298 - Direct mode decision does not create or consume ritual context
+  ---
+  duration_ms: 0.1069
+  type: 'test'
+  ...
+# Subtest: Profile selection alone does not produce a start decision
+ok 299 - Profile selection alone does not produce a start decision
+  ---
+  duration_ms: 0.0923
+  type: 'test'
+  ...
+# Subtest: resolveForExecution returns canonical options without starting anything
+ok 300 - resolveForExecution returns canonical options without starting anything
+  ---
+  duration_ms: 0.7869
+  type: 'test'
+  ...
+# Subtest: Generic remote source blocks ritual gateway regardless of mode
+ok 301 - Generic remote source blocks ritual gateway regardless of mode
+  ---
+  duration_ms: 0.1486
+  type: 'test'
+  ...
+# Subtest: Companion Night Mode origin allows ritual gateway with remote source
+ok 302 - Companion Night Mode origin allows ritual gateway with remote source
+  ---
+  duration_ms: 0.1372
+  type: 'test'
+  ...
+# Subtest: Non-eligible start origin blocks ritual gateway even with standard mode
+ok 303 - Non-eligible start origin blocks ritual gateway even with standard mode
+  ---
+  duration_ms: 0.1653
+  type: 'test'
+  ...
+# Subtest: updater: current == latest is up to date
+ok 304 - updater: current == latest is up to date
+  ---
+  duration_ms: 1.8661
+  type: 'test'
+  ...
+# Subtest: updater: older < latest resolves the exact portable Windows x64 ZIP
+ok 305 - updater: older < latest resolves the exact portable Windows x64 ZIP
+  ---
+  duration_ms: 0.4634
+  type: 'test'
+  ...
+# Subtest: updater: malformed release JSON fails explicitly
+ok 306 - updater: malformed release JSON fails explicitly
+  ---
+  duration_ms: 0.207
+  type: 'test'
+  ...
+# Subtest: updater: API unavailable preserves the HTTP failure truth
+ok 307 - updater: API unavailable preserves the HTTP failure truth
+  ---
+  duration_ms: 1.1186
+  type: 'test'
+  ...
+# Subtest: updater: missing expected ZIP fails explicitly
+ok 308 - updater: missing expected ZIP fails explicitly
+  ---
+  duration_ms: 0.2438
+  type: 'test'
+  ...
+# Subtest: updater: wrong asset name is not accepted
+ok 309 - updater: wrong asset name is not accepted
+  ---
+  duration_ms: 0.2097
+  type: 'test'
+  ...
+# Subtest: updater: missing integrity metadata fails explicitly
+ok 310 - updater: missing integrity metadata fails explicitly
+  ---
+  duration_ms: 0.3536
+  type: 'test'
+  ...
+# Subtest: updater: malformed integrity metadata fails explicitly
+ok 311 - updater: malformed integrity metadata fails explicitly
+  ---
+  duration_ms: 0.2545
+  type: 'test'
+  ...
+# Subtest: updater: digest mismatch is rejected
+ok 312 - updater: digest mismatch is rejected
+  ---
+  duration_ms: 1.0756
+  type: 'test'
+  ...
+# Subtest: updater: valid portable ZIP bytes pass the declared SHA-256
+ok 313 - updater: valid portable ZIP bytes pass the declared SHA-256
+  ---
+  duration_ms: 0.6225
+  type: 'test'
+  ...
+# Subtest: updater: no installer asset is required and no fallback URL is fabricated
+ok 314 - updater: no installer asset is required and no fallback URL is fabricated
+  ---
+  duration_ms: 0.5081
+  type: 'test'
+  ...
+# Subtest: updater: installer-only releases are rejected rather than guessed
+ok 315 - updater: installer-only releases are rejected rather than guessed
+  ---
+  duration_ms: 0.1875
+  type: 'test'
+  ...
+# Subtest: validIps keeps clean IPv4 and IPv6 literals
+ok 316 - validIps keeps clean IPv4 and IPv6 literals
+  ---
+  duration_ms: 5.6635
+  type: 'test'
+  ...
+# Subtest: validIps drops non-IP strings that could carry a PowerShell payload
+ok 317 - validIps drops non-IP strings that could carry a PowerShell payload
+  ---
+  duration_ms: 0.1597
+  type: 'test'
+  ...
+# Subtest: validIps drops non-string and nullish entries
+ok 318 - validIps drops non-string and nullish entries
+  ---
+  duration_ms: 0.1198
+  type: 'test'
+  ...
+# Subtest: validIps tolerates missing / non-array input
+ok 319 - validIps tolerates missing / non-array input
+  ---
+  duration_ms: 0.4479
+  type: 'test'
+  ...
+# Subtest: xmlEscape encodes all five XML metacharacters
+ok 320 - xmlEscape encodes all five XML metacharacters
+  ---
+  duration_ms: 0.3935
+  type: 'test'
+  ...
+# Subtest: xmlEscape escapes & first so other entities are not double-encoded
+ok 321 - xmlEscape escapes & first so other entities are not double-encoded
+  ---
+  duration_ms: 0.1898
+  type: 'test'
+  ...
+# Subtest: xmlEscape coerces null/undefined to an empty string
+ok 322 - xmlEscape coerces null/undefined to an empty string
+  ---
+  duration_ms: 0.2506
+  type: 'test'
+  ...
+# Subtest: xmlEscape neutralizes an element-breakout attempt
+ok 323 - xmlEscape neutralizes an element-breakout attempt
+  ---
+  duration_ms: 0.2235
+  type: 'test'
+  ...
+1..323
+# tests 327
+# suites 2
+# pass 327
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2474.9066
+
+Step passed.
+
+--- Step: Static smoke (npm) ---
+
+> lights-out-electron@11.1.3 smoke
+> node scripts/smoke.js
+
+  PASS  syntax: main.js
+  PASS  syntax: preload.js
+  PASS  syntax: renderer-utils.js
+  PASS  syntax: renderer-help.js
+  PASS  syntax: renderer-nav.js
+  PASS  syntax: renderer-profiles.js
+  PASS  syntax: renderer-calendar.js
+  PASS  syntax: renderer-receipts.js
+  PASS  syntax: renderer-family-remote.js
+  PASS  syntax: renderer-ritual-focus.js
+  PASS  syntax: renderer-settings.js
+  PASS  syntax: renderer-lastlight-alarm.js
+  PASS  syntax: renderer-onboarding-updater.js
+  PASS  syntax: renderer.js
+  PASS  syntax: settings.js
+  PASS  syntax: smartLights.js
+  PASS  syntax: profiles.js
+  PASS  syntax: profileIdentity.js
+  PASS  syntax: profileRitualContext.js
+  PASS  syntax: startDecision.js
+  PASS  syntax: updater.js
+  PASS  syntax: updaterPolicy.js
+  PASS  syntax: windowGeometry.js
+  PASS  syntax: calendar.js
+  PASS  syntax: lastLight.js
+  PASS  syntax: companionNetwork.js
+  PASS  syntax: companionFirewall.js
+  PASS  syntax: capabilityTruth.js
+  PASS  package: local main-process modules are included in the build
+  PASS  package: renderer <script src> files are included in the build
+  PASS  package: portable ZIP keeps one Lights Out extraction root
+  PASS  settings: defaults load
+  PASS  settings: updateSection persists to disk
+  PASS  settings: selected profile persists and reloads from disk
+  PASS  settings: active-timer round-trip
+  PASS  smartLights: loadConfig/getConfig round-trip
+  PASS  settings: lastLight defaults present
+  PASS  profiles: lastLight fields in normalized profile
+  PASS  profiles: family identity metadata is safe and legacy-compatible
+  PASS  profiles: display-only accents normalize and round-trip through profile import/export
+  PASS  profiles: accent presentation stays element-scoped and selection stays inert
+  PASS  profiles: markUsed stamps lastUsedAt and persists to disk
+  PASS  main.js: profiles-apply handler stamps lastUsedAt via markUsed on success
+  PASS  family profiles: selection stays inert and identity reaches receipts
+  PASS  profiles: deleting or replacing the selected profile clears persisted selection
+  PASS  streaks: export/import round-trip restores event history
+  PASS  streaks: getTrend aggregates events into weekly and monthly buckets
+  PASS  streaks: buildWeeklyNarrative summarizes only real computed fields (no invented claims)
+  PASS  lastLight: catalog, steps, and duration
+  PASS  icon: assets/icon.ico is a valid multi-size ICO
+  PASS  startup: login wording stays "minimized and idle"
+  PASS  startup: login args use --minimized --no-auto-start
+  PASS  startup: no default force-shutdown auto-start
+  PASS  startup: launch flags still parse minimized, no-auto-start, timer, and action
+  PASS  startup: portable temp cleanup only targets stale Lights Out extractions
+  PASS  tray: initialization and cleanup
+  PASS  tray: hide/show and toggle logic
+  PASS  mini-mode: toggle and resizing
+  PASS  window chrome: frameless window remains movable and resizable
+  PASS  window chrome: header drag region is not swallowed by the nav container
+  PASS  window state: normal bounds persist safely across launches and mini mode
+  PASS  tray: close-to-tray behavior remains the default window close action
+  PASS  tray: menu keeps show-hide, settings, timer controls, and quick starts
+  PASS  tray: tooltip updates and menu rebuild guard still exist
+  PASS  timer: pause, resume, snooze, and cancel state transitions remain wired in main
+  PASS  ipc: shared Start architecture and timer/login handlers remain exposed
+  PASS  calendar: runtime uses the provider API that actually exists
+  PASS  calendar: bedtime matching and notifications use normalized event titles
+  PASS  calendar: the per-event Start button only appears on the nearest upcoming occurrence
+  PASS  first-light: morning briefing uses live calendar and sleep-debt APIs
+  PASS  first-light: smart-light sunrise uses exported helper with bounded timing
+  PASS  idle-detection: disabled state is honored at startup and at runtime
+  PASS  bedtime-reminder: runtime honors disabled state and avoids duplicate renderer push
+  PASS  settings: save-app-settings persists the auxiliary protection sections
+  PASS  backup: export/import all-data uses the live profile API and restores streaks
+  PASS  mini-mode: toggling keeps the auto-fit guard in sync
+  PASS  widget: updates on lifecycle changes, not just timer ticks
+  PASS  ui: #ns-home-cta present
+  PASS  ui: #btn-stop present
+  PASS  ui: #btn-pause present
+  PASS  ui: #btn-snooze present
+  PASS  ui: #btn-mini present
+  PASS  ui: #btn-warning-ledger present
+  PASS  ui: #btn-notif present
+  PASS  ui: #btn-widget present
+  PASS  ui: #btn-companion present
+  PASS  ui: #cz-accent present
+  PASS  ui: #cz-theme present
+  PASS  ui: #cz-ring present
+  PASS  ui: #cz-opacity present
+  PASS  ui: #cz-volume present
+  PASS  ui: #cz-clock-format present
+  PASS  ui: #cz-clock-scale present
+  PASS  ui: #cz-clock-dial present
+  PASS  ui: #cz-clock-date present
+  PASS  ui: #chk-lastlight present
+  PASS  ui: #sel-lastlight-sequence present
+  PASS  ui: #warning-modal present
+  PASS  ui: #last-light-overlay present
+  PASS  ui: #morning-proof-section present
+  PASS  ui: #receipts-modal present
+  PASS  ui: login wording stays aligned with safe startup behavior
+  PASS  ui: warning modal keeps snooze and cancel choices
+  PASS  layout: Settings is a real in-flow dashboard view, not a modal overlaying Tonight
+  PASS  layout: Settings migrates persisted nsActiveTab "set"/"help" to Tonight on launch
+  PASS  ui: icon-only navigation and footer buttons have accessible labels
+  PASS  preload: timer, mini-mode, and tray-settings bridge APIs remain exposed
+  PASS  renderer: running-state controls still swap stop-pause visibility and label
+  PASS  renderer: keyboard shortcuts - Space (Start/Pause)
+  PASS  renderer: keyboard shortcuts - Escape (Cancel/Modals)
+  PASS  renderer: keyboard shortcuts - Ctrl+M (Mini Mode)
+  PASS  renderer: keyboard shortcuts - Ctrl+Shift+S (Show/Hide)
+  PASS  renderer: keyboard shortcuts - Ctrl+Shift+X (Emergency Cancel)
+  PASS  renderer: keyboard shortcuts - Presets (1-9)
+  PASS  settings: saveSettingsPanel is defined exactly once and Save calls it
+  PASS  settings: Cancel reloads persisted values before closing
+  PASS  settings: Back to Tonight discards edits and does not save
+  PASS  settings: Settings panel listeners are attached exactly once
+  PASS  settings: persisted nsActiveTab "set" migrates to Home on launch
+  PASS  settings: legacy options-modal/optionsModal references are fully removed
+  PASS  settings: exactly one Settings panel binding exists
+  PASS  ux: focus-visible and accessibility
+  PASS  renderer fallback: preview mode stays safe and idle by default
+  PASS  renderer: visible sidebar navigation routes to a real tab or modal
+  PASS  renderer: LIB/SCH/DEV/STATS panels are mutually exclusive, single-visible destinations
+  PASS  renderer: PROOF panel shows only real session/receipt history, intentional honest empty state
+  PASS  renderer: DEVICES panel shows real device data without inventing state
+  PASS  renderer: DEVICES panel routes to existing Settings categories
+  PASS  renderer: DEVICES panel live-updates volatile PC status only
+  PASS  renderer: DEVICES PC status uses canonical idle/focus/dim/lastlight phases
+  PASS  renderer: footer and ledger controls provide real feedback
+  PASS  renderer: advanced options immediate persistence wiring
+  PASS  companion: mode buttons present in settings
+  PASS  companion: pairing UI layout classes exist in HTML and CSS
+  PASS  companion: PWA pairing card and stats sections use classes
+  PASS  companion C2: Night Mode picker and detail overlay exist in PWA
+  PASS  companion C2: main handles startNightMode and getNightModes
+  PASS  companion: phone timer actions are attributed on the desktop
+  PASS  companion C2: protocol validates startNightMode and getNightModes
+  PASS  companion: mode buttons have explanatory tooltips, and a live description reflects the selected mode
+  PASS  content-blocker: recurring schedules -- settings default, IPC wiring, HTML, and renderer wiring
+  PASS  settings: WiFi Guard / Content Blocker / Accountability settings actually rehydrate on launch
+  PASS  companion: settings panel loads remote control state on open
+  PASS  companion: QR only shown for same-wifi mode
+  PASS  companion: copy, regenerate, and off buttons wired
+  PASS  companion: status pill is visible near the heading and listens to pushed state
+  PASS  companion: status pill class updates by readiness and connection state
+  PASS  companion: Off hides QR and manual LAN URL
+  PASS  companion: phone page has explicit connection states
+  PASS  companion: reconnects cannot let stale sockets replace a healthy connection
+  PASS  companion: host query cannot override location.host for the pairing token
+  PASS  companion: no dangling getElementById reference crashes the page on load
+  PASS  companion: no const-bound getElementById references an id missing from the markup
+  PASS  morning proof: Last Night card is compact, not a dismissible overlay
+  PASS  morning proof: Play Tonight Again was deliberately removed, not orphaned
+  PASS  ux: focused active-run screen hides idle-only lobby clutter while a run is active
+  PASS  companion: default settings are off with no token
+  PASS  companion: main mode contract maps to correct host binding
+  PASS  production truth: companion publishes pairing data only after readiness
+  PASS  production truth: UI feedback follows observable state
+  PASS  production truth: legacy labels and unsupported claims are removed
+  PASS  companion: dead setRemoteControlEnabled IPC surface removed
+  PASS  ipc: execute-action power-action channel removed (unvalidated, unused renderer-facing surface)
+  PASS  companion: same-wifi URL includes token and host for Android APK
+  PASS  companion: QR URL has no host in off or local mode
+  PASS  companion: same-wifi status distinguishes desktop readiness from phone reachability
+  PASS  companion: firewall changes are narrowly owned and failure is honest
+  PASS  companion: failed pairing attempts are surfaced to the desktop UI, calmly
+  PASS  trusted-lan: explicit warning modal exists and states the real exposure/limits
+  PASS  trusted-lan: enabling wifi mode is gated behind the warning modal, other modes are not
+  PASS  trusted-lan: Escape cancels the warning modal without silently enabling wifi mode
+  PASS  weekly-report: "This Week" UI is wired to the real backend field, not a placeholder
+  PASS  receipts: create + update receipt
+  PASS  receipts: legacy timer state remains compatible without profile identity
+  PASS  receipts: list and latest
+  PASS  receipts: getAllReceiptsForExport returns the full ledger, not just the display-limited list
+  PASS  receipts: pause/snooze/warning increments
+  PASS  receipts: clear and prune
+  PASS  receipts: malformed file recovery
+  PASS  receipts: export-receipts IPC handler and preload bridge wired
+  PASS  receipts: humanizeReceiptResult turns raw result codes into readable proof text
+  PASS  receipts: profile label renders only when canonical identity exists
+  PASS  receipts: Night Mode label renders only when canonical identity exists
+  PASS  override-tax: module exists and exports expected API
+  PASS  override-tax: IPC handlers registered
+  PASS  override-tax: preload exposes assessSnoozeCost
+  PASS  fullscreen-clock: IPC handler, window sync, preload, HTML, and renderer wiring
+  PASS  override-tax: snooze-tax-modal in HTML
+  PASS  override-tax: renderer assesses cost before snooze
+  PASS  autopilot: module exists and is scheduled
+  PASS  autopilot: IPC handlers registered
+  PASS  autopilot: preload exposes autopilot API
+  PASS  autopilot: settings default is OFF
+  PASS  override-tax: settings UI elements in HTML
+  PASS  autopilot: settings UI elements in HTML
+  PASS  ritual-mode: module exists and IPC registered
+  PASS  ritual-mode: preload exposes ritual API
+  PASS  ritual-mode: UI overlay in HTML
+  PASS  ritual-mode: lights step uses a real smart-lights scene helper
+  PASS  profile-ritual-gateway: context module loaded and ritual gateway in startTimer
+  PASS  ritual-mode: remote-originated rituals are marked and fast-forwarded, not left stuck active
+  PASS  profile-ritual-gateway: timer step uses run-owned token from runMeta
+  PASS  profile-ritual-gateway: beginValidatedCountdown split from startTimer
+  PASS  profile-ritual-gateway: direct supersession only for non-ritual source
+  PASS  profile-ritual-gateway: context cleared on cancel, complete, and manual start
+  PASS  profile-ritual-gateway: renderer sends startOrigin without ritual branching
+  PASS  profile-ritual-gateway: remote source cannot trigger profile ritual
+  PASS  profile-ritual-gateway: companion Night Mode origin is eligible for ritual gateway
+  PASS  profile-ritual-gateway: normalizeTimerOptions accepts startOrigin field
+  PASS  profile-ritual-gateway: run-owned token via ritualMode metadata
+  PASS  profile-ritual-gateway: error uses runId-owned cancellation and token-owned cleanup
+  PASS  profile-ritual-gateway: cancelIfCurrent exported from ritualMode
+  PASS  profile-ritual-gateway: onStep callback receives runId as 4th param
+  PASS  profile-ritual-gateway: getRunId exported from ritualMode
+  PASS  profile-ritual-gateway: auto-advance timer captures runId for staleness
+  PASS  profile-ritual-gateway: shutdown cleanup
+  PASS  profile-ritual-gateway: no activeRitualRunToken global
+  PASS  profile-ritual-gateway: consumeAny completely removed
+  PASS  stats-dashboard: module and IPC
+  PASS  ux: ns-home-cta is wired to the state-aware hero handler
+  PASS  ux: ns-home-cta has exactly one click handler (no duplicate startTimer)
+  PASS  ux: ns-home-cta has aria-label
+  PASS  ux: exactly one Start control exists -- no hidden or duplicate #btn-start
+  PASS  help: shared hover/focus tooltip pattern exists and is wired
+  PASS  help: Tonight's highest-risk controls carry data-ns-help
+  PASS  help: idle-clock bottom label reflects real schedule state, not a static default
+  PASS  help: no emoji in the new data-ns-help / ns-setup-hint copy
+  PASS  nav: renderer-nav.js is loaded and wired before renderer.js
+  PASS  nav: mouse-button and Alt+Arrow back/forward are wired
+  PASS  nav: handleSidebarNavigation pushes real navigation onto the back/forward stack
+  PASS  nav: arrow-key roving navigation covers sidebar, Library, Tonight, Schedule/Proof tabs, and Settings
+  PASS  nav: Quick plans cards are keyboard-activatable, not mouse-only
+  PASS  command-clarity: top menu labels no longer hide their contents
+  PASS  command-clarity: footer status pill names Live/Dry Run in both directions
+  PASS  command-clarity: ritual overlay icons are SVG, not emoji
+  PASS  command-clarity: Schedule TOOLS divider is a plain label, not a fake tab
+  PASS  command-clarity: Save Profile modal has no stray emoji in new/edited copy
+  PASS  command-clarity: footer Companion shortcut keeps its unique behavior, gains disambiguating help
+  PASS  settings-shell: rail is visually grouped without changing categories or handlers
+  PASS  settings-shell: every category has a truthful summary card
+  PASS  settings-shell: category visibility toggle covers summary cards, same mechanism as option-sections
+  PASS  settings-shell: no save/dirty-state or control behavior changed
+  PASS  settings-context: breadcrumb renders only for identified sources, cleared on direct entry
+  PASS  settings-context: every real entry point passes a truthful source label
+  PASS  settings-context: data-ta-source lives with the element it describes, not duplicated in JS
+  PASS  quick-controls: Quick Controls drawer and trigger exist
+  PASS  quick-controls: drawer/pill styling uses real, defined CSS custom properties
+  PASS  settings-context: the dead #firstlight-hero-btn now has a real handler
+  PASS  settings-context: Save/Cancel and return-tab behavior untouched
+  PASS  home-command: hero and Tonight card are merged into one command card, not duplicated
+  PASS  home-command: secondary actions present, primary CTA labels unchanged (no fake arming)
+  PASS  home-command: status row reuses real synced state, no new fetch, no fabricated placeholders
+  PASS  home-command: Dry Run/Live badge has its own visual weight, not equal to secondary facts
+  PASS  arm-model: armCustomTimer() never starts anything or touches Dry Run
+  PASS  arm-model: state and functions exist, mutually exclusive with armed Night Mode
+  PASS  arm-model: Home CTA and current-plan banner treat an armed custom timer as a real plan
+  PASS  arm-model: invalidation clears an armed custom timer on edit, same rule as armed Night Mode
+  PASS  arm-model: Start Now (#btn-start-custom) still uses the existing shared start path, unchanged
+  PASS  arm-model: Arm Tonight has its own visible, active styling -- not the tertiary Begin Ritual treatment
+  PASS  arm-model: duration presets (chips/quick-preset menu items/number keys) select a duration, they do not start the timer
+  PASS  media-pause: disclosed on Home glance and in the pre-start Tonight plan summary, from real settings state
+  PASS  layout: Tonight at a glance is a fixed 5-column grid, not an auto-fit width that can strand a tile alone
+  PASS  arm-model: armed custom timer persists and restores the same way as armed Night Mode
+  PASS  layout: main scroll area has enough bottom clearance to clear the footer
+  PASS  layout: timer-name moved out of the cramped centered clock stack, same element/behavior
+  PASS  nav: no timer/power/schedule-execution files touched by the Navigation Contract
+  PASS  ux: Escape closes all modals (profiles, receipts, about, notif-drawer)
+  PASS  ux: sidebar sets aria-current on active item
+  PASS  ux: global focus-visible ring defined
+  PASS  ux: disabled button styling defined
+  PASS  ux: navigation rail stays reachable while a timer is running or paused
+  PASS  ux: mini mode exposes a mouse exit wired to the existing toggle
+  PASS  warning: dialog timing and emergency cancel
+  PASS  session: receipt and morning proof rendering
+  PASS  session: recovery banner and tax safety
+  PASS  tray: quick-action menu items are present
+  PASS  tray: no duplicate tray icons on state change
+  PASS  mini-mode: toggle and window resize logic
+  PASS  mini-mode: state broadcast to renderer
+  PASS  keyboard: global shortcuts registered for quick actions
+  PASS  keyboard: Escape closes modals in renderer
+  PASS  keyboard: disabled controls do not activate
+  PASS  warning: emergency cancel is always available
+  PASS  session: receipt creation on timer start
+  PASS  session: morning proof section renders on app load
+  PASS  session: recovery banner flow on resume
+  PASS  session: override tax applied to snooze
+  PASS  version: get-app-version IPC is sourced from package.json, not a second hardcoded string
+  PASS  version: renderer overrides the static footer/About text from the runtime version
+  PASS  version: HTML fallback text matches electron/package.json (fails the build if someone bumps one and not the other)
+  PASS  layout: wordmark positioned outside header to avoid menu overlap
+  PASS  night-modes: module exists and exports catalogue
+  PASS  night-modes: six built-in modes with unique IDs
+  PASS  night-modes: disabled modes have honest unavailability reasons
+  PASS  night-modes: only allowed execution paths (no arbitrary scripts)
+  PASS  night-modes: IPC handlers registered in main
+  PASS  night-modes: preload exposes night mode API
+  PASS  night-modes: receipt creation includes nightModeId field
+  PASS  night-modes: timerState carries nightModeId, nightModeTitle, and nightModeVersion
+  PASS  night-modes: MODES panel exists in HTML
+  PASS  night-modes: sidebar has MODES nav item
+  PASS  night-modes: renderer handles modes panel visibility
+  PASS  night-modes: Use Tonight does not auto-start timer
+  PASS  night-modes: resolveNightModeStart exported from nightModes module
+  PASS  night-modes: main delegates to nightModes.resolveNightModeStart
+  PASS  night-modes: normalizeTimerOptions preserves nightModeId only
+  PASS  night-modes: renderer sends only nightModeId (not title) in startTimer
+  PASS  night-modes: armed mode state replaces window.__nightModeSelection
+  PASS  night-modes: armed mode banner in HTML
+  PASS  night-modes: tiles have keyboard accessibility
+  PASS  night-modes: receipt includes nightModeVersion
+  PASS  night-modes: profileRitualContext preserves night mode identity
+  PASS  night-modes: responsive breakpoint for detail panel
+  PASS  night-modes: resolveNightModeStart returns canonical ritualId
+  PASS  night-modes: startTimer delegates canonical ritual decision to startDecision
+  PASS  night-modes: startDecision gives Night Mode precedence over profile ritual
+  PASS  night-modes: armed mode banner shows ritual state (presentation only)
+  PASS  night-modes: normal-mode minimum width supports library detail panel
+  PASS  window sizing: default size is never narrower than the enforced minimum
+  PASS  gate6 brand: real mark is selective session identity, not a functional icon replacement
+  PASS  gate6 settings: desktop category rail and narrow fallback are both explicit
+  PASS  gate6 feedback: status toasts never intercept nearby controls
+  PASS  gate6 microcopy: unproven universal timer-safety claim is removed
+
+323 passed, 0 failed
+
+Step passed.
+
+--- Step: Companion static smoke (npm) ---
+
+> lights-out-electron@11.1.3 smoke:companion
+> node scripts/companion-smoke.js
+
+  PASS  companion: off by default
+Companion PWA bound on 127.0.0.1:50741; verifying HTTP and WebSocket readiness.
+Companion PWA ready on 127.0.0.1:50741
+  PASS  companion: same-wifi starts and reports running
+  PASS  companion: HTTP page served as inert pairing shell without token
+  PASS  companion: HTTP page with invalid token still served as inert shell
+  PASS  companion: HTTP page with valid token served as inert shell
+  PASS  companion: WebSocket without token rejected with 401
+  PASS  companion: WebSocket with invalid token rejected with 403
+  PASS  companion: WebSocket with valid token connects
+  PASS  companion: protected action without token is rejected
+  PASS  companion: protected action with bad token is rejected
+  PASS  companion: protected action with valid token is accepted
+  PASS  companion: invalid action over valid socket is ignored
+Companion PWA bound on 127.0.0.1:50741; verifying HTTP and WebSocket readiness.
+Companion PWA ready on 127.0.0.1:50741
+  PASS  companion: old token invalidated after rotation
+  PASS  companion: new token accepted after rotation
+  PASS  companion: stop closes listener and rejects connections
+
+Companion Smoke Results: 15 passed, 0 failed
+
+
+Step passed.
+
+--- Step: Packaged smoke and truth (npm) ---
+
+> lights-out-electron@11.1.3 smoke:packaged
+> node scripts/packaged-smoke.js && node scripts/packaged-truth-smoke.js
+
+Starting Enhanced Packaged Runtime Smoke Test...
+
+  PASS  package: executable exists and is reasonably sized
+  PASS  package: executable is readable
+  PASS  runtime: app launches cleanly with --minimized --no-auto-start
+  PASS  safety: no-auto-start logic present in main.js
+  PASS  safety: launch flags parsed correctly
+  PASS  safety: no default force-shutdown on login
+  PASS  safety: tray initialization guards against orphans
+  PASS  safety: window close-to-tray behavior is default
+  PASS  safety: quit handler cleans up processes
+  PASS  cleanup: no lingering Electron processes after test
+  PASS  cleanup: no lingering Lights Out processes or temporary profile
+  PASS  cleanup: no lingering Node processes from app
+
+Packaged Smoke Results: 12 passed, 0 failed
+
+[packaged-truth] waiting for renderer target
+[packaged-truth] verifying packaged process and CDP ownership
+[packaged-truth] waiting for authoritative renderer and menu readiness
+[packaged-truth] proving production default port is unchanged (58732, read-only, no bind)
+[packaged-truth] proving occupied-port failure
+[packaged-truth] proving retry and default port
+[packaged-truth] proving widget and notifications
+[packaged-truth] proving native top-menu interaction contract
+[packaged-truth] proving canonical routes and modes
+[packaged-truth] proving off state
+[packaged-truth] cleaning isolated runtime
+{
+  "packaged": true,
+  "profiles": {
+    "migratedExisting": true,
+    "missingDefaultsRestored": true
+  },
+  "productionDefaultPort": 58732,
+  "occupiedPort": {
+    "failed": true,
+    "ownerPidMatched": true,
+    "credentialsHidden": true
+  },
+  "retry": {
+    "ready": true,
+    "host": "192.168.0.16",
+    "port": 50762
+  },
+  "defaultPort": {
+    "ready": true,
+    "port": 50763
+  },
+  "firewall": {
+    "before": 0,
+    "active": 2,
+    "privateOnly": true,
+    "exactProgram": true,
+    "alternatePortUpdated": true,
+    "after": 0
+  },
+  "widget": {
+    "shown": true,
+    "hidden": true
+  },
+  "notifications": {
+    "unreadBeforeOpen": 1,
+    "unreadAfterOpen": 0,
+    "duplicates": 1
+  },
+  "routes": {
+    "settingsCanonical": true,
+    "restored": "lib",
+    "modes": 6
+  },
+  "menus": {
+    "power": {
+      "opened": true,
+      "pointerTransfer": true,
+      "escapeFocus": "menu-power"
+    },
+    "settings": {
+      "opened": true,
+      "escapeFocus": "menu-settings"
+    },
+    "help": {
+      "opened": true,
+      "escapeFocus": "menu-help"
+    }
+  },
+  "menuSafety": {
+    "timerStarts": 0,
+    "realPowerActions": 0
+  },
+  "runtime": {
+    "pid": 11228,
+    "executable": "C:\\Users\\KickA\\Projects\\Active\\OfflineForge_Sovereign_V2\\.claude\\worktrees\\lights-out-runroom-gate\\cache\\ci\\workspaces\\6b67a712-33ba-4cd6-9c4a-81e66f056750\\dist-native\\win-unpacked\\Lights Out.exe",
+    "userData": "C:\\Users\\KickA\\AppData\\Local\\Temp\\lightsout-packaged-gate-927QuL",
+    "cdpPort": 50761,
+    "rendererUrl": "file:///C:/Users/KickA/Projects/Active/OfflineForge_Sovereign_V2/.claude/worktrees/lights-out-runroom-gate/cache/ci/workspaces/6b67a712-33ba-4cd6-9c4a-81e66f056750/dist-native/win-unpacked/resources/app/index.html",
+    "windowCount": 1,
+    "generation": "2f97f3b8-50a1-473a-940a-c9c84fe0234b",
+    "proofReady": true,
+    "menusReady": true,
+    "consoleErrors": 0,
+    "pageErrors": 0,
+    "lifecycle": [
+      {
+        "event": "waiting for renderer target",
+        "elapsedMs": 907
+      },
+      {
+        "event": "verifying packaged process and CDP ownership",
+        "elapsedMs": 1188
+      },
+      {
+        "event": "waiting for authoritative renderer and menu readiness",
+        "elapsedMs": 1912
+      },
+      {
+        "event": "renderer-generation",
+        "generation": "2f97f3b8-50a1-473a-940a-c9c84fe0234b",
+        "at": 1788297133122,
+        "elapsedMs": 1914
+      },
+      {
+        "event": "renderer-ready",
+        "generation": "2f97f3b8-50a1-473a-940a-c9c84fe0234b",
+        "at": 1788297133123,
+        "elapsedMs": 1915
+      },
+      {
+        "event": "proving production default port is unchanged (58732, read-only, no bind)",
+        "elapsedMs": 1916
+      },
+      {
+        "event": "proving occupied-port failure",
+        "elapsedMs": 1921
+      },
+      {
+        "event": "proving retry and default port",
+        "elapsedMs": 8156
+      },
+      {
+        "event": "proving widget and notifications",
+        "elapsedMs": 23536
+      },
+      {
+        "event": "proving native top-menu interaction contract",
+        "elapsedMs": 23694
+      },
+      {
+        "event": "proving canonical routes and modes",
+        "elapsedMs": 23818
+      },
+      {
+        "event": "proving off state",
+        "elapsedMs": 24514
+      },
+      {
+        "event": "cleaning isolated runtime",
+        "elapsedMs": 28097
+      }
+    ]
+  },
+  "powerActions": 0,
+  "cleanup": {
+    "ownedProcesses": 0,
+    "blockerPortFree": true,
+    "cdpPortFree": true,
+    "firewallRules": 0,
+    "tempProfileRemoved": true,
+    "diagnosticStagingRemoved": true,
+    "elapsedMs": 3615
+  }
+}
+
+Step passed.
+
+--- Step: Native packaged truth (npm) ---
+
+> lights-out-electron@11.1.3 smoke:native
+> node scripts/native-packaged-truth-smoke.js
+
+Starting Native Packaged Truth Smoke Test...
+
+  PASS  native: dist-native/win-unpacked/Lights Out.exe exists
+  PASS  native: executable is reasonably sized
+  PASS  native: executable metadata is branded
+  PASS  native: app launches and exits cleanly via supported test Quit path
+  PASS  native: no orphan Lights Out processes remain
+
+Native Packaged Truth Smoke Results: 5 passed, 0 failed
+
+
+Step passed.
+
+--- Step: Packaged network (npm) ---
+
+> lights-out-electron@11.1.3 smoke:network
+> node scripts/packaged-network-smoke.js
+
+Connected test adapter:
+  - name: Wi-Fi
+  - interface index: 14
+  - status: connected
+  - IPv4: 192.168.0.16
+Disconnected test adapter:
+  - name: Local Area Connection* 9
+  - interface index: 21
+  - status: disconnected
+{
+  "packaged": true,
+  "productionDefaultPort": 58732,
+  "connectedAdapter": {
+    "name": "Wi-Fi",
+    "index": 14,
+    "ipv4": "192.168.0.16"
+  },
+  "disconnectedAdapter": {
+    "name": "Local Area Connection* 9",
+    "index": 21,
+    "status": "disconnected"
+  },
+  "roleSelectionUsedDisplayName": false,
+  "wifiMode": {
+    "ready": true,
+    "address": "192.168.0.16"
+  },
+  "localMode": {
+    "ready": true,
+    "host": "127.0.0.1"
+  },
+  "off": {
+    "listener": false,
+    "pairingData": false
+  },
+  "physicalAdaptersModified": false,
+  "powerActions": 0
+}
+Listener cleanup: confirmed. Firewall cleanup: confirmed.
+
+Step passed.
+
+--- Step: Packaged phone simulation (npm) ---
+
+> lights-out-electron@11.1.3 smoke:phone
+> node scripts/packaged-phone-smoke.js
+
+{
+  "device": "Samsung SM-S911W",
+  "packaged": true,
+  "desktop": {
+    "host": "192.168.0.16",
+    "port": 51534,
+    "token": "[REDACTED]"
+  },
+  "phoneWifi": "BMW ONLY! 5G",
+  "httpPairing": true,
+  "authenticatedWebSocket": true,
+  "countdownUpdates": 2,
+  "commandCounts": {
+    "rejectedStart": 1,
+    "pause": 1,
+    "resume": 1,
+    "addFive": 1,
+    "cancel": 1
+  },
+  "phoneWifiRecovery": true,
+  "wrapperRestartRecovery": true,
+  "qrScanMethod": "manual URL entry driven over ADB; camera scan not claimed",
+  "realPowerActions": 0
+}
+
+Step passed.
+
+--- Step: Companion V2 runtime (npm) ---
+
+> lights-out-electron@11.1.3 test:companion-v2-runtime
+> node scripts/companion-v2-electron-proof.js
+
+
+Real Electron Runtime Proof — Companion V2 (C1 + C2)
+Isolated userData: C:\Users\KickA\AppData\Local\Temp\lightsout-companion-v2-proof-ThCRYa
+Ephemeral companion port: 51678
+Dry Run: ENABLED
+Real power actions: DISABLED
+
+
+Loaded 4 profiles
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Companion PWA bound on 127.0.0.1:51678; verifying HTTP and WebSocket readiness.
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Companion PWA ready on 127.0.0.1:51678
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  idle startup remains inert
+  PASS  state projection includes canonical Night Mode identity
+  PASS  state projection includes canonical profile identity
+  PASS  active UI renders desktop-projected Dry Run
+  PASS  missing Night Mode renders Custom Timer
+  PASS  active UI renders Real Action only from projected false
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  two authoritative countdown ticks decrement
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  real masked WebSocket frames discard forged trusted fields
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  real WebSocket rejects unsupported remote power actions
+  PASS  320px active layout has no clipping
+  PASS  360px active layout has no clipping
+  PASS  390px active layout has no clipping
+  PASS  412px active layout has no clipping
+  PASS  430px active layout has no clipping
+  PASS  Pause sends one toggle
+  PASS  Pending Pause clears only after authoritative paused state
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  +5 sends once and adds exactly 300 seconds
+  PASS  rapid double-tap sends one add-time command
+  PASS  +15 sends once and adds exactly 900 seconds
+  PASS  +30 sends once and adds exactly 1800 seconds
+  PASS  Snooze tap followed by Enter sends exactly once
+  PASS  touch event plus synthetic click sends exactly one Snooze
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  command timeout does not resend
+  PASS  Resume tap plus repeated Space sends one toggle
+  PASS  Pending Resume clears only after authoritative resumed state
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  reconnect does not replay a pending command
+  PASS  reload cannot overwrite desktop timer state
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  socket open without state remains stale and disabled
+  PASS  replacement socket never inherits old freshness
+  PASS  obsolete socket message is ignored
+  PASS  first current-generation state enables controls
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  pending Pause disconnect never resends or claims success
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Companion PWA bound on 127.0.0.1:51678; verifying HTTP and WebSocket readiness.
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Companion PWA ready on 127.0.0.1:51678
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  pending Resume disconnect never resends or claims success
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Companion PWA bound on 127.0.0.1:51678; verifying HTTP and WebSocket readiness.
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Companion PWA ready on 127.0.0.1:51678
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Companion PWA bound on 127.0.0.1:51678; verifying HTTP and WebSocket readiness.
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Companion PWA ready on 127.0.0.1:51678
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  desktop timer change while disconnected replaces old phone state
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Companion PWA bound on 127.0.0.1:51678; verifying HTTP and WebSocket readiness.
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Companion PWA ready on 127.0.0.1:51678
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  timer completion while disconnected restores honest idle
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  timeout sends nothing further and remains uncertain
+  PASS  late authoritative transition renders without retrospective success
+  PASS  offline state disables timer mutation controls
+  PASS  offline state marks prior state stale
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  200% layout keeps every primary element reachable
+  PASS  844x390 landscape keeps controls reachable
+  PASS  844x390 cancel dialog fits or scrolls safely
+  PASS  700x320 landscape keeps controls reachable
+  PASS  700x320 cancel dialog fits or scrolls safely
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  cancel modal starts inside dialog and makes background inert
+  PASS  Tab and Shift+Tab remain inside the two modal actions
+  PASS  Escape sends nothing and restores focus to opener
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  connection loss keeps modal contained and disables Stop
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Companion PWA bound on 127.0.0.1:51678; verifying HTTP and WebSocket readiness.
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Companion PWA ready on 127.0.0.1:51678
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  current state re-enables modal Stop without leaving dialog
+  PASS  cancel confirmation names run, PC, remaining time, and consequence
+  PASS  keyboard and repeated activation send one Cancel
+  PASS  Cancel success appears only after authoritative idle
+  PASS  desktop cancelled receipt behavior remains intact
+  PASS  phone start confirm reflects desktop-authoritative Dry Run (ON)
+  PASS  phone idle banner reflects desktop-authoritative Dry Run (ON)
+  PASS  phone cannot overwrite desktop identity fields
+  PASS  remote force shutdown remains impossible
+  PASS  remote logout remains impossible
+  PASS  remote hibernate remains impossible
+  PASS  C2: Night Mode picker expands from idle controls
+  PASS  C2: catalogue request yields canonical modes from main
+  PASS  C2: disabled mode card is non-interactive
+  PASS  C2: detail shows canonical duration, action, and ritual from desktop
+  PASS  C2: phone sends only nightModeId
+  PASS  C2: desktop resolves canonical mode and inherits desktop-authoritative Dry Run
+  PASS  C2: successful Night Mode start is acknowledged, not falsely reported as "PC did not confirm"
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  C2: Full Shutdown detail shows standard ritual
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  C2: main rejects forged startNightMode with unknown ID
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  C2: main rejects forged startNightMode with disabled ID
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  C2: forged startNightMode cannot smuggle timer options or force flags
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  C2: startNightMode rejected while a countdown is active
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  C2: startNightMode rejected while a countdown is paused
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  C2: startNightMode rejected while a ritual is active
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  C2: two simultaneous authenticated clients create at most one run
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  F-05: authenticated duplicate generic start is rejected without superseding the active run
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  C2: forged dryRun:false from phone cannot disable desktop Dry Run (policy ON)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  C2: desktop Dry Run OFF makes phone Night Mode start REAL, not the client
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  C2: forged dryRun:true from phone cannot fake Dry Run while desktop policy is OFF
+  PASS  C2: phone UI switches to REAL ACTION once desktop Dry Run policy goes OFF
+  PASS  C2: first authenticated socket requests catalogue once
+  PASS  C2: repeated state frames on same socket do not request catalogue again
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Companion PWA bound on 127.0.0.1:51678; verifying HTTP and WebSocket readiness.
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Companion PWA ready on 127.0.0.1:51678
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  C2: replacement socket requests fresh catalogue even when cache is non-empty
+  PASS  C2: reconnect does not duplicate catalogue cards
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Companion PWA bound on 127.0.0.1:51678; verifying HTTP and WebSocket readiness.
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Companion PWA ready on 127.0.0.1:51678
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  C2: pending Night Mode start is not replayed on reconnect
+  PASS  C2: old-socket catalogue reply is ignored
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Companion PWA bound on 127.0.0.1:51678; verifying HTTP and WebSocket readiness.
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Companion PWA ready on 127.0.0.1:51678
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  C2: current-socket catalogue reply replaces old list atomically
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Companion PWA bound on 127.0.0.1:51678; verifying HTTP and WebSocket readiness.
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Companion PWA ready on 127.0.0.1:51678
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  C2: removed mode clears open selection
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  C2: newly disabled mode clears actionable confirmation
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Companion PWA bound on 127.0.0.1:51678; verifying HTTP and WebSocket readiness.
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Companion PWA ready on 127.0.0.1:51678
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  C2: catalogue refresh does not alter active desktop timer state
+
+Companion V2 Electron proof: 89 passed, 0 failed
+Commands observed: 27
+Real power actions: 0
+Captures: C:\Users\KickA\AppData\Local\Temp\lightsout-companion-v2-proof-ThCRYa\captures
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+
+Step passed.
+
+--- Step: Night Modes runtime (npm) ---
+
+> lights-out-electron@11.1.3 test:night-modes-runtime
+> node scripts/night-modes-electron-proof.js
+
+
+Real Electron Runtime Proof — Night Modes
+Isolated userData: C:\Users\KickA\AppData\Local\Temp\lightsout-night-modes-proof-CiqA6k
+Dry Run: ENABLED
+Timer acceleration: proof process only
+
+
+Loaded 4 profiles
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Windows Firewall configuration skipped or failed: PowerShell exited with code 1
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+
+  PASS  real index.html and preload bridge load
+  PASS  catalogue crosses renderer-preload-IPC-main boundary
+  PASS  Quick Sleep arms through real DOM without auto-start
+  PASS  Quick Sleep reaches a real dry-run completion receipt
+  PASS  Lights Down arms, hands off to ritual, records identity, and cancels
+  PASS  Movie Wind-Down arms, hands off to ritual, records identity, and cancels
+  PASS  Full Shutdown arms, hands off to ritual, records identity, and cancels
+  PASS  unavailable mode clears prior selection and cannot be used
+
+Night Modes Electron proof: 8 passed, 0 failed
+Dry Run completion: verified
+Real power actions: 0
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+
+Step passed.
+
+--- Step: Receipt recovery (npm) ---
+
+> lights-out-electron@11.1.3 test:receipt-recovery-runtime
+> node scripts/receipt-recovery-electron-proof.js
+
+
+Real Electron Runtime Proof — Orphaned Receipt Reconciliation
+Real power actions: DISABLED
+
+--- scenario: main (orphan/protected/terminal, resume, discard, new-start, viewer) ---
+
+Loaded 4 profiles
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  startup reconciliation finalizes the orphaned receipt as interrupted
+  PASS  orphaned receipt keeps original evidence (id, start time, profile, action, dryRun)
+  PASS  protected receipt (matching persisted active timer) is left running
+  PASS  already-terminal receipt is untouched by reconciliation
+  PASS  second reconciliation pass at this same runtime is a no-op
+  PASS  recoverable timer snapshot exposed via get-app-settings still points at the protected receipt
+  PASS  resuming the recoverable timer reuses the original receipt, no duplicate
+Windows Firewall configuration skipped or failed: PowerShell exited with code 1
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  pre-upgrade snapshot with no receiptId falls back to most-recent-running and resumes without a duplicate
+  PASS  discarding a recoverable timer finalizes its receipt honestly as interrupted
+  PASS  a historical interrupted receipt does not block a brand-new timer start
+  PASS  receipt viewer displays "Interrupted", never "Running", for the orphaned receipt
+
+Receipt recovery Electron proof (main): 11 passed, 0 failed
+Real power actions: 0
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+
+--- scenario: legacy-startup (pre-upgrade receiptId-less snapshot protected at real app.whenReady()) ---
+
+Loaded 4 profiles
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Windows Firewall configuration skipped or failed: PowerShell exited with code 1
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+  PASS  real app.whenReady() protects a pre-upgrade (receiptId-less) snapshot's receipt via fallback
+  PASS  resuming that legacy-protected receipt reuses it, no duplicate
+
+Receipt recovery Electron proof (legacy-startup): 2 passed, 0 failed
+Real power actions: 0
+Selected LAN IP: 192.168.0.16 (Wi-Fi)
+
+Step passed.
+
+--- Step: Reliability and crash policy (npm) ---
+
+> lights-out-electron@11.1.3 smoke:reliability
+> node scripts/reliability-crash-policy-proof.js
+
+Reliability/Crash Policy Native Proof
+Root: C:\Users\KickA\AppData\Local\Temp\lightsout-reliability-proof-OOWVlK
+
+PASS
+  + timer started and running before crash
+  + renderer crash terminated the renderer process
+  + renderer page reloaded after crash
+  + preload bridge present after renderer reload
+  + timer state persisted and is running after renderer crash reload
+  + main uncaught exception recorded in startup.log with fault context
+  + app still responds after main uncaught exception
+
+Report: C:\Users\KickA\AppData\Local\Temp\lightsout-reliability-proof-OOWVlK\report.json
+
+Step passed.
+
+--- Step: Performance and resize (npm) ---
+
+> lights-out-electron@11.1.3 smoke:performance
+> node scripts/performance-resize-gate.js
+
+Gate 5A — baseline measured
+  EXE:     DC4FFA82A254820E4946A1056A8B894AEA3C39B171C39E79D4A34747A010545A
+  Manifest hashes recorded for: package.json, main.js, preload.js, renderer.js, index.html, styles.css
+  Main:    19440  workingSet=92.25MB  private=40.77MB
+  Route:   home
+
+Gate 5B/5C — resize surfaces
+  home      frames=471 jank=0(0%) maxDelta=20.2ms avgDelta=10.3ms
+  lib       frames=451 jank=0(0%) maxDelta=29.9ms avgDelta=10.8ms
+  schedule  frames=466 jank=0(0%) maxDelta=30.1ms avgDelta=10.6ms
+  devices   frames=457 jank=0(0%) maxDelta=20.1ms avgDelta=10.5ms
+  proof     frames=444 jank=0(0%) maxDelta=20.1ms avgDelta=10.7ms
+  set       frames=453 jank=0(0%) maxDelta=20.1ms avgDelta=10.1ms
+
+Gate 5D — navigation stress (30 cycles x 6 routes)
+  heapUsed growth: 0 bytes  domNodes growth: 0
+
+Full report: C:\Users\KickA\AppData\Local\Temp\lightsout-perf-gate5-r2fdZL\gate5-baseline.json
+
+Step passed.
+
+--- Step: Window geometry (npm) ---
+
+> lights-out-electron@11.1.3 test:geometry
+> electron scripts/window-geometry-runtime.js
+
+
+{
+  "requestedMiniSize": [
+    260,
+    320
+  ],
+  "observedMiniOuterSize": [
+    262,
+    321
+  ],
+  "normalMinimum": [
+    1024,
+    640
+  ],
+  "restoredBounds": {
+    "x": 40,
+    "y": 40,
+    "width": 1030,
+    "height": 725
+  },
+  "displayClamping": "pass",
+  "relaunch": "pass",
+  "isolatedUserData": "C:\\Users\\KickA\\AppData\\Local\\Temp\\lightsout-window-geometry-56USGx"
+}
+
+Step passed.
+
+Run verification receipt cryptographically signed (ECDSA P-256).
+
+Proof receipt saved: C:\Users\KickA\Projects\Active\OfflineForge_Sovereign_V2\.claude\worktrees\lights-out-runroom-gate\data\ci\Lights Out\runs\6b67a712-33ba-4cd6-9c4a-81e66f056750_proof.json

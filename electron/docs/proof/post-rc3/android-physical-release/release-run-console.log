@@ -1,0 +1,25 @@
+{
+  "device": "Samsung SM-S911W",
+  "packaged": false,
+  "desktopMode": "source-electron (post-RC3 tranche: Windows packaging forbidden)",
+  "desktop": {
+    "host": "192.168.0.16",
+    "port": 65455,
+    "token": "[REDACTED]"
+  },
+  "phoneWifi": "BMW ONLY! 5G",
+  "httpPairing": true,
+  "authenticatedWebSocket": true,
+  "countdownUpdates": 2,
+  "commandCounts": {
+    "rejectedStart": 1,
+    "pause": 1,
+    "resume": 1,
+    "addFive": 1,
+    "cancel": 1
+  },
+  "phoneWifiRecovery": true,
+  "wrapperRestartRecovery": true,
+  "qrScanMethod": "manual URL entry driven over ADB; camera scan not claimed",
+  "realPowerActions": 0
+}
