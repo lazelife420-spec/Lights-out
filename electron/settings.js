@@ -244,17 +244,57 @@ function clone(value) {
     : JSON.parse(JSON.stringify(value));
 }
 
+function tryParseSettingsFile(filePath) {
+  if (!fs.existsSync(filePath)) return null;
+  const raw = fs.readFileSync(filePath, 'utf8');
+  if (!raw || !raw.trim()) return null;
+  return JSON.parse(raw);
+}
+
 function load() {
+  let file;
   try {
-    const file = getConfigPath();
-    if (fs.existsSync(file)) {
-      const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    file = getConfigPath();
+  } catch (error) {
+    console.error('Failed to load settings:', error.message);
+    cache = clone(DEFAULTS);
+    return cache;
+  }
+  const bakFile = file + '.bak';
+  const tmpFile = file + '.tmp';
+
+  // Clean stale temp file from a previous interrupted save.
+  try { if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile); } catch { /* best effort */ }
+
+  // PRIMARY_VALID: normal case.
+  try {
+    const parsed = tryParseSettingsFile(file);
+    if (parsed) {
       cache = deepMerge(DEFAULTS, parsed);
-      transformSecrets(cache, decryptSecret); // in-memory cache holds plaintext secrets
+      transformSecrets(cache, decryptSecret);
       return cache;
     }
   } catch (error) {
-    console.error('Failed to load settings:', error.message);
+    console.error('Failed to load settings (primary):', error.message);
+  }
+
+  // PRIMARY_CORRUPT_BACKUP_VALID: recover from backup.
+  try {
+    const parsed = tryParseSettingsFile(bakFile);
+    if (parsed) {
+      console.warn('Settings: primary corrupt or missing, recovered from backup.');
+      cache = deepMerge(DEFAULTS, parsed);
+      transformSecrets(cache, decryptSecret);
+      save();
+      return cache;
+    }
+  } catch (error) {
+    console.error('Failed to load settings (backup):', error.message);
+  }
+
+  // PRIMARY_AND_BACKUP_CORRUPT or FIRST_RUN: use DEFAULTS.
+  if (fs.existsSync(file) || fs.existsSync(bakFile)) {
+    console.error('Settings: both primary and backup are corrupt. Starting with defaults.');
   }
   cache = clone(DEFAULTS);
   return cache;
@@ -267,13 +307,38 @@ function ensureLoaded() {
 
 function save() {
   try {
+    const file = getConfigPath();
+    const tmpFile = file + '.tmp';
+    const bakFile = file + '.bak';
+
     // Serialize an encrypted copy; keep the in-memory cache as plaintext so the
     // rest of the app keeps reading usable values.
     const toWrite = transformSecrets(clone(ensureLoaded()), encryptSecret);
-    fs.writeFileSync(getConfigPath(), JSON.stringify(toWrite, null, 2), 'utf8');
+    const json = JSON.stringify(toWrite, null, 2);
+
+    // 1. Write to temp file.
+    fs.writeFileSync(tmpFile, json, 'utf8');
+
+    // 2. Verify the temp file is valid JSON.
+    const verification = fs.readFileSync(tmpFile, 'utf8');
+    JSON.parse(verification);
+
+    // 3. Backup the current file (if it exists and is non-empty).
+    try {
+      if (fs.existsSync(file) && fs.statSync(file).size > 0) {
+        fs.copyFileSync(file, bakFile);
+      }
+    } catch (bakErr) {
+      console.warn('Settings: failed to create backup:', bakErr.message);
+    }
+
+    // 4. Replace primary with verified temp.
+    fs.renameSync(tmpFile, file);
     return true;
   } catch (error) {
     console.error('Failed to save settings:', error.message);
+    // Clean up failed temp file.
+    try { fs.unlinkSync(getConfigPath() + '.tmp'); } catch { /* best effort */ }
     return false;
   }
 }
