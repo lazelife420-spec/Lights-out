@@ -620,7 +620,7 @@
         nmDetailTimeline.appendChild(li);
       }
       nmDetailMeta.innerHTML = '';
-      [[' Duration', formatNmDuration(mode.durationSeconds)],
+      [['Duration', formatNmDuration(mode.durationSeconds)],
        ['Action', formatNmAction(mode.action)],
        ['Ritual', mode.ritualId === 'standard' ? 'Standard wind-down' : 'Direct start']].forEach(([label, value]) => {
         const row = document.createElement('div');
