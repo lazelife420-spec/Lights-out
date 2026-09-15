@@ -1,5 +1,7 @@
 'use strict';
 
+const net = require('net');
+
 function validHttpUrl(value) {
   try {
     const url = new URL(String(value || '').trim());
@@ -21,8 +23,11 @@ function sanitizeWifiGuard(input = {}) {
     configured = validHttpUrl(value.webhookUrl);
     if (!configured) setupError = 'Enter a valid HTTP(S) webhook URL before enabling WiFi Guard.';
   } else {
-    configured = Boolean(String(value.routerIp || '').trim() && (deviceMacs.length || deviceIps.length));
-    if (!configured) setupError = 'Enter the router address and select at least one device before enabling WiFi Guard.';
+    const routerIpRaw = String(value.routerIp || '').trim();
+    const routerIpValid = net.isIP(routerIpRaw) !== 0;
+    configured = Boolean(routerIpValid && (deviceMacs.length || deviceIps.length));
+    if (!routerIpValid && routerIpRaw) setupError = 'Router address must be a valid IP address (not a hostname). Example: 192.168.0.1';
+    else if (!configured) setupError = 'Enter the router IP address and select at least one device before enabling WiFi Guard.';
   }
   return { ...value, provider, deviceMacs, deviceIps, enabled: Boolean(value.enabled && configured), configured, setupError };
 }
