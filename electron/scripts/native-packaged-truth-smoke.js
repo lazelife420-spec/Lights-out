@@ -14,11 +14,11 @@ const { executable, unpackedDir: distNative } = requirePackagedArtifact();
 const expected = {
   CompanyName: 'The Proof Foundry',
   FileDescription: 'Lights Out',
-  FileVersion: '11.1.2.0',
+  FileVersion: '11.1.3.0',
   InternalName: 'Lights Out',
   OriginalFilename: 'Lights Out.exe',
   ProductName: 'Lights Out',
-  ProductVersion: '11.1.2',
+  ProductVersion: '11.1.3',
   LegalCopyright: 'Copyright (C) 2026 The Proof Foundry. All rights reserved.'
 };
 

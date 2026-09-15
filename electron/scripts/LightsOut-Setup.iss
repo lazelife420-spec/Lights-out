@@ -1,8 +1,8 @@
-; Dependency-minimal Inno Setup installer definition for Lights Out v11.1.2
+; Dependency-minimal Inno Setup installer definition for Lights Out v11.1.3
 ; Per-user install, no admin required, no automatic launch, preserves user data.
 
 #define MyAppName "Lights Out"
-#define MyAppVersion "11.1.2"
+#define MyAppVersion "11.1.3"
 #define MyAppPublisher "Lights Out"
 #define MyAppURL "https://github.com/lazelife420-spec/Lights-out"
 #define MyAppExeName "Lights Out.exe"

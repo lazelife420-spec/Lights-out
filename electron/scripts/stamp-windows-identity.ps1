@@ -10,8 +10,8 @@ param(
     [string]$FileDescription = 'Lights Out',
     [string]$InternalName = 'Lights Out',
     [string]$OriginalFilename = 'Lights Out.exe',
-    [string]$FileVersion = '11.1.2.0',
-    [string]$ProductVersion = '11.1.2',
+    [string]$FileVersion = '11.1.3.0',
+    [string]$ProductVersion = '11.1.3',
     [string]$Copyright = 'Copyright (C) 2026 The Proof Foundry. All rights reserved.',
     [string]$RceditPath
 )

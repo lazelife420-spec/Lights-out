@@ -8,8 +8,8 @@ param(
     [string]$ExpectedFileDescription = 'Lights Out',
     [string]$ExpectedInternalName = 'Lights Out',
     [string]$ExpectedOriginalFilename = 'Lights Out.exe',
-    [string]$ExpectedFileVersion = '11.1.2.0',
-    [string]$ExpectedProductVersion = '11.1.2'
+    [string]$ExpectedFileVersion = '11.1.3.0',
+    [string]$ExpectedProductVersion = '11.1.3'
 )
 
 $ErrorActionPreference = 'Stop'
