@@ -1,0 +1,67 @@
+{
+  "name": "Lights-out Audit Remediation CI",
+  "projectRoots": [
+    "electron"
+  ],
+  "steps": [
+    {
+      "name": "Dependency restore",
+      "command": "npm",
+      "args": ["ci", "--prefix", "electron"],
+      "timeoutMs": 300000
+    },
+    {
+      "name": "Syntax — main",
+      "command": "node",
+      "args": ["--check", "electron/main.js"]
+    },
+    {
+      "name": "Syntax — renderer",
+      "command": "node",
+      "args": ["--check", "electron/renderer.js"]
+    },
+    {
+      "name": "Syntax — preload",
+      "command": "node",
+      "args": ["--check", "electron/preload.js"]
+    },
+    {
+      "name": "Syntax — settings",
+      "command": "node",
+      "args": ["--check", "electron/settings.js"]
+    },
+    {
+      "name": "Syntax — capabilityTruth",
+      "command": "node",
+      "args": ["--check", "electron/capabilityTruth.js"]
+    },
+    {
+      "name": "Syntax — companion",
+      "command": "node",
+      "args": ["--check", "electron/companion.js"]
+    },
+    {
+      "name": "Syntax — smartLights",
+      "command": "node",
+      "args": ["--check", "electron/smartLights.js"]
+    },
+    {
+      "name": "ESLint",
+      "command": "npm",
+      "args": ["run", "lint", "--prefix", "electron"],
+      "timeoutMs": 60000
+    },
+    {
+      "name": "Unit tests",
+      "command": "npm",
+      "args": ["test", "--prefix", "electron"],
+      "timeoutMs": 120000
+    },
+    {
+      "name": "Static smoke",
+      "command": "npm",
+      "args": ["run", "smoke", "--prefix", "electron"],
+      "timeoutMs": 120000
+    }
+  ]
+}
