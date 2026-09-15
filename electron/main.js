@@ -758,7 +758,7 @@ function beginValidatedCountdown(options, identity, nmIdentity) {
   timerInterval = setInterval(() => {
     if (!timerState.running || timerState.paused) return;
 
-    timerState.remainingSeconds = Math.max(0, timerState.remainingSeconds - 1);
+    timerState.remainingSeconds = Math.max(0, Math.round((new Date(timerState.endsAt).getTime() - Date.now()) / 1000));
     const percent = timerState.totalSeconds > 0
       ? (timerState.remainingSeconds / timerState.totalSeconds) * 100
       : 0;
