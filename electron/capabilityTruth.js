@@ -11,11 +11,13 @@ function validHttpUrl(value) {
   }
 }
 
+const VALID_MAC = /^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$/;
+
 function sanitizeWifiGuard(input = {}) {
   const value = input && typeof input === 'object' ? input : {};
   const provider = ['adapter', 'tplink', 'asus', 'netgear', 'webhook'].includes(value.provider) ? value.provider : 'webhook';
-  const deviceMacs = Array.isArray(value.deviceMacs) ? value.deviceMacs.filter(Boolean) : [];
-  const deviceIps = Array.isArray(value.deviceIps) ? value.deviceIps.filter(Boolean) : [];
+  const deviceMacs = Array.isArray(value.deviceMacs) ? value.deviceMacs.filter(m => typeof m === 'string' && VALID_MAC.test(m.trim())) : [];
+  const deviceIps = Array.isArray(value.deviceIps) ? value.deviceIps.filter(ip => typeof ip === 'string' && net.isIP(ip.trim()) !== 0) : [];
   let configured = false;
   let setupError = '';
   if (provider === 'adapter') configured = true;

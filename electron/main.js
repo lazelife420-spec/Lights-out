@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, globalShortcut, shell, screen, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, globalShortcut, shell, screen, clipboard, session } = require('electron');
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
@@ -1951,9 +1951,13 @@ ipcMain.handle('import-all-data', async (event, jsonData) => {
     const parsed = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
     if (!parsed || typeof parsed !== 'object') return { success: false, error: 'Invalid data format' };
     if (parsed.settings) {
+      const ALLOWED_SECTIONS = new Set([
+        'window', 'app', 'calendar', 'smartLights', 'customization', 'lastLight',
+        'wifiGuard', 'contentBlocker', 'accountability', 'remoteControl', 'ritual'
+      ]);
       for (const [section, value] of Object.entries(parsed.settings)) {
         if (section === 'activeTimer') settingsStore.setActiveTimer(value || null);
-        else if (value !== undefined) settingsStore.updateSection(section, value);
+        else if (value !== undefined && ALLOWED_SECTIONS.has(section)) settingsStore.updateSection(section, value);
       }
     }
     if (parsed.profiles && Array.isArray(parsed.profiles)) {
@@ -2813,6 +2817,11 @@ function setupRitualCallbacks() {
 
 app.whenReady().then(async () => {
   cleanupStalePortableExtracts();
+
+  // Deny all browser permissions by default. Lights Out loads only local
+  // content and does not require camera, microphone, geolocation, etc.
+  session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+  session.defaultSession.setPermissionCheckHandler(() => false);
 
   // Load persisted settings and rehydrate the smart-lights module.
   settingsStore.load();

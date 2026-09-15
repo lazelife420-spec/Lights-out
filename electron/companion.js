@@ -367,9 +367,9 @@ function requestHandler(req, res) {
       const html = fs.readFileSync(htmlPath, 'utf8');
       res.writeHead(200, {
         'Content-Type': 'text/html',
-        // The page is fully inline (script + style), so inline is allowed; it
-        // renders server data only via textContent, never innerHTML. The value
-        // of this CSP is locking down where the page may connect/load from.
+        // The page is fully inline (script + style), so inline is allowed.
+        // Server-provided data is rendered via textContent / createElement.
+        // The value of this CSP is locking down where the page may connect/load from.
         'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data:; base-uri 'none'; form-action 'none'; object-src 'none'"
       });
       res.end(html);

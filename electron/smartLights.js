@@ -4,6 +4,7 @@
 
 const https = require('https');
 const http = require('http');
+const net = require('net');
 
 // Configuration state
 let config = {
@@ -565,7 +566,7 @@ function loadConfig(newConfig) {
     mode: newConfig.mode || config.mode,
     dimMinutes: newConfig.dimMinutes !== undefined ? Number(newConfig.dimMinutes) : config.dimMinutes,
     enabled: newConfig.enabled !== undefined ? Boolean(newConfig.enabled) : config.enabled,
-    hueBridgeIp: newConfig.hueBridgeIp || config.hueBridgeIp,
+    hueBridgeIp: (newConfig.hueBridgeIp && net.isIP(String(newConfig.hueBridgeIp).trim()) !== 0) ? String(newConfig.hueBridgeIp).trim() : config.hueBridgeIp,
     hueUsername: newConfig.hueUsername || config.hueUsername,
     hueLightIds: newConfig.hueLightIds || config.hueLightIds,
     hueGroupId: newConfig.hueGroupId || config.hueGroupId,

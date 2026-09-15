@@ -563,16 +563,32 @@
         card.setAttribute('role', 'listitem');
         card.setAttribute('tabindex', mode.status === 'ready' ? '0' : '-1');
         const statusTag = getNmStatusText(mode.status, mode.availability);
-        card.innerHTML = `
-          <div class="night-mode-art">${NM_ARTWORK[mode.artworkId] || '\u{1F319}'}</div>
-          <div class="night-mode-name">${mode.title}</div>
-          <div class="night-mode-sub">${mode.subtitle}</div>
-          <div class="night-mode-tags">
-            <span class="night-mode-tag">${formatNmDuration(mode.durationSeconds)}</span>
-            <span class="night-mode-tag">${formatNmAction(mode.action)}</span>
-            ${statusTag ? `<span class="night-mode-tag status">${statusTag}</span>` : ''}
-          </div>
-        `;
+        const artDiv = document.createElement('div');
+        artDiv.className = 'night-mode-art';
+        artDiv.textContent = NM_ARTWORK[mode.artworkId] || '\u{1F319}';
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'night-mode-name';
+        nameDiv.textContent = mode.title;
+        const subDiv = document.createElement('div');
+        subDiv.className = 'night-mode-sub';
+        subDiv.textContent = mode.subtitle;
+        const tagsDiv = document.createElement('div');
+        tagsDiv.className = 'night-mode-tags';
+        const durTag = document.createElement('span');
+        durTag.className = 'night-mode-tag';
+        durTag.textContent = formatNmDuration(mode.durationSeconds);
+        tagsDiv.appendChild(durTag);
+        const actTag = document.createElement('span');
+        actTag.className = 'night-mode-tag';
+        actTag.textContent = formatNmAction(mode.action);
+        tagsDiv.appendChild(actTag);
+        if (statusTag) {
+          const statSpan = document.createElement('span');
+          statSpan.className = 'night-mode-tag status';
+          statSpan.textContent = statusTag;
+          tagsDiv.appendChild(statSpan);
+        }
+        card.append(artDiv, nameDiv, subDiv, tagsDiv);
         if (mode.status === 'ready') {
           card.addEventListener('click', () => openNightModeDetail(mode.id));
           card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openNightModeDetail(mode.id); } });
@@ -603,11 +619,19 @@
         li.textContent = step;
         nmDetailTimeline.appendChild(li);
       }
-      nmDetailMeta.innerHTML = `
-        <div class="night-mode-meta-row"><span>Duration</span><span>${formatNmDuration(mode.durationSeconds)}</span></div>
-        <div class="night-mode-meta-row"><span>Action</span><span>${formatNmAction(mode.action)}</span></div>
-        <div class="night-mode-meta-row"><span>Ritual</span><span>${mode.ritualId === 'standard' ? 'Standard wind-down' : 'Direct start'}</span></div>
-      `;
+      nmDetailMeta.innerHTML = '';
+      [[' Duration', formatNmDuration(mode.durationSeconds)],
+       ['Action', formatNmAction(mode.action)],
+       ['Ritual', mode.ritualId === 'standard' ? 'Standard wind-down' : 'Direct start']].forEach(([label, value]) => {
+        const row = document.createElement('div');
+        row.className = 'night-mode-meta-row';
+        const lbl = document.createElement('span');
+        lbl.textContent = label;
+        const val = document.createElement('span');
+        val.textContent = value;
+        row.append(lbl, val);
+        nmDetailMeta.appendChild(row);
+      });
       updateNightModeRunType();
       nightModeBackdrop.classList.add('show');
       nightModeBackdrop.setAttribute('aria-hidden', 'false');
@@ -648,9 +672,13 @@
       const banner = document.getElementById('idle-safety-banner');
       if (!banner) return;
       const dryRun = Boolean(latestState && latestState.dryRunPolicy);
-      banner.innerHTML = dryRun
-        ? '<strong>DRY RUN</strong> — no PC power action will execute.'
-        : '<strong>REAL ACTION</strong> — timers started from this phone can perform the selected PC action.';
+      banner.textContent = '';
+      const strong = document.createElement('strong');
+      strong.textContent = dryRun ? 'DRY RUN' : 'REAL ACTION';
+      banner.appendChild(strong);
+      banner.appendChild(document.createTextNode(dryRun
+        ? ' — no PC power action will execute.'
+        : ' — timers started from this phone can perform the selected PC action.'));
     }
 
     function toggleNightModeGrid() {
