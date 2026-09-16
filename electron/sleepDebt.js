@@ -1,35 +1,45 @@
 // Estimated bedtime-deficit tracker. Values are inferred from a completed
 // Lights Out timer to a configured wake time; they are not measured sleep.
 
-const fs = require('fs');
 const path = require('path');
-const { app } = require('electron');
+const { writeTmpVerifyRename, safeLoadJson } = require('./durableJsonStore');
 
 const DEBT_FILE = 'sleepDebt.json';
 let cache = null;
-let configPath = null;
 
 // Target sleep hours (configurable, default 8).
 const DEFAULT_TARGET_HOURS = 8;
 
 function getConfigPath() {
-  if (!configPath) {
-    configPath = path.join(app.getPath('userData'), DEBT_FILE);
+  let userDataDir;
+  try {
+    const { app } = require('electron');
+    userDataDir = app.getPath('userData');
+  } catch {
+    const os = require('os');
+    userDataDir = os.tmpdir();
   }
-  return configPath;
+  return path.join(userDataDir, DEBT_FILE);
 }
 
 function load() {
   if (cache) return cache;
+  const DEFAULTS = {
+    targetHours: DEFAULT_TARGET_HOURS,
+    wakeTime: '07:00',
+    dailyLog: [] // [{ date, bedTime, wakeTime, actualHours, targetHours, debt }]
+  };
   try {
-    const raw = fs.readFileSync(getConfigPath(), 'utf-8');
-    cache = JSON.parse(raw);
+    const file = getConfigPath();
+    const { data, recovered } = safeLoadJson(file);
+    if (data && typeof data === 'object') {
+      cache = { ...DEFAULTS, ...data };
+      if (recovered) save();
+    } else {
+      cache = structuredClone(DEFAULTS);
+    }
   } catch {
-    cache = {
-      targetHours: DEFAULT_TARGET_HOURS,
-      wakeTime: '07:00',
-      dailyLog: [] // [{ date, bedTime, wakeTime, actualHours, targetHours, debt }]
-    };
+    cache = structuredClone(DEFAULTS);
   }
   return cache;
 }
@@ -37,7 +47,7 @@ function load() {
 function save() {
   if (!cache) return;
   try {
-    fs.writeFileSync(getConfigPath(), JSON.stringify(cache, null, 2), 'utf-8');
+    writeTmpVerifyRename(getConfigPath(), cache);
   } catch { /* best effort */ }
 }
 
@@ -152,6 +162,7 @@ module.exports = {
   setWakeTime,
   estimateSleepHours,
   getDebtLabel,
+  // Testing helpers.
   _load: load,
-  _reset: reset
+  _reset: () => { cache = null; }
 };

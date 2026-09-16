@@ -2,9 +2,8 @@
 // Ported from PowerShell LightsOut.Profiles.psm1
 // Manages saved timer profiles with quick-load capability
 
-const { app } = require('electron');
 const path = require('path');
-const fs = require('fs');
+const { writeTmpVerifyRename, safeLoadJson } = require('./durableJsonStore');
 
 // Default profiles storage
 const PROFILES_FILE = 'profiles.json';
@@ -27,8 +26,15 @@ let configPath = null;
 
 function getConfigPath() {
   if (!configPath) {
-    const userData = app.getPath('userData');
-    configPath = path.join(userData, PROFILES_FILE);
+    let userDataDir;
+    try {
+      const { app } = require('electron');
+      userDataDir = app.getPath('userData');
+    } catch {
+      const os = require('os');
+      userDataDir = os.tmpdir();
+    }
+    configPath = path.join(userDataDir, PROFILES_FILE);
   }
   return configPath;
 }
@@ -36,13 +42,11 @@ function getConfigPath() {
 function loadProfilesFromDisk() {
   try {
     const configFile = getConfigPath();
-    if (fs.existsSync(configFile)) {
-      const data = fs.readFileSync(configFile, 'utf8');
-      const parsed = JSON.parse(data);
-      if (Array.isArray(parsed)) {
-        profilesCache = parsed.map(normalizeProfile).filter(p => p !== null);
-        return profilesCache;
-      }
+    const { data, recovered } = safeLoadJson(configFile, Array.isArray);
+    if (Array.isArray(data)) {
+      profilesCache = data.map(normalizeProfile).filter(p => p !== null);
+      if (recovered) saveProfilesToDisk();
+      return profilesCache;
     }
   } catch (error) {
     console.error('Failed to load profiles:', error.message);
@@ -54,8 +58,8 @@ function loadProfilesFromDisk() {
 function saveProfilesToDisk() {
   try {
     const configFile = getConfigPath();
-    fs.writeFileSync(configFile, JSON.stringify(profilesCache, null, 2), 'utf8');
-    return true;
+    const success = writeTmpVerifyRename(configFile, profilesCache);
+    return success;
   } catch (error) {
     console.error('Failed to save profiles:', error.message);
     return false;
@@ -445,6 +449,10 @@ module.exports = {
   
   // Defaults
   createDefaults: createDefaultProfiles,
+
+  // Testing helpers
+  _load: loadProfilesFromDisk,
+  _reset: () => { profilesCache = []; },
   
   // Direct access (use with caution)
   get cache() { return [...profilesCache]; }

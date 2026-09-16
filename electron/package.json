@@ -20,6 +20,7 @@
     "test:night-modes-runtime": "node scripts/night-modes-electron-proof.js",
     "test:companion-v2-runtime": "node scripts/companion-v2-electron-proof.js",
     "test:receipt-recovery-runtime": "node scripts/receipt-recovery-electron-proof.js",
+    "test:e2e": "npm run build && node scripts/e2e-runner.js",
     "electron:provision": "install-electron --no",
     "electron:verify": "node scripts/verify-electron-provisioning.js",
     "electron:verify-provision": "npm run electron:verify",
@@ -92,6 +93,7 @@
       "smartSuggestions.js",
       "nightModes.js",
       "startDecision.js",
+      "durableJsonStore.js",
       "renderer-night-modes.js",
       "widget.html",
       "assets/**"

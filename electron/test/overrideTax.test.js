@@ -26,7 +26,9 @@ const overrideTax = require('../overrideTax');
 function cleanup() {
   overrideTax._reset();
   const f = path.join(tmpDir, 'override-tax.json');
-  if (fs.existsSync(f)) fs.unlinkSync(f);
+  try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch {}
+  try { if (fs.existsSync(f + '.bak')) fs.unlinkSync(f + '.bak'); } catch {}
+  try { if (fs.existsSync(f + '.tmp')) fs.unlinkSync(f + '.tmp'); } catch {}
 }
 
 let passed = 0;

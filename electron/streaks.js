@@ -1,13 +1,11 @@
 // Sleep streaks + insights engine.
 // Records bedtime events and computes streaks, weekly stats, and achievements.
 
-const { app } = require('electron');
 const path = require('path');
-const fs = require('fs');
+const { writeTmpVerifyRename, safeLoadJson } = require('./durableJsonStore');
 
 const STREAKS_FILE = 'streaks.json';
 
-let configPath = null;
 let cache = null;
 
 const DEFAULTS = {
@@ -17,6 +15,18 @@ const DEFAULTS = {
   achievements: []  // ['first_light', '7_night_streak', ...]
 };
 
+function getConfigPath() {
+  let userDataDir;
+  try {
+    const { app } = require('electron');
+    userDataDir = app.getPath('userData');
+  } catch {
+    const os = require('os');
+    userDataDir = os.tmpdir();
+  }
+  return path.join(userDataDir, STREAKS_FILE);
+}
+
 function clone(value) {
   if (typeof structuredClone === 'function') return structuredClone(value);
   return JSON.parse(JSON.stringify(value));
@@ -25,9 +35,11 @@ function clone(value) {
 function load() {
   if (cache) return cache;
   try {
-    if (!configPath) configPath = path.join(app.getPath('userData'), STREAKS_FILE);
-    if (fs.existsSync(configPath)) {
-      cache = deepMerge(clone(DEFAULTS), JSON.parse(fs.readFileSync(configPath, 'utf8')));
+    const file = getConfigPath();
+    const { data, recovered } = safeLoadJson(file);
+    if (data && typeof data === 'object') {
+      cache = deepMerge(clone(DEFAULTS), data);
+      if (recovered) save();
     } else {
       cache = clone(DEFAULTS);
     }
@@ -38,9 +50,9 @@ function load() {
 }
 
 function save() {
+  if (!cache) return;
   try {
-    if (!configPath) configPath = path.join(app.getPath('userData'), STREAKS_FILE);
-    fs.writeFileSync(configPath, JSON.stringify(cache, null, 2), 'utf8');
+    writeTmpVerifyRename(getConfigPath(), cache);
   } catch { /* best-effort */ }
 }
 

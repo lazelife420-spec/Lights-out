@@ -6,12 +6,10 @@
 // Override (cancel via override) breaks streak + all above.
 
 const path = require('path');
-const fs = require('fs');
-const { app } = require('electron');
+const { writeTmpVerifyRename, safeLoadJson } = require('./durableJsonStore');
 
 const TAX_FILE = 'override-tax.json';
 
-let configPath = null;
 let cache = null;
 
 const DEFAULTS = {
@@ -38,17 +36,25 @@ const DEFAULTS = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function getPath() {
-  if (!configPath) configPath = path.join(app.getPath('userData'), TAX_FILE);
-  return configPath;
+  let userDataDir;
+  try {
+    const { app } = require('electron');
+    userDataDir = app.getPath('userData');
+  } catch {
+    const os = require('os');
+    userDataDir = os.tmpdir();
+  }
+  return path.join(userDataDir, TAX_FILE);
 }
 
 function load() {
   if (cache) return cache;
   try {
     const p = getPath();
-    if (fs.existsSync(p)) {
-      const raw = JSON.parse(fs.readFileSync(p, 'utf8'));
-      cache = { ...structuredClone(DEFAULTS), ...raw, config: { ...DEFAULTS.config, ...(raw.config || {}) } };
+    const { data, recovered } = safeLoadJson(p);
+    if (data && typeof data === 'object') {
+      cache = { ...structuredClone(DEFAULTS), ...data, config: { ...DEFAULTS.config, ...(data.config || {}) } };
+      if (recovered) save();
     } else {
       cache = structuredClone(DEFAULTS);
     }
@@ -59,8 +65,9 @@ function load() {
 }
 
 function save() {
+  if (!cache) return;
   try {
-    fs.writeFileSync(getPath(), JSON.stringify(cache, null, 2), 'utf8');
+    writeTmpVerifyRename(getPath(), cache);
   } catch { /* best-effort */ }
 }
 
@@ -228,5 +235,5 @@ module.exports = {
   getStats,
   // Testing helpers.
   _load: load,
-  _reset: () => { cache = null; configPath = null; }
+  _reset: () => { cache = null; }
 };
