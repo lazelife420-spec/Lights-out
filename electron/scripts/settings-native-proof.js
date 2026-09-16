@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // Native Settings runtime proof for the built Windows Electron app.
+// Uses the shared packaged-artifact-resolver so it follows the same output
+// path as the rest of the packaging tooling (dist-native by default).
 // Uses Chrome DevTools Protocol over --remote-debugging-port.
 // Runs dry-run only and keeps every test in an isolated userData directory.
 
@@ -11,8 +13,9 @@ const os = require('os');
 const path = require('path');
 const http = require('http');
 const WebSocket = require('ws');
+const { requirePackagedArtifact } = require('./packaged-artifact-resolver');
 
-const EXE_PATH = path.resolve(__dirname, '..', '..', 'dist', 'win-unpacked', 'Lights Out.exe');
+const { executable: EXE_PATH } = requirePackagedArtifact();
 const ROOT_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-settings-native-proof-'));
 const SCREENSHOTS_DIR = path.join(ROOT_DIR, 'screenshots');
 fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });

@@ -30,6 +30,7 @@ try {
 
 let passed = 0;
 let failed = 0;
+let testChild = null;
 
 function check(name, fn) {
   try {
@@ -60,16 +61,30 @@ function lightsOutProcessCount() {
   return Number.parseInt(result.stdout.trim(), 10) || 0;
 }
 
-function waitForNoLightsOutProcesses(timeoutMs = 10000) {
+function processAlive(pid) {
+  if (!pid) return false;
+  const result = spawnSync('powershell', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    `(Get-CimInstance Win32_Process -Filter "ProcessId = ${Number(pid)}" -ErrorAction SilentlyContinue) -ne $null`
+  ], { encoding: 'utf8', windowsHide: true });
+  return result.stdout.trim().toLowerCase() === 'true';
+}
+
+function waitForNoLightsOutProcesses(rootPid, timeoutMs = 10000) {
+  if (!rootPid) return;
   const deadline = Date.now() + timeoutMs;
   let consecutiveEmptyChecks = 0;
   while (Date.now() < deadline) {
+    if (processAlive(rootPid)) {
+      spawnSync('taskkill', ['/F', '/T', '/PID', String(rootPid)], { windowsHide: true });
+    }
     if (lightsOutProcessCount() === 0) {
       consecutiveEmptyChecks += 1;
       if (consecutiveEmptyChecks >= 3) return;
     } else {
       consecutiveEmptyChecks = 0;
-      spawnSync('taskkill', ['/F', '/T', '/IM', 'Lights Out.exe'], { windowsHide: true });
     }
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150);
   }
@@ -98,7 +113,7 @@ check('runtime: app launches cleanly with --minimized --no-auto-start', () => {
     remoteControl: { enabled: false, mode: 'off', port: 58732, lanIp: '', token: '' }
   }));
   try {
-    const child = require('child_process').spawn(exePath, [
+    testChild = require('child_process').spawn(exePath, [
       '--minimized',
       '--no-auto-start',
       `--user-data-dir=${userData}`
@@ -108,16 +123,19 @@ check('runtime: app launches cleanly with --minimized --no-auto-start', () => {
       env: { ...process.env, ELECTRON_IS_DEV: '0', LIGHTS_OUT_SUPPRESS_TRAY: '1' }
     });
 
-    if (!child.pid) throw new Error('Failed to get PID for launched process');
+    if (!testChild.pid) throw new Error('Failed to get PID for launched process');
     const deadline = Date.now() + 10000;
     while (Date.now() < deadline && lightsOutProcessCount() === 0) {
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
     }
     assert(lightsOutProcessCount() > 0, 'packaged application did not remain running');
   } finally {
-    spawnSync('taskkill', ['/F', '/T', '/IM', 'Lights Out.exe'], { windowsHide: true });
-    waitForNoLightsOutProcesses();
+    if (testChild && testChild.pid) {
+      spawnSync('taskkill', ['/F', '/T', '/PID', String(testChild.pid)], { windowsHide: true });
+    }
+    waitForNoLightsOutProcesses(testChild && testChild.pid);
     fs.rmSync(userData, { recursive: true, force: true });
+    testChild = null;
   }
 });
 
@@ -163,29 +181,14 @@ check('safety: quit handler cleans up processes', () => {
   if (!mainSrc.includes('tray.destroy()')) throw new Error('quit must destroy the tray icon');
 });
 
-// 4. Verify no Electron/Node processes linger
-check('cleanup: no lingering Electron processes after test', () => {
-  const electronProcs = spawnSync('powershell', ['-Command', 'Get-Process electron -ErrorAction SilentlyContinue | Measure-Object | Select-Object -ExpandProperty Count'], { encoding: 'utf8' });
-  const electronCount = parseInt(electronProcs.stdout.trim()) || 0;
-  if (electronCount > 0) {
-    throw new Error(`${electronCount} electron processes still running`);
-  }
-});
-
+// 4. Verify the launched process and its tree have been cleaned up.
+// The prior check counted all "electron" processes globally, which could
+// confuse unrelated Electron applications on the host. Cleanup is now scoped
+// to the specific child PID launched above.
 check('cleanup: no lingering Lights Out processes or temporary profile', () => {
   assert(lightsOutProcessCount() === 0, 'Lights Out process cleanup was not stable');
   const profiles = fs.readdirSync(os.tmpdir()).filter(name => name.startsWith('lightsout-portable-smoke-'));
   assert(profiles.length === 0, `${profiles.length} portable smoke profile(s) remain`);
-});
-
-check('cleanup: no lingering Node processes from app', () => {
-  // Note: This is a best-effort check; Node processes from other sources may exist
-  const nodeProcs = spawnSync('powershell', ['-Command', 'Get-Process node -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match "node" } | Measure-Object | Select-Object -ExpandProperty Count'], { encoding: 'utf8' });
-  const nodeCount = parseInt(nodeProcs.stdout.trim()) || 0;
-  if (nodeCount > 5) {
-    // Allow some Node processes; just check we don't have excessive ones
-    throw new Error(`${nodeCount} Node processes running; possible orphan leak`);
-  }
 });
 
 // Summary

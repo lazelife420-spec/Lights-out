@@ -39,7 +39,39 @@ public static class LightsOutNativeWorker {
   [DllImport("shcore.dll")] public static extern int SetProcessDpiAwareness(int value);
   [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr dpiContext);
   [DllImport("shcore.dll")] public static extern int GetDpiForMonitor(IntPtr hmonitor, int dpiType, out uint dpiX, out uint dpiY);
+  [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+  [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
   [DllImport("kernel32.dll")] public static extern IntPtr GetCurrentProcess();
+  public static bool ForceForegroundWindow(IntPtr hWnd) {
+    if (hWnd == IntPtr.Zero) return false;
+    IntPtr fgWnd = GetForegroundWindow();
+    if (fgWnd == hWnd) return true;
+    uint dummyPid;
+    uint fgThread = fgWnd != IntPtr.Zero ? GetWindowThreadProcessId(fgWnd, out dummyPid) : 0;
+    uint targetThread = GetWindowThreadProcessId(hWnd, out dummyPid);
+    uint currentThread = GetCurrentThreadId();
+
+    bool attachedFg = false;
+    bool attachedTarget = false;
+
+    if (fgThread != 0 && fgThread != currentThread) {
+      attachedFg = AttachThreadInput(currentThread, fgThread, true);
+    }
+    if (targetThread != 0 && targetThread != currentThread) {
+      attachedTarget = AttachThreadInput(currentThread, targetThread, true);
+    }
+
+    ShowWindow(hWnd, 9);
+    bool ok = SetForegroundWindow(hWnd);
+
+    if (attachedTarget) {
+      AttachThreadInput(currentThread, targetThread, false);
+    }
+    if (attachedFg) {
+      AttachThreadInput(currentThread, fgThread, false);
+    }
+    return ok;
+  }
   public static IntPtr FindVisibleWindowForProcessIds(int[] processIds) {
     var expected = new HashSet<uint>(); foreach (var id in processIds) expected.Add((uint)id);
     var found = IntPtr.Zero; long largestArea = 0;
@@ -193,7 +225,7 @@ while ($true) {
     Mark 'current-window-resolved' ([ordered]@{processId=$pidValue;windowHandle=$hwnd.ToInt64();clientLeft=$origin.X;clientTop=$origin.Y;clientWidth=$client.Right-$client.Left;clientHeight=$client.Bottom-$client.Top})
     [void][LightsOutNativeWorker]::ShowWindow($hwnd,9)
     if ($captureForegroundChronology) { Sample-Foreground 'before-set-foreground-window' }
-    [void][LightsOutNativeWorker]::SetForegroundWindow($hwnd)
+    [void][LightsOutNativeWorker]::ForceForegroundWindow($hwnd)
     if ($captureForegroundChronology) { Sample-Foreground 'after-set-foreground-window' }
     Start-Sleep -Milliseconds 40
     $foreground=[LightsOutNativeWorker]::GetForegroundWindow()
