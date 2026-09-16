@@ -204,3 +204,24 @@ test('nested errorData (nativeEnvironment, selector) survives onto the rejected 
   });
   await harness.worker.stop();
 });
+
+test('wrong foreground error rejects request before gesture execution', async () => {
+  const harness = createHarness();
+  await startReady(harness);
+  const response = harness.worker.request({ kind: 'pointer', action: 'click' });
+  const request = await waitForRequest(harness.child);
+  harness.child.send({
+    type: 'result',
+    requestId: request.requestId,
+    ok: false,
+    error: 'current app window does not own foreground custody',
+    errorData: { gesture: null, selector: '[data-ns-tab="modes"]' }
+  });
+  await assert.rejects(response, error => {
+    assert.match(error.message, /does not own foreground custody/);
+    assert.equal(error.nativeInput.gesture, null);
+    return true;
+  });
+  await harness.worker.stop();
+});
+

@@ -250,8 +250,7 @@ while ($true) {
       # previous sample) before it can extend the streak at all; the
       # previous-sample step check is additionally required on top of that,
       # so two samples that each independently qualify but sit at opposite
-      # edges of the tolerance band still cannot both count.
-      $requiredStableCount = 3
+      # edges of the tolerance band still cannot both count.      $requiredStableCount = 3
       $maxSettlementStepPixels = 1
       $settlementTimeoutMs = 250
       $pollIntervalMs = 5
@@ -261,6 +260,10 @@ while ($true) {
       $settlementFailureReason = $null
       $acceptedCursor = $null
       $settlementClock = [Diagnostics.Stopwatch]::StartNew()
+      $lastRepulseMs = 0
+      $repulseIntervalMs = 25
+      $maxRepulses = 5
+      $repulseCount = 0
 
       function Test-StrictInteriorOfTarget([int]$X,[int]$Y,[object]$Rect) {
         if ($null -eq $Rect) { return $true }
@@ -312,6 +315,11 @@ while ($true) {
           }
         } else {
           $stableRun.Clear()
+          if ($repulseCount -lt $maxRepulses -and ($sampleElapsedMs - $lastRepulseMs) -ge $repulseIntervalMs) {
+            [void][LightsOutNativeWorker]::SetCursorPos($screenX,$screenY)
+            $lastRepulseMs = $sampleElapsedMs
+            $repulseCount++
+          }
         }
         if (-not $settled -and $null -eq $settlementFailureReason) { Start-Sleep -Milliseconds $pollIntervalMs }
       }
@@ -331,7 +339,7 @@ while ($true) {
         $dy = if ($null -ne $lastSample) { $lastSample.y - $screenY } else { $null }
         $actualStrictInterior = if ($null -ne $lastSample) { $lastSample.strictInterior } else { $null }
       }
-      Mark 'cursor-settlement-complete' ([ordered]@{settled=$settled;failureReason=$settlementFailureReason;sampleCount=$settlementSamples.Count;stableRunLength=$stableRun.Count;elapsedMs=[Math]::Round($settlementClock.Elapsed.TotalMilliseconds,3);acceptedCursor=$acceptedCursor})
+      Mark 'cursor-settlement-complete' ([ordered]@{settled=$settled;failureReason=$settlementFailureReason;sampleCount=$settlementSamples.Count;stableRunLength=$stableRun.Count;elapsedMs=[Math]::Round($settlementClock.Elapsed.TotalMilliseconds,3);acceptedCursor=$acceptedCursor;repulseCount=$repulseCount})
       $nativeEnvironment = [ordered]@{
         selector = $payload.selector
         cursorBeforeSetCursorPos = if ($cursorBeforeSetCursorPosOk) { [ordered]@{ x=$cursorBeforeSetCursorPos.X; y=$cursorBeforeSetCursorPos.Y } } else { $null }
@@ -340,7 +348,7 @@ while ($true) {
         clipCursorAfterReadback = $clipCursorAfterDiag
         virtualScreenMetrics = $virtualScreenDiag
         intendedPointMonitor = $intendedMonitorDiag
-        preMoveCursorMonitor = $preMoveMonitorDiag
+        preMoveCursorMonitor = $preMoveCursorDiag
         dpiAwareness = $dpiAwarenessDiag
         session = $sessionDiag
         settlementChronology = [ordered]@{
@@ -351,12 +359,13 @@ while ($true) {
           maxSettlementStepPixels = $maxSettlementStepPixels
           settlementTimeoutMs = $settlementTimeoutMs
           pollIntervalMs = $pollIntervalMs
+          repulseCount = $repulseCount
           settled = $settled
           failureReason = $settlementFailureReason
           acceptedCursor = $acceptedCursor
           elapsedMs = [Math]::Round($settlementClock.Elapsed.TotalMilliseconds,3)
         }
-      }
+      }}
       # Custody invariant, now evaluated only once Windows has demonstrably
       # finished positioning the cursor (see COLD-04, P1 -- cursor custody;
       # distinct from the unrelated warm-iteration-count P1): the physical
