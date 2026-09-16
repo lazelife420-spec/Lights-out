@@ -44,10 +44,10 @@ The important behavior is:
 - force shutdown is never the default launcher behavior; it must be chosen explicitly
 - "Run at login" means "start minimized and idle" — login startup never silently
   implies a force shutdown or an active countdown
-- the current tagged/published release is `v11.1.0` — Night Modes Library:
-  four main-resolved ready modes, two honestly unavailable future modes, safe
-  lobby arming without auto-start, canonical receipt attribution, and real
-  Electron runtime proof — shipped on top of v11.0.1 production hardening
+- the current tagged/published release is `v11.1.3` — Post-Audit Remediation:
+  updated `tar` transitive resolution, idempotent tray lifecycle for proof runs,
+  lint/syntax/unit/smoke qualification green, and the v11.1.0 Night Modes
+  behavior preserved
 - Electron build packaging succeeds with `npm run build`
 - Electron smoke coverage guards startup wording/flags, tray menu wiring, timer
   control IPC, mini mode wiring, keyboard shortcuts, and browser-preview safe defaults
@@ -56,8 +56,9 @@ The important behavior is:
   and the wifiGuard input sanitizers
 - Electron is pinned to `^43.0.0` and electron-builder to `^26.0.0` (bumped from
   30/24 to close 7 high-severity npm-audit CVEs against the old Electron line;
-  `npm audit` is clean); `sharp`'s prebuilt N-API binary needs no rebuild across
-  that jump
+  `npm audit` is clean); `sharp` is pinned to `^0.35.4` (bumped from `^0.35.3`
+  post-v11.1.3); the prebuilt N-API binary needs no rebuild across the Electron
+  or sharp jumps
 - `main.js` installs `process.on('uncaughtException'/'unhandledRejection', ...)`
   handlers that log to `userData/startup.log` and keep the app alive rather than
   letting an unrelated bug silently kill the user's active timer

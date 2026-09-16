@@ -7,7 +7,7 @@ Set a time. Press START. Lights Out PC walks you through a calm wind-down, then 
 cinematic Last Light final countdown before your PC shuts off. Emergency cancel
 is always available. No surprise force-quits. No cloud account. No drama.
 
-[![Download v11.1.0](https://img.shields.io/badge/Download-v11.1.0-blue?style=for-the-badge)](https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.1.0)
+[![Download v11.1.3](https://img.shields.io/badge/Download-v11.1.3-blue?style=for-the-badge)](https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.1.3)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?style=for-the-badge)](https://github.com/lazelife420-spec/Lights-out/releases/latest)
 
@@ -15,9 +15,9 @@ is always available. No surprise force-quits. No cloud account. No drama.
 
 ## Download
 
-**[→ Lights Out v11.1.0 — installer, portable EXE, SHA256 checksums](https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.1.0)**
+**[→ Lights Out v11.1.3 — installer, portable EXE, SHA256 checksums](https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.1.3)**
 
-- `Lights.Out.Setup.11.1.0.exe` — NSIS installer, standard Windows install
+- `Lights.Out.Setup.11.1.3.exe` — NSIS installer, standard Windows install
 - `LightsOut.exe` — portable, runs from any folder, no install needed
 - `SHA256SUMS.txt` — checksums for both artifacts
 
@@ -49,13 +49,13 @@ calendar, and Wi-Fi features only reach out when you configure them.
 ### Proof-backed releases
 
 Every release ships an installer, a portable build, and SHA256 checksums from a
-verified build. GitHub Actions normally publishes them; v11.1.0 uses the exact
+verified build. GitHub Actions normally publishes them; v11.1.3 uses the exact
 locally gated artifacts because Actions was disabled at the account level. No
 hand-edited binaries. No mystery downloads.
 
 - Latest release: https://github.com/lazelife420-spec/Lights-out/releases/latest
-- v11.1.0 release: https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.1.0
-- Smoke suite: 239 passing
+- v11.1.3 release: https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.1.3
+- Smoke suite: 261 passing
 
 ## Surface
 

@@ -2,12 +2,21 @@
 
 ## Unreleased
 
+### Changed
+- Bumped `sharp` from `^0.35.3` to `^0.35.4` post-release; the prebuilt N-API
+  binary needs no rebuild across this patch.
+
+## v11.1.3 — Post-Audit Remediation (2026-09-15)
+
 ### Fixed
 - Updated the transitive build-time `tar` resolution from 7.5.19 to 7.5.22,
   resolving `GHSA-r292-9mhp-454m` without broad dependency updates.
 - Automated Electron proof runs no longer create real Windows notification-area
   icons. Tray creation is now idempotent, proof instances explicitly suppress
   the tray, and normal app shutdown destroys its tray icon before exit.
+
+### Verification
+- 629/629 unit tests, 261/261 smoke checks, lint clean, 7 syntax checks.
 
 ## v11.1.2 — Desktop Consolidation (2026-07-22)
 
