@@ -21,6 +21,8 @@
     "test:companion-v2-runtime": "node scripts/companion-v2-electron-proof.js",
     "test:receipt-recovery-runtime": "node scripts/receipt-recovery-electron-proof.js",
     "test:e2e": "npm run build && node scripts/e2e-runner.js",
+    "test:e2e:ci": "npm run build && node scripts/e2e-runner.js --ci",
+    "test:e2e:desktop": "node scripts/desktop-ux-functional-gate.js --desktop-ux-proof",
     "electron:provision": "install-electron --no",
     "electron:verify": "node scripts/verify-electron-provisioning.js",
     "electron:verify-provision": "npm run electron:verify",

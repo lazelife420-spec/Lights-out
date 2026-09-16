@@ -2066,8 +2066,13 @@ main().catch(async err => {
     console.error('Failed to write failure artifacts:', artifactError);
   }
   cleanupUserDataDirs();
-  console.error('Gate fatal:', err);
-  process.exitCode = 1;
+  if (err.message && err.message.includes('current app window does not own foreground custody')) {
+    console.error('\nEnvironment Notice: INTERACTIVE_DESKTOP_REQUIRED - This test requires an unlocked interactive Windows desktop session.');
+    process.exitCode = 2;
+  } else {
+    console.error('Gate fatal:', err);
+    process.exitCode = 1;
+  }
 }).finally(async () => {
   await nativeInputWorker.stop();
 });

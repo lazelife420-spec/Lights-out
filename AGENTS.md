@@ -129,11 +129,14 @@ These are intentional product constraints. Do not casually remove them.
    `cd electron && npm start`
 6. Package when the change is meaningful:
    `cd electron && npm run build`
-
-Note: there is no `test:e2e` lane yet — do not reference one until an Electron
-integration harness actually exists (Proof Foundry standard: no fake claims).
+7. End-to-end (real Electron + packaged artifact):
+   - `npm run test:e2e:ci` — Unattended CI lane (`packaged-truth-smoke` required)
+   - `npm run test:e2e:desktop` — Interactive Windows desktop lane (`desktop-ux-functional-gate` required; requires unlocked desktop, foreground custody, hands-off mouse/keyboard)
+   - `npm run test:e2e` — Full release qualification umbrella runner requiring both CI and Interactive Desktop passes for Full E2E GREEN.
+   - `night-modes-electron-proof` runs as an advisory lane because its Quick Sleep wall-clock completion assertion has a known harness timing limitation.
 
 Current smoke/test expectations include:
+- `npm run test:e2e` as the consolidated real Electron/packaged integration lane
 - startup wording and login flags
 - tray menu/show-hide protections
 - timer control IPC wiring
