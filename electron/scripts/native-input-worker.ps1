@@ -249,8 +249,8 @@ while ($true) {
       # $maxSettlementStepPixels of ($screenX,$screenY) itself (never of the
       # previous sample) before it can extend the streak at all; the
       # previous-sample step check is additionally required on top of that,
-      # so two samples that each independently qualify but sit at opposite
-      # edges of the tolerance band still cannot both count.      $requiredStableCount = 3
+      # so two samples that each independently qualify but sit at opposite      # edges of the tolerance band still cannot both count.
+      $requiredStableCount = 3
       $maxSettlementStepPixels = 1
       $settlementTimeoutMs = 250
       $pollIntervalMs = 5
@@ -365,7 +365,7 @@ while ($true) {
           acceptedCursor = $acceptedCursor
           elapsedMs = [Math]::Round($settlementClock.Elapsed.TotalMilliseconds,3)
         }
-      }}
+      }
       # Custody invariant, now evaluated only once Windows has demonstrably
       # finished positioning the cursor (see COLD-04, P1 -- cursor custody;
       # distinct from the unrelated warm-iteration-count P1): the physical
