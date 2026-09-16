@@ -36,6 +36,8 @@ public static class LightsOutNativeWorker {
   [DllImport("user32.dll")] public static extern IntPtr MonitorFromPoint(POINT pt, uint dwFlags);
   [DllImport("user32.dll")] public static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO info);
   [DllImport("shcore.dll")] public static extern int GetProcessDpiAwareness(IntPtr hprocess, out int value);
+  [DllImport("shcore.dll")] public static extern int SetProcessDpiAwareness(int value);
+  [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr dpiContext);
   [DllImport("shcore.dll")] public static extern int GetDpiForMonitor(IntPtr hmonitor, int dpiType, out uint dpiX, out uint dpiY);
   [DllImport("kernel32.dll")] public static extern IntPtr GetCurrentProcess();
   public static IntPtr FindVisibleWindowForProcessIds(int[] processIds) {
@@ -60,6 +62,12 @@ public static class LightsOutNativeWorker {
   }
 }
 '@
+
+try {
+  [void][LightsOutNativeWorker]::SetProcessDpiAwarenessContext([IntPtr](-4))
+} catch {
+  try { [void][LightsOutNativeWorker]::SetProcessDpiAwareness(2) } catch {}
+}
 
 function Send-Message([object]$Message) {
   [Console]::Out.WriteLine(($Message | ConvertTo-Json -Depth 12 -Compress))
