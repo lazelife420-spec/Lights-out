@@ -283,7 +283,7 @@
     </div>
 
     <div class="safety-row" id="safety-row">
-      <span class="safety-badge dry" id="safety-badge">DRY RUN</span>
+      <span class="safety-badge dry" id="safety-badge">TEST MODE</span>
       <span class="profile-name" id="profile-name"></span>
     </div>
     <div class="status-pill connecting" id="status-pill">
@@ -663,7 +663,7 @@
       // has authoritatively decided (latestState.dryRunPolicy from settingsStore).
       const dryRun = Boolean(latestState && latestState.dryRunPolicy);
       nmDetailRunType.textContent = dryRun
-        ? 'DRY RUN — no PC power action will execute'
+        ? 'TEST MODE — no PC power action will execute'
         : 'This run will be: REAL ACTION';
       nmDetailRunType.className = `night-mode-run-type ${dryRun ? 'dry' : 'real'}`;
     }
@@ -674,7 +674,7 @@
       const dryRun = Boolean(latestState && latestState.dryRunPolicy);
       banner.textContent = '';
       const strong = document.createElement('strong');
-      strong.textContent = dryRun ? 'DRY RUN' : 'REAL ACTION';
+      strong.textContent = dryRun ? 'TEST MODE' : 'REAL ACTION';
       banner.appendChild(strong);
       banner.appendChild(document.createTextNode(dryRun
         ? ' — no PC power action will execute.'
@@ -1015,12 +1015,12 @@
       const destination = pcName || 'this PC';
       const dryRun = Boolean(latestState && latestState.dryRunPolicy);
       const confirmMsg = dryRun
-        ? `DRY RUN: Start a ${selectedAction} timer on ${destination} for ${Math.round(s / 60)} minutes? No PC power action will execute.`
+        ? `TEST MODE: Start a ${selectedAction} timer on ${destination} for ${Math.round(s / 60)} minutes? No PC power action will execute.`
         : `REAL ACTION: Start a ${selectedAction} timer on ${destination} for ${Math.round(s / 60)} minutes?`;
       if (!confirm(confirmMsg)) return;
       if (!beginPending({
         kind: 'start',
-        success: dryRun ? 'Timer started — DRY RUN' : 'Timer started — REAL ACTION',
+        success: dryRun ? 'Timer started — TEST MODE' : 'Timer started — REAL ACTION',
         matches: state => Boolean(state.running || state.paused)
       })) return;
       if (!send({ action: 'start', durationSeconds: s, timerAction: selectedAction })) clearPending({ timeout: true });
@@ -1061,7 +1061,7 @@
           ? `lights out ≈ ${clockAt(data.remainingSeconds)}` : '';
 
         safetyRow.style.display = active ? 'flex' : 'none';
-        safetyBadge.textContent = data.dryRun === true ? 'DRY RUN' : 'REAL ACTION';
+        safetyBadge.textContent = data.dryRun === true ? 'TEST MODE' : 'REAL ACTION';
         safetyBadge.className = `safety-badge ${data.dryRun === true ? 'dry' : 'real'}`;
         profileNameEl.textContent = data.profileName ? `Profile: ${data.profileName}` : '';
 

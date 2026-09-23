@@ -71,7 +71,7 @@
           finalLine: custom.steps[custom.steps.length - 1]?.line || 'Night secured.',
           sequenceLabel: custom.name.toUpperCase(),
           cinematicTitle: custom.name.toUpperCase(),
-          stampLine: dryRun ? 'DRY RUN' : 'UNPLUGGED'
+          stampLine: dryRun ? 'TEST MODE' : 'UNPLUGGED'
         };
       }
     }
@@ -92,7 +92,7 @@
       finalLine,
       sequenceLabel,
       cinematicTitle: 'LAST LIGHT',
-      stampLine: dryRun ? 'DRY RUN' : 'UNPLUGGED'
+      stampLine: dryRun ? 'TEST MODE' : 'UNPLUGGED'
     };
   }
 

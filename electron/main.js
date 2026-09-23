@@ -904,7 +904,7 @@ async function completeTimer() {
   
   emitTimerUpdate('complete', { message: 'Timer complete' });
   showNativeNotification('Lights Out', timerState.dryRun
-    ? `Dry run complete: ${formatAction(timerState.action)} skipped.`
+    ? `Test Mode complete: ${formatAction(timerState.action)} skipped.`
     : `Timer complete: ${formatAction(timerState.action)} now.`);
 
   // Record a streak event for the completed ritual.
@@ -1683,13 +1683,13 @@ async function executePowerAction(options = {}) {
   const muteSystem = Boolean(options.muteSystem);
 
   if (dryRun) {
-    emitTimerUpdate('dryrun', { action, message: `Dry run: ${formatAction(action)} skipped` });
+    emitTimerUpdate('dryrun', { action, message: `Test Mode: ${formatAction(action)} skipped` });
     // Update receipt: dry run completed.
     if (activeReceiptId) {
       runReceipts.updateRunReceipt(activeReceiptId, {
         result: 'dry_run_completed',
         endedAt: new Date().toISOString(),
-        notes: 'Dry run - no power action executed'
+        notes: 'Test Mode - no power action executed'
       });
       activeReceiptId = null;
     }

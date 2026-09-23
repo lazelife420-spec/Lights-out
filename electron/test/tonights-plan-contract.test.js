@@ -187,7 +187,7 @@ test('Tonight\'s Plan summary reflects a manual timer\'s duration and action', (
 
   renderTonightHero();
 
-  assert.equal(elements['ns-hero-title'].textContent, 'Custom Timer · 45 min · Sleep');
+  assert.equal(elements['ns-hero-title'].textContent, 'Custom Timer · 45 min');
   assert.equal(elements['ns-preview-time'].textContent, '45:00');
   assert.equal(elements['ns-play-label'].textContent, 'Start Custom Timer');
   assert.equal(elements['ns-hero-source'].style.display, 'none');
@@ -201,7 +201,7 @@ test('loading a profile shows its name as the plan source ("From: <name>")', () 
 
   renderTonightHero();
 
-  assert.equal(elements['ns-hero-title'].textContent, 'Hard Stop · 15 min · Shutdown');
+  assert.equal(elements['ns-hero-title'].textContent, 'Hard Stop · 15 min');
   assert.equal(elements['ns-hero-source'].style.display, '');
   assert.equal(elements['ns-hero-source-name'].textContent, 'Hard Stop');
 });
@@ -229,7 +229,7 @@ test('manually editing action after a profile load clears the profile identity a
   assert.equal(calls.renderProfiles, 1);
 
   renderTonightHero();
-  assert.equal(elements['ns-hero-title'].textContent, 'Custom Timer · 15 min · Sleep');
+  assert.equal(elements['ns-hero-title'].textContent, 'Custom Timer · 15 min');
   assert.equal(elements['ns-hero-source'].style.display, 'none');
 });
 
@@ -282,7 +282,7 @@ test('Night Modes continue showing their own correct plan, unaffected by profile
 
   renderTonightHero();
 
-  assert.equal(elements['ns-hero-title'].textContent, 'Movie Wind-Down · 90 min · Sleep');
+  assert.equal(elements['ns-hero-title'].textContent, 'Movie Wind-Down · 90 min');
   assert.equal(elements['ns-preview-time'].textContent, '1:30:00');
   assert.equal(elements['ns-play-label'].textContent, 'Start Movie Wind-Down');
   // Night Modes are credited by the existing armed-mode banner, not the
@@ -374,7 +374,7 @@ test('manual Lock plan summary renders in Tonight\'s Plan exactly like any other
 
   renderTonightHero();
 
-  assert.equal(elements['ns-hero-title'].textContent, 'Custom Timer · 20 min · Lock');
+  assert.equal(elements['ns-hero-title'].textContent, 'Custom Timer · 20 min');
   assert.equal(elements['ns-play-label'].textContent, 'Start Custom Timer');
 });
 
@@ -390,7 +390,7 @@ test('a Lock profile shows its source, and manually editing away from it clears 
   renderTonightHero();
   assert.equal(elements['ns-hero-source'].style.display, '');
   assert.equal(elements['ns-hero-source-name'].textContent, 'Quick Lock');
-  assert.equal(elements['ns-hero-title'].textContent, 'Quick Lock · 5 min · Lock');
+  assert.equal(elements['ns-hero-title'].textContent, 'Quick Lock · 5 min');
 
   setAction('shutdown');
 
@@ -398,7 +398,7 @@ test('a Lock profile shows its source, and manually editing away from it clears 
   assert.deepEqual(calls.persistSelectedProfile, [null]);
 
   renderTonightHero();
-  assert.equal(elements['ns-hero-title'].textContent, 'Custom Timer · 5 min · Shutdown');
+  assert.equal(elements['ns-hero-title'].textContent, 'Custom Timer · 5 min');
   assert.equal(elements['ns-hero-source'].style.display, 'none');
 });
 
@@ -408,7 +408,7 @@ test('Start executes the same canonical action Tonight\'s Plan displays when Loc
   els.timerInput.value = '10';
 
   renderTonightHero();
-  assert.equal(elements['ns-hero-title'].textContent, 'Custom Timer · 10 min · Lock');
+  assert.equal(elements['ns-hero-title'].textContent, 'Custom Timer · 10 min');
 
   // startTimer (Start's shared entry point, generic across every action)
   // sends `action: state.action` verbatim -- with state.action === 'lock'

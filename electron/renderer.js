@@ -1835,7 +1835,7 @@ function render() {
 
   // Briefly label how the last session ended, overriding the idle/clock label.
   if (isIdle && state.lastOutcome && els.timerLabel) {
-    const outcomeLabels = { completed: 'session complete', dryrun: 'dry run complete', cancelled: 'session cancelled' };
+    const outcomeLabels = { completed: 'session complete', dryrun: 'test mode complete', cancelled: 'session cancelled' };
     if (outcomeLabels[state.lastOutcome]) els.timerLabel.textContent = outcomeLabels[state.lastOutcome];
   }
 
@@ -1890,27 +1890,27 @@ function render() {
     if (!state.running && !state.paused) {
       const outcomePill = state.lastOutcome && {
         completed: { cls: 'complete', text: 'Completed' },
-        dryrun: { cls: 'complete', text: 'Dry Run Complete' },
+        dryrun: { cls: 'complete', text: 'Test Mode Complete' },
         cancelled: { cls: 'cancelled', text: 'Cancelled' }
       }[state.lastOutcome];
       if (outcomePill) {
         pill.classList.add(outcomePill.cls);
         els.statusText.textContent = outcomePill.text;
       } else {
-        els.statusText.textContent = state.dryRun ? 'Dry Run' : 'Idle';
+        els.statusText.textContent = state.dryRun ? 'Test Mode' : 'Idle';
         if (state.dryRun) pill.classList.add('dryrun');
       }
     } else if (state.paused) {
       pill.classList.add('paused');
       if (state.dryRun) pill.classList.add('dryrun');
-      els.statusText.textContent = state.dryRun ? 'Dry Run · Paused' : 'Paused';
+      els.statusText.textContent = state.dryRun ? 'Test Mode · Paused' : 'Paused';
     } else {
       const phaseClass = state.phase === 'dim' ? 'dim' : state.phase === 'lastlight' ? 'lastlight' : 'running';
       pill.classList.add(phaseClass);
       if (state.dryRun) pill.classList.add('dryrun');
       const labels = { focus: 'Focus', dim: 'Winding Down', lastlight: 'Last Light', idle: 'Running' };
       const phaseLabel = labels[state.phase] || 'Running';
-      els.statusText.textContent = state.dryRun ? `Dry Run · ${phaseLabel}` : phaseLabel;
+      els.statusText.textContent = state.dryRun ? `Test Mode · ${phaseLabel}` : phaseLabel;
     }
   }
 
@@ -2126,9 +2126,8 @@ function renderTonightHero() {
   const durationSeconds = armed ? armed.durationSeconds : inputSeconds();
   const durationMin = Math.max(1, Math.round(durationSeconds / 60));
   const effectiveAction = armed ? armed.action : state.action;
-  const planActionLabel = actionLabel(effectiveAction);
 
-  if (titleEl) titleEl.textContent = `${planTitle} · ${durationMin} min · ${planActionLabel}`;
+  if (titleEl) titleEl.textContent = `${planTitle} · ${durationMin} min`;
   if (previewEl) previewEl.textContent = formatTime(durationSeconds);
   if (playLabelEl) playLabelEl.textContent = `Start ${planTitle}`;
   if (sourceEl) {
@@ -2454,7 +2453,7 @@ function applyTimerPayload(data) {
     if (data.streaks && data.streaks.streak >= 1) {
       showStreakCelebration(data.streaks.streak);
     }
-    api.showNotification('Lights Out', state.dryRun ? 'Dry run complete.' : `${actionLabel()} started.`);
+    api.showNotification('Lights Out', state.dryRun ? 'Test mode complete.' : `${actionLabel()} started.`);
     notify(data.message || 'Timer complete', 'success', 5000);
     setSessionOutcome(state.dryRun ? 'dryrun' : 'completed');
     if (typeof stopGuidedBreathing === 'function') stopGuidedBreathing();
@@ -2498,7 +2497,7 @@ function applyTimerPayload(data) {
   } else if (data.type === 'tick' && state.remainingSeconds <= 10 && state.remainingSeconds > 0) {
     SoundSystem.playTone(800, 0.04, 'sine', 0.08);
   } else if (data.type === 'dryrun') {
-    notify(data.message || 'Dry run skipped the power action', 'info');
+    notify(data.message || 'Test Mode skipped the power action', 'info');
   } else if (data.type === 'error') {
     notify(data.message || 'Timer error', 'error');
   }
@@ -3278,7 +3277,7 @@ if (els.btnProofCopy) {
         `Lights Out - Morning Proof`,
         `Result: ${humanizeReceiptResult(receipt.result)}`,
         getReceiptProfileLabel(receipt),
-        `Action: ${receipt.action}${receipt.forceShutdown ? ' (Force)' : ''}${receipt.dryRun ? ' (Dry Run)' : ''}`,
+        `Action: ${receipt.action}${receipt.forceShutdown ? ' (Force)' : ''}${receipt.dryRun ? ' (Test Mode)' : ''}`,
         `Duration: ${Math.floor(receipt.durationSeconds / 60)}m`,
         `Started: ${receipt.startedAt ? new Date(receipt.startedAt).toLocaleString() : 'N/A'}`,
         `Ended: ${receipt.endedAt ? new Date(receipt.endedAt).toLocaleString() : 'N/A'}`,
@@ -3339,7 +3338,7 @@ if (els.btnExportReceipts) {
         ledger += `${start}\n`;
         ledger += `  Result: ${humanizeReceiptResult(r.result)}\n`;
         if (getReceiptProfileLabel(r)) ledger += `  ${getReceiptProfileLabel(r)}\n`;
-        ledger += `  Action: ${r.action || 'N/A'}${r.forceShutdown ? ' (Force)' : ''}${r.dryRun ? ' (Dry Run)' : ''}\n`;
+        ledger += `  Action: ${r.action || 'N/A'}${r.forceShutdown ? ' (Force)' : ''}${r.dryRun ? ' (Test Mode)' : ''}\n`;
         ledger += `  Duration: ${durMin}m | Ended: ${end}\n`;
         ledger += `  Pauses: ${r.pauseCount || 0}, Snoozes: ${r.snoozeCount || 0}, Warnings: ${r.warningsShown || 0}\n`;
         if (r.notes) ledger += `  Notes: ${r.notes}\n`;

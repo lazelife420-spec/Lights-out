@@ -635,8 +635,8 @@ check('renderer: running-state controls still swap stop-pause visibility and lab
   assertMatch(rendererSrc, /els\.btnStop\.style\.display = state\.running \|\| state\.paused \? 'flex' : 'none';/, 'renderer stop visibility changed');
   assertMatch(rendererSrc, /els\.btnPause\.style\.display = state\.running \|\| state\.paused \? 'flex' : 'none';/, 'renderer pause visibility changed');
   assertMatch(rendererSrc, /els\.btnPause\.querySelector\('span:last-child'\)\.textContent = state\.paused \? 'Resume' : 'Pause';/, 'renderer pause/resume label changed');
-  assertMatch(rendererSrc, /state\.dryRun \? `Dry Run · \$\{phaseLabel\}` : phaseLabel/, 'active Dry Run status must remain prominent');
-  assertMatch(rendererSrc, /state\.dryRun \? 'Dry Run · Paused' : 'Paused'/, 'paused Dry Run status must remain prominent');
+  assertMatch(rendererSrc, /state\.dryRun \? `Test Mode · \$\{phaseLabel\}` : phaseLabel/, 'active Test Mode status must remain prominent');
+  assertMatch(rendererSrc, /state\.dryRun \? 'Test Mode · Paused' : 'Paused'/, 'paused Test Mode status must remain prominent');
 });
 
 check('renderer: keyboard shortcuts - Space (Start/Pause)', () => {
@@ -1252,7 +1252,7 @@ check('receipts: humanizeReceiptResult turns raw result codes into readable proo
   const humanizeReceiptResult = new Function(`${fnMatch[0]}; return humanizeReceiptResult;`)();
 
   assert(humanizeReceiptResult('power_executed') === 'Completed', 'power_executed should read "Completed"');
-  assert(humanizeReceiptResult('dry_run_completed') === 'Dry Run Completed', 'dry_run_completed should read "Dry Run Completed"');
+  assert(humanizeReceiptResult('dry_run_completed') === 'Test Mode Completed', 'dry_run_completed should read "Test Mode Completed"');
   assert(humanizeReceiptResult('cancelled') === 'Cancelled', 'cancelled should read "Cancelled"');
   assert(humanizeReceiptResult(null) === 'Unknown', 'null/undefined result should read "Unknown", not crash');
   // Unmapped codes still get title-cased with underscores turned to spaces,

@@ -24,7 +24,7 @@ function humanizeReceiptResult(result) {
   const labels = {
     power_executed: 'Completed',
     completed: 'Completed',
-    dry_run_completed: 'Dry Run Completed',
+    dry_run_completed: 'Test Mode Completed',
     cancelled: 'Cancelled',
     running: 'Running',
     interrupted: 'Interrupted',
@@ -64,7 +64,7 @@ async function renderMorningProof(receipt) {
     running:           { text: 'RUNNING',    color: '#5b8cff', icon: '\u{1F504}', title: 'IN PROGRESS' },
     completing:        { text: 'COMPLETING', color: '#d4a50a', icon: '⏳',    title: 'COMPLETING…' },
     power_executed:    { text: 'COMPLETED',  color: '#4caf50', icon: '☀️', title: 'MISSION COMPLETE' },
-    dry_run_completed: { text: 'DRY RUN',    color: '#76c9ff', icon: '\u{1F4CB}', title: 'DRY RUN COMPLETE' },
+    dry_run_completed: { text: 'TEST MODE',    color: '#76c9ff', icon: '\u{1F4CB}', title: 'TEST MODE COMPLETE' },
     cancelled:         { text: 'CANCELLED',  color: '#ff9800', icon: '❌',    title: 'SESSION CANCELLED' },
     blocked:           { text: 'BLOCKED',    color: '#ff4d4d', icon: '\u{1F6AB}', title: 'BLOCKED' },
     error:             { text: 'ERROR',      color: '#ff4d4d', icon: '⚠️', title: 'ERROR' }
@@ -131,7 +131,7 @@ function renderReceiptsModal(receipts, stats) {
         <div class="receipt-stat"><span class="rs-val">${stats.total}</span><span class="rs-lbl">Total</span></div>
         <div class="receipt-stat"><span class="rs-val" style="color:#4caf50">${stats.completed}</span><span class="rs-lbl">Completed</span></div>
         <div class="receipt-stat"><span class="rs-val" style="color:#ff9800">${stats.cancelled}</span><span class="rs-lbl">Cancelled</span></div>
-        <div class="receipt-stat"><span class="rs-val" style="color:#76c9ff">${stats.dryRun}</span><span class="rs-lbl">Dry Runs</span></div>
+        <div class="receipt-stat"><span class="rs-val" style="color:#76c9ff">${stats.dryRun}</span><span class="rs-lbl">Test Mode Runs</span></div>
         <div class="receipt-stat"><span class="rs-val" style="color:#ff4d4d">${stats.blocked}</span><span class="rs-lbl">Blocked</span></div>
       </div>
     `;
@@ -166,7 +166,7 @@ function renderReceiptsModal(receipts, stats) {
       getReceiptProfileLabel(r) ? escapeHtml(getReceiptProfileLabel(r)) : null,
       `${escapeHtml((r.action || '').charAt(0).toUpperCase() + (r.action || '').slice(1))}`,
       `${dur}m`,
-      r.dryRun ? 'Dry Run' : null,
+      r.dryRun ? 'Test Mode' : null,
       r.forceShutdown ? 'Forced' : null,
       r.pauseCount ? `${r.pauseCount} pause${r.pauseCount === 1 ? '' : 's'}` : null,
       r.snoozeCount ? `${r.snoozeCount} snooze${r.snoozeCount === 1 ? '' : 's'}` : null

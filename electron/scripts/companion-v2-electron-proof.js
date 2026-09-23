@@ -250,7 +250,7 @@ async function runElectronProof() {
     assert(layout.boxes.every(box => box.left >= 0 && box.right <= layout.innerWidth && box.height >= 48), `${width}px clips or shrinks a primary control`);
     const stopBox = layout.boxes.find(box => box.text === 'Stop Tonight’s Run');
     assert(stopBox && stopBox.top >= 0 && stopBox.bottom <= height, `${width}px Stop Tonight’s Run is outside the initial frame`);
-    assert(layout.badge === 'DRY RUN', `${width}px safety badge missing`);
+    assert(layout.badge === 'TEST MODE', `${width}px safety badge missing`);
     assert(layout.pc.includes('Target PC:'), `${width}px target PC missing`);
     assert(layout.stop === 'Stop Tonight’s Run', `${width}px stop control missing`);
     await capture(name);
@@ -335,7 +335,7 @@ async function runElectronProof() {
   });
   await check('active UI renders desktop-projected Dry Run', async () => {
     const value = await phoneEval("({ dryRun: latestState.dryRun, badge: safetyBadge.textContent })");
-    assert(value.dryRun === true && value.badge === 'DRY RUN', JSON.stringify(value));
+    assert(value.dryRun === true && value.badge === 'TEST MODE', JSON.stringify(value));
   });
   await check('missing Night Mode renders Custom Timer', async () => {
     const title = await phoneEval("handleUpdate({ ...latestState, type: 'state', nightModeId: null, nightModeTitle: null, nightModeVersion: null }); timerName.textContent");
@@ -352,7 +352,7 @@ async function runElectronProof() {
     nightModeId: 'quick-sleep', nightModeTitle: 'Quick Sleep', nightModeVersion: 1,
     profileId: profile.id, profileName: profile.name
   });
-  await waitFor(() => phoneEval("timerName.textContent === 'Quick Sleep' && safetyBadge.textContent === 'DRY RUN'"), 'authoritative identity did not restore');
+  await waitFor(() => phoneEval("timerName.textContent === 'Quick Sleep' && safetyBadge.textContent === 'TEST MODE'"), 'authoritative identity did not restore');
 
   const tickOne = await desktopEval('state.remainingSeconds');
   await wait(1150);
@@ -718,11 +718,11 @@ async function runElectronProof() {
       document.querySelector('[data-min="15"]').click();
       return captured;
     })()`);
-    assert(message.includes('DRY RUN') && message.includes('No PC power action will execute'), message);
+    assert(message.includes('TEST MODE') && message.includes('No PC power action will execute'), message);
   });
   await check('phone idle banner reflects desktop-authoritative Dry Run (ON)', async () => {
     const text = await phoneEval("document.querySelector('.idle-safety').textContent");
-    assert(text.includes('DRY RUN') && text.includes('no PC power action will execute'), text);
+    assert(text.includes('TEST MODE') && text.includes('no PC power action will execute'), text);
   });
   await check('phone cannot overwrite desktop identity fields', () => {
     const forged = commandLog.some(message => 'nightModeId' in message || 'profileId' in message || 'dryRun' in message || 'forceShutdown' in message);
@@ -761,7 +761,7 @@ async function runElectronProof() {
   await waitFor(() => phoneEval("document.getElementById('night-mode-backdrop').classList.contains('show')"), 'Night Mode detail did not open');
   await check('C2: detail shows canonical duration, action, and ritual from desktop', async () => {
     const value = await phoneEval("({ title: nmDetailTitle.textContent, duration: nmDetailMeta.textContent, action: nmDetailMeta.textContent, ritual: nmDetailMeta.textContent, runType: nmDetailRunType.textContent })");
-    assert(value.title === 'Quick Sleep' && value.duration.includes('15 min') && value.action.includes('Sleep') && value.ritual.includes('Direct start') && value.runType.includes('DRY RUN'), JSON.stringify(value));
+    assert(value.title === 'Quick Sleep' && value.duration.includes('15 min') && value.action.includes('Sleep') && value.ritual.includes('Direct start') && value.runType.includes('TEST MODE'), JSON.stringify(value));
   });
   await phone.setContentSize(390, 844);
   await phoneEval('window.scrollTo(0,0)');
@@ -782,7 +782,7 @@ async function runElectronProof() {
   });
   await waitFor(async () => {
     const value = await phoneEval("({ title: timerName.textContent, id: latestState.nightModeId, badge: safetyBadge.textContent, active: activeControls.style.display !== 'none' })");
-    return value.title === 'Quick Sleep' && value.id === 'quick-sleep' && value.badge === 'DRY RUN' && value.active;
+    return value.title === 'Quick Sleep' && value.id === 'quick-sleep' && value.badge === 'TEST MODE' && value.active;
   }, 'phone active UI did not reflect canonical Night Mode identity');
   await check('C2: successful Night Mode start is acknowledged, not falsely reported as "PC did not confirm"', async () => {
     // Regression guard: nmDetailStart's matches() closure previously read the

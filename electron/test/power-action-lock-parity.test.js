@@ -124,7 +124,7 @@ test('Dry Run blocks the real lock operation', async () => {
   assert.equal(spawnCalls.length, 0, 'Dry Run must never invoke the mocked spawn for Lock');
   assert.deepEqual(
     emitCalls.map(c => ({ type: c.type, data: plain(c.data) })),
-    [{ type: 'dryrun', data: { action: 'lock', message: 'Dry run: Lock skipped' } }]
+    [{ type: 'dryrun', data: { action: 'lock', message: 'Test Mode: Lock skipped' } }]
   );
   assert.equal(receiptUpdates.length, 1);
   assert.equal(receiptUpdates[0].patch.result, 'dry_run_completed');

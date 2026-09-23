@@ -1614,7 +1614,7 @@ async function runActiveRunGate() {
         cancelVisible: getComputedStyle(document.getElementById('btn-stop')).display !== 'none'
       })`);
       requireGate(focused.modeTitle === 'Movie Wind-Down', `active mode title is not dominant at ${label}`, focused);
-      requireGate(focused.dryRunText.includes('Dry Run'), `Dry Run is not prominent at ${label}`, focused);
+      requireGate(focused.dryRunText.includes('Test Mode'), `Test Mode is not prominent at ${label}`, focused);
       requireGate(focused.profilesHidden && focused.streakHidden && focused.proofHidden, `idle-only content remains visible at ${label}`, focused);
       requireGate(focused.pauseVisible && focused.snoozeVisible && focused.cancelVisible, `active controls are incomplete at ${label}`, focused);
       results.push({ label, metrics: m, focused });
