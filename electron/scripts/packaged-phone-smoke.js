@@ -240,7 +240,7 @@ async function main() {
 
     const started = await desktop.evaluate(`electronAPI.startTimer({ durationSeconds: 600, action: 'shutdown', dryRun: true, force: false, source: 'manual' })`);
     assert.equal(started.success, true);
-    await waitFor(() => phone.evaluate(`document.getElementById('safety-badge').textContent === 'DRY RUN'`));
+    await waitFor(() => phone.evaluate(`document.getElementById('safety-badge').textContent === 'TEST MODE'`));
     const updateOne = await waitFor(() => phone.evaluate(`latestState?.running && !latestState?.paused ? latestState.remainingSeconds : 0`));
     await new Promise(resolve => setTimeout(resolve, 1300));
     const updateTwo = await waitFor(() => phone.evaluate(`latestState?.remainingSeconds < ${updateOne} ? latestState.remainingSeconds : 0`));
