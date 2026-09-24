@@ -99,6 +99,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getSmartLightConfig: () => ipcRenderer.invoke('get-smartlight-config'),
   saveSmartLightConfig: (settings) => ipcRenderer.invoke('save-smartlight-config', settings),
   testSmartLightConnection: () => ipcRenderer.invoke('test-smartlight-connection'),
+  testSmartLightAction: () => ipcRenderer.invoke('test-smartlight-action'),
   discoverHueBridge: () => ipcRenderer.invoke('discover-hue-bridge'),
   registerHueBridge: (bridgeIp) => ipcRenderer.invoke('register-hue-bridge', bridgeIp),
   getHueLights: (bridgeIp, username) => ipcRenderer.invoke('get-hue-lights', bridgeIp, username),

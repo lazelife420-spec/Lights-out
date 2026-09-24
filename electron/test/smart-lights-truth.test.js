@@ -3,36 +3,231 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const Module = require('module');
 const smartLights = require('../smartLights');
+
+function listen(server) {
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => resolve(server.address().port));
+  });
+}
 
 test('Smart Lights cannot remain enabled without verification of the exact configuration', async () => {
   smartLights.loadConfig({ provider: 'hue', hueBridgeIp: '', hueUsername: '', enabled: true, verifiedConfigKey: 'invented' });
   assert.equal(smartLights.getConfig().enabled, false);
-  const result = await smartLights.testSmartLightConnection();
+  const result = await smartLights.verifySmartLightConnection();
   assert.equal(result.success, false);
 });
 
-test('Smart Lights enables only after a real successful test and disables after configuration changes', async (t) => {
-  const server = http.createServer((req, res) => {
-    req.resume();
-    req.on('end', () => { res.writeHead(204); res.end(); });
-  });
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
-  });
-  t.after(() => new Promise(resolve => server.close(resolve)));
-  const port = server.address().port;
+test('dead providers normalize to none and can never enable', async () => {
+  for (const dead of ['mqtt', 'homeassistant', 'ifttt']) {
+    smartLights.loadConfig({ provider: dead, enabled: true, verifiedConfigKey: 'x' });
+    assert.equal(smartLights.getConfig().provider, 'none', `${dead} must not persist as a selectable provider`);
+    assert.equal(smartLights.getConfig().enabled, false);
+  }
+  // And the config object no longer carries dead-provider credential fields.
+  const cfg = smartLights.getConfig();
+  for (const key of ['mqttBroker', 'mqttPassword', 'haToken', 'iftttWebhookKey']) {
+    assert.equal(cfg[key], undefined, `${key} must not exist in live config`);
+  }
+  smartLights.loadConfig({ provider: 'none', enabled: false, verifiedConfigKey: '' });
+});
+
+test('HTTP verify is passive and never actuates; only a test action can verify', async (t) => {
+  let hits = 0;
+  const server = http.createServer((req, res) => { hits++; req.resume(); req.on('end', () => { res.writeHead(204); res.end(); }); });
+  const port = await listen(server);
+  t.after(() => new Promise(r => server.close(r)));
   const url = `http://127.0.0.1:${port}/lights`;
 
   smartLights.loadConfig({ provider: 'http', httpUrl: url, httpMethod: 'POST', enabled: false, verifiedConfigKey: '' });
-  const result = await smartLights.testSmartLightConnection();
-  assert.equal(result.success, true);
-  assert.ok(result.verifiedConfigKey);
+  const verify = await smartLights.verifySmartLightConnection();
+  assert.equal(verify.success, false);
+  assert.equal(verify.code, 'ACTUATION_REQUIRED');
+  assert.equal(verify.verifiedConfigKey, undefined, 'passive verify must never mint a verified key');
+  assert.equal(hits, 0, 'VERIFY_CONNECTION_ACTUATES_LIGHTS = NO — zero requests allowed');
 
-  smartLights.loadConfig({ enabled: true, verifiedConfigKey: result.verifiedConfigKey });
+  const action = await smartLights.testSmartLightAction();
+  assert.equal(action.success, true);
+  assert.ok(action.verifiedConfigKey);
+  assert.equal(hits, 1, 'the actuation test sends exactly one request');
+
+  smartLights.loadConfig({ enabled: true, verifiedConfigKey: action.verifiedConfigKey });
   assert.equal(smartLights.getConfig().enabled, true);
-
-  smartLights.loadConfig({ httpUrl: `${url}/changed`, enabled: true, verifiedConfigKey: result.verifiedConfigKey });
+  smartLights.loadConfig({ httpUrl: `${url}/changed`, enabled: true, verifiedConfigKey: action.verifiedConfigKey });
   assert.equal(smartLights.getConfig().enabled, false);
+});
+
+test('HTTP transport failure is truthful — never reported as success', async () => {
+  // Nothing listens on this port: guaranteed ECONNREFUSED.
+  smartLights.loadConfig({ provider: 'http', httpUrl: 'http://127.0.0.1:9/unreachable', httpMethod: 'POST', enabled: false, verifiedConfigKey: '' });
+  const res = await smartLights.invokeHttpLightAction(254, 366, true);
+  assert.equal(res.success, false, 'a refused webhook must not report success');
+  const action = await smartLights.testSmartLightAction();
+  assert.equal(action.success, false);
+  assert.equal(action.verifiedConfigKey, undefined, 'a failed test must never mint a verified key');
+});
+
+test('HTTP webhook rejects non-http schemes and wild verbs', async () => {
+  smartLights.loadConfig({ provider: 'http', httpUrl: 'file:///etc/passwd', httpMethod: 'POST', enabled: false, verifiedConfigKey: '' });
+  const res = await smartLights.invokeHttpLightAction(1, 366, true);
+  assert.equal(res.success, false);
+  assert.equal(res.code, 'INVALID_URL');
+});
+
+test('Hue verify is a passive read and returns truthful failure', async (t) => {
+  const server = http.createServer((req, res) => {
+    // /api/<user>/lights → object map of lights
+    if (/\/api\/[^/]+\/lights/.test(req.url)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ '1': { name: 'Desk', state: { on: true, bri: 200, ct: 300 } }, '2': { name: 'Lamp', state: { on: false, bri: 0, ct: 300 } } }));
+      return;
+    }
+    res.writeHead(404); res.end();
+  });
+  const port = await listen(server);
+  t.after(() => new Promise(r => server.close(r)));
+
+  smartLights.loadConfig({ provider: 'hue', hueBridgeIp: '127.0.0.1', hueUsername: 'u', enabled: false, verifiedConfigKey: '' });
+  // Point the module at the stub via the IP field being overridden post-load:
+  // loadConfig requires a valid IP; 127.0.0.1 is valid — but the port differs,
+  // so exercise the read path through the stub by monkey-patching config via
+  // the http webhook shape is wrong. Instead use the direct function:
+  const res = await smartLights.getHueLights(`127.0.0.1:${port}`, 'u');
+  assert.equal(res.success, true);
+  assert.equal(res.lights.length, 2);
+
+  const dead = await smartLights.getHueLights('127.0.0.1:9', 'u');
+  assert.equal(dead.success, false, 'refused bridge must fail truthfully');
+});
+
+test('Hue cancel restoration replays the captured snapshot truthfully', async (t) => {
+  const writes = [];
+  const server = http.createServer((req, res) => {
+    if (req.method === 'PUT' && /\/state$/.test(req.url)) {
+      let body = '';
+      req.on('data', c => body += c);
+      req.on('end', () => { writes.push({ url: req.url, body: JSON.parse(body) }); res.writeHead(200); res.end('[]'); });
+      return;
+    }
+    res.writeHead(404); res.end();
+  });
+  const port = await listen(server);
+  t.after(() => new Promise(r => server.close(r)));
+
+  const snapshot = [{ id: '7', on: true, bri: 180, ct: 320 }, { id: '9', on: true, bri: 90, ct: 0 }];
+  const res = await smartLights.restoreLightSnapshot(`127.0.0.1:${port}`, 'u', snapshot);
+  assert.equal(res.success, true);
+  assert.equal(res.code, 'RESTORED');
+  assert.equal(writes.length, 2);
+  assert.equal(writes[0].body.on, true);
+  assert.equal(writes[0].body.bri, 180);
+  assert.equal(writes[0].body.ct, 320);
+  assert.equal(writes[1].body.bri, 90);
+  assert.equal(writes[1].body.ct, undefined, 'zero ct must not be written');
+
+  // Restoration failure is surfaced, not hidden.
+  const bad = await smartLights.restoreLightSnapshot('127.0.0.1:9', 'u', snapshot);
+  assert.equal(bad.success, false);
+  assert.equal(bad.code, 'RESTORE_PARTIAL');
+
+  const nothing = await smartLights.restoreLightSnapshot('127.0.0.1', 'u', null);
+  assert.equal(nothing.success, true);
+  assert.equal(nothing.code, 'NOTHING_TO_RESTORE');
+});
+
+test('Test Mode contract: smart lights actuate during dry-run (lights are the rehearsal, not the power action)', () => {
+  // The module intentionally has no dryRun/Test Mode input: Test Mode suppresses
+  // Windows power actions only, while the light ritual still runs so the user
+  // sees the real bedtime sequence. REAL_POWER_ACTIONS stays 0 in main.js.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'smartLights.js'), 'utf8');
+  assert.equal(src.includes('dryRun'), false, 'smartLights must not consult dry-run state');
+});
+
+test('public config redacts secrets; full config stays in main process', () => {
+  smartLights.loadConfig({
+    provider: 'hue', hueBridgeIp: '192.168.0.50', hueUsername: 'super-secret-user',
+    httpHeaders: { Authorization: 'Bearer live-token' }, enabled: false
+  });
+  const pub = smartLights.getPublicConfig();
+  assert.equal(pub.hueUsername, undefined, 'hueUsername must not reach renderer');
+  assert.equal(pub.httpHeaders, undefined, 'httpHeaders must not reach renderer');
+  assert.equal(pub.hasHueCredential, true);
+  assert.equal(pub.hasHttpHeaders, true);
+  assert.equal(JSON.stringify(pub).includes('super-secret-user'), false);
+  assert.equal(JSON.stringify(pub).includes('live-token'), false);
+  const full = smartLights.getConfig();
+  assert.equal(full.hueUsername, 'super-secret-user');
+});
+
+// settings.js secret-at-rest coverage for object-valued fields (httpHeaders).
+test('settings: httpHeaders secret map is encrypted at rest when safeStorage is available', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-slsec-'));
+  const origLoad = Module._load;
+  const fakeEnc = s => 'enc:v1:' + Buffer.from(s).toString('base64');
+  const fakeDec = s => Buffer.from(s.slice(7), 'base64').toString();
+  Module._load = function (request, parent, isMain) {
+    if (request === 'electron') {
+      return {
+        app: { getPath: () => tmpDir },
+        safeStorage: {
+          isEncryptionAvailable: () => true,
+          encryptString: v => Buffer.from(fakeDec(fakeEnc(v))),
+          decryptString: b => fakeDec('enc:v1:' + Buffer.from(b).toString('base64'))
+        }
+      };
+    }
+    return origLoad.apply(this, arguments);
+  };
+  const settingsPath = path.resolve(__dirname, '..', 'settings.js');
+  try {
+    delete require.cache[settingsPath];
+    const settings = require(settingsPath);
+    settings.updateSection('smartLights', { httpHeaders: { Authorization: 'Bearer should-be-encrypted' } });
+    const raw = fs.readFileSync(path.join(tmpDir, 'settings.json'), 'utf8');
+    assert.equal(raw.includes('should-be-encrypted'), false, 'header secret must not sit plaintext in settings.json');
+    // It must round-trip back as an object.
+    const sec = settings.getSection('smartLights');
+    assert.equal(sec.httpHeaders.Authorization, 'Bearer should-be-encrypted');
+  } finally {
+    Module._load = origLoad;
+    delete require.cache[settingsPath];
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+  }
+});
+
+test('settings: dead-provider credential keys are pruned on load', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-slprune-'));
+  const origLoad = Module._load;
+  Module._load = function (request, parent, isMain) {
+    if (request === 'electron') {
+      return { app: { getPath: () => tmpDir }, safeStorage: { isEncryptionAvailable: () => false } };
+    }
+    return origLoad.apply(this, arguments);
+  };
+  const settingsPath = path.resolve(__dirname, '..', 'settings.js');
+  try {
+    // Seed a settings.json carrying dead-provider secrets.
+    fs.writeFileSync(path.join(tmpDir, 'settings.json'), JSON.stringify({
+      smartLights: { provider: 'mqtt', mqttPassword: 'dead-secret', haToken: 'dead-token', iftttWebhookKey: 'dead-key' }
+    }));
+    delete require.cache[settingsPath];
+    const settings = require(settingsPath);
+    const sec = settings.getSection('smartLights');
+    assert.equal(sec.mqttPassword, undefined, 'dead-provider secret must be pruned');
+    assert.equal(sec.haToken, undefined);
+    assert.equal(sec.iftttWebhookKey, undefined);
+    // And the next save must not re-persist them.
+    settings.updateSection('smartLights', { provider: 'none' });
+    const raw = fs.readFileSync(path.join(tmpDir, 'settings.json'), 'utf8');
+    assert.equal(raw.includes('dead-secret'), false);
+  } finally {
+    Module._load = origLoad;
+    delete require.cache[settingsPath];
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+  }
 });

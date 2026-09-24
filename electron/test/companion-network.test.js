@@ -2,6 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const { normalizeCandidateIps, selectLanIp, networkFingerprint } = require('../companionNetwork');
 const { discoverAdapterRoles } = require('../scripts/adapterRoles');
 
@@ -29,6 +31,38 @@ test('networkFingerprint detects address-set changes but ignores enumeration ord
 
 test('normalizeCandidateIps trims, deduplicates, and drops invalid values', () => {
   assert.deepEqual(normalizeCandidateIps([' 192.168.0.11 ', '192.168.0.11', '', null]), ['192.168.0.11']);
+});
+
+test('no default route still selects the best LAN candidate (offline-LAN contract)', () => {
+  // An isolated LAN (no 0.0.0.0/0 route) yields routedIp=''. Selection must
+  // fall through to the candidates — never collapse to "no LAN".
+  const sel = selectLanIp(['192.168.0.16', '10.0.0.4'], '192.168.0.16', '');
+  assert.equal(sel.lanIp, '192.168.0.16');
+  assert.equal(sel.hasLanIp, true);
+});
+
+test('a VPN/tunnel route address that is not a filtered LAN candidate can never be advertised', () => {
+  // WireGuard/Tailscale-owning the default route must not leak its address into
+  // the pairing URL — candidates already exclude virtual adapters by name.
+  const sel = selectLanIp(['192.168.0.16'], '', '100.64.7.7');
+  assert.equal(sel.lanIp, '192.168.0.16');
+  // And when the ONLY hint is a VPN address, the result is honestly empty.
+  const none = selectLanIp([], '', '100.64.7.7');
+  assert.equal(none.hasLanIp, false);
+});
+
+test('the route-table hint wins over a stale persisted preference', () => {
+  const sel = selectLanIp(['192.168.0.16', '192.168.0.99'], '192.168.0.99', '192.168.0.16');
+  assert.equal(sel.lanIp, '192.168.0.16');
+});
+
+test('companionNetwork uses no Internet host or socket probe', () => {
+  // The old implementation dialed UDP 1.1.1.1:53 to discover the route source.
+  // The route-table implementation must not reference external hosts or dgram.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'companionNetwork.js'), 'utf8');
+  assert.equal(src.includes('1.1.1.1'), false, 'no external host literal');
+  assert.equal(src.includes('dgram'), false, 'no socket probe');
+  assert.match(src, /Get-NetRoute/, 'route-table truth is the mechanism');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

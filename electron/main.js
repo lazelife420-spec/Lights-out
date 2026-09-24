@@ -875,6 +875,13 @@ function cancelTimer() {
   timerState.endsAt = null;
   timerState.phase = 'idle';
   setTaskbarProgress(0, 'none');
+  // Cancellation restores the Hue state captured at dim start (desktop or
+  // phone cancel alike — they converge here). Failure is surfaced, not fatal.
+  if (smartLights.getConfig().enabled && smartLights.getConfig().provider === 'hue') {
+    smartLights.restoreHueOriginalState().then(res => {
+      if (!res.success) console.warn(`Smart light restore after cancel: ${res.message}`);
+    }).catch(err => console.warn('Smart light restore after cancel failed:', err.message));
+  }
   smartLights.resetSmartLightState();
   persistActiveTimer();
   restoreAfterTimer();
@@ -1554,6 +1561,11 @@ function getCompanionStatusLabel(mode, status) {
   if (mode === 'off') return 'Off';
   if (status.failed || companionNetworkFailure) return 'Connection failed';
   if (!status.ready || !status.running) return 'Starting companion';
+  // Listener is up but phones may still be blocked: surface the firewall gap
+  // as a real status instead of a console warning only.
+  if (mode === 'wifi' && companionFirewallState && companionFirewallState.configured === false) {
+    return 'Firewall action required';
+  }
   if (status.connected || status.clients > 0) return 'Phone connected';
   if (mode === 'local') return 'Ready on this PC only';
   return 'Desktop endpoint ready — waiting for phone';
@@ -1623,9 +1635,11 @@ async function startRemoteControl() {
   const mode = rc.mode || (rc.enabled ? 'wifi' : 'off');
   const port = normalizeCompanionPort(rc.port);
   const assignedIps = family.getLocalIPs();
-  const routedIp = await companionNetwork.getRoutedLanIp();
-  const usableIps = process.platform === 'win32' && !routedIp ? [] : assignedIps;
-  const network = companionNetwork.selectLanIp(usableIps, rc.lanIp, routedIp);
+  // Route-table truth, not an Internet probe: no packet is emitted, and an
+  // isolated LAN with no default route simply yields no hint — the LAN
+  // candidates still apply.
+  const routedIp = await companionNetwork.getDefaultRouteLanIp();
+  const network = companionNetwork.selectLanIp(assignedIps, rc.lanIp, routedIp);
   const lanIp = network.lanIp;
   companionNetworkFingerprint = companionNetwork.networkFingerprint(assignedIps, routedIp);
   
@@ -1642,7 +1656,9 @@ async function startRemoteControl() {
     }
     if (rc.lanIp !== lanIp) settingsStore.updateSection('remoteControl', { lanIp });
     const firewall = await configureFirewallRules(true, port);
-    const result = await companion.start({ token: rc.token, host: '0.0.0.0', port, probeHost: lanIp });
+    // Bind only the selected LAN interface + nothing else: the advertised URL,
+    // the listener, and the firewall-scoped Private-network surface all agree.
+    const result = await companion.start({ token: rc.token, host: lanIp, port, probeHost: lanIp });
     if (result.ready) {
       family.start({ enabled: true, token: rc.token, peerName: os.hostname() }, familyCommandHandler);
     }
@@ -1673,8 +1689,9 @@ function startCompanionNetworkMonitor() {
       const rc = settingsStore.getSection('remoteControl') || {};
       const mode = rc.mode || (rc.enabled ? 'wifi' : 'off');
       const assignedIps = family.getLocalIPs();
-      const routedIp = await companionNetwork.getRoutedLanIp();
-      const nextFingerprint = companionNetwork.networkFingerprint(assignedIps, routedIp);
+      // Fingerprint on interface truth only; route-table flaps (VPN metric
+      // churn without an address change) must not churn the listener.
+      const nextFingerprint = companionNetwork.networkFingerprint(assignedIps);
       if (nextFingerprint === companionNetworkFingerprint) return;
       companionNetworkFingerprint = nextFingerprint;
       if (mode !== 'wifi') return;
@@ -2422,14 +2439,15 @@ ipcMain.handle('resume-recoverable-timer', async () => {
 });
 
 // Smart Lights IPC handlers
-ipcMain.handle('get-smartlight-config', async () => smartLights.getConfig());
+ipcMain.handle('get-smartlight-config', async () => smartLights.getPublicConfig());
 ipcMain.handle('save-smartlight-config', async (event, settings) => {
   smartLights.loadConfig(settings);
   const merged = smartLights.getConfig();
   settingsStore.updateSection('smartLights', merged);
-  return merged;
+  return smartLights.getPublicConfig();
 });
-ipcMain.handle('test-smartlight-connection', async () => smartLights.testSmartLightConnection());
+ipcMain.handle('test-smartlight-connection', async () => smartLights.verifySmartLightConnection());
+ipcMain.handle('test-smartlight-action', async () => smartLights.testSmartLightAction());
 ipcMain.handle('discover-hue-bridge', async () => smartLights.findHueBridge());
 ipcMain.handle('register-hue-bridge', async (event, bridgeIp) => smartLights.registerHueBridge(bridgeIp));
 ipcMain.handle('get-hue-lights', async (event, bridgeIp, username) => smartLights.getHueLights(bridgeIp, username));

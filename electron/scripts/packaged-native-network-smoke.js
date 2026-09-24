@@ -117,7 +117,7 @@ async function firewallSnapshot() {
 // Windows display name. Never issues a connect/disconnect/enable/disable
 // call -- this test uses whatever the machine is already doing right now.
 async function observeRealAdapterRoles() {
-  const inventory = await readWindowsAdapterInventory({ getRoutedLanIp: companionNetwork.getRoutedLanIp });
+  const inventory = await readWindowsAdapterInventory({ getRoutedLanIp: companionNetwork.getDefaultRouteLanIp });
   const roles = discoverAdapterRoles(inventory);
   console.log('Connected test adapter:');
   if (roles.connectedAdapter) {

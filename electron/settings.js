@@ -19,6 +19,9 @@ const SECRET_PATHS = [
   ['calendar', 'outlook', 'accessToken'],
   ['calendar', 'calendly', 'personalToken'],
   ['smartLights', 'hueUsername'],
+  // Credential-bearing header map (e.g. Authorization) for the HTTP webhook
+  // provider. Stored encrypted as a serialized JSON object.
+  ['smartLights', 'httpHeaders'],
   ['remoteControl', 'token']
 ];
 const ENC_PREFIX = 'enc:v1:';
@@ -32,10 +35,12 @@ function encryptionAvailable() {
 }
 
 function encryptSecret(value) {
-  if (typeof value !== 'string' || value === '' || value.startsWith(ENC_PREFIX)) return value;
+  const isObject = value !== null && typeof value === 'object';
+  const str = isObject ? JSON.stringify(value) : value;
+  if (typeof str !== 'string' || str === '' || str === '{}' || str.startsWith(ENC_PREFIX)) return value;
   if (!encryptionAvailable()) return value; // fall back to plaintext rather than lose data
   try {
-    return ENC_PREFIX + electron.safeStorage.encryptString(value).toString('base64');
+    return ENC_PREFIX + electron.safeStorage.encryptString(str).toString('base64');
   } catch {
     return value;
   }
@@ -45,13 +50,20 @@ function decryptSecret(value) {
   if (typeof value !== 'string' || !value.startsWith(ENC_PREFIX)) return value;
   if (!encryptionAvailable()) return ''; // cannot recover; surface as empty so the user re-enters
   try {
-    return electron.safeStorage.decryptString(Buffer.from(value.slice(ENC_PREFIX.length), 'base64'));
+    const plain = electron.safeStorage.decryptString(Buffer.from(value.slice(ENC_PREFIX.length), 'base64'));
+    // Object-valued secrets were serialized before encryption; restore shape.
+    if (plain.startsWith('{') || plain.startsWith('[')) {
+      try { return JSON.parse(plain); } catch { /* fall through */ }
+    }
+    return plain;
   } catch {
     return '';
   }
 }
 
 // Apply fn to each present secret field in `tree`, mutating it in place.
+// Object-valued secrets (e.g. a header map) are serialized to JSON before
+// encryption and parsed back on decrypt.
 function transformSecrets(tree, fn) {
   if (!tree || typeof tree !== 'object') return tree;
   for (const segments of SECRET_PATHS) {
@@ -60,7 +72,7 @@ function transformSecrets(tree, fn) {
       node = node && node[segments[i]];
     }
     const leaf = segments[segments.length - 1];
-    if (node && typeof node === 'object' && typeof node[leaf] === 'string') {
+    if (node && typeof node === 'object' && node[leaf] !== undefined && node[leaf] !== null) {
       node[leaf] = fn(node[leaf]);
     }
   }
@@ -153,7 +165,8 @@ const DEFAULTS = {
     httpUrl: '',
     httpMethod: 'POST',
     httpHeaders: {},
-    httpBodyTemplate: '{"brightness": {{BRIGHTNESS}}, "color_temp": {{COLOR_TEMP}}, "on": {{ON}}}'
+    httpBodyTemplate: '{"brightness": {{BRIGHTNESS}}, "color_temp": {{COLOR_TEMP}}, "on": {{ON}}}',
+    verifiedConfigKey: ''
   },
   customization: {
     accent: '#5b8cff',
@@ -271,6 +284,7 @@ function load() {
     const parsed = tryParseSettingsFile(file);
     if (parsed) {
       cache = deepMerge(DEFAULTS, parsed);
+      pruneSmartLightsSection(cache);
       transformSecrets(cache, decryptSecret);
       return cache;
     }
@@ -284,6 +298,7 @@ function load() {
     if (parsed) {
       console.warn('Settings: primary corrupt or missing, recovered from backup.');
       cache = deepMerge(DEFAULTS, parsed);
+      pruneSmartLightsSection(cache);
       transformSecrets(cache, decryptSecret);
       save();
       return cache;
@@ -298,6 +313,18 @@ function load() {
   }
   cache = clone(DEFAULTS);
   return cache;
+}
+
+// Dead-provider cleanup: earlier revisions advertised MQTT / Home Assistant /
+// IFTTT fields that were never reachable through the live config path. Their
+// persisted keys (including any plaintext credentials) are dropped on load so
+// they are never re-saved.
+function pruneSmartLightsSection(tree) {
+  const section = tree && tree.smartLights;
+  if (!section || typeof section !== 'object') return;
+  for (const key of Object.keys(section)) {
+    if (!(key in DEFAULTS.smartLights)) delete section[key];
+  }
 }
 
 function ensureLoaded() {

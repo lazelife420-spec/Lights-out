@@ -114,6 +114,21 @@ function upgradeHandler(req, socket, head) {
   const key = req.headers['sec-websocket-key'];
   if (!key) { socket.destroy(); return; }
 
+  // Origin is not authentication (the token is), but a browser page from a
+  // different host should never be allowed to drive the control plane. Non-
+  // browser clients (health probes, the Android WebView without an Origin)
+  // send none and are unaffected.
+  const origin = req.headers.origin;
+  if (origin) {
+    let originHost = '';
+    try { originHost = new URL(origin).host; } catch { originHost = ''; }
+    if (!originHost || originHost !== req.headers.host) {
+      recordFailedAttempt(socket);
+      writeHttpResponse(socket, '403 Forbidden', {}, 'Forbidden');
+      return;
+    }
+  }
+
   const token = tokenFromUrl(req.url);
 
   // Reject any client that does not present the correct pairing token before
@@ -488,9 +503,13 @@ async function probeHostReadiness(host, port, token) {
   await probeWebSocket(host, port, token);
 }
 
-function probeReadiness(port, token, probeHost) {
-  const hosts = ['127.0.0.1'];
-  if (probeHost && probeHost !== '127.0.0.1') hosts.push(probeHost);
+function probeReadiness(port, token, probeHost, bindHost = '127.0.0.1') {
+  // Probe only what the listener actually claims to serve. A wildcard bind is
+  // proven via loopback plus the advertised LAN address; a single-IP bind is
+  // proven on that address (loopback correctly refuses there).
+  const hosts = bindHost === '0.0.0.0'
+    ? ['127.0.0.1', ...(probeHost && probeHost !== '127.0.0.1' ? [probeHost] : [])]
+    : [bindHost];
   return Promise.all(hosts.map(host => probeHostReadiness(host, port, token)));
 }
 
@@ -548,7 +567,7 @@ function start(opts = {}) {
       updateStatus({ running: true, ready: false, host: bindHost, port, failed: false, errorCode: '', errorMessage: '' });
       startHeartbeat();
       try {
-        await readinessProbe(port, expectedToken, probeHost);
+        await readinessProbe(port, expectedToken, probeHost, bindHost);
         if (generation !== startGeneration || server !== instance) return resolve(getStatus());
         console.log(`Companion PWA ready on ${bindHost}:${port}`);
         updateStatus({ running: true, ready: true, host: bindHost, port, failed: false, connected: clients.size > 0, failedAttempts, lastFailedIp });

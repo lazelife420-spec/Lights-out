@@ -1041,7 +1041,7 @@ check('companion: default settings are off with no token', () => {
 });
 
 check('companion: main mode contract maps to correct host binding', () => {
-  assertMatch(mainSrc, /if \(mode === 'wifi'\) \{[\s\S]*await companion\.start\(\{ token: rc\.token, host: '0\.0\.0\.0', port, probeHost: lanIp \}\)/s, 'wifi mode should bind 0.0.0.0 and probe the selected LAN address');
+  assertMatch(mainSrc, /if \(mode === 'wifi'\) \{[\s\S]*await companion\.start\(\{ token: rc\.token, host: lanIp, port, probeHost: lanIp \}\)/s, 'wifi mode must bind the selected LAN interface only');
   assertMatch(mainSrc, /\} else if \(mode === 'local'\) \{[\s\S]*await companion\.start\(\{ token: rc\.token, host: '127\.0\.0\.1', port \}\)/s, 'local mode should bind 127.0.0.1');
   assertMatch(mainSrc, /if \(mode === 'off' \|\| !rc\.token\) return getRemoteControlState\(\);/, 'off mode should not start listener');
 });
@@ -1055,7 +1055,7 @@ check('production truth: companion publishes pairing data only after readiness',
   assertMatch(mainSrc, /Get-NetTCPConnection -LocalPort \$\{safePort\}[\s\S]*Get-Process -Id \$connection\.OwningProcess/, 'occupied-port diagnostics must identify the listener owner when Windows allows it');
   assert(htmlSrc.includes('id="remote-startup-error"'), 'bind/readiness failure region missing');
   assert(htmlSrc.includes('id="remote-port"'), 'configurable companion port input missing');
-  assertMatch(mainSrc, /await companionNetwork\.getRoutedLanIp\(\)/, 'same-wifi host selection must use the current routed source address');
+  assertMatch(mainSrc, /await companionNetwork\.getDefaultRouteLanIp\(\)/, 'same-wifi host selection must read the OS route table, not an Internet hint');
   assertMatch(mainSrc, /startCompanionNetworkMonitor\(\)/, 'network changes must trigger stale-pairing recovery');
   assertMatch(rendererSrc, /generation !== remoteQrGeneration \|\| els\.remoteUrl\?\.textContent !== url/, 'stale async QR results must be discarded');
   assertMatch(mainSrc, /shortCode: ready && rc\.token/, 'short code must remain hidden before readiness');

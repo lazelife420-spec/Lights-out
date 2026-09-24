@@ -400,6 +400,7 @@ const els = {
   httpMethod: document.getElementById('http-method'),
   httpTemplate: document.getElementById('http-template'),
   btnTestLights: document.getElementById('btn-test-lights'),
+  btnTestAction: document.getElementById('btn-test-action'),
   lightTestResult: document.getElementById('light-test-result'),
   // Profiles elements
   profilesGrid: document.getElementById('profiles-grid'),
@@ -773,6 +774,7 @@ const state = {
     dimMinutes: 10,
     hueBridgeIp: '',
     hueUsername: '',
+    hasHueCredential: false,
     hueGroupId: '',
     httpUrl: '',
     httpMethod: 'POST',
@@ -1370,6 +1372,8 @@ async function saveSettingsPanel() {
     mode: els.selLightMode?.value || 'gradual_dim',
     dimMinutes: clamp(Number(els.lightDimMinutes?.value) || 10, 1, 60),
     hueBridgeIp: els.hueBridgeIp?.value || '',
+    // Blank means "keep the stored credential" — the renderer never sees the
+    // existing secret, so an untouched field must not overwrite it.
     hueUsername: els.hueUsername?.value || '',
     hueGroupId: els.hueGroupId?.value || '',
     httpUrl: els.httpUrl?.value || '',
@@ -1449,7 +1453,8 @@ async function discardSettingsPanelChanges() {
         mode: lightConfig.mode || 'gradual_dim',
         dimMinutes: lightConfig.dimMinutes || 10,
         hueBridgeIp: lightConfig.hueBridgeIp || '',
-        hueUsername: lightConfig.hueUsername || '',
+        hueUsername: '',
+        hasHueCredential: Boolean(lightConfig.hasHueCredential),
         hueGroupId: lightConfig.hueGroupId || '',
         httpUrl: lightConfig.httpUrl || '',
         httpMethod: lightConfig.httpMethod || 'POST',
@@ -3956,43 +3961,73 @@ if (els.btnClearReceipts) {
     });
   }
 
+  const collectSmartLightForm = () => ({
+    enabled: false,
+    provider: els.selLightProvider.value,
+    mode: els.selLightMode.value,
+    dimMinutes: Number(els.lightDimMinutes.value) || 10,
+    hueBridgeIp: els.hueBridgeIp.value,
+    hueUsername: els.hueUsername.value,
+    hueGroupId: els.hueGroupId.value,
+    httpUrl: els.httpUrl.value,
+    httpMethod: els.httpMethod.value,
+    httpBodyTemplate: els.httpTemplate.value,
+    verifiedConfigKey: ''
+  });
+
+  const applyTestResult = async (result) => {
+    if (els.lightTestResult) {
+      els.lightTestResult.textContent = result.message;
+      els.lightTestResult.className = result.success ? 'success' : 'error';
+    }
+    notify(result.message, result.success ? 'success' : 'warning');
+  };
+
   if (els.btnTestLights) {
     els.btnTestLights.addEventListener('click', async () => {
-      // Save current config first
-      const testConfig = {
-        enabled: false,
-        provider: els.selLightProvider.value,
-        mode: els.selLightMode.value,
-        dimMinutes: Number(els.lightDimMinutes.value) || 10,
-        hueBridgeIp: els.hueBridgeIp.value,
-        hueUsername: els.hueUsername.value,
-        hueGroupId: els.hueGroupId.value,
-        httpUrl: els.httpUrl.value,
-        httpMethod: els.httpMethod.value,
-        httpBodyTemplate: els.httpTemplate.value,
-        verifiedConfigKey: ''
-      };
-      
+      // Passive verification only — never changes a real light.
+      const testConfig = collectSmartLightForm();
       try {
         await api.saveSmartLightConfig(testConfig);
         const result = await api.testSmartLightConnection();
-        if (result.success) {
+        if (result.success && result.verifiedConfigKey) {
           state.smartLights = await api.saveSmartLightConfig({
             ...testConfig,
             enabled: Boolean(els.chkSmartLights?.checked),
-            verifiedConfigKey: result.verifiedConfigKey || ''
+            verifiedConfigKey: result.verifiedConfigKey
+          });
+        } else {
+          state.smartLights = await api.saveSmartLightConfig(testConfig);
+          if (result.success === false && els.chkSmartLights) els.chkSmartLights.checked = false;
+        }
+        await applyTestResult(result);
+      } catch (error) {
+        notify(`Verification failed: ${error.message}`, 'error');
+      }
+    });
+  }
+
+  if (els.btnTestAction) {
+    els.btnTestAction.addEventListener('click', async () => {
+      // Explicit actuation: the button is labeled so the user knows a real
+      // command fires. Only a truthful success earns verifiedConfigKey.
+      const testConfig = collectSmartLightForm();
+      try {
+        await api.saveSmartLightConfig(testConfig);
+        const result = await api.testSmartLightAction();
+        if (result.success && result.verifiedConfigKey) {
+          state.smartLights = await api.saveSmartLightConfig({
+            ...testConfig,
+            enabled: Boolean(els.chkSmartLights?.checked),
+            verifiedConfigKey: result.verifiedConfigKey
           });
         } else {
           state.smartLights = await api.saveSmartLightConfig(testConfig);
           if (els.chkSmartLights) els.chkSmartLights.checked = false;
         }
-        if (els.lightTestResult) {
-          els.lightTestResult.textContent = result.message;
-          els.lightTestResult.className = result.success ? 'success' : 'error';
-        }
-        notify(result.message, result.success ? 'success' : 'warning');
+        await applyTestResult(result);
       } catch (error) {
-        notify(`Test failed: ${error.message}`, 'error');
+        notify(`Test action failed: ${error.message}`, 'error');
       }
     });
   }
@@ -4218,7 +4253,8 @@ async function loadInitialData() {
         mode: lightConfig.mode || 'gradual_dim',
         dimMinutes: lightConfig.dimMinutes || 10,
         hueBridgeIp: lightConfig.hueBridgeIp || '',
-        hueUsername: lightConfig.hueUsername || '',
+        hueUsername: '',
+        hasHueCredential: Boolean(lightConfig.hasHueCredential),
         hueGroupId: lightConfig.hueGroupId || '',
         httpUrl: lightConfig.httpUrl || '',
         httpMethod: lightConfig.httpMethod || 'POST',
@@ -4269,7 +4305,14 @@ function updateLightsUIFromState() {
   if (els.selLightMode) els.selLightMode.value = state.smartLights.mode;
   if (els.lightDimMinutes) els.lightDimMinutes.value = state.smartLights.dimMinutes;
   if (els.hueBridgeIp) els.hueBridgeIp.value = state.smartLights.hueBridgeIp;
-  if (els.hueUsername) els.hueUsername.value = state.smartLights.hueUsername;
+  if (els.hueUsername) {
+    // The credential itself never round-trips through the renderer. A saved
+    // credential is shown as a placeholder; typing a new value replaces it.
+    els.hueUsername.value = '';
+    els.hueUsername.placeholder = state.smartLights.hasHueCredential
+      ? 'Saved — leave blank to keep, or enter a new key'
+      : 'Press link button, then Register';
+  }
   if (els.hueGroupId) els.hueGroupId.value = state.smartLights.hueGroupId;
   if (els.httpUrl) els.httpUrl.value = state.smartLights.httpUrl;
   if (els.httpMethod) els.httpMethod.value = state.smartLights.httpMethod;
