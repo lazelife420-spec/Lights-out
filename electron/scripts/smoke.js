@@ -68,7 +68,7 @@ check('settings: defaults load', () => {
   const settings = require(path.join(root, 'settings.js'));
   const all = settings.getAll();
   assert(all.app && all.customization, 'missing default sections');
-  assert(all.customization.accent === '#5b8cff', 'unexpected default accent');
+  assert(all.customization.accent === '#9b93d6', 'unexpected default accent');
   assert(all.app.clockFace === 'hybrid', 'clock face default should be hybrid');
   assert(all.app.clockDial === 'bars', 'clock dial default should be hour markers');
 });
@@ -1071,14 +1071,29 @@ check('production truth: companion publishes pairing data only after readiness',
 check('production truth: UI feedback follows observable state', () => {
   assertMatch(preloadSrc, /toggleWidget: \(\) => ipcRenderer\.invoke\('toggle-widget'\)/, 'widget must use acknowledged IPC');
   assertMatch(rendererSrc, /duplicate = \[\.\.\.container\.querySelectorAll\('\.toast'\)\][\s\S]*duplicate\._dismissTimer/, 'duplicate toasts must be coalesced');
-  // Power/Settings/Help are click-toggled dropdowns (wireTopMenus), not a
-  // hover-only reveal and not a label that jumps straight to a modal --
-  // clicking the label must open/close its own submenu.
-  assertMatch(rendererSrc, /function wireTopMenus\(\)/, 'top menu bar needs click-toggle wiring, not hover-only dropdowns');
-  assertMatch(rendererSrc, /if \(menu\.classList\.contains\('open'\)\) closeAllTopMenus\(\);/, 'top menu label click must toggle its own dropdown open/closed');
-  assertMatch(rendererSrc, /if \(event\.defaultPrevented\) return;/, 'global shortcuts must not override handled top-menu keyboard navigation');
+  // UI-R1: the top Power/Settings/Help menus were removed -- the sidebar is
+  // the single navigation authority. Guard the removal, the unified nav
+  // model, and the new Tonight/session chrome.
+  assert(!/main-menu|menu-power|menu-settings|menu-help|submenu-item/.test(htmlSrc), 'top-menu markup must not remain in index.html');
+  assert(!/wireTopMenus|closeAllTopMenus/.test(rendererSrc), 'top-menu wiring must not remain in renderer.js');
+  assertMatch(htmlSrc, /id="nav-lib" data-ns-tab="lib"/, 'nav items need stable ids for native targeting');
+  assertMatch(htmlSrc, /id="nav-stats" data-ns-tab="stats"/, 'every nav item needs a stable id');
+  assert((htmlSrc.match(/class="ns-nav-item/g) || []).length === 6, 'unified shell must have exactly 6 nav items');
+  assertMatch(htmlSrc, /id="readiness-strip"/, 'Tonight must expose the readiness strip');
+  for (const rdy of ['rdy-phone', 'rdy-lights', 'rdy-network', 'rdy-safety']) {
+    assertMatch(htmlSrc, new RegExp(`id="${rdy}"`), `readiness strip missing ${rdy}`);
+  }
+  assertMatch(htmlSrc, /id="testmode-pill"/, 'TEST MODE/REAL ACTION truth pill must exist');
+  assertMatch(rendererSrc, /TEST MODE · No PC power action will run/, 'TEST MODE pill must state the no-power-action truth');
+  assertMatch(rendererSrc, /REAL ACTION · \$\{actionLabel\(\)\} will run at end/, 'REAL ACTION pill must name the real ending');
+  assertMatch(htmlSrc, /class="snooze-chip" data-snooze="(300|900|1800)"/, 'explicit snooze chips must exist');
+  assertMatch(rendererSrc, /function updateReadiness/, 'readiness strip must be populated from real status sources');
+  assertMatch(htmlSrc, /id="chk-graceful"/, 'Graceful Close must have a Settings checkbox (its only toggle was in the removed menu)');
+  assertMatch(rendererSrc, /chkGraceful/, 'chk-graceful must be wired in renderer.js');
+  assertMatch(rendererSrc, /if \(event\.defaultPrevented\) return;/, 'global shortcuts must not override handled keyboard navigation');
   const cssSrcForMenus = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
-  assertMatch(cssSrcForMenus, /\.menu-item\.open \.submenu\s*\{/, 'submenu visibility must be driven by a click-toggled class, not :hover');
+  assert(!/\.menu-item|\.main-menu|\.submenu/.test(cssSrcForMenus), 'top-menu CSS must not remain in styles.css');
+  assertMatch(cssSrcForMenus, /#9b93d6/i, 'Lights Out violet must be the product accent');
   assertMatch(rendererSrc, /notifDrawer\.classList\.toggle\('active', opening\)/, 'notification drawer must use the modal active state');
   assertMatch(mainSrc, /backgroundColor: '#0d0e11'/, 'main window needs a dark native background to prevent startup flash');
 });

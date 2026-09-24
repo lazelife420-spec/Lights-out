@@ -10,7 +10,7 @@ const path = require('node:path');
 const { promisify } = require('node:util');
 const {
   assertOwnedEndpoint,
-  exerciseMenuContract,
+  exerciseNavContract,
   waitForAuthoritativeReadiness
 } = require('./packaged-proof-readiness');
 const {
@@ -229,13 +229,14 @@ async function rendererSnapshot(cdp) {
         writable: false
       });
     }
-    const menus = Array.from(document.querySelectorAll('.menu-item'));
-    const menusReady = Boolean(
+    const navItems = Array.from(document.querySelectorAll('.ns-nav-item'));
+    const navReady = Boolean(
       proof?.ready === true &&
-      menus.length >= 3 &&
-      menus.every(menu => menu.isConnected && menu.getAttribute('aria-expanded') !== null)
+      navItems.length === 6 &&
+      navItems.every(item => item.isConnected) &&
+      document.querySelectorAll('.menu-item, .main-menu, .submenu-item').length === 0
     );
-    if (proof) proof.menusReady = menusReady;
+    if (proof) proof.navReady = navReady;
     const visiblePanel = Array.from(document.querySelectorAll('.ns-main-panel'))
       .find(panel => getComputedStyle(panel).display !== 'none');
     return {
@@ -245,55 +246,52 @@ async function rendererSnapshot(cdp) {
       proofReady: proof?.ready === true,
       proofPhase: proof?.phase || null,
       proofError: proof?.error || null,
-      menusReady,
+      navReady,
       view: document.querySelector('.ns-nav-item[aria-current="page"]')?.dataset?.nsTab || visiblePanel?.id || null,
       openModal: document.querySelector('.modal.active')?.id || null,
-      openMenu: document.querySelector('.menu-item.open')?.id || null,
+      activeNav: document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || null,
       focusedElement: document.activeElement?.id || document.activeElement?.className || document.activeElement?.tagName || null,
       href: location.href
     };
   })()`);
 }
 
-async function menuState(cdp, menuId) {
+async function navState(cdp, navId) {
   return cdp.evaluate(`(() => {
-    const trigger = document.getElementById(${JSON.stringify(menuId)});
-    const menu = trigger?.querySelector('.submenu');
-    const triggerBox = trigger?.getBoundingClientRect();
-    const menuBox = menu?.getBoundingClientRect();
+    const item = document.getElementById(${JSON.stringify(navId)});
+    const box = item?.getBoundingClientRect();
     const visible = element => Boolean(element && getComputedStyle(element).display !== 'none' &&
       getComputedStyle(element).visibility !== 'hidden' && element.getBoundingClientRect().width > 0 &&
       element.getBoundingClientRect().height > 0);
     return {
-      connected: Boolean(trigger?.isConnected),
-      visible: visible(trigger),
-      enabled: Boolean(trigger && !trigger.hasAttribute('disabled') && trigger.getAttribute('aria-disabled') !== 'true'),
-      triggerRect: triggerBox ? { x: triggerBox.x, y: triggerBox.y, width: triggerBox.width, height: triggerBox.height } : null,
-      menuRect: menuBox ? { x: menuBox.x, y: menuBox.y, width: menuBox.width, height: menuBox.height } : null,
-      ariaExpanded: trigger?.getAttribute('aria-expanded') || null,
-      open: Boolean(trigger?.classList.contains('open')),
-      menuVisible: visible(menu),
+      connected: Boolean(item?.isConnected),
+      visible: visible(item),
+      enabled: Boolean(item && !item.hasAttribute('disabled') && item.getAttribute('aria-disabled') !== 'true'),
+      rect: box ? { x: box.x, y: box.y, width: box.width, height: box.height } : null,
+      active: Boolean(item?.classList.contains('active')),
+      ariaCurrent: item?.getAttribute('aria-current') || null,
+      activeModal: document.querySelector('.modal.active')?.id || null,
+      menuRemnants: document.querySelectorAll('.menu-item, .main-menu, .submenu-item').length,
       focusedId: document.activeElement?.id || null
     };
   })()`);
 }
 
-async function proveTopMenu(cdp, readiness, menuId, full = false) {
-  const result = await exerciseMenuContract({
-    menuId,
+async function proveNavItem(cdp, readiness, navId, { opensModal = false } = {}) {
+  const result = await exerciseNavContract({
+    navId,
     readReadiness: async () => {
       const current = await rendererSnapshot(cdp);
-      assert.equal(current.generation, readiness.generation, 'renderer generation changed before menu interaction');
+      assert.equal(current.generation, readiness.generation, 'renderer generation changed before nav interaction');
       return current;
     },
-    readMenu: () => menuState(cdp, menuId),
-    clickTrigger: () => cdp.click(`#${menuId}`),
-    moveToFirstItem: () => cdp.moveTo(`#${menuId} .submenu-item`),
+    readNav: () => navState(cdp, navId),
+    clickNav: () => cdp.click(`#${navId}`),
     pressEscape: () => cdp.pressEscape(),
-    full
+    opensModal
   });
   const after = await rendererSnapshot(cdp);
-  assert.equal(after.generation, readiness.generation, 'renderer generation changed during menu interaction');
+  assert.equal(after.generation, readiness.generation, 'renderer generation changed during nav interaction');
   return result;
 }
 
@@ -311,12 +309,12 @@ async function boundedDiagnostics(cdp, child, debugPort, userData, target, readi
     documentReadyState: state?.documentReadyState || null,
     proofExists: state?.proofExists ?? false,
     proofReady: state?.proofReady ?? false,
-    menusReady: state?.menusReady ?? false,
+    navReady: state?.navReady ?? false,
     currentView: state?.view || null,
     openModal: state?.openModal || null,
-    openMenu: state?.openMenu || null,
+    activeNav: state?.activeNav || null,
     focusedElement: state?.focusedElement || null,
-    power: cdp ? await menuState(cdp, 'menu-power').catch(() => null) : null,
+    tonightNav: cdp ? await navState(cdp, 'nav-lib').catch(() => null) : null,
     consoleErrors: cdp?.consoleErrors.slice(-20) || [],
     pageErrors: cdp?.pageErrors.slice(-20) || [],
     lifecycle: lifecycle.slice(-30)
@@ -493,7 +491,7 @@ async function main() {
     await cdp.evaluate(`(async () => {
       renderRemoteControl(await electronAPI.getRemoteControl());
       document.getElementById('onboarding').style.display = 'none';
-      document.getElementById('menu-settings').click();
+      document.querySelector('[data-ns-tab="set"]').click();
       return true;
     })()`);
     const failureUi = await cdp.evaluate(`(() => ({
@@ -583,15 +581,18 @@ async function main() {
     await cdp.click('#notif-drawer-close');
     await waitFor(() => cdp.evaluate(`!document.getElementById('notif-drawer').classList.contains('active')`));
 
-    progress('proving native top-menu interaction contract');
+    progress('proving unified shell nav interaction contract');
     await cdp.evaluate(`window.__desktopUxProof.clearStartInvocations()`);
-    const powerMenu = await proveTopMenu(cdp, readiness, 'menu-power', true);
-    const settingsMenu = await proveTopMenu(cdp, readiness, 'menu-settings');
-    const helpMenu = await proveTopMenu(cdp, readiness, 'menu-help');
+    const modesNav = await proveNavItem(cdp, readiness, 'nav-modes');
+    const schNav = await proveNavItem(cdp, readiness, 'nav-sch');
+    const statsNav = await proveNavItem(cdp, readiness, 'nav-stats');
+    const libNav = await proveNavItem(cdp, readiness, 'nav-lib');
+    const helpNav = await proveNavItem(cdp, readiness, 'nav-help', { opensModal: true });
+    const setNav = await proveNavItem(cdp, readiness, 'nav-set');
     const menuStartInvocations = await cdp.evaluate(`window.__desktopUxProof.getStartInvocations()`);
     const menuPowerActions = await cdp.evaluate(`window.__desktopUxProof.getRealPowerActions()`);
-    assert.deepEqual(menuStartInvocations, [], 'handled menu input triggered the timer shortcut');
-    assert.deepEqual(menuPowerActions, [], 'menu proof triggered a real power action');
+    assert.deepEqual(menuStartInvocations, [], 'nav input triggered the timer shortcut');
+    assert.deepEqual(menuPowerActions, [], 'nav proof triggered a real power action');
     injectFailure(failureStage, 'during-proof');
 
     progress('proving canonical routes and modes');
@@ -600,12 +601,8 @@ async function main() {
       return true;
     })()`);
     const before = await cdp.evaluate(`document.querySelector('.ns-nav-item[aria-current="page"]')?.dataset.nsTab`);
-    await cdp.click('#menu-settings');
-    await waitFor(async () => {
-      const state = await menuState(cdp, 'menu-settings');
-      return state.ariaExpanded === 'true' && state.open && state.menuVisible;
-    });
-    await cdp.click('#open-options');
+    await cdp.click('[data-ns-tab="set"]');
+    await waitFor(async () => cdp.evaluate(`document.getElementById('ns-panel-set').style.display !== 'none'`));
     const routes = await cdp.evaluate(`(async () => {
       // Settings is a real panel (applyMainPanelVisibility), not a
       // .active-toggled modal -- visibility is the inline display style.
@@ -656,12 +653,15 @@ async function main() {
       widget: { shown: true, hidden: true },
       notifications: { unreadBeforeOpen: 1, unreadAfterOpen: 0, duplicates: 1 },
       routes: { settingsCanonical: true, restored: routes.restored, modes: routes.modeTitles.length },
-      menus: {
-        power: { opened: powerMenu.opened.open, pointerTransfer: powerMenu.pointerTransfer.open, escapeFocus: powerMenu.closed.focusedId },
-        settings: { opened: settingsMenu.opened.open, escapeFocus: settingsMenu.closed.focusedId },
-        help: { opened: helpMenu.opened.open, escapeFocus: helpMenu.closed.focusedId }
+      nav: {
+        modes: { active: modesNav.activated.active },
+        schedule: { active: schNav.activated.active },
+        stats: { active: statsNav.activated.active },
+        lib: { active: libNav.activated.active },
+        help: { modalOpened: helpNav.opened.activeModal, escapeClosed: helpNav.closed.activeModal },
+        settings: { active: setNav.activated.active }
       },
-      menuSafety: { timerStarts: menuStartInvocations.length, realPowerActions: menuPowerActions.length },
+      navSafety: { timerStarts: menuStartInvocations.length, realPowerActions: menuPowerActions.length },
       runtime: {
         pid: child.pid,
         executable,
@@ -671,7 +671,7 @@ async function main() {
         windowCount: target.windowCount,
         generation: readiness.generation,
         proofReady: readiness.proofReady,
-        menusReady: readiness.menusReady,
+        navReady: readiness.navReady,
         consoleErrors: cdp.consoleErrors.length,
         pageErrors: cdp.pageErrors.length,
         lifecycle

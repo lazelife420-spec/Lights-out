@@ -321,7 +321,7 @@ if (desktopUxProofBridge?.enabled) {
       documentReadyState: document.readyState,
       route: document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || null,
       visiblePanel: Array.from(document.querySelectorAll('.ns-main-panel')).find(panel => getComputedStyle(panel).display !== 'none')?.id || null,
-      openMenu: document.querySelector('.menu-item.open')?.id || null,
+      activeNav: document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || null,
       activeModal: document.querySelector('.modal.active')?.id || null,
       running: state.running,
       paused: state.paused,
@@ -369,6 +369,12 @@ const els = {
   graceMinutes: document.getElementById('grace-minutes'),
   chkForceShutdown: document.getElementById('chk-forceshutdown'),
   chkMute: document.getElementById('chk-mute'),
+  chkGraceful: document.getElementById('chk-graceful'),
+  testmodePill: document.getElementById('testmode-pill'),
+  rdyPhone: document.getElementById('rdy-phone'),
+  rdyLights: document.getElementById('rdy-lights'),
+  rdyNetwork: document.getElementById('rdy-network'),
+  rdySafety: document.getElementById('rdy-safety'),
   chkRunLogin: document.getElementById('chk-run-login'),
   focusBlocklist: document.getElementById('focus-blocklist'),
   chkDryRun: document.getElementById('chk-dryrun'),
@@ -785,7 +791,7 @@ const state = {
   },
   // Customization state
   customization: {
-    accent: '#5b8cff',
+    accent: '#9b93d6',
     theme: 'midnight',
     ringStyle: 'glow',
     opacity: 1,
@@ -1486,15 +1492,9 @@ async function discardSettingsPanelChanges() {
 // closing About never needs to guess, and never touches Settings'
 // Save/Cancel state either way.
 //
-// Top-menu Help -> About is the one path that can't just trust
-// document.activeElement, though: closeAllTopMenus() (see wireTopMenus())
-// hides the #open-about submenu item the instant it runs, and losing a
-// hidden element's focus moves document.activeElement to BODY -- by the
-// time openHelpPanel() would read it, the useful target is already gone.
-// So the top-menu click handler below passes an explicit restoreTarget
-// (the still-visible parent Help menu trigger) instead of relying on
-// activeElement capture; the sidebar path keeps using activeElement, since
-// a sidebar click never hides its own button.
+// Other callers (e.g. a badge or tray-initiated About) can pass an explicit
+// restoreTarget when activeElement can't be trusted; the sidebar path keeps
+// using activeElement, since a sidebar click never hides its own button.
 let helpOpenerElement = null;
 
 // Whether `el` is currently worth returning keyboard focus to. Guards
@@ -1517,7 +1517,7 @@ function isSensibleFocusTarget(el) {
 // each element's `display` is independent of its ancestors'; only the
 // element's LAYOUT reflects an ancestor being hidden), so a bare
 // style-property read can't catch e.g. body.mini-mode hiding
-// .chrome-header/.ns-sidebar wholesale while #menu-help's or the sidebar
+// .chrome-header/.ns-sidebar wholesale while the sidebar
 // Help button's own style is never touched. checkVisibility() is
 // Chromium's purpose-built answer to "is this actually visible right
 // now," including ancestor display/visibility -- called with no options
@@ -1600,6 +1600,48 @@ async function renderStatusPanel() {
     }).join('');
   } catch {
     els.statsSessionSummary.innerHTML = '<p class="empty-state">No session history yet.</p>';
+  }
+}
+
+// UI-R1 readiness strip: Phone/Lights/Network/Safety from REAL status
+// sources — same data the stats panel already uses, no new telemetry.
+// Async + debounced (render() runs every tick while a timer is active).
+let readinessFetchedAt = 0;
+async function updateReadiness(force = false) {
+  if (!els.rdyPhone) return;
+  if (els.rdySafety) {
+    const warned = els.warningCard && els.warningCard.style.display !== 'none';
+    els.rdySafety.textContent = warned ? 'Warnings' : (state.dryRun ? 'Test Mode' : 'Clear');
+    els.rdySafety.classList.toggle('warn', warned || !state.dryRun);
+  }
+  const now = Date.now();
+  if (!force && now - readinessFetchedAt < 5000) return;
+  readinessFetchedAt = now;
+  try {
+    const rc = await api.getRemoteControl?.();
+    const mode = rc?.mode || 'off';
+    if (els.rdyPhone) {
+      els.rdyPhone.textContent = mode === 'off' ? 'Off'
+        : (rc?.clients > 0 ? `${rc.statusLabel || 'Connected'} · ${rc.clients}` : (rc?.statusLabel || 'Listening'));
+      els.rdyPhone.classList.toggle('ok', mode !== 'off');
+    }
+    if (els.rdyNetwork) {
+      els.rdyNetwork.textContent = mode === 'wifi' ? `Local · ${rc.lanIp}`
+        : mode === 'local' ? 'This PC only' : 'Local only';
+    }
+  } catch {
+    if (els.rdyPhone) els.rdyPhone.textContent = 'Unavailable';
+  }
+  try {
+    const lights = await api.getSmartLightConfig?.();
+    if (els.rdyLights) {
+      if (!lights || !lights.enabled) els.rdyLights.textContent = 'Off';
+      else if (lights.verifiedConfigKey) els.rdyLights.textContent = `${lights.provider === 'hue' ? 'Hue' : 'HTTP'} Ready${lights.hueAllowLegacyHttp ? ' · legacy' : ''}`;
+      else els.rdyLights.textContent = 'Needs setup';
+      els.rdyLights.classList.toggle('warn', Boolean(lights?.enabled && !lights.verifiedConfigKey) || Boolean(lights?.hueAllowLegacyHttp));
+    }
+  } catch {
+    if (els.rdyLights) els.rdyLights.textContent = '—';
   }
 }
 
@@ -1710,6 +1752,9 @@ async function handleSidebarNavigation(tab, { persist = true, restoreTarget = nu
 
   if (tab === 'lib') {
     applyMainPanelVisibility('lib');
+    // typeof-guarded: navigation unit-test sandboxes extract this handler
+    // without the readiness machinery.
+    if (typeof updateReadiness === 'function') void updateReadiness(true);
     handled = true;
   }
   if (tab === 'modes') {
@@ -1888,9 +1933,13 @@ function render() {
     btn.classList.toggle('active', btn.dataset.unit === state.unit);
   });
 
-  document.getElementById('toggle-dryrun')?.querySelector('.toggle-indicator')?.replaceChildren(document.createTextNode(state.dryRun ? 'ON' : 'OFF'));
-  document.getElementById('toggle-mute')?.querySelector('.toggle-indicator')?.replaceChildren(document.createTextNode(state.sound ? 'ON' : 'OFF'));
-  document.getElementById('toggle-graceful')?.querySelector('.toggle-indicator')?.replaceChildren(document.createTextNode(state.gracefulClose ? 'ON' : 'OFF'));
+  // Test Mode / REAL ACTION truth pill — always shown under the timer.
+  if (els.testmodePill) {
+    els.testmodePill.textContent = state.dryRun
+      ? 'TEST MODE · No PC power action will run'
+      : `REAL ACTION · ${actionLabel()} will run at end`;
+    els.testmodePill.classList.toggle('real', !state.dryRun);
+  }
 
   // Status pill: single animated indicator replacing badge soup
   if (els.statusPill) {
@@ -1934,13 +1983,13 @@ function render() {
   els.actionName.textContent = actionLabel();
   els.endTime.textContent = state.running || state.paused ? formatEndTime(state.endsAt) : 'Idle';
 
-  // Dry Run has two independent, immediate-commit editors -- this checkbox
-  // (see its 'change' listener in wireEvents) and the top-menu quick
-  // toggle -- so unlike the fields below, there is no "in-progress unsaved
-  // edit" on it for a background render() to protect. It must stay synced
-  // to canonical state.dryRun even while the Settings panel is open, or
-  // changing it via the top-menu toggle while Settings is already open
-  // leaves this checkbox showing a stale value -- and Save used to
+  // Dry Run is an immediate-commit field -- this checkbox's 'change'
+  // listener (and any other immediate editor: companion, family, IPC) writes
+  // canonical state.dryRun directly -- so unlike the fields below, there is
+  // no "in-progress unsaved edit" on it for a background render() to
+  // protect. It must stay synced to canonical state.dryRun even while the
+  // Settings panel is open, or an external edit while Settings is already
+  // open leaves this checkbox showing a stale value -- and Save used to
   // silently re-read and persist that stale value over the newer one (see
   // saveSettingsPanel(), which no longer re-reads this checkbox at all).
   if (els.chkDryRun) els.chkDryRun.checked = state.dryRun;
@@ -1949,6 +1998,7 @@ function render() {
   if (els.panelSet?.style.display === 'none') {
     if (els.chkForceShutdown) els.chkForceShutdown.checked = state.forceShutdown;
     if (els.chkMute) els.chkMute.checked = state.muteSystem;
+  if (els.chkGraceful) els.chkGraceful.checked = state.gracefulClose;
     if (els.chkRunLogin) els.chkRunLogin.checked = state.runAtLogin;
     if (els.graceMinutes) els.graceMinutes.value = state.graceMinutes;
   }
@@ -2759,81 +2809,21 @@ function applyTonightCard(card) {
   }
   notify(`Selected: ${card.querySelector('.card-title')?.textContent || 'Timer'}`, 'info');
 }
-// Top menu bar (Power/Settings/Help): click-to-toggle dropdowns with
-// outside-click/Escape/blur dismissal and roving-tabindex keyboard nav.
-// Replaces the old `.menu-item:hover .submenu` CSS rule, which closed the
-// dropdown the instant the pointer left `.menu-item`'s box -- on anything
-// but a perfectly straight, fast diagonal move toward an item, the menu
-// vanished before it could be clicked. Same idiom as the notification
-// drawer (`#btn-notif`/`#notif-drawer` above) and the context menu
-// (renderer-utils.js `showContextMenu`/`closeContextMenu`).
-function closeAllTopMenus() {
-  document.querySelectorAll('.menu-item.open').forEach(menu => {
-    menu.classList.remove('open');
-    menu.setAttribute('aria-expanded', 'false');
-  });
-}
-
-function wireTopMenus() {
-  const menus = Array.from(document.querySelectorAll('.menu-item'));
-  if (!menus.length) return;
-
-  function openMenu(menu) {
-    closeAllTopMenus();
-    menu.classList.add('open');
-    menu.setAttribute('aria-expanded', 'true');
-  }
-
-  menus.forEach(menu => {
-    menu.addEventListener('click', event => {
-      if (event.target.closest('.submenu-item')) return; // item's own handler runs and closes it
-      if (menu.classList.contains('open')) closeAllTopMenus();
-      else { openMenu(menu); menu.querySelector('.submenu-item')?.focus(); }
-    });
-
-    menu.addEventListener('keydown', event => {
-      const items = Array.from(menu.querySelectorAll('.submenu-item'));
-      const focusedIndex = items.indexOf(document.activeElement);
-
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        closeAllTopMenus();
-        menu.focus();
-        return;
-      }
-      if (!menu.classList.contains('open') && (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown')) {
-        event.preventDefault();
-        openMenu(menu);
-        items[0]?.focus();
-        return;
-      }
-      if (focusedIndex === -1) return;
-      if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        items[(focusedIndex + 1) % items.length].focus();
-      } else if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        items[(focusedIndex - 1 + items.length) % items.length].focus();
-      } else if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        document.activeElement.click();
-      }
-    });
-  });
-
-  document.addEventListener('mousedown', event => {
-    if (!event.target.closest('.menu-item')) closeAllTopMenus();
-  });
-  document.addEventListener('keydown', event => {
-    if (event.key === 'Escape') closeAllTopMenus();
-  });
-  window.addEventListener('blur', closeAllTopMenus);
-}
+// UI-R1: the top Power/Settings/Help menus were removed -- the sidebar is
+// the single navigation authority. Their behaviors re-homed: action
+// selection -> action chips / "Change ending", toggles -> Settings
+// checkboxes (chk-dryrun/chk-mute/chk-graceful), Advanced Options ->
+// sidebar Settings, About/docs -> sidebar About + about-modal.
 
 function wireEvents() {
   els.btnStop.addEventListener('click', cancelTimer);
   els.btnPause.addEventListener('click', togglePause);
   els.btnSnooze.addEventListener('click', () => snooze(5 * 60));
+  // UI-R1 snooze chips: same snooze() path as the main button — same
+  // Override Tax assessment and receipt attribution, just explicit amounts.
+  document.querySelectorAll('.snooze-chip').forEach(btn => {
+    btn.addEventListener('click', () => snooze(Number(btn.dataset.snooze) || 300));
+  });
   els.btnMinimize.addEventListener('click', () => api.minimizeWindow());
   els.btnMaximize?.addEventListener('click', () => api.toggleMaximizeWindow());
   els.btnClose.addEventListener('click', () => api.closeWindow());
@@ -2841,7 +2831,7 @@ function wireEvents() {
   els.btnFullscreenClock?.addEventListener('click', enterFullscreenClock);
   els.btnFullscreenClockExit?.addEventListener('click', exitFullscreenClock);
   api.onFullScreenChanged?.(applyFullscreenClockState);
-  wireTopMenus();
+  // Top menus removed in UI-R1 (single nav authority).
   document.querySelectorAll('.settings-rail-btn').forEach(btn => {
     btn.addEventListener('click', () => switchSettingsCategory(btn.dataset.settingsCategory));
   });
@@ -3415,97 +3405,6 @@ if (els.btnClearReceipts) {
     });
   });
 
-  document.querySelectorAll('.submenu-item').forEach(item => {
-    item.addEventListener('click', event => {
-      event.stopPropagation();
-      closeAllTopMenus();
-
-      if (item.dataset.action) {
-        setAction(item.dataset.action);
-        notify(`${actionLabel()} selected`, 'info');
-        return;
-      }
-
-      if (item.dataset.minutes) {
-        state.unit = 'min';
-        setInputFromSeconds(Number(item.dataset.minutes) * 60);
-        clearArmedNightMode();
-        clearCurrentProfile();
-        startTimer(Number(item.dataset.minutes) * 60);
-        return;
-      }
-
-      if (item.classList.contains('toggle')) {
-        if (item.id === 'toggle-dryrun') state.dryRun = !state.dryRun;
-        if (item.id === 'toggle-mute') {
-          state.sound = !state.sound;
-          SoundSystem.enabled = state.sound;
-        }
-        if (item.id === 'toggle-graceful') state.gracefulClose = !state.gracefulClose;
-        render();
-        // Persist these quick toggles so they survive a relaunch.
-        api.saveAppSettings({ app: collectAppSettings() });
-        return;
-      }
-
-      if (item.id === 'open-options') {
-        // Routed through the same central navigation entry point the
-        // sidebar Settings destination uses -- not a duplicated
-        // openSettingsPanel()+setSidebarSelection() call -- so this
-        // top-menu action gets the exact same blocking-modal refusal,
-        // dismissible-modal cleanup, and settingsReturnTab bookkeeping,
-        // instead of silently bypassing all of it.
-        if (findActiveBlockingModal()) {
-          // closeAllTopMenus() above already hid this submenu item, and
-          // losing a hidden element's focus lands the browser on BODY --
-          // handleSidebarNavigation() below is about to refuse this
-          // request outright and touch nothing else, so nothing else will
-          // claim focus afterward either. Land it back on the visible
-          // Settings menu trigger instead of leaving it stranded while
-          // the blocking modal is still active -- routed through the
-          // same isSensibleFocusTarget() policy as every other focus
-          // call in this file, so a trigger that's itself gone hidden
-          // (e.g. body.mini-mode) is never focused either.
-          const trigger = document.getElementById('menu-settings');
-          if (isSensibleFocusTarget(trigger)) trigger.focus();
-        }
-        handleSidebarNavigation('set');
-        return;
-      }
-
-      if (item.id === 'open-about') {
-        // Same reasoning as 'open-options' above: routed through the
-        // central entry point so this shares Help's corrected semantics
-        // (never claims page-current state) and the blocking-modal check,
-        // rather than duplicating -- and previously incorrectly
-        // reintroducing -- the old setSidebarSelection('help') bug via a
-        // second, always-visible trigger.
-        //
-        // closeAllTopMenus() above already hides this submenu item, so by
-        // the time openHelpPanel() would read document.activeElement it's
-        // already BODY, not #open-about -- supply the still-visible
-        // parent Help menu trigger as the explicit restoration target
-        // instead (see isSensibleFocusTarget()/openHelpPanel() above).
-        const menuTrigger = document.getElementById('menu-help');
-        if (findActiveBlockingModal()) {
-          // Same reasoning as 'open-options' above.
-          if (isSensibleFocusTarget(menuTrigger)) menuTrigger.focus();
-        }
-        handleSidebarNavigation('help', { restoreTarget: menuTrigger });
-        return;
-      }
-
-      if (item.dataset.external) {
-        api.openExternal(item.dataset.external);
-        return;
-      }
-
-      if (item.dataset.help) {
-        notify(item.dataset.help, 'info', 4200);
-      }
-    });
-  });
-
   document.querySelectorAll('#action-chips-row [data-action]').forEach(btn => {
     btn.addEventListener('click', () => setAction(btn.dataset.action));
   });
@@ -3554,8 +3453,10 @@ if (els.btnClearReceipts) {
   // Armed Night Mode clear button.
   document.getElementById('armed-mode-clear')?.addEventListener('click', clearArmedNightMode);
 
-  // Home streak callout jumps to the Streaks tab for the full breakdown.
-  els.streakCallout?.addEventListener('click', () => {
+  // Streak callout (now on the Stats/Proof surface) navigates to the
+  // Schedule panel's Streaks tab for the full breakdown.
+  els.streakCallout?.addEventListener('click', async () => {
+    await handleSidebarNavigation('sch');
     document.querySelector('.tab-btn[data-tab="streaks"]')?.click();
   });
 
@@ -3661,6 +3562,12 @@ if (els.btnClearReceipts) {
 
   els.chkMute?.addEventListener('change', () => {
     state.muteSystem = els.chkMute.checked;
+    render();
+    persistAdvancedOptions();
+  });
+
+  els.chkGraceful?.addEventListener('change', () => {
+    state.gracefulClose = els.chkGraceful.checked;
     render();
     persistAdvancedOptions();
   });

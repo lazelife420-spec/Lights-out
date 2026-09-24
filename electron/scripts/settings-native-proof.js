@@ -355,13 +355,12 @@ async function main() {
     if (await app.session.eval(helpers.isSetHidden) && await app.session.eval(helpers.panelLibVisible)) controlsResult.passed.push('Back returns to Tonight');
     else controlsResult.failed.push('Back did not return to Tonight');
 
-    // open via top menu
-    await app.session.click('#menu-settings');
-    await wait(100);
-    await app.session.click('#open-options');
+    // open via sidebar nav (UI-R1: the top menus were removed; the sidebar
+    // is the single navigation authority)
+    await app.session.click('[data-ns-tab="set"]');
     await wait(300);
-    if (await app.session.eval(helpers.isSetVisible)) controlsResult.passed.push('top menu opens Settings');
-    else controlsResult.failed.push('top menu did not open Settings');
+    if (await app.session.eval(helpers.isSetVisible)) controlsResult.passed.push('sidebar nav opens Settings');
+    else controlsResult.failed.push('sidebar nav did not open Settings');
 
     await app.session.click('#modal-close');
     await wait(300);

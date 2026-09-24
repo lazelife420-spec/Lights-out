@@ -14,9 +14,14 @@
 //
 // Fix (renderer.js): the checkbox's render() sync is now unconditional
 // (moved out of the "panel closed" guard -- Dry Run has no in-progress
-// unsaved state to protect, since both its editors commit immediately);
+// unsaved state to protect, since its editors commit immediately);
 // saveSettingsPanel() no longer re-reads the checkbox for state.dryRun at
 // all, since it's already correct by the time Save runs.
+//
+// UI-R1: the top-menu quick toggle is gone with the menus -- #chk-dryrun
+// inside Settings is now the single canonical editor (plus non-DOM editors
+// like companion/IPC, which still commit immediately). The sync property
+// below is therefore still load-bearing.
 //
 // Same source-extraction + vm sandbox technique as
 // tonights-plan-contract.test.js / power-action-lock-parity.test.js.
@@ -60,7 +65,7 @@ function extractFunction(source, name) {
 // leading comment through the closing brace of the "other fields" guard,
 // and wraps it as a standalone function for sandboxed execution.
 function extractDryRunSyncBlock(source) {
-  const startMarker = "// Dry Run has two independent, immediate-commit editors";
+  const startMarker = "// Dry Run is an immediate-commit field";
   const start = source.indexOf(startMarker);
   if (start === -1) throw new Error('Dry Run sync block comment not found in renderer.js');
   const guardOpen = source.indexOf('if (els.panelSet?.style.display', start);
@@ -134,8 +139,12 @@ test('no duplicate Dry Run state was introduced -- state.dryRun remains the sing
   assert.deepEqual(uniqueFieldNames, ['dryRun'], `expected only state.dryRun, found: ${uniqueFieldNames.join(', ')}`);
 });
 
-test('the top-menu quick toggle and the checkbox\'s own change listener are unchanged (still write canonical state.dryRun and persist immediately)', () => {
-  assert.match(rendererSource, /if \(item\.id === 'toggle-dryrun'\) state\.dryRun = !state\.dryRun;/);
+test('the checkbox\'s own change listener still writes canonical state.dryRun and persists immediately (the menu quick-toggle is gone)', () => {
+  assert.doesNotMatch(
+    rendererSource,
+    /toggle-dryrun/,
+    'UI-R1 removed the top menu -- its #toggle-dryrun branch must not remain'
+  );
   assert.match(
     rendererSource,
     /els\.chkDryRun\?\.addEventListener\('change', \(\) => \{\s*state\.dryRun = els\.chkDryRun\.checked;/,

@@ -94,13 +94,15 @@ test('valid current target and current cursor allow one two-event gesture', () =
   assert.deepEqual(atomicClickContract().inputRecords, ['LEFTDOWN', 'LEFTUP']);
 });
 
-// COLD-04 / P1: readback exceeding the one-pixel bound still prevents the
+// COLD-04 / P1: readback exceeding the custody bound still prevents the
 // gesture. This replaces the pre-correction exact-equality expectation
 // (a 1px delta used to throw here; see the bounded-custody suite below for
 // why that was stricter than the actual target-custody requirement).
-test('cursor readback beyond the one-pixel bound prevents any native gesture', () => {
-  assert.throws(() => assertCursorCustody({ x: 100, y: 200 }, { x: 102, y: 200 }), /custody was not established/);
-  assert.throws(() => assertCursorCustody({ x: 100, y: 200 }, { x: 100, y: 202 }), /custody was not established/);
+// UI-R1: the bound is ±2px -- real wireless-pointer jitter made ±1px
+// un-winnable while the click contract stays identical (same target).
+test('cursor readback beyond the two-pixel bound prevents any native gesture', () => {
+  assert.throws(() => assertCursorCustody({ x: 100, y: 200 }, { x: 103, y: 200 }), /custody was not established/);
+  assert.throws(() => assertCursorCustody({ x: 100, y: 200 }, { x: 100, y: 203 }), /custody was not established/);
 });
 
 test('non-finite or missing cursor points prevent the native gesture', () => {
@@ -108,7 +110,7 @@ test('non-finite or missing cursor points prevent the native gesture', () => {
   assert.throws(() => assertCursorCustody({ x: 100, y: 200 }, { x: NaN, y: 200 }), /custody was not established/);
 });
 
-// COLD-04 / P1 bounded-custody suite: a readback within one physical pixel is
+// COLD-04 / P1 bounded-custody suite: a readback within the custody bound is
 // safe only when the actual point remains strictly interior of the same
 // verified activation target. Fixture rect is {x:600,y:10,width:50,height:28}
 // -> bounds {left:600,top:10,right:650,bottom:38}, deep-interior center (625,24).
@@ -158,16 +160,21 @@ test('one-pixel readback that crosses the top or bottom boundary is rejected', (
   );
 });
 
-test('two-pixel X readback is rejected even while still inside the target', () => {
-  assert.throws(
-    () => assertCursorCustody({ x: 625, y: 24 }, { x: 627, y: 24 }, custodyBounds),
-    /custody was not established/
-  );
+test('two-pixel X readback deep inside the same target is accepted', () => {
+  assert.equal(assertCursorCustody({ x: 625, y: 24 }, { x: 627, y: 24 }, custodyBounds), true);
 });
 
-test('two-pixel Y readback is rejected even while still inside the target', () => {
+test('two-pixel Y readback deep inside the same target is accepted', () => {
+  assert.equal(assertCursorCustody({ x: 625, y: 24 }, { x: 625, y: 26 }, custodyBounds), true);
+});
+
+test('three-pixel readback is rejected even while still inside the target', () => {
   assert.throws(
-    () => assertCursorCustody({ x: 625, y: 24 }, { x: 625, y: 26 }, custodyBounds),
+    () => assertCursorCustody({ x: 625, y: 24 }, { x: 628, y: 24 }, custodyBounds),
+    /custody was not established/
+  );
+  assert.throws(
+    () => assertCursorCustody({ x: 625, y: 24 }, { x: 625, y: 27 }, custodyBounds),
     /custody was not established/
   );
 });
@@ -631,16 +638,15 @@ test('B. ±1 absolute-stable readback: differs from the requested point by <=1 a
 });
 
 // C. SG1 REGRESSION TEST -- this is exactly the shape the first settlement-gate
-// commit (b2c2de7) accepted incorrectly: each sample is only <=1px from the
+// commit (b2c2de7) accepted incorrectly: each sample is only a small step from the
 // PREVIOUS sample, so it "looked" step-stable, but each is progressively
-// farther from the original requested point. None of these samples is even
-// individually qualifying once measured against the absolute requested
-// point (delta 1, 2, 3, 4) -- only the first (delta 1) qualifies at all, and
-// it alone can never reach the required streak of 3.
+// farther from the original requested point. Only the samples inside the
+// absolute ±2 custody bound (delta 1, 2) qualify at all, and they alone can
+// never reach the required streak of 3.
 test('C. cumulative drift away from the requested point must not settle (SG1 regression)', () => {
   const samples = [
     { x: 626, y: 24, elapsedMs: 5 },  // +1, qualifies alone
-    { x: 627, y: 24, elapsedMs: 60 }, // +2, does not qualify -- resets streak
+    { x: 627, y: 24, elapsedMs: 60 }, // +2, qualifies -- streak reaches only 2
     { x: 628, y: 24, elapsedMs: 120 }, // +3, does not qualify
     { x: 629, y: 24, elapsedMs: 180 }  // +4, does not qualify
   ];
@@ -663,10 +669,10 @@ test('D. stale previous position then converges to the requested point settles o
   assert.deepEqual(result.acceptedSample, { x: 625, y: 24 });
 });
 
-test('E. transient +2/+3-from-requested-point samples inside the button do not qualify even though strict-interior, only the later exact samples settle', () => {
+test('E. transient +3/+4-from-requested-point samples inside the button do not qualify even though strict-interior, only the later exact samples settle', () => {
   const samples = [
-    { x: 627, y: 24, elapsedMs: 5 },  // +2 from requested point -- does not qualify, even though well inside custodyBounds
-    { x: 628, y: 24, elapsedMs: 10 }, // +3 -- does not qualify
+    { x: 628, y: 24, elapsedMs: 5 },  // +3 from requested point -- does not qualify, even though well inside custodyBounds
+    { x: 629, y: 24, elapsedMs: 10 }, // +4 -- does not qualify
     { x: 625, y: 24, elapsedMs: 15 }, // exact -- streak starts here
     { x: 625, y: 24, elapsedMs: 20 },
     { x: 625, y: 24, elapsedMs: 25 }
@@ -674,16 +680,16 @@ test('E. transient +2/+3-from-requested-point samples inside the button do not q
   const result = evaluateCursorSettlement(samples, settlementTarget, custodyBounds);
   assert.equal(result.settled, true);
   assert.equal(result.stableRunLength, 3);
-  // The accepted sample cannot be either of the two +2/+3 transients.
-  assert.notDeepEqual(result.acceptedSample, { x: 627, y: 24 });
+  // The accepted sample cannot be either of the two +3/+4 transients.
   assert.notDeepEqual(result.acceptedSample, { x: 628, y: 24 });
+  assert.notDeepEqual(result.acceptedSample, { x: 629, y: 24 });
 });
 
-test('F. stable +2-from-requested-point the whole time never qualifies and times out (no permanent multi-pixel displacement is accepted)', () => {
+test('F. stable +3-from-requested-point the whole time never qualifies and times out (no permanent multi-pixel displacement is accepted)', () => {
   const samples = [
-    { x: 627, y: 24, elapsedMs: 50 },
-    { x: 627, y: 24, elapsedMs: 150 },
-    { x: 627, y: 24, elapsedMs: 260 } // exceeds DEFAULT_SETTLEMENT_TIMEOUT_MS (250)
+    { x: 628, y: 24, elapsedMs: 50 },
+    { x: 628, y: 24, elapsedMs: 150 },
+    { x: 628, y: 24, elapsedMs: 860 } // exceeds DEFAULT_SETTLEMENT_TIMEOUT_MS (800)
   ];
   const result = evaluateCursorSettlement(samples, settlementTarget, custodyBounds);
   assert.equal(result.settled, false);
@@ -712,14 +718,14 @@ test('H. foreground loss while waiting fails immediately, not after further poll
   assert.equal(result.stableRunLength, 1);
 });
 
-test('I. settles, then the final pre-SendInput sample is outside the absolute ±1 bound: rejected, no click', () => {
+test('I. settles, then the final pre-SendInput sample is outside the absolute ±2 bound: rejected, no click', () => {
   const settlement = evaluateCursorSettlement([
     { x: 625, y: 24, elapsedMs: 5 },
     { x: 625, y: 24, elapsedMs: 10 },
     { x: 625, y: 24, elapsedMs: 15 }
   ], settlementTarget, custodyBounds);
   assert.equal(settlement.settled, true);
-  const finalCheck = evaluateFinalPreSendCheck(settlementTarget, { x: 627, y: 24 }, custodyBounds);
+  const finalCheck = evaluateFinalPreSendCheck(settlementTarget, { x: 628, y: 24 }, custodyBounds);
   assert.equal(finalCheck.ok, false);
   assert.equal(finalCheck.reason, 'final-pre-send-check-outside-absolute-bound');
 });

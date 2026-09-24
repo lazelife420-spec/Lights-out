@@ -408,7 +408,7 @@ function applyCustomization(c) {
   }
 }
 
-const CUSTOMIZE_DEFAULTS = { accent: '#5b8cff', theme: 'midnight', ringStyle: 'glow', opacity: 1, volume: 1, warmShift: true, soundscape: 'off', ambientVisual: 'off' };
+const CUSTOMIZE_DEFAULTS = { accent: '#9b93d6', theme: 'midnight', ringStyle: 'glow', opacity: 1, volume: 1, warmShift: true, soundscape: 'off', ambientVisual: 'off' };
 
 function syncCustomizeUI() {
   const c = state.customization;

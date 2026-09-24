@@ -10,7 +10,7 @@ const os = require('node:os');
 const path = require('node:path');
 const {
   assertOwnedEndpoint,
-  exerciseMenuContract,
+  exerciseNavContract,
   waitForAuthoritativeReadiness
 } = require('../scripts/packaged-proof-readiness');
 const {
@@ -28,14 +28,14 @@ const ready = generation => ({
   documentReadyState: 'complete',
   proofExists: true,
   proofReady: true,
-  menusReady: true,
+  navReady: true,
   openModal: null
 });
 
 test('packaged proof waits through delayed renderer initialization', async () => {
   const states = [
-    { ...ready('a'), proofReady: false, menusReady: false },
-    { ...ready('a'), menusReady: false },
+    { ...ready('a'), proofReady: false, navReady: false },
+    { ...ready('a'), navReady: false },
     ready('a'),
     ready('a')
   ];
@@ -71,65 +71,87 @@ test('packaged proof cannot attach to the wrong CDP listener process', () => {
   }), /different process/);
 });
 
-test('menu interaction starts only after readiness and proves open, pointer, Escape, and focus', async () => {
+test('nav interaction starts only after readiness and proves activation', async () => {
   const actions = [];
   let state = {
     connected: true,
     visible: true,
     enabled: true,
-    ariaExpanded: 'false',
-    open: false,
-    menuVisible: false,
+    active: false,
+    ariaCurrent: null,
+    activeModal: null,
+    menuRemnants: 0,
     focusedId: null
   };
-  const result = await exerciseMenuContract({
-    menuId: 'menu-power',
+  const result = await exerciseNavContract({
+    navId: 'nav-modes',
     readReadiness: async () => {
       actions.push('ready');
-      return { menusReady: true };
+      return { navReady: true };
     },
-    readMenu: async () => ({ ...state }),
-    clickTrigger: async () => {
+    readNav: async () => ({ ...state }),
+    clickNav: async () => {
       actions.push('click');
-      state = { ...state, ariaExpanded: 'true', open: true, menuVisible: true, focusedId: 'first-item' };
+      state = { ...state, active: true, ariaCurrent: 'page', focusedId: 'nav-modes' };
     },
-    moveToFirstItem: async () => actions.push('move'),
-    pressEscape: async () => {
-      actions.push('escape');
-      state = { ...state, ariaExpanded: 'false', open: false, menuVisible: false, focusedId: 'menu-power' };
-    },
-    full: true
+    pressEscape: async () => actions.push('escape')
   });
-  assert.deepEqual(actions, ['ready', 'click', 'move', 'escape']);
-  assert.equal(result.opened.open, true);
-  assert.equal(result.pointerTransfer.open, true);
-  assert.equal(result.closed.focusedId, 'menu-power');
+  assert.deepEqual(actions, ['ready', 'click']);
+  assert.equal(result.activated.active, true);
+  assert.equal(result.activated.ariaCurrent, 'page');
 });
 
-test('handled menu keys do not invoke timer shortcuts', async () => {
-  let timerStarts = 0;
+test('nav help destination opens the About modal and Escape closes it', async () => {
+  const actions = [];
   let state = {
     connected: true,
     visible: true,
     enabled: true,
-    ariaExpanded: 'false',
-    open: false,
-    menuVisible: false,
+    active: false,
+    ariaCurrent: null,
+    activeModal: null,
+    menuRemnants: 0,
     focusedId: null
   };
-  await exerciseMenuContract({
-    menuId: 'menu-help',
-    readReadiness: async () => ({ menusReady: true }),
-    readMenu: async () => ({ ...state }),
-    clickTrigger: async () => {
-      state = { ...state, ariaExpanded: 'true', open: true, menuVisible: true };
+  const result = await exerciseNavContract({
+    navId: 'nav-help',
+    readReadiness: async () => ({ navReady: true }),
+    readNav: async () => ({ ...state }),
+    clickNav: async () => {
+      actions.push('click');
+      state = { ...state, activeModal: 'about-modal' };
     },
-    moveToFirstItem: async () => {},
     pressEscape: async () => {
-      state = { ...state, ariaExpanded: 'false', open: false, menuVisible: false, focusedId: 'menu-help' };
-    }
+      actions.push('escape');
+      state = { ...state, activeModal: null };
+    },
+    opensModal: true
   });
-  assert.equal(timerStarts, 0);
+  assert.deepEqual(actions, ['click', 'escape']);
+  assert.equal(result.opened.activeModal, 'about-modal');
+  assert.equal(result.closed.activeModal, null);
+});
+
+test('nav contract fails when top-menu remnants are still in the DOM', async () => {
+  await assert.rejects(
+    exerciseNavContract({
+      navId: 'nav-lib',
+      readReadiness: async () => ({ navReady: true }),
+      readNav: async () => ({
+        connected: true,
+        visible: true,
+        enabled: true,
+        active: false,
+        ariaCurrent: null,
+        activeModal: null,
+        menuRemnants: 3,
+        focusedId: null
+      }),
+      clickNav: async () => {},
+      pressEscape: async () => {}
+    }),
+    /top-menu remnants still in DOM/
+  );
 });
 
 function emptyResources() {

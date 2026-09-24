@@ -85,31 +85,18 @@ function extractMainEscapeBranch(source) {
   return source.slice(ifStart, i);
 }
 
-// Extracts a top-level `if (<condition>) { ... }` block by exact source
-// text (condition given without the surrounding `if (...)`), via balanced
-// brace matching. Used for the top-menu submenu branches, which are small
-// standalone if-blocks inside a much larger click handler not otherwise
-// practical to extract whole.
-function extractIfBlock(source, condition) {
-  const marker = `if (${condition}) {`;
-  const ifStart = source.indexOf(marker);
-  if (ifStart === -1) throw new Error(`${marker} not found in renderer.js`);
-  const braceStart = source.indexOf('{', ifStart);
-  let i = braceStart + 1;
-  let depth = 1;
-  while (depth > 0 && i < source.length) {
-    if (source[i] === '{') depth++;
-    else if (source[i] === '}') depth--;
-    i++;
-  }
-  return source.slice(ifStart, i);
+// Strips `// ...` line comments before running "must not contain" regex
+// checks -- the explanatory comments on these branches legitimately
+// mention the old function names/calls in prose (documenting what they
+// used to do), which would otherwise false-positive a naive substring/regex
+// check against the comment text itself, not the executable code.
+function stripLineComments(text) {
+  return text.split('\n').map(line => line.replace(/\/\/.*$/, '')).join('\n');
 }
 
 // Extracts just the `{ ... }` body introduced by arbitrary literal text
 // ending in an opening `{` (e.g. an addEventListener/api.on... callback
-// signature), via balanced brace matching -- same technique as
-// extractIfBlock() above, generalized to any such marker rather than
-// specifically an `if (...) {` header, and returning only the brace body
+// signature), via balanced brace matching, and returning only the brace body
 // (not the marker prefix) so it can be attached directly to a new
 // function signature. Used for the Companion-setup button and the
 // tray/global-shortcut IPC handler, which are anonymous callbacks, not
@@ -160,7 +147,7 @@ function createElement({ id = null, classes = [], dataset = {}, style = {}, visi
     addEventListener: () => {},
     click: () => { el.__clicked = (el.__clicked || 0) + 1; },
     // Settable like __focused/__clicked above -- tests flip this directly
-    // (e.g. sandbox.menuHelp.__visible = false) to simulate an ancestor
+    // (e.g. a nav control going hidden) to simulate an ancestor
     // hiding the element (body.mini-mode hiding .chrome-header/
     // .ns-sidebar), which is exactly what isRendered()'s real
     // checkVisibility() call has to detect and an inline-style read alone
@@ -260,12 +247,6 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab, remoteC
   };
   const btnNotif = createElement({ id: 'btn-notif' });
   const btnLanWarningCancel = createElement({ id: 'btn-lan-warning-cancel' });
-  // The always-visible top-menu triggers themselves -- #menu-help/
-  // #menu-settings, the parents of #open-about/#open-options -- distinct
-  // from those submenu items, which the top-menu click handler no longer
-  // uses as a restoration target (see triggerTopMenuAbout tests below).
-  const menuHelp = createElement({ id: 'menu-help' });
-  const menuSettings = createElement({ id: 'menu-settings' });
 
   const elementsById = {
     'notif-drawer': modalEls['notif-drawer'],
@@ -277,8 +258,6 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab, remoteC
     'override-modal': modalEls['override-modal'],
     'snooze-tax-modal': modalEls['snooze-tax-modal'],
     'ritual-overlay': modalEls['ritual-overlay'],
-    'menu-help': menuHelp,
-    'menu-settings': menuSettings
   };
   const fakeDocument = createFakeDocument({ elementsById, navItems });
 
@@ -360,12 +339,6 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab, remoteC
     extractFunction(rendererSource, 'openSettingsPanel'),
     extractFunction(rendererSource, 'closeSettingsPanel'),
     extractFunction(rendererSource, 'handleSidebarNavigation'),
-    // The actual top-menu submenu branches, wrapped as standalone
-    // functions -- real source, not a re-implementation -- so tests
-    // exercise the literal code path a real click runs, delegating into
-    // the SAME extracted handleSidebarNavigation() above.
-    `function triggerTopMenuSettings(item) {\n${extractIfBlock(rendererSource, "item.id === 'open-options'")}\n}`,
-    `function triggerTopMenuAbout(item) {\n${extractIfBlock(rendererSource, "item.id === 'open-about'")}\n}`,
     // The Companion-setup button and the tray/global-shortcut IPC
     // handler, wrapped as standalone functions -- real callback bodies,
     // not a re-implementation -- so tests exercise the literal code path
@@ -374,7 +347,7 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab, remoteC
     // openSettingsPanel() bypass.
     `async function triggerCompanionSettingsClick() ${extractBlockAfter(rendererSource, "els.btnCompanion?.addEventListener('click', async () => {")}`,
     `function triggerOnOpenSettingsIpc() ${extractBlockAfter(rendererSource, 'api.onOpenSettings(() => {')}`,
-    `this.__nav = { closeAnyDismissibleModal, findActiveBlockingModal, handleSidebarNavigation, setSidebarSelection, applyMainPanelVisibility, openSettingsPanel, closeSettingsPanel, openHelpPanel, closeHelpPanel, isSensibleFocusTarget, triggerTopMenuSettings, triggerTopMenuAbout, triggerCompanionSettingsClick, triggerOnOpenSettingsIpc, getSettingsReturnTab: () => settingsReturnTab, getHelpOpenerElement: () => helpOpenerElement };`
+    `this.__nav = { closeAnyDismissibleModal, findActiveBlockingModal, handleSidebarNavigation, setSidebarSelection, applyMainPanelVisibility, openSettingsPanel, closeSettingsPanel, openHelpPanel, closeHelpPanel, isSensibleFocusTarget, triggerCompanionSettingsClick, triggerOnOpenSettingsIpc, getSettingsReturnTab: () => settingsReturnTab, getHelpOpenerElement: () => helpOpenerElement };`
   ].join('\n');
   vm.runInContext(source, context);
   // Initialize .active/aria-current via the real setSidebarSelection(),
@@ -388,8 +361,6 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab, remoteC
     modalEls,
     panels,
     navItems,
-    menuHelp,
-    menuSettings,
     fakeDocument,
     calls,
     ...context.__nav
@@ -753,342 +724,11 @@ test('ordinary dismissible modals (About, profiles, receipts, etc.) still dismis
   assert.equal(sandbox.panels.panelModes.style.display, '');
 });
 
-// --- Chrome (top-menu) actions routed through the navigation contract
-// (second corrective pass, REQUIRED) ----------------------------------------
-//
-// The always-visible top chrome menu ("Settings" -> "Advanced Options...",
-// "Help" -> "About") had its own independent openSettingsPanel()/
-// openHelpPanel() + setSidebarSelection() calls, completely bypassing
-// handleSidebarNavigation() -- silently reintroducing the exact
-// current-view-truth defect the prior corrective pass fixed for the
-// sidebar, and skipping the blocking-modal/dismissible-modal checks
-// entirely. Both branches now just call handleSidebarNavigation() with
-// the same tab id the sidebar uses. These tests exercise the ACTUAL
-// top-menu branch source (via triggerTopMenuSettings/triggerTopMenuAbout,
-// extracted from renderer.js) delegating into the real
-// handleSidebarNavigation(), not just the sidebar path a second time.
-
-test('top-menu Settings ("Advanced Options...") from Tonight follows normal navigation', async () => {
-  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
-
-  await sandbox.triggerTopMenuSettings({ id: 'open-options' });
-
-  const setItem = sandbox.navItems.find(i => i.dataset.nsTab === 'set');
-  assert.equal(setItem.classList.contains('active'), true);
-  assert.equal(setItem.getAttribute('aria-current'), 'page');
-  assert.equal(sandbox.panels.panelSet.style.display, '');
-  assert.equal(sandbox.getSettingsReturnTab(), 'lib');
-});
-
-test('top-menu Settings from Modes/Schedule records the correct return destination', async () => {
-  for (const fromTab of ['modes', 'sch']) {
-    const sandbox = createNavigationSandbox({ activeTab: fromTab });
-    await sandbox.triggerTopMenuSettings({ id: 'open-options' });
-    assert.equal(sandbox.getSettingsReturnTab(), fromTab, `opening Settings from the top menu while on ${fromTab} must record ${fromTab} as the return destination`);
-  }
-});
-
-test('top-menu Settings with an ordinary dismissible modal open closes it first, then opens Settings', async () => {
-  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
-  sandbox.modalEls['about-modal'].classList.add('active');
-
-  await sandbox.triggerTopMenuSettings({ id: 'open-options' });
-
-  assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), false, 'the stray modal must be dismissed');
-  assert.equal(sandbox.panels.panelSet.style.display, '', 'Settings must still open');
-});
-
-test('top-menu Settings is refused while each of the four blocking modals is active', async () => {
-  for (const id of NON_DISMISSIBLE_MODAL_IDS) {
-    const sandbox = createNavigationSandbox({ activeTab: 'lib' });
-    sandbox.modalEls[id].classList.add('active');
-
-    // The submenu branch itself is fire-and-forget (matches the real
-    // click-handler pattern -- it never returns a value the caller
-    // observes), so "refused" is asserted via side effects, not a
-    // returned boolean.
-    await sandbox.triggerTopMenuSettings({ id: 'open-options' });
-
-    assert.equal(sandbox.panels.panelSet.style.display, 'none', `${id}: Settings must not open`);
-    assert.equal(sandbox.panels.panelLib.style.display, '', `${id}: the underlying page must not change`);
-    const libItem = sandbox.navItems.find(i => i.dataset.nsTab === 'lib');
-    assert.equal(libItem.classList.contains('active'), true, `${id}: the nav indicator must not move`);
-    assert.equal(sandbox.modalEls[id].classList.contains('active'), true, `${id}: the blocking modal must remain active`);
-  }
-});
-
-test('blocked top-menu Settings leaves destination and nav state completely unchanged', async () => {
-  const sandbox = createNavigationSandbox({ activeTab: 'modes' });
-  sandbox.modalEls['override-modal'].classList.add('active');
-  const snapshot = { ...sandbox.state };
-
-  await sandbox.triggerTopMenuSettings({ id: 'open-options' });
-
-  assert.equal(sandbox.state.action, snapshot.action);
-  assert.equal(sandbox.state.dryRun, snapshot.dryRun);
-  assert.equal(sandbox.calls.discardSettingsPanelChanges, 0);
-  assert.equal(sandbox.calls.render, 0);
-  assert.equal(sandbox.getSettingsReturnTab(), 'lib', 'a refused Settings request must not touch settingsReturnTab at all');
-});
-
-test('top-menu About ("Help" -> "About") from Tonight leaves Tonight current', async () => {
-  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
-
-  await sandbox.triggerTopMenuAbout({ id: 'open-about' });
-
-  assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), true);
-  const libItem = sandbox.navItems.find(i => i.dataset.nsTab === 'lib');
-  const helpItem = sandbox.navItems.find(i => i.dataset.nsTab === 'help');
-  assert.equal(libItem.classList.contains('active'), true, 'Tonight must remain current');
-  assert.equal(libItem.getAttribute('aria-current'), 'page');
-  assert.equal(helpItem.classList.contains('active'), false, 'top-menu About must never assign Help as current, same as the sidebar path');
-  assert.equal(helpItem.getAttribute('aria-current'), null);
-});
-
-test('top-menu About from Settings leaves Settings current', async () => {
-  const sandbox = createNavigationSandbox({ activeTab: 'sch' });
-  await sandbox.openSettingsPanel();
-
-  await sandbox.triggerTopMenuAbout({ id: 'open-about' });
-
-  assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), true);
-  const setItem = sandbox.navItems.find(i => i.dataset.nsTab === 'set');
-  assert.equal(setItem.classList.contains('active'), true, 'Settings must remain current underneath top-menu About');
-  assert.equal(setItem.getAttribute('aria-current'), 'page');
-  assert.equal(sandbox.panels.panelSet.style.display, '', 'Settings must still actually be the visible panel');
-});
-
-test('top-menu About never assigns Help aria-current under any starting tab', async () => {
-  for (const tab of NAV_TABS) {
-    const sandbox = createNavigationSandbox({ activeTab: tab });
-    await sandbox.triggerTopMenuAbout({ id: 'open-about' });
-    const helpItem = sandbox.navItems.find(i => i.dataset.nsTab === 'help');
-    assert.equal(helpItem.getAttribute('aria-current'), null, `starting from ${tab}, top-menu About must not assign Help aria-current`);
-    assert.equal(helpItem.classList.contains('active'), false);
-  }
-});
-
-test('top-menu About is refused while a blocking safety modal is active -- does not stack on top of it', async () => {
-  for (const id of NON_DISMISSIBLE_MODAL_IDS) {
-    const sandbox = createNavigationSandbox({ activeTab: 'lib' });
-    sandbox.modalEls[id].classList.add('active');
-
-    // Same fire-and-forget note as the top-menu Settings test above.
-    await sandbox.triggerTopMenuAbout({ id: 'open-about' });
-
-    assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), false, `${id}: About must not open on top of it`);
-    assert.equal(sandbox.modalEls[id].classList.contains('active'), true, `${id}: the safety modal must remain untouched`);
-  }
-});
-
-test('Settings unsaved state survives top-menu About', async () => {
-  const sandbox = createNavigationSandbox({ activeTab: 'sch' });
-  await sandbox.openSettingsPanel();
-
-  await sandbox.triggerTopMenuAbout({ id: 'open-about' });
-  await sandbox.closeHelpPanel();
-
-  assert.equal(sandbox.calls.discardSettingsPanelChanges, 0, 'top-menu About must never discard Settings state');
-  assert.equal((sandbox.calls.saveSettingsPanel || 0), 0, 'top-menu About must never save Settings state');
-  assert.equal(sandbox.panels.panelSet.style.display, '', 'Settings must still be open exactly as the user left it');
-});
-
-// --- Top-menu About focus restoration (Navigation Foundation final
-// corrective pass) ------------------------------------------------------
-//
-// Reproduces and fixes the reachable defect: real click order is
-// closeAllTopMenus() (hides #open-about, which moves the browser's
-// document.activeElement to BODY) THEN the 'open-about' branch runs. If
-// openHelpPanel() trusted document.activeElement at that point it would
-// record BODY, and closing About would restore focus nowhere useful.
-// triggerTopMenuAbout() below now supplies #menu-help -- the visible
-// parent Help menu trigger -- as an explicit restoreTarget instead, so
-// this is exercised regardless of what document.activeElement happens to
-// be by the time the branch runs.
-
-test('top-menu About records the visible top-level Help trigger as its restoration target, not #open-about', async () => {
-  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
-  // Simulates the real sequence as closely as the sandbox allows:
-  // #open-about is the element the user actually activated, but by the
-  // time this branch runs (after closeAllTopMenus()) it's already hidden,
-  // and activeElement has already moved to BODY -- both of which must be
-  // ignored in favor of the explicit #menu-help target.
-  const submenuItem = createElement({ id: 'open-about', style: { display: 'none' } });
-  sandbox.fakeDocument.__setActive(sandbox.fakeDocument.body);
-
-  await sandbox.triggerTopMenuAbout(submenuItem);
-
-  assert.equal(sandbox.getHelpOpenerElement(), sandbox.menuHelp, 'the recorded restoration target must be the visible #menu-help trigger');
-  assert.notEqual(sandbox.getHelpOpenerElement(), submenuItem, 'the hidden #open-about submenu item must never be recorded as the restoration target');
-});
-
-test('closing top-menu About restores focus to the visible Help menu trigger, never the hidden submenu item or BODY', async () => {
-  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
-  const submenuItem = createElement({ id: 'open-about', style: { display: 'none' } });
-  sandbox.fakeDocument.__setActive(sandbox.fakeDocument.body);
-
-  await sandbox.triggerTopMenuAbout(submenuItem);
-  sandbox.closeHelpPanel();
-
-  assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), false);
-  assert.equal(sandbox.menuHelp.__focused, true, 'focus must land on the visible top-level Help menu trigger');
-  assert.notEqual(submenuItem.__focused, true, 'the hidden #open-about submenu item must never receive focus back');
-  assert.notEqual(sandbox.fakeDocument.body.__focused, true, 'BODY must never be the thing focus() is actually called on');
-});
-
-test('X, backdrop, and Escape all restore top-menu About focus the same way, through the same closeHelpPanel()', async () => {
-  // All three close mechanisms are wired to call closeHelpPanel() directly
-  // (see wireEvents(): els.aboutModalClose click, els.aboutModal backdrop
-  // click, and the Escape handler's about-modal branch) -- there is only
-  // one restoration code path for all of them to share, so exercising the
-  // real closeHelpPanel() once, after each, proves all three behave alike.
-  for (const trigger of ['x-button', 'backdrop', 'escape']) {
-    const sandbox = createNavigationSandbox({ activeTab: 'lib' });
-    const submenuItem = createElement({ id: 'open-about', style: { display: 'none' } });
-    sandbox.fakeDocument.__setActive(sandbox.fakeDocument.body);
-
-    await sandbox.triggerTopMenuAbout(submenuItem);
-    // The X button, backdrop click, and Escape key each just invoke
-    // closeHelpPanel() -- see the structural assertions below for proof
-    // they're wired that way in the real source.
-    sandbox.closeHelpPanel();
-
-    assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), false, `${trigger}: About must close`);
-    assert.equal(sandbox.menuHelp.__focused, true, `${trigger}: focus must land on the visible Help menu trigger`);
-  }
-});
-
-test('X button and backdrop click both close About via closeHelpPanel(), not a raw classList.remove() (structural)', () => {
-  assert.match(rendererSource, /els\.aboutModalClose\.addEventListener\('click', \(\) => closeHelpPanel\(\)\)/, 'the X button must call closeHelpPanel()');
-  assert.match(rendererSource, /if \(event\.target === els\.aboutModal\) closeHelpPanel\(\);/, 'the backdrop click must call closeHelpPanel()');
-});
-
-test('sidebar About restoration is unaffected by the top-menu fix -- still restores to the sidebar Help control', async () => {
-  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
-  const helpButton = sandbox.navItems.find(i => i.dataset.nsTab === 'help');
-  sandbox.fakeDocument.__setActive(helpButton);
-
-  await sandbox.handleSidebarNavigation('help');
-  assert.equal(sandbox.getHelpOpenerElement(), helpButton, 'the sidebar path must still record its own visible opener, not #menu-help');
-
-  sandbox.closeHelpPanel();
-  assert.equal(helpButton.__focused, true, 'focus must return to the sidebar Help button, unchanged from before this fix');
-  assert.notEqual(sandbox.menuHelp.__focused, true, 'the sidebar path must never redirect focus to the top-menu trigger');
-});
-
-test('a hidden or disconnected element is never used as the final focus-restoration destination', () => {
-  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
-  const hidden = createElement({ id: 'hidden-target', style: { display: 'none' } });
-  const disconnected = createElement({ id: 'disconnected-target' });
-  disconnected.isConnected = false;
-  const disabled = createElement({ id: 'disabled-target' });
-  disabled.disabled = true;
-
-  assert.equal(sandbox.isSensibleFocusTarget(hidden), false, 'a display:none element must be rejected');
-  assert.equal(sandbox.isSensibleFocusTarget(disconnected), false, 'a disconnected element must be rejected');
-  assert.equal(sandbox.isSensibleFocusTarget(disabled), false, 'a disabled element must be rejected');
-
-  // openHelpPanel() must not record any of them even when explicitly
-  // supplied as restoreTarget -- it must fall back instead.
-  sandbox.openHelpPanel(hidden);
-  assert.notEqual(sandbox.getHelpOpenerElement(), hidden);
-  sandbox.closeHelpPanel();
-});
-
-test('BODY is never the successful focus-restoration target', () => {
-  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
-
-  assert.equal(sandbox.isSensibleFocusTarget(sandbox.fakeDocument.body), false, 'document.body must never be treated as a sensible focus target');
-
-  // With activeElement already BODY (the exact real-world state right
-  // after closeAllTopMenus() hides a focused submenu item) and no
-  // restoreTarget supplied, openHelpPanel() must not fall back to it.
-  sandbox.fakeDocument.__setActive(sandbox.fakeDocument.body);
-  sandbox.openHelpPanel();
-  assert.notEqual(sandbox.getHelpOpenerElement(), sandbox.fakeDocument.body);
-
-  sandbox.closeHelpPanel();
-  assert.notEqual(sandbox.fakeDocument.body.__focused, true, 'closeHelpPanel() must never call focus() on BODY');
-});
-
-test('top-menu About refused by a blocking safety modal still redirects focus off BODY/the hidden submenu, onto the visible Help trigger', async () => {
-  for (const id of NON_DISMISSIBLE_MODAL_IDS) {
-    const sandbox = createNavigationSandbox({ activeTab: 'lib' });
-    sandbox.modalEls[id].classList.add('active');
-    const submenuItem = createElement({ id: 'open-about', style: { display: 'none' } });
-    sandbox.fakeDocument.__setActive(sandbox.fakeDocument.body);
-
-    await sandbox.triggerTopMenuAbout(submenuItem);
-
-    assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), false, `${id}: About must not open on top of it`);
-    assert.equal(sandbox.modalEls[id].classList.contains('active'), true, `${id}: the safety modal must remain untouched (blocking semantics unchanged)`);
-    assert.equal(sandbox.getSettingsReturnTab(), 'lib', `${id}: refusal must not touch unrelated navigation state`);
-    assert.equal(sandbox.menuHelp.__focused, true, `${id}: focus must land on the visible Help menu trigger instead of staying stranded on BODY`);
-  }
-});
-
-test('top-menu Settings refused by a blocking safety modal redirects focus onto the visible Settings trigger, not BODY', async () => {
-  for (const id of NON_DISMISSIBLE_MODAL_IDS) {
-    const sandbox = createNavigationSandbox({ activeTab: 'lib' });
-    sandbox.modalEls[id].classList.add('active');
-
-    await sandbox.triggerTopMenuSettings({ id: 'open-options' });
-
-    assert.equal(sandbox.panels.panelSet.style.display, 'none', `${id}: Settings must not open (blocking semantics unchanged)`);
-    assert.equal(sandbox.menuSettings.__focused, true, `${id}: focus must land on the visible Settings menu trigger instead of staying stranded on BODY`);
-  }
-});
-
-test('top-menu About/Settings focus redirect only fires while a blocking modal is actually active -- the normal-case flow is untouched', async () => {
-  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
-
-  await sandbox.triggerTopMenuSettings({ id: 'open-options' });
-  assert.notEqual(sandbox.menuSettings.__focused, true, 'with nothing blocking, the eager redirect must not fire -- Settings itself opens normally');
-});
-
-test('sidebar navigation behavior is unaffected by the top-menu routing change', async () => {
-  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
-
-  const result = await sandbox.handleSidebarNavigation('modes');
-
-  assert.equal(result, true);
-  const modesItem = sandbox.navItems.find(i => i.dataset.nsTab === 'modes');
-  assert.equal(modesItem.classList.contains('active'), true);
-  assert.equal(sandbox.panels.panelModes.style.display, '');
-});
-
-test('Back (settingsReturnTab) behavior is unaffected by the top-menu routing change', async () => {
-  const sandbox = createNavigationSandbox({ activeTab: 'sch' });
-
-  await sandbox.triggerTopMenuSettings({ id: 'open-options' });
-  sandbox.closeSettingsPanel();
-
-  assert.equal(sandbox.panels.panelSch.style.display, '', 'Back must still return to Schedule via the top-menu-opened Settings, exactly as the sidebar path does');
-});
-
-// Strips `// ...` line comments before running "must not contain" regex
-// checks -- the explanatory comments on these exact branches legitimately
-// mention the old function names/calls in prose (documenting what they
-// used to do), which would otherwise false-positive a naive substring/regex
-// check against the comment text itself, not the executable code.
-function stripLineComments(text) {
-  return text.split('\n').map(line => line.replace(/\/\/.*$/, '')).join('\n');
-}
-
-test('the top-menu branches delegate to handleSidebarNavigation() rather than duplicating its checks (structural)', () => {
-  const optionsBlock = stripLineComments(extractIfBlock(rendererSource, "item.id === 'open-options'"));
-  assert.match(optionsBlock, /handleSidebarNavigation\('set'\)/);
-  assert.doesNotMatch(optionsBlock, /openSettingsPanel\(\)/, 'must not call openSettingsPanel() directly -- that would skip the blocking-modal check');
-  assert.doesNotMatch(optionsBlock, /setSidebarSelection\(/, 'must not call setSidebarSelection() directly -- handleSidebarNavigation() already does this correctly');
-
-  const aboutBlock = stripLineComments(extractIfBlock(rendererSource, "item.id === 'open-about'"));
-  // Takes a second arg now (an explicit focus-restoration target -- see the
-  // "records/restores the visible top-level Help trigger" tests below) but
-  // must still be the single entry point, same as 'set' above.
-  assert.match(aboutBlock, /handleSidebarNavigation\('help', \{ restoreTarget: menuTrigger \}\)/);
-  assert.doesNotMatch(aboutBlock, /openHelpPanel\(/, 'must not call openHelpPanel() directly -- that would skip the blocking-modal check');
-  assert.doesNotMatch(aboutBlock, /setSidebarSelection\(/, 'must not reintroduce the setSidebarSelection(\'help\') bug');
-});
+// UI-R1: the top Power/Settings/Help menus were removed -- the sidebar is the
+// single navigation authority. The equivalent contracts are exercised by the
+// sidebar navigation tests above (return destinations, blocking-modal refusal,
+// Help-leaves-current, unsaved-state preservation) and by the shell-nav gate
+// in desktop-ux-functional-gate.js.
 
 // --- .tab-btn internal sub-tab audit (read-only finding, narrowly fixed) ---
 //
@@ -1343,23 +983,21 @@ test('closeSettingsPanel() leaves settingsReturnTab itself completely untouched'
 test('a target hidden via an ancestor (not its own inline style) is rejected -- e.g. body.mini-mode hiding .chrome-header/.ns-sidebar', () => {
   const sandbox = createNavigationSandbox({ activeTab: 'lib' });
   // Real body.mini-mode hides .chrome-header/.ns-sidebar via a CSS rule
-  // on an ancestor -- #menu-help's/the sidebar Help button's own inline
-  // style is never touched. __visible simulates exactly that (see
-  // createElement()'s checkVisibility() mock above).
-  sandbox.menuHelp.__visible = false;
+  // on an ancestor -- the sidebar Help button's own inline style is never
+  // touched. __visible simulates exactly that (see createElement()'s
+  // checkVisibility() mock above).
   const sidebarHelp = sandbox.navItems.find(i => i.dataset.nsTab === 'help');
   sidebarHelp.__visible = false;
 
-  assert.equal(sandbox.isSensibleFocusTarget(sandbox.menuHelp), false, '#menu-help must be rejected once ancestor-hidden, even with untouched inline style');
   assert.equal(sandbox.isSensibleFocusTarget(sidebarHelp), false, 'the sidebar Help control must be rejected once ancestor-hidden, even with untouched inline style');
 });
 
 test('a genuinely visible target is not wrongly rejected by the hardened check', () => {
   const sandbox = createNavigationSandbox({ activeTab: 'lib' });
-  assert.equal(sandbox.isSensibleFocusTarget(sandbox.menuHelp), true);
-  assert.equal(sandbox.isSensibleFocusTarget(sandbox.menuSettings), true);
-  const sidebarHelp = sandbox.navItems.find(i => i.dataset.nsTab === 'help');
-  assert.equal(sandbox.isSensibleFocusTarget(sidebarHelp), true);
+  for (const tab of NAV_TABS) {
+    const item = sandbox.navItems.find(i => i.dataset.nsTab === tab);
+    assert.equal(sandbox.isSensibleFocusTarget(item), true, `${tab} nav item must be a sensible focus target`);
+  }
 });
 
 test('BODY/disconnected/disabled rejection still holds after the visibility hardening (regression guard)', () => {
@@ -1374,60 +1012,24 @@ test('BODY/disconnected/disabled rejection still holds after the visibility hard
   assert.equal(sandbox.isSensibleFocusTarget(disabled), false);
 });
 
-test('mini-mode About close does not target the now-hidden top-menu trigger or sidebar Help control', async () => {
+test('mini-mode About close does not target the now-hidden sidebar Help control', async () => {
   const sandbox = createNavigationSandbox({ activeTab: 'lib' });
-  const submenuItem = createElement({ id: 'open-about', style: { display: 'none' } });
-  sandbox.fakeDocument.__setActive(sandbox.fakeDocument.body);
+  const sidebarHelp = sandbox.navItems.find(i => i.dataset.nsTab === 'help');
+  sandbox.fakeDocument.__setActive(sidebarHelp);
 
-  await sandbox.triggerTopMenuAbout(submenuItem);
-  assert.equal(sandbox.getHelpOpenerElement(), sandbox.menuHelp, 'sanity: recorded the normal-mode target as usual');
+  await sandbox.handleSidebarNavigation('help');
+  assert.equal(sandbox.getHelpOpenerElement(), sidebarHelp, 'sanity: recorded the sidebar opener');
 
   // body.mini-mode toggles on WHILE About is still open -- toggleMiniMode()
-  // has no modal-open guard, and the global Ctrl+M handler has none
-  // either -- so both #menu-help and the sidebar Help control become
+  // has no modal-open guard -- so the sidebar Help control becomes
   // ancestor-hidden before About is closed.
-  sandbox.menuHelp.__visible = false;
-  const sidebarHelp = sandbox.navItems.find(i => i.dataset.nsTab === 'help');
   sidebarHelp.__visible = false;
 
   sandbox.closeHelpPanel();
 
   assert.equal(sandbox.modalEls['about-modal'].classList.contains('active'), false);
-  assert.notEqual(sandbox.menuHelp.__focused, true, 'the now-hidden top-menu trigger must never receive focus');
-  assert.notEqual(sidebarHelp.__focused, true, 'the now-hidden sidebar fallback must never receive focus either');
+  assert.notEqual(sidebarHelp.__focused, true, 'the now-hidden sidebar control must never receive focus');
   assert.notEqual(sandbox.fakeDocument.body.__focused, true, 'BODY must never be the successful target either');
-});
-
-test('normal-mode top-menu About restoration continues to work unchanged after the visibility hardening (regression guard)', async () => {
-  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
-  const submenuItem = createElement({ id: 'open-about', style: { display: 'none' } });
-  sandbox.fakeDocument.__setActive(sandbox.fakeDocument.body);
-
-  await sandbox.triggerTopMenuAbout(submenuItem);
-  sandbox.closeHelpPanel();
-
-  assert.equal(sandbox.menuHelp.__focused, true);
-});
-
-// --- Blocking-modal refusal focus, normalized (Navigation Foundation
-// final contract completion) --------------------------------------------
-//
-// The redirect calls in the top-menu click handler now go through
-// isSensibleFocusTarget() like every other focus call in this file,
-// instead of calling .focus() unconditionally.
-
-test('blocking-modal refusal never focuses a hidden top-menu trigger, for both About and Settings', async () => {
-  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
-  sandbox.modalEls['override-modal'].classList.add('active');
-  sandbox.menuHelp.__visible = false;
-  sandbox.menuSettings.__visible = false;
-
-  await sandbox.triggerTopMenuAbout({ id: 'open-about' });
-  await sandbox.triggerTopMenuSettings({ id: 'open-options' });
-
-  assert.notEqual(sandbox.menuHelp.__focused, true, 'a hidden Help trigger must never receive focus, even during blocking-modal refusal');
-  assert.notEqual(sandbox.menuSettings.__focused, true, 'a hidden Settings trigger must never receive focus, even during blocking-modal refusal');
-  assert.equal(sandbox.modalEls['override-modal'].classList.contains('active'), true, 'the blocking modal itself must remain untouched regardless');
 });
 
 // --- Central Settings-entry parity: Companion button + tray/IPC

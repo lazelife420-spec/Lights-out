@@ -1,41 +1,51 @@
-/* Lights Out - Cockpit Theme */
+/* Lights Out - Proof Foundry night theme (UI-R1 foundation).
+   Studio-wide DNA: #0B0F14 field, hairline #263746 borders, restrained glow.
+   Product accent: Lights Out violet #9B93D6 for identity/primary interaction.
+   Semantic: teal = connected/local/healthy, gold = proof/evidence,
+   amber = warnings, red = destructive. */
 :root {
-  --bg-primary: #0d0e11;
-  --bg-secondary: #15191c;
-  --bg-card: #1b2024;
-  --bg-hover: #273039;
-  --bg-elevated: #252b31;
-  
-  --accent-cyan: #76c9ff;
-  --accent-blue: #4a9eff;
-  --accent-amber: #d4a50a;
-  --accent-red: #ff4d4d;
-  --accent-green: #4caf50;
-  
-  --text-primary: #e8ecf1;
-  --text-secondary: #9aa5b8;
-  --text-muted: #6b7685;
-  
-  --border-color: #2a3040;
-  --ring-bg: #1a1f2e;
+  --bg-primary: #0b0f14;
+  --bg-secondary: #101923;
+  --bg-card: #151f28;
+  --bg-hover: #1b2429;
+  --bg-elevated: #1b2429;
+
+  --accent-cyan: #9b93d6;   /* product accent (violet) — keeps the var name */
+  --accent-blue: #8a80cc;   /* accent hover/dim variant */
+  --accent-amber: #f5b83d;  /* warning */
+  --accent-red: #ff5c7a;    /* destructive/blocked */
+  --accent-green: #23d18b;  /* success/completed */
+
+  --pf-teal: #00d1b2;       /* connected/local/healthy truth */
+  --pf-gold: #d6a84f;       /* proof/evidence accent */
+  --pf-proof: #85c8bb;      /* receipt/evidence text accent */
+  --border-strong: #3b4c63;
+
+  --text-primary: #f4f7f8;
+  --text-secondary: #91a0af;
+  --text-muted: #758083;
+
+  --border-color: #263746;
+  --ring-bg: #1a2230;
   --ring-fill: var(--accent-cyan);
 
   --font-display: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --radius-sm: 4px;
-  --radius-md: 8px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
   --radius-lg: 14px;
   --radius-xl: 20px;
+  --radius-pill: 999px;
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
   --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
-  --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
-  --shadow-glow: 0 0 20px rgba(91,140,255,0.15);
+  --shadow-lg: 0 24px 54px rgba(0,0,0,0.38);
+  --shadow-glow: 0 0 12px rgba(155,147,214,0.30);
 }
 
 /* Global focus ring for keyboard navigation */
 button:focus-visible,
 [role="button"]:focus-visible {
-  outline: 2px solid rgba(107, 211, 255, 0.9);
-  outline-offset: 2px;
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 3px;
 }
 
 /* Disabled / coming-soon state */
@@ -329,137 +339,8 @@ body.warm-shift .ambient-canvas {
   -webkit-user-drag: none;
 }
 
-/* Main Menu */
-.main-menu {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: 1;
-  justify-content: center;
-  -webkit-app-region: no-drag;
-}
-
-.menu-item {
-  position: relative;
-  padding: 6px 12px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  border-radius: 4px;
-  transition: all 0.15s ease;
-}
-
-.menu-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-/* Dropdown visibility is click-driven (see wireTopMenus() in renderer.js),
-   not hover-driven -- a hover-only menu closes the instant the pointer
-   drifts off-path between the label and the dropdown, which made Power/
-   Settings/Help effectively unusable. `.open` is toggled by JS. */
-.menu-item.open .submenu {
-  display: block;
-  animation: fadeInDown 0.2s ease;
-}
-
-@keyframes fadeInDown {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Menu item active state */
-.menu-item:active {
-  background: var(--bg-elevated);
-}
-
-/* Submenu item with icon */
-.submenu-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
-  min-height: 36px;
-  box-sizing: border-box;
-  font-size: 12px;
-  color: var(--text-secondary);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.submenu {
-  display: none;
-  position: absolute;
-  top: 100%;
-  left: 0;
-  min-width: 160px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: var(--card-radius);
-  padding: 6px;
-  margin-top: 4px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-  z-index: 1000;
-}
-
-/* Invisible bridge so moving the cursor from the menu item to the dropdown
-   does not cross a dead zone that would dismiss it. */
-.submenu::before {
-  content: '';
-  position: absolute;
-  top: -6px;
-  left: 0;
-  right: 0;
-  height: 6px;
-}
-
-.submenu-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  min-height: 36px;
-  box-sizing: border-box;
-  font-size: 12px;
-  color: var(--text-secondary);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.submenu-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.submenu-item.selected {
-  background: rgba(118, 201, 255, 0.12);
-  color: var(--accent-cyan);
-}
-
-.submenu-item .icon {
-  width: 16px;
-  text-align: center;
-}
-
-.submenu-item.toggle {
-  justify-content: space-between;
-}
-
-.toggle-indicator {
-  font-size: 10px;
-  padding: 2px 6px;
-  background: var(--bg-elevated);
-  border-radius: 3px;
-  color: var(--accent-amber);
-}
+/* Top Power/Settings/Help menus removed in UI-R1 — the sidebar is the
+   single navigation authority. */
 
 /* Window Buttons */
 .window-buttons {
@@ -961,7 +842,7 @@ input:disabled {
 
 /* Persistent "this is what will happen" state -- toggled by setAction() on
    every [data-action] element, same mechanism as the existing Power submenu
-   items (.submenu-item.selected), so a manual action choice is never a
+   items, so a manual action choice is never a
    separate visual language from the rest of the app. */
 .action-chip.selected {
   background: rgba(118, 201, 255, 0.12);
@@ -2137,14 +2018,6 @@ body.mini-mode .action-btn {
 @media (max-width: 500px) {
   .chrome-header {
     padding: 0 8px;
-  }
-
-  .main-menu {
-    gap: 2px;
-  }
-
-  .menu-item {
-    padding: 6px 8px;
   }
 
   .status-section {
@@ -4399,14 +4272,21 @@ body.ns-lobby .dashboard {
 }
 
 .ns-nav-item.active {
-  background: rgba(74, 158, 255, 0.15);
+  background: var(--bg-card);
   color: var(--accent-cyan);
-  border: 1px solid rgba(74, 158, 255, 0.25);
+  border: 1px solid var(--border-color);
+  box-shadow: inset 2px 0 0 var(--accent-cyan);
 }
 
 .ns-nav-icon {
   font-size: 18px;
   line-height: 1;
+  display: inline-flex;
+}
+
+.ns-nav-icon svg {
+  width: 18px;
+  height: 18px;
 }
 
 .ns-nav-label {
@@ -4417,7 +4297,7 @@ body.ns-lobby .dashboard {
 }
 
 /* ── Header wordmark: its own row below .chrome-header (not absolutely
-   centered over it) so it can never overlap the Power/Settings/Help menu --
+   centered over it) so it can never overlap the header chrome --
    see index.html for why that used to collide. ── */
 .ns-header-wordmark {
   display: none;                        /* hidden until .ns-lobby active */
@@ -4454,11 +4334,11 @@ body.ns-lobby .ns-header-wordmark {
   letter-spacing: 0.05em;
 }
 
-/* ── Tonight's Run hero card ── */
+/* ── Tonight's plan card (UI-R1: PF surface, hairline border, no glow) ── */
 .ns-hero-card {
-  background: linear-gradient(135deg, rgba(15,22,40,0.95) 0%, rgba(10,16,30,0.9) 100%);
-  border: 1px solid rgba(74,158,255,0.18);
-  border-radius: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
   margin-bottom: 10px;
   overflow: hidden;
   position: relative;
@@ -4469,7 +4349,7 @@ body.ns-lobby .ns-header-wordmark {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 60% 80% at 70% 50%, rgba(10,30,80,0.4) 0%, transparent 70%);
+    radial-gradient(ellipse 60% 80% at 70% 50%, rgba(155,147,214,0.06) 0%, transparent 70%);
   pointer-events: none;
 }
 
@@ -4493,8 +4373,8 @@ body.ns-lobby .ns-header-wordmark {
 .ns-hero-label {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.2em;
-  color: var(--accent-amber);
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
   text-transform: uppercase;
 }
 
@@ -4539,26 +4419,23 @@ body.ns-lobby .ns-header-wordmark {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 22px;
-  background: linear-gradient(135deg, #1a4fd6, #1266d4);
+  padding: 12px 26px;
+  background: var(--accent-cyan);
   border: none;
-  border-radius: 8px;
-  color: #fff;
+  border-radius: var(--radius-pill);
+  color: #14101f;
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   cursor: pointer;
-  box-shadow: 0 3px 14px rgba(26,79,214,0.4);
-  transition: all 0.15s ease;
+  transition: background 0.15s ease;
   align-self: flex-start;
   margin-top: 4px;
 }
 
 .ns-play-btn:hover {
-  background: linear-gradient(135deg, #2055e0, #1470e0);
-  box-shadow: 0 5px 20px rgba(26,79,214,0.55);
-  transform: translateY(-1px);
+  background: var(--accent-blue);
 }
 
 /* Preview ring (right side of hero card) */
@@ -5516,9 +5393,10 @@ body.fullscreen-clock-mode .fullscreen-clock-exit {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(91, 140, 255, 0.08);
-  border: 1px solid rgba(91, 140, 255, 0.25);
-  border-radius: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--accent-cyan);
+  border-radius: var(--radius-md);
   padding: 10px 14px;
   margin: 0 20px 12px;
 }
@@ -5531,11 +5409,11 @@ body.fullscreen-clock-mode .fullscreen-clock-exit {
 .armed-mode-label {
   font-size: 9px;
   font-weight: 700;
-  letter-spacing: 1px;
-  color: rgba(91, 140, 255, 0.85);
-  background: rgba(91, 140, 255, 0.12);
+  letter-spacing: 0.12em;
+  color: var(--accent-cyan);
+  background: rgba(155,147,214,0.12);
   padding: 2px 7px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 .armed-mode-title {
   font-size: 14px;
@@ -5553,7 +5431,7 @@ body.fullscreen-clock-mode .fullscreen-clock-exit {
   font-size: 18px;
   cursor: pointer;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   line-height: 1;
 }
 .armed-mode-clear:hover {
@@ -5561,6 +5439,84 @@ body.fullscreen-clock-mode .fullscreen-clock-exit {
   background: rgba(255,255,255,0.06);
 }
 .armed-mode-clear:focus-visible {
-  outline: 2px solid rgba(107, 211, 255, 0.7);
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+}
+
+/* ── UI-R1: Tonight readiness strip ─────────────────────────────────────── */
+.readiness-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 10px 0;
+}
+.rdy-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+}
+.rdy-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.rdy-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.rdy-value.ok   { color: var(--pf-teal); }
+.rdy-value.warn { color: var(--accent-amber); }
+
+/* ── UI-R1: TEST MODE / REAL ACTION truth pill ──────────────────────────── */
+.testmode-pill {
+  align-self: center;
+  margin: 8px auto 0;
+  width: fit-content;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-amber);
+  background: rgba(245,184,61,0.10);
+  border: 1px solid rgba(245,184,61,0.35);
+  border-radius: var(--radius-pill);
+  padding: 4px 12px;
+}
+.testmode-pill.real {
+  color: var(--accent-red);
+  background: rgba(255,92,122,0.08);
+  border-color: rgba(255,92,122,0.35);
+}
+
+/* ── UI-R1: snooze chips (explicit +5/+15/+30 next to the main Snooze) ──── */
+.snooze-chips {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.snooze-chip {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-pill);
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.snooze-chip:hover {
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+}
+.snooze-chip:focus-visible {
+  outline: 2px solid var(--accent-cyan);
   outline-offset: 2px;
 }

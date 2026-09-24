@@ -108,31 +108,31 @@
         <img src="assets/brand/lights-out-icon.svg" alt="Lights Out" draggable="false">
       </div>
       <nav class="ns-sidebar-nav">
-        <button class="ns-nav-item active" data-ns-tab="lib" title="Tonight" aria-label="Open tonight">
-          <span class="ns-nav-icon" aria-hidden="true">&#x1F319;</span>
+        <button class="ns-nav-item active" id="nav-lib" data-ns-tab="lib" title="Tonight" aria-label="Open tonight">
+          <span class="ns-nav-icon" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M14.5 10.8A6.3 6.3 0 0 1 7.2 3.5a6.3 6.3 0 1 0 7.3 7.3z"/></svg></span>
           <span class="ns-nav-label">TONIGHT</span>
         </button>
-        <button class="ns-nav-item" data-ns-tab="modes" title="Night Modes" aria-label="Open night modes">
-          <span class="ns-nav-icon" aria-hidden="true">&#x1F4DA;</span>
-          <span class="ns-nav-label">MODES</span>
+        <button class="ns-nav-item" id="nav-modes" data-ns-tab="modes" title="Night Modes" aria-label="Open night modes">
+          <span class="ns-nav-icon" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3.2 2.6 5.4v7.4L9 15l6.4-2.2V5.4L9 3.2z"/><path d="M9 3.2V15"/></svg></span>
+          <span class="ns-nav-label">NIGHT MODES</span>
         </button>
-        <button class="ns-nav-item" data-ns-tab="sch" title="Open schedule" aria-label="Open schedule">
-          <span class="ns-nav-icon" aria-hidden="true">&#x1F4C5;</span>
+        <button class="ns-nav-item" id="nav-sch" data-ns-tab="sch" title="Open schedule" aria-label="Open schedule">
+          <span class="ns-nav-icon" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2.5" y="3.5" width="13" height="12" rx="1.5"/><path d="M2.5 7h13M6 2v3M12 2v3"/><circle cx="9" cy="11" r="1" fill="currentColor" stroke="none"/></svg></span>
           <span class="ns-nav-label">SCHEDULE</span>
         </button>
-        <button class="ns-nav-item" data-ns-tab="set" title="Open settings" aria-label="Open settings">
-          <span class="ns-nav-icon" aria-hidden="true">&#x2699;</span>
+        <button class="ns-nav-item" id="nav-set" data-ns-tab="set" title="Open settings" aria-label="Open settings">
+          <span class="ns-nav-icon" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="2.4"/><path d="M9 1.8v2M9 14.2v2M1.8 9h2M14.2 9h2M4 4l1.4 1.4M12.6 12.6 14 14M14 4l-1.4 1.4M5.4 12.6 4 14"/></svg></span>
           <span class="ns-nav-label">SETTINGS</span>
         </button>
       </nav>
       <div class="ns-sidebar-footer">
-        <button class="ns-nav-item" data-ns-tab="help" title="Open help and about" aria-label="Open help and about">
-          <span class="ns-nav-icon" aria-hidden="true">&#x3F;</span>
-          <span class="ns-nav-label">?</span>
+        <button class="ns-nav-item" id="nav-help" data-ns-tab="help" title="Open help and about" aria-label="Open help and about">
+          <span class="ns-nav-icon" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="9" cy="9" r="6.5"/><path d="M9 12.8h.01M7 7.2c0-1.2.9-2 2-2s2 .8 2 2c0 1.2-1 1.7-2 2.3v1.3"/></svg></span>
+          <span class="ns-nav-label">ABOUT</span>
         </button>
-        <button class="ns-nav-item" data-ns-tab="stats" title="Open stats" aria-label="Open stats">
-          <span class="ns-nav-icon" aria-hidden="true">&#x1F4CA;</span>
-          <span class="ns-nav-label">STATS</span>
+        <button class="ns-nav-item" id="nav-stats" data-ns-tab="stats" title="Open stats" aria-label="Open stats">
+          <span class="ns-nav-icon" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2.5h12v13l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4-2 1.4v-13z"/><path d="M6 6.5h6M6 9.5h6M6 12.5h3"/></svg></span>
+          <span class="ns-nav-label">PROOF</span>
         </button>
       </div>
     </aside>
@@ -145,66 +145,6 @@
           <span>Lights Out</span>
         </div>
       </div>
-      <nav class="main-menu">
-        <div class="menu-item" id="menu-power" tabindex="0" role="button" aria-haspopup="menu" aria-expanded="false">
-          <span>Power</span>
-          <div class="submenu" role="menu" aria-label="Power">
-            <div class="submenu-item" role="menuitem" tabindex="-1" data-action="shutdown">
-              <span class="icon">&#x23FB;</span>
-              <span>Shutdown</span>
-            </div>
-            <div class="submenu-item" role="menuitem" tabindex="-1" data-action="restart">
-              <span class="icon">&#x21BB;</span>
-              <span>Restart</span>
-            </div>
-            <div class="submenu-item" role="menuitem" tabindex="-1" data-action="sleep">
-              <span class="icon">&#x263E;</span>
-              <span>Sleep</span>
-            </div>
-            <div class="submenu-item" role="menuitem" tabindex="-1" data-action="hibernate">
-              <span class="icon">&#x2744;</span>
-              <span>Hibernate</span>
-            </div>
-          </div>
-        </div>
-        <div class="menu-item" id="menu-settings" tabindex="0" role="button" aria-haspopup="menu" aria-expanded="false">
-          <span>Settings</span>
-          <div class="submenu" role="menu" aria-label="Settings">
-            <div class="submenu-item toggle" role="menuitemcheckbox" tabindex="-1" id="toggle-dryrun">
-              <span>Test Mode</span>
-              <span class="toggle-indicator">OFF</span>
-            </div>
-            <div class="submenu-item toggle" role="menuitemcheckbox" tabindex="-1" id="toggle-mute">
-              <span>Sound Effects</span>
-              <span class="toggle-indicator">ON</span>
-            </div>
-            <div class="submenu-item toggle" role="menuitemcheckbox" tabindex="-1" id="toggle-graceful">
-              <span>Graceful Close</span>
-              <span class="toggle-indicator">ON</span>
-            </div>
-            <div class="submenu-item" role="menuitem" tabindex="-1" id="open-options">
-              <span>Advanced Options...</span>
-            </div>
-          </div>
-        </div>
-        <div class="menu-item" id="menu-help" tabindex="0" role="button" aria-haspopup="menu" aria-expanded="false">
-          <span>Help</span>
-          <div class="submenu" role="menu" aria-label="Help">
-            <div class="submenu-item" role="menuitem" tabindex="-1" data-help="Use presets for quick starts, Options for launch behavior, and the tray menu for pause, snooze, or cancel.">
-              <span class="icon">&#x2139;</span>
-              <span>Documentation</span>
-            </div>
-            <div class="submenu-item" role="menuitem" tabindex="-1" data-help="Space starts or pauses. Escape cancels. Ctrl+M toggles mini mode. Number keys 1-6 start quick presets.">
-              <span class="icon">&#x2328;</span>
-              <span>Keyboard Shortcuts</span>
-            </div>
-            <div class="submenu-item" role="menuitem" tabindex="-1" id="open-about">
-              <span class="icon">&#x24D8;</span>
-              <span>About Lights Out</span>
-            </div>
-          </div>
-        </div>
-      </nav>
       <div class="window-buttons">
         <button class="win-btn mini" id="btn-mini" title="Mini Mode" aria-label="Toggle mini mode">
           <span>&#x25A3;</span>
@@ -222,7 +162,7 @@
     </header>
 
     <!-- Northstar wordmark: own row below the header so it can never collide
-         with the Power/Settings/Help menu regardless of window width (was
+         with the header chrome regardless of window width (was
          absolutely centered over the header itself, which overlapped
          "Settings" at the app's normal/default 520px window width). -->
     <div class="ns-header-wordmark" aria-hidden="true">
@@ -263,7 +203,7 @@
             </div>
             <button class="ns-play-btn" id="ns-play-btn" aria-label="Start tonight's timer">
               <span aria-hidden="true">&#x25B6;</span>
-              <span class="ns-play-label" id="ns-play-label">PLAY</span>
+              <span class="ns-play-label" id="ns-play-label">START TONIGHT</span>
             </button>
           </div>
           <div class="ns-hero-right">
@@ -278,6 +218,20 @@
           </div>
         </div>
       </section>
+
+      <!-- Readiness strip: the "is everything ready" answer for Tonight and the
+           active session. Values are real status, populated by updateReadiness()
+           in renderer.js — no fake telemetry. -->
+      <section class="readiness-strip" id="readiness-strip" aria-label="Readiness">
+        <div class="rdy-row"><span class="rdy-label">Phone</span><span class="rdy-value" id="rdy-phone">—</span></div>
+        <div class="rdy-row"><span class="rdy-label">Lights</span><span class="rdy-value" id="rdy-lights">—</span></div>
+        <div class="rdy-row"><span class="rdy-label">Network</span><span class="rdy-value" id="rdy-network">—</span></div>
+        <div class="rdy-row"><span class="rdy-label">Safety</span><span class="rdy-value" id="rdy-safety">—</span></div>
+      </section>
+
+      <!-- Test Mode / REAL ACTION truth pill: always visible under the timer —
+           the single unmistakable answer to "will this actually power down?" -->
+      <div class="testmode-pill" id="testmode-pill" role="status">TEST MODE · No PC power action will run</div>
 
 
 
@@ -319,6 +273,11 @@
             <span class="icon">&#x23F9;</span>
             <span>Snooze</span>
           </button>
+          <div class="snooze-chips" role="group" aria-label="Snooze duration">
+            <button class="snooze-chip" data-snooze="300">+5m</button>
+            <button class="snooze-chip" data-snooze="900">+15m</button>
+            <button class="snooze-chip" data-snooze="1800">+30m</button>
+          </div>
           <button class="action-btn danger" id="btn-stop">
             <span class="icon">&#x25A0;</span>
             <span>Cancel</span>
@@ -361,137 +320,25 @@
         </div>
       </section>
 
-      <!-- Home streak callout: current streak at a glance. Hidden until there
-           is a real streak (>=1) so it never overclaims. Click opens Streaks. -->
-      <button class="streak-callout" id="streak-callout" style="display:none" title="View your streak">
-        <span class="streak-callout-flame" aria-hidden="true">&#x1F525;</span>
-        <span class="streak-callout-text"><strong id="streak-callout-count">0</strong>-night streak</span>
-        <span class="streak-callout-best" id="streak-callout-best"></span>
-        <span class="streak-callout-go" aria-hidden="true">&#x203A;</span>
-      </button>
-
-      <!-- Saved Profiles -->
-      <section class="profiles-section" id="profiles-section">
-        <div class="profiles-header">
-          <span class="profiles-title">Saved Profiles</span>
-          <div class="profiles-header-actions">
-            <button class="btn-save-profile-quick" id="btn-save-current-profile" title="Save the current timer as a reusable profile">&#x2795; Save as Profile</button>
-            <button class="btn-icon" id="btn-manage-profiles" title="Manage Profiles" aria-label="Manage profiles">&#x2699;</button>
-          </div>
-        </div>
-        <div class="profiles-grid" id="profiles-grid">
-          <!-- Profiles loaded dynamically -->
-        </div>
-      </section>
-
-      <!-- Status Cards -->
-      <section class="status-section">
-        <div class="status-card">
-          <div class="card-header">
-            <span class="icon">&#x23FB;</span>
-            <span>Session</span>
-          </div>
-          <div class="card-body">
-            <div class="status-row">
-              <span>Action</span>
-              <span id="action-name">Shutdown</span>
-            </div>
-            <div class="status-row">
-              <span>Ends</span>
-              <span id="end-time">Idle</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="status-card">
-          <div class="card-header">
-            <span class="icon">&#x26A1;</span>
-            <span>Power Status</span>
-          </div>
-          <div class="card-body">
-            <div class="status-row">
-              <span>Battery</span>
-              <span id="battery-level">85%</span>
-            </div>
-            <div class="status-row">
-              <span>Power Plan</span>
-              <span id="power-plan">Balanced</span>
-            </div>
-          </div>
-        </div>
-        
-        <div class="status-card warning" id="warning-card" style="display: none;">
-          <div class="card-header">
-            <span class="icon">&#x26A0;</span>
-            <span>Warnings</span>
-          </div>
-          <div class="card-body">
-            <p id="warning-text">Apps may prevent shutdown</p>
-            <button class="link-btn" id="btn-warning-ledger">View Ledger</button>
-          </div>
-        </div>
-      </section>
-
-      <!-- Morning Proof / Last Run Card (northstar hero) -->
-      <section class="morning-proof-section ns-proof-section" id="morning-proof-section" style="display:none">
-        <div class="proof-card ns-proof-hero" id="proof-card">
-
-          <!-- Glow background layer -->
-          <div class="ns-proof-bg" aria-hidden="true"></div>
-
-          <!-- Top row: icon + headline + result badge -->
-          <div class="ns-proof-top">
-            <span class="ns-proof-icon" id="proof-icon" aria-hidden="true">&#x2600;</span>
-            <div class="ns-proof-headline">
-              <div class="ns-proof-eyebrow">LAST NIGHT</div>
-              <div class="ns-proof-title" id="ns-proof-title">MISSION COMPLETE</div>
-            </div>
-            <span class="proof-badge ns-proof-badge" id="proof-badge"></span>
-          </div>
-
-          <!-- Stat pills row (real data only; JS shows/hides each pill) -->
-          <div class="ns-proof-pills" id="proof-body">
-            <div class="ns-proof-pill" id="ns-pill-duration" style="display:none">
-              <div class="ns-pill-value" id="ns-pill-duration-val">—</div>
-              <div class="ns-pill-label">SESSION</div>
-            </div>
-            <div class="ns-proof-pill" id="ns-pill-action" style="display:none">
-              <div class="ns-pill-value" id="ns-pill-action-val">—</div>
-              <div class="ns-pill-label">ACTION</div>
-            </div>
-            <div class="ns-proof-pill" id="ns-pill-snoozes" style="display:none">
-              <div class="ns-pill-value" id="ns-pill-snoozes-val">0</div>
-              <div class="ns-pill-label">SNOOZES</div>
-            </div>
-            <div class="ns-proof-pill" id="ns-pill-runs" style="display:none">
-              <div class="ns-pill-value" id="ns-pill-runs-val">—</div>
-              <div class="ns-pill-label">TOTAL RUNS</div>
-            </div>
-          </div>
-
-          <!-- Completed-at timestamp -->
-          <div class="ns-proof-timestamp" id="ns-proof-timestamp"></div>
-
-          <!-- Action buttons -->
-          <div class="ns-proof-actions">
-            <button class="ns-proof-btn ns-proof-btn-primary" id="btn-proof-again">
-              <span aria-hidden="true">&#x25B6;</span>
-              Play Tonight Again
-            </button>
-            <button class="ns-proof-btn ns-proof-btn-secondary" id="btn-proof-details">View Ledger</button>
-            <button class="ns-proof-btn ns-proof-btn-ghost" id="btn-proof-copy">Copy Proof</button>
-            <button class="ns-proof-btn ns-proof-btn-ghost" id="btn-proof-close">Close</button>
-            <button class="ns-proof-btn ns-proof-btn-ghost" id="btn-proof-dismiss" aria-label="Dismiss overlay">&#x2715;</button>
-          </div>
-
-        </div>
-      </section>
-
       </div>
       <!-- /LIB panel -->
 
       <!-- MODES: Night Modes library panel -->
       <div class="ns-main-panel" id="ns-panel-modes" style="display:none">
+        <!-- Saved profiles live here as "My Modes" — a saved plan is a custom
+             night mode, not a Tonight control. -->
+        <section class="profiles-section" id="profiles-section">
+          <div class="profiles-header">
+            <span class="profiles-title">My Modes</span>
+            <div class="profiles-header-actions">
+              <button class="btn-save-profile-quick" id="btn-save-current-profile" title="Save the current timer as a reusable profile">&#x2795; Save as Profile</button>
+              <button class="btn-icon" id="btn-manage-profiles" title="Manage Profiles" aria-label="Manage profiles">&#x2699;</button>
+            </div>
+          </div>
+          <div class="profiles-grid" id="profiles-grid">
+            <!-- Profiles loaded dynamically -->
+          </div>
+        </section>
         <div class="nm-library">
           <div class="nm-library-header">
             <h2 class="nm-library-title">Your Night Modes</h2>
@@ -819,6 +666,105 @@
 
       <!-- STATS: Status / proof / diagnostics panel -->
       <div class="ns-main-panel" id="ns-panel-stats" style="display:none">
+
+        <!-- Proof-adjacent surfaces moved here from Tonight (UI-R1 single-owner
+             rule): last-night receipt card, streak callout, session/power/
+             warning cards. Full Proof redesign lands in a later tranche. -->
+        <button class="streak-callout" id="streak-callout" style="display:none" title="View your streak">
+          <span class="streak-callout-flame" aria-hidden="true">&#x1F525;</span>
+          <span class="streak-callout-text"><strong id="streak-callout-count">0</strong>-night streak</span>
+          <span class="streak-callout-best" id="streak-callout-best"></span>
+          <span class="streak-callout-go" aria-hidden="true">&#x203A;</span>
+        </button>
+
+        <section class="morning-proof-section ns-proof-section" id="morning-proof-section" style="display:none">
+          <div class="proof-card ns-proof-hero" id="proof-card">
+            <div class="ns-proof-bg" aria-hidden="true"></div>
+            <div class="ns-proof-top">
+              <span class="ns-proof-icon" id="proof-icon" aria-hidden="true">&#x2600;</span>
+              <div class="ns-proof-headline">
+                <div class="ns-proof-eyebrow">LAST NIGHT</div>
+                <div class="ns-proof-title" id="ns-proof-title">MISSION COMPLETE</div>
+              </div>
+              <span class="proof-badge ns-proof-badge" id="proof-badge"></span>
+            </div>
+            <div class="ns-proof-pills" id="proof-body">
+              <div class="ns-proof-pill" id="ns-pill-duration" style="display:none">
+                <div class="ns-pill-value" id="ns-pill-duration-val">—</div>
+                <div class="ns-pill-label">SESSION</div>
+              </div>
+              <div class="ns-proof-pill" id="ns-pill-action" style="display:none">
+                <div class="ns-pill-value" id="ns-pill-action-val">—</div>
+                <div class="ns-pill-label">ACTION</div>
+              </div>
+              <div class="ns-proof-pill" id="ns-pill-snoozes" style="display:none">
+                <div class="ns-pill-value" id="ns-pill-snoozes-val">0</div>
+                <div class="ns-pill-label">SNOOZES</div>
+              </div>
+              <div class="ns-proof-pill" id="ns-pill-runs" style="display:none">
+                <div class="ns-pill-value" id="ns-pill-runs-val">—</div>
+                <div class="ns-pill-label">TOTAL RUNS</div>
+              </div>
+            </div>
+            <div class="ns-proof-timestamp" id="ns-proof-timestamp"></div>
+            <div class="ns-proof-actions">
+              <button class="ns-proof-btn ns-proof-btn-primary" id="btn-proof-again">
+                <span aria-hidden="true">&#x25B6;</span>
+                Play Tonight Again
+              </button>
+              <button class="ns-proof-btn ns-proof-btn-secondary" id="btn-proof-details">View Ledger</button>
+              <button class="ns-proof-btn ns-proof-btn-ghost" id="btn-proof-copy">Copy Proof</button>
+              <button class="ns-proof-btn ns-proof-btn-ghost" id="btn-proof-close">Close</button>
+              <button class="ns-proof-btn ns-proof-btn-ghost" id="btn-proof-dismiss" aria-label="Dismiss overlay">&#x2715;</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="status-section">
+          <div class="status-card">
+            <div class="card-header">
+              <span class="icon">&#x23FB;</span>
+              <span>Session</span>
+            </div>
+            <div class="card-body">
+              <div class="status-row">
+                <span>Action</span>
+                <span id="action-name">Shutdown</span>
+              </div>
+              <div class="status-row">
+                <span>Ends</span>
+                <span id="end-time">Idle</span>
+              </div>
+            </div>
+          </div>
+          <div class="status-card">
+            <div class="card-header">
+              <span class="icon">&#x26A1;</span>
+              <span>Power Status</span>
+            </div>
+            <div class="card-body">
+              <div class="status-row">
+                <span>Battery</span>
+                <span id="battery-level">85%</span>
+              </div>
+              <div class="status-row">
+                <span>Power Plan</span>
+                <span id="power-plan">Balanced</span>
+              </div>
+            </div>
+          </div>
+          <div class="status-card warning" id="warning-card" style="display: none;">
+            <div class="card-header">
+              <span class="icon">&#x26A0;</span>
+              <span>Warnings</span>
+            </div>
+            <div class="card-body">
+              <p id="warning-text">Apps may prevent shutdown</p>
+              <button class="link-btn" id="btn-warning-ledger">View Ledger</button>
+            </div>
+          </div>
+        </section>
+
         <section class="status-section">
           <div class="status-card">
             <div class="card-header">
@@ -907,6 +853,12 @@
           <label class="checkbox-label">
             <input type="checkbox" id="chk-mute">
             Mute system before action
+          </label>
+        </div>
+        <div class="option-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="chk-graceful">
+            Graceful close (let apps save before closing)
           </label>
         </div>
         <div class="option-group">
@@ -1479,8 +1431,9 @@
 
           <div class="option-group">
             <label>Accent Color</label>
-            <input type="color" id="cz-accent" value="#5b8cff">
+            <input type="color" id="cz-accent" value="#9b93d6">
             <div class="swatches" id="cz-swatches">
+              <button type="button" class="swatch" data-color="#9b93d6" style="--sw:#9b93d6"></button>
               <button type="button" class="swatch" data-color="#5b8cff" style="--sw:#5b8cff"></button>
               <button type="button" class="swatch" data-color="#a855f7" style="--sw:#a855f7"></button>
               <button type="button" class="swatch" data-color="#22d3ee" style="--sw:#22d3ee"></button>
@@ -2025,6 +1978,11 @@
             <button class="btn-secondary updater-check-btn" id="btn-check-update">Check for updates</button>
             <a class="updater-download" id="updater-download" href="#" rel="noreferrer" style="display:none">Download</a>
           </div>
+        </div>
+        <!-- Shortcuts/docs rows moved here from the removed top Help menu -->
+        <div class="about-shortcuts" style="margin-top: 1rem; font-size: 12px; color: var(--text-secondary); line-height: 1.7;">
+          <p style="margin:0">Space starts or pauses. Escape cancels. Ctrl+M toggles mini mode. Number keys 1-6 start quick presets.</p>
+          <p style="margin:0">Use presets for quick starts, Settings for launch behavior, and the tray menu for pause, snooze, or cancel.</p>
         </div>
         <div class="about-brand" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); text-align: center;">
           <p style="font-size: 0.7rem; color: #91a2b3; text-transform: uppercase; letter-spacing: 0.1em; margin: 0;">A Proof Foundry Product</p>

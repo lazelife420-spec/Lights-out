@@ -82,13 +82,12 @@ test('live trace installs one dedicated listener for each focus-state event', ()
   assert.equal(source.match(/document\.addEventListener\('visibilitychange', addFocusState, true\)/g)?.length, 1);
 });
 
-test('pointer-transfer diagnostics are serialized before the unchanged assertion', () => {
+test('menu-remnant negative truth is asserted before any nav interaction', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'desktop-ux-functional-gate.js'), 'utf8');
-  const serializedAt = source.indexOf("results.mouse.push({ step: 'pointer-transfer-diagnostics'");
-  const assertedAt = source.indexOf("'Settings menu remains open inside submenu'");
-  assert.ok(serializedAt >= 0);
-  assert.ok(assertedAt > serializedAt);
-  assert.match(source, /await waitFor\(`document\.getElementById\('menu-settings'\)\.classList\.contains\('open'\)`, 'Settings menu remains open inside submenu'\)/);
+  const assertedAt = source.indexOf("results.assertions.push({ step: 'no-menu-remnants'");
+  const firstClickAt = source.indexOf("await s.click('#nav-modes')");
+  assert.ok(assertedAt >= 0, 'the gate must prove no top-menu DOM remains');
+  assert.ok(firstClickAt > assertedAt, 'remnant assertion must precede nav interaction');
 });
 
 test('browser events and focus trace retain the move correlation ID', () => {

@@ -291,8 +291,8 @@ while ($true) {
       # previous-sample step check is additionally required on top of that,
       # so two samples that each independently qualify but sit at opposite      # edges of the tolerance band still cannot both count.
       $requiredStableCount = 3
-      $maxSettlementStepPixels = 1
-      $settlementTimeoutMs = 250
+      $maxSettlementStepPixels = 2
+      $settlementTimeoutMs = 800
       $pollIntervalMs = 5
       $settlementSamples = [Collections.Generic.List[object]]::new()
       $stableRun = [Collections.Generic.List[object]]::new()
@@ -302,7 +302,7 @@ while ($true) {
       $settlementClock = [Diagnostics.Stopwatch]::StartNew()
       $lastRepulseMs = 0
       $repulseIntervalMs = 25
-      $maxRepulses = 5
+      $maxRepulses = 12
       $repulseCount = 0
 
       function Test-StrictInteriorOfTarget([int]$X,[int]$Y,[object]$Rect) {

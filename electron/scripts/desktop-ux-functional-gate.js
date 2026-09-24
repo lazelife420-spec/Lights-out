@@ -141,7 +141,7 @@ class CdpSession {
   }
   eval(expr) { return this.send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }).then(r => r.result.value); }
   async measureNativeTarget(sel) {
-    const ownerSel = /^#menu-(power|settings|help) > span$/.test(sel) ? sel.split(' > ')[0] : sel;
+    const ownerSel = /^\.ns-nav-item > span$/.test(sel) || /^#nav-\w+ > span$/.test(sel) ? sel.split(' > ')[0] : sel;
     const measured = await this.eval(`(() => {
       const requested = document.querySelector(${JSON.stringify(sel)});
       const owner = document.querySelector(${JSON.stringify(ownerSel)});
@@ -240,7 +240,7 @@ class CdpSession {
             armedNightMode: stateSnapshot.armedNightMode ?? null,
             ritualOverlayActive: document.getElementById('ritual-overlay')?.classList.contains('active') || false,
             heroVisible: Boolean(heroStyle && heroStyle.display !== 'none' && heroStyle.visibility !== 'hidden' && Number(heroStyle.opacity) !== 0),
-            openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
+            activeNav: document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || null,
             activeModals: Array.from(document.querySelectorAll('.modal.active')).map(modal => modal.id),
             selectedProfile: stateSnapshot.selectedProfile ?? stateSnapshot.activeProfile ?? stateSnapshot.profile ?? null,
             selectedMode: stateSnapshot.selectedMode ?? stateSnapshot.activeMode ?? stateSnapshot.nightMode ?? null,
@@ -494,16 +494,16 @@ class CdpSession {
         const rect = element.getBoundingClientRect();
         return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
       };
-      const settings = document.getElementById('menu-settings');
-      const submenu = settings?.querySelector('.submenu') || null;
+      const navSet = document.getElementById('nav-set');
+      const sidebar = document.querySelector('.ns-sidebar');
       return {
         selector: ${JSON.stringify(selector)},
         requestedClientPoint: { x: ${JSON.stringify(x)}, y: ${JSON.stringify(y)} },
         viewport: { innerWidth: window.innerWidth, innerHeight: window.innerHeight, dpr: window.devicePixelRatio },
-        settingsRect: rectOf(settings),
-        submenuRect: rectOf(submenu),
-        settingsOpen: settings?.classList.contains('open') || false,
-        ariaExpanded: settings?.getAttribute('aria-expanded') || null,
+        navSetRect: rectOf(navSet),
+        sidebarRect: rectOf(sidebar),
+        navSetActive: navSet?.classList.contains('active') || false,
+        navSetAriaCurrent: navSet?.getAttribute('aria-current') || null,
         documentHasFocus: document.hasFocus(),
         visibilityState: document.visibilityState,
         trace: window.__desktopUxBeginPointerMove?.(${JSON.stringify(correlationId)}) || null
@@ -524,17 +524,17 @@ class CdpSession {
         }
         return ancestry;
       };
-      const settings = document.getElementById('menu-settings');
-      const submenu = settings?.querySelector('.submenu') || null;
+      const navSet = document.getElementById('nav-set');
+      const sidebar = document.querySelector('.ns-sidebar');
       const hit = document.elementFromPoint(${JSON.stringify(x)}, ${JSON.stringify(y)});
       const trace = window.__desktopUxEndPointerMove?.(${JSON.stringify(correlationId)}) || null;
       return {
         documentHasFocus: document.hasFocus(),
         visibilityState: document.visibilityState,
-        settingsOpen: settings?.classList.contains('open') || false,
-        ariaExpanded: settings?.getAttribute('aria-expanded') || null,
-        settingsRect: rectOf(settings),
-        submenuRect: rectOf(submenu),
+        navSetActive: navSet?.classList.contains('active') || false,
+        navSetAriaCurrent: navSet?.getAttribute('aria-current') || null,
+        navSetRect: rectOf(navSet),
+        sidebarRect: rectOf(sidebar),
         requestedClientPoint: { x: ${JSON.stringify(x)}, y: ${JSON.stringify(y)} },
         hit: { tag: hit?.tagName || null, id: hit?.id || null, classes: typeof hit?.className === 'string' ? hit.className : null },
         hitAncestry: ancestryOf(hit),
@@ -633,7 +633,7 @@ class CdpSession {
         visiblePanels: Array.from(document.querySelectorAll('.ns-main-panel'))
           .filter(panel => getComputedStyle(panel).display !== 'none')
           .map(panel => panel.id),
-        openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
+        activeNav: document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || null,
         activeModals: Array.from(document.querySelectorAll('.modal.active')).map(modal => modal.id),
         hero: {
           exists: Boolean(document.getElementById('ns-hero-card')),
@@ -720,7 +720,11 @@ async function spawnApp(userDataDir, seed = {}, { preserveSettings = false } = {
   ];
   if (SOURCE_RUNTIME) launchArgs.push(ELECTRON_ROOT);
   launchArgs.push('--desktop-ux-proof');
-  const child = spawn(EXE_PATH, launchArgs, { detached: true, windowsHide: false, env: { ...process.env, LIGHTS_OUT_DESKTOP_UX_GATE: '1' } });
+  const spawnEnv = { ...process.env, LIGHTS_OUT_DESKTOP_UX_GATE: '1' };
+  // A leaked ELECTRON_RUN_AS_NODE makes electron.exe run as plain Node
+  // ("bad option" on every switch) -- strip it for the child.
+  delete spawnEnv.ELECTRON_RUN_AS_NODE;
+  const child = spawn(EXE_PATH, launchArgs, { detached: true, windowsHide: false, env: spawnEnv });
   child.unref();
   let list = [];
   for (let i = 0; i < 40; i++) {
@@ -759,15 +763,23 @@ function addShot(phase, s) {
 async function clearStarts(s) { await s.eval('window.__desktopUxProof?.clearStartInvocations()'); }
 async function getStarts(s) { return s.eval('window.__desktopUxProof?.getStartInvocations()'); }
 async function getRealPowerActions(s) { return s.eval('window.__desktopUxProof?.getRealPowerActions()'); }
-async function getTopMenuKeyboardState(s) {
+async function getShellNavState(s) {
   return s.eval(`({
     focusedElement: { id: document.activeElement?.id || null, text: document.activeElement?.textContent?.trim() || null, role: document.activeElement?.getAttribute('role') || null },
-    settingsMenuOpen: document.getElementById('menu-settings')?.classList.contains('open') || false,
-    settingsAriaExpanded: document.getElementById('menu-settings')?.getAttribute('aria-expanded') || null,
-    selectedMenuItem: document.activeElement?.closest?.('.submenu-item')?.id || null,
+    navItemCount: document.querySelectorAll('.ns-nav-item').length,
+    menuRemnants: document.querySelectorAll('.menu-item, .main-menu, .submenu-item').length,
     route: document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || null,
+    ariaCurrent: document.querySelector('.ns-nav-item.active')?.getAttribute('aria-current') || null,
     visiblePanels: Array.from(document.querySelectorAll('.ns-main-panel')).filter(panel => getComputedStyle(panel).display !== 'none').map(panel => panel.id),
     settingsVisible: getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none',
+    activeModal: document.querySelector('.modal.active')?.id || null,
+    testmodePill: document.getElementById('testmode-pill')?.textContent || null,
+    readiness: {
+      phone: document.getElementById('rdy-phone')?.textContent || null,
+      lights: document.getElementById('rdy-lights')?.textContent || null,
+      network: document.getElementById('rdy-network')?.textContent || null,
+      safety: document.getElementById('rdy-safety')?.textContent || null
+    },
     recentEvents: (window.__desktopUxGateEvents || []).slice(-20)
   })`);
 }
@@ -838,8 +850,7 @@ async function installTopMenuEventTrace(s) {
         eventPhase: event.eventPhase ?? null,
         defaultPrevented: event.defaultPrevented ?? null,
         activeElement: document.activeElement?.id || null,
-        openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
-        settingsAriaExpanded: document.getElementById('menu-settings')?.getAttribute('aria-expanded') || null
+        activeNav: document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || null
       });
     };
     ['blur', 'focus', 'focusin', 'focusout', 'pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click', 'mouseenter', 'mouseleave', 'mousemove', 'pointermove', 'pointerover', 'pointerout', 'mouseover', 'mouseout', 'pointerenter', 'pointerleave'].forEach(type => window.addEventListener(type, add, true));
@@ -853,15 +864,13 @@ async function installTopMenuEventTrace(s) {
         moveCorrelationId: activeMove?.id || null,
         documentHasFocus: document.hasFocus(),
         visibilityState: document.visibilityState,
-        openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
-        settingsOpen: document.getElementById('menu-settings')?.classList.contains('open') || false,
-        settingsAriaExpanded: document.getElementById('menu-settings')?.getAttribute('aria-expanded') || null
+        activeNav: document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || null
       });
     };
     window.addEventListener('focus', addFocusState, true);
     window.addEventListener('blur', addFocusState, true);
     document.addEventListener('visibilitychange', addFocusState, true);
-    for (const ownerId of ['menu-power', 'menu-settings', 'menu-help']) {
+    for (const ownerId of ['nav-lib', 'nav-modes', 'nav-sch', 'nav-set', 'nav-help', 'nav-stats']) {
       document.getElementById(ownerId)?.addEventListener('click', event => {
         handlerSeq += 1;
         appendBounded(handlerEntries, {
@@ -934,8 +943,8 @@ async function installTopMenuEventTrace(s) {
         activeGestureMatchedAtSample,
         handlerEntries: handlerEntries.filter(entry => entry.activeGestureId === id),
         expectedState: {
-          openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
-          ariaExpanded: ownerId ? document.getElementById(ownerId)?.getAttribute('aria-expanded') || null : null
+          activeNav: document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || null,
+          ownerActive: ownerId ? document.getElementById(ownerId)?.classList.contains('active') || false : null
         },
         previousGestureRequestId: previousGesture?.id || null,
         previousGestureEndWallClockMs: previousGesture?.endedAtWallClockMs ?? null,
@@ -1058,174 +1067,114 @@ async function runStartupGate() {
   report.phases[phase] = { status: 'passed', results };
 }
 
-async function runTopMenuGate() {
-  const phase = 'top-menu';
-  const userData = path.join(ROOT_DIR, 'userdata-topmenu');
+async function runShellNavGate() {
+  // UI-R1: the top Power/Settings/Help menus are gone -- the sidebar is the
+  // single navigation authority. This phase proves the same properties the
+  // old top-menu gate proved, through the shell: native-click navigation,
+  // exclusive selection, item activation without execution, Escape/modal
+  // semantics, and keyboard activation.
+  const phase = 'shell-nav';
+  const userData = path.join(ROOT_DIR, 'userdata-shellnav');
   const { child, session: s } = await spawnApp(userData);
   const results = { mouse: [], keyboard: [], assertions: [] };
   report.phases[phase] = { status: 'running', results };
-  // Preserve the established finite assertion budget; this observes state
-  // after one native gesture and is not an input retry.
   const waitFor = (expression, label, timeout = 5000) => s.condition(expression, timeout, label);
   try {
     await s.resize(1280, 720);
-    await s.waitFor('#menu-power');
+    await s.waitFor('#nav-lib');
     await installTopMenuEventTrace(s);
 
-    await s.click('#menu-power > span');
-    await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'Power menu open after native click');
-    const powerAfterClick = await s.eval(`({
-      open: document.getElementById('menu-power').classList.contains('open'),
-      ariaExpanded: document.getElementById('menu-power').getAttribute('aria-expanded'),
-      focusedElement: document.activeElement?.id || null,
-      recentEvents: (window.__desktopUxGateEvents || []).slice(-20)
-    })`);
-    let open = powerAfterClick.open;
-    results.mouse.push({ step: 'click-power', ...powerAfterClick });
-    requireGate(open, 'Power menu did not open on click', powerAfterClick);
-    addShot(phase, await s.screenshot('topmenu-power-mouse-open.png'));
+    // Single-authority negative truth: no menu machinery may remain.
+    const remnants = await s.eval(`document.querySelectorAll('.menu-item, .main-menu, .submenu-item, #menu-power, #menu-settings, #menu-help').length`);
+    requireGate(remnants === 0, 'top-menu remnants still in DOM', { remnants });
+    results.assertions.push({ step: 'no-menu-remnants', remnants });
 
-    await s.click('#menu-power > span');
-    open = await waitFor(`!document.querySelector('.menu-item.open')`, 'Power menu closed after second native click');
-    results.mouse.push({ step: 'click-power-again', closed: open });
-    requireGate(open, 'Power trigger did not toggle closed');
+    const navCount = await s.eval(`document.querySelectorAll('.ns-nav-item').length`);
+    requireGate(navCount === 6, 'unified shell nav must have exactly 6 items', { navCount });
+    results.assertions.push({ step: 'nav-count', navCount });
 
-    await s.click('#menu-settings > span');
-    open = await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu open after native click');
-    addShot(phase, await s.screenshot('topmenu-settings-mouse-open.png'));
-    results.mouse.push({ step: 'click-settings', open });
-    requireGate(open, 'Settings menu did not open on click');
+    // Native-click navigation through each destination.
+    await s.click('#nav-modes');
+    await waitFor(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'modes'`, 'Modes nav active after native click');
+    let state = await getShellNavState(s);
+    results.mouse.push({ step: 'click-modes', route: state.route, ariaCurrent: state.ariaCurrent });
+    requireGate(state.route === 'modes' && state.ariaCurrent === 'page', 'Modes nav did not become current', state);
+    addShot(phase, await s.screenshot('shellnav-modes.png'));
 
-    await s.click('#menu-help > span');
-    await waitFor(`!document.getElementById('menu-settings').classList.contains('open') && document.getElementById('menu-help').classList.contains('open')`, 'Help open and Settings closed');
-    const settingsClosed = await s.eval(`!document.getElementById('menu-settings').classList.contains('open')`);
-    const helpOpen = await s.eval(`document.getElementById('menu-help').classList.contains('open')`);
-    results.mouse.push({ step: 'click-help-closes-settings', settingsClosed, helpOpen });
-    requireGate(settingsClosed && helpOpen, 'opening Help did not close Settings');
-    addShot(phase, await s.screenshot('topmenu-help-mouse-open.png'));
+    await s.click('#nav-sch');
+    await waitFor(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'sch'`, 'Schedule nav active after native click');
+    addShot(phase, await s.screenshot('shellnav-schedule.png'));
 
-    await s.click('#menu-settings > span');
-    await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu reopened for pointer transfer');
-    const menuRect = await s.eval(`(r=document.querySelector('#menu-settings .submenu').getBoundingClientRect(),{x:r.x+r.width/2,y:r.y+10})`);
-    const beforePointerTransfer = await getTopMenuKeyboardState(s);
-    const pointerTransferMove = await s.movePointer(menuRect.x, menuRect.y, { selector: '#menu-settings .submenu' });
-    results.mouse.push({ step: 'pointer-transfer-diagnostics', menuRect, diagnostics: pointerTransferMove.diagnostics });
-    await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu remains open inside submenu');
-    const afterPointerTransfer = await getTopMenuKeyboardState(s);
-    const stillOpen = afterPointerTransfer.settingsMenuOpen;
-    results.mouse.push({ step: 'pointer-transfer-stays-open', menuRect, beforePointerTransfer, afterPointerTransfer, stillOpen });
-    requireGate(stillOpen, 'menu closed while pointer entered its submenu', afterPointerTransfer);
-    await s.movePointer(20, 20);
-    await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu remains open until dismissal click');
-    const afterPointerAway = await getTopMenuKeyboardState(s);
-    const stillOpen2 = afterPointerAway.settingsMenuOpen;
-    results.mouse.push({ step: 'pointer-away-stays-open', afterPointerAway, stillOpen2 });
-    requireGate(stillOpen2, 'menu closed before an outside click', afterPointerAway);
+    await s.click('#nav-stats');
+    await waitFor(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'stats'`, 'Stats nav active after native click');
+    addShot(phase, await s.screenshot('shellnav-stats.png'));
 
-    await s.click('#open-options');
-    await waitFor(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none'`, 'Advanced Options opens Settings panel');
-    const settingsVisible = await s.eval(`document.getElementById('ns-panel-set').style.display !== 'none'`);
-    results.mouse.push({ step: 'advanced-options-opens-settings', settingsVisible });
-    requireGate(settingsVisible, 'Advanced Options did not open the Settings workspace');
-    addShot(phase, await s.screenshot('topmenu-settings-panel.png'));
+    await s.click('#nav-lib');
+    await waitFor(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'lib'`, 'Tonight nav restored after native click');
+
+    // Settings destination: opens the settings workspace, closes back to lib.
+    await s.click('#nav-set');
+    await waitFor(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none'`, 'Settings nav opens Settings workspace');
+    state = await getShellNavState(s);
+    requireGate(state.settingsVisible, 'Settings workspace did not open', state);
+    addShot(phase, await s.screenshot('shellnav-settings-panel.png'));
     await s.click('#modal-close');
-    await waitFor(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'lib'`, 'native Settings close restores Tonight');
-    const restored = await s.eval(`document.querySelector('.ns-nav-item.active')?.dataset.nsTab`);
-    results.mouse.push({ step: 'close-restores-route', restored });
-    requireGate(restored === 'lib', 'closing Settings did not restore Tonight', restored);
+    await waitFor(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'lib'`, 'Settings close restores Tonight');
 
-    await s.click('#menu-settings > span');
-    await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu open for Dry Run toggle');
-    await s.click('#toggle-dryrun');
-    await waitFor(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent === 'OFF'`, 'Dry Run toggle visibly disabled');
-    const dryRunIndicator = await s.eval(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent`);
-    results.mouse.push({ step: 'toggle-dryrun', dryRunIndicator });
-    requireGate(dryRunIndicator === 'OFF', 'enabled Settings toggle did not activate', dryRunIndicator);
-    await s.click('#menu-settings > span');
-    await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu reopened to restore Dry Run');
-    await s.click('#toggle-dryrun');
-    await waitFor(`state.dryRun === true`, 'Dry Run restored');
-
-    await s.click('#menu-power > span');
-    await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'Power menu open for outside dismissal');
-    const outside = await s.eval(`(r=document.getElementById('ns-hero-card').getBoundingClientRect(), {x:r.x+r.width/2, y:r.y+r.height/2})`);
-    await s.clickXY(outside.x, outside.y);
-    const allClosed = await waitFor(`!document.querySelector('.menu-item.open')`, 'outside native click closes every top menu');
-    results.mouse.push({ step: 'outside-click-closes', allClosed });
-    requireGate(allClosed, 'outside click did not close top menu');
-
-    await clearStarts(s);
-    await s.click('#menu-power > span');
-    await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'Power menu open for plan selection');
-    await s.click('#menu-power [data-action="shutdown"]');
-    await waitFor(`state.action === 'shutdown' && state.dryRun === true`, 'Shutdown plan selected without leaving Dry Run');
-    const powerSelection = await s.eval(`({ action: state.action, dryRun: state.dryRun, warningOpen: document.getElementById('warning-modal')?.classList.contains('active') || false })`);
-    const startsAfterPowerSelection = await getStarts(s);
-    const realPowerActions = await getRealPowerActions(s);
-    requireGate(powerSelection.action === 'shutdown' && powerSelection.dryRun === true, 'Power selection changed safety state', powerSelection);
-    requireGate(startsAfterPowerSelection.length === 0 && realPowerActions.length === 0, 'Power menu selection bypassed the shared Start/confirmation path', { startsAfterPowerSelection, realPowerActions });
-    results.mouse.push({ step: 'power-selects-plan-without-execution', powerSelection, starts: startsAfterPowerSelection.length, realPowerActions: realPowerActions.length });
-
-    await s.click('#menu-help > span');
-    await waitFor(`document.getElementById('menu-help').classList.contains('open')`, 'Help menu open');
-    await s.click('#open-about');
-    await waitFor(`document.getElementById('about-modal')?.classList.contains('active') || false`, 'About modal open from native menu selection');
-    const aboutOpen = await s.eval(`document.getElementById('about-modal')?.classList.contains('active') || false`);
-    requireGate(aboutOpen, 'enabled Help item did not activate');
+    // About destination: opens the About modal over Tonight.
+    await s.click('#nav-help');
+    await waitFor(`document.getElementById('about-modal')?.classList.contains('active')`, 'About modal opens from nav');
+    state = await getShellNavState(s);
+    requireGate(state.activeModal === 'about-modal', 'About modal did not open', state);
+    addShot(phase, await s.screenshot('shellnav-about.png'));
     await s.key('Escape');
     await waitFor(`!document.getElementById('about-modal')?.classList.contains('active')`, 'Escape closes About modal');
-    results.mouse.push({ step: 'help-item-activates', aboutOpen });
+    results.mouse.push({ step: 'about-open-escape-close' });
 
-    // Keyboard navigation
-    await s.click('#menu-power > span');
-    await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'Power menu primed for keyboard path');
-    await s.key('Escape');
-    await waitFor(`!document.querySelector('.menu-item.open') && document.activeElement?.id === 'menu-power'`, 'Power trigger focused after Escape');
-    await s.key('Enter');
-    await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'Enter opens Power menu');
-    const powerOpen = await s.eval(`document.getElementById('menu-power').classList.contains('open')`);
-    addShot(phase, await s.screenshot('topmenu-power-keyboard-open.png'));
-    results.keyboard.push({ step: 'enter-opens-power', powerOpen });
-    requireGate(powerOpen, 'Enter did not open Power');
-
-    await s.key('ArrowDown');
-    await waitFor(`document.activeElement?.dataset?.action === 'restart'`, 'ArrowDown focuses Restart');
-    const focusedItem = await s.eval(`({ text: document.activeElement?.textContent?.trim(), action: document.activeElement?.dataset?.action || null })`);
-    results.keyboard.push({ step: 'arrow-down-to-item', focusedItem });
-    requireGate(focusedItem.action === 'restart', 'ArrowDown did not move to the next Power item', focusedItem);
-    await s.key('ArrowUp');
-    await waitFor(`document.activeElement?.dataset?.action === 'shutdown'`, 'ArrowUp focuses Shutdown');
-    const focusedAfterUp = await s.eval(`({ text: document.activeElement?.textContent?.trim(), action: document.activeElement?.dataset?.action || null })`);
-    results.keyboard.push({ step: 'arrow-up', focusedItem: focusedAfterUp });
-    requireGate(focusedAfterUp.action === 'shutdown', 'ArrowUp did not move to the previous Power item', focusedAfterUp);
-    await s.key('Escape');
-    const closedByEscape = await waitFor(`!document.querySelector('.menu-item.open') && document.activeElement?.id === 'menu-power'`, 'Escape closes Power and returns focus');
-    results.keyboard.push({ step: 'escape-closes-and-focuses-trigger', closedByEscape });
-    requireGate(closedByEscape, 'Escape did not close Power and return focus');
-
+    // Ending selection: action chip changes state.action, never starts, and
+    // never escapes Test Mode -- same contract the old Power menu proved.
     await clearStarts(s);
-    await s.click('#menu-settings > span');
-    await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'Settings menu primed for keyboard path');
-    await s.key('Escape');
-    await waitFor(`document.activeElement?.id === 'menu-settings'`, 'Settings trigger focused after Escape');
-    await s.key('ArrowDown');
-    await waitFor(`document.getElementById('menu-settings').classList.contains('open') && document.activeElement?.id === 'toggle-dryrun'`, 'ArrowDown opens Settings and focuses first item');
-    const settingsOpen = await getTopMenuKeyboardState(s);
-    results.keyboard.push({ step: 'arrow-down-opens-settings', ...settingsOpen });
-    requireGate(settingsOpen.settingsMenuOpen && settingsOpen.settingsAriaExpanded === 'true' && settingsOpen.selectedMenuItem === 'toggle-dryrun', 'ArrowDown did not open Settings and focus the first menu item', settingsOpen);
-    await s.key('ArrowUp');
-    const beforeEnter = await getTopMenuKeyboardState(s);
-    results.keyboard.push({ step: 'before-enter-on-open-options', ...beforeEnter });
-    requireGate(beforeEnter.settingsMenuOpen && beforeEnter.settingsAriaExpanded === 'true' && beforeEnter.selectedMenuItem === 'open-options', 'Advanced Options was not focused before Enter', beforeEnter);
+    await s.click('.action-chip[data-action="shutdown"]');
+    await waitFor(`state.action === 'shutdown' && state.dryRun === true`, 'Shutdown ending selected without leaving Test Mode');
+    const powerSelection = await s.eval(`({ action: state.action, dryRun: state.dryRun, warningOpen: document.getElementById('warning-modal')?.classList.contains('active') || false })`);
+    const startsAfterSelection = await getStarts(s);
+    const realPowerActions = await getRealPowerActions(s);
+    requireGate(powerSelection.action === 'shutdown' && powerSelection.dryRun === true, 'Ending selection changed safety state', powerSelection);
+    requireGate(startsAfterSelection.length === 0 && realPowerActions.length === 0, 'ending selection bypassed the shared Start/confirmation path', { startsAfterSelection, realPowerActions });
+    results.mouse.push({ step: 'ending-selects-without-execution', powerSelection });
+    await s.click('.action-chip[data-action="sleep"]');
+    await waitFor(`state.action === 'sleep'`, 'Sleep ending selected');
+
+    // TEST MODE truth: pill always visible; Settings checkbox flips it.
+    state = await getShellNavState(s);
+    requireGate(state.testmodePill && state.testmodePill.includes('TEST MODE'), 'TEST MODE pill absent in dry-run', state.testmodePill);
+    await s.click('#nav-set');
+    await waitFor(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none'`, 'Settings open for Test Mode toggle');
+    await s.click('#chk-dryrun');
+    await waitFor(`state.dryRun === false`, 'Test Mode checkbox disabled dry run');
+    state = await getShellNavState(s);
+    requireGate(state.testmodePill && state.testmodePill.includes('REAL ACTION'), 'pill did not flip to REAL ACTION', state.testmodePill);
+    addShot(phase, await s.screenshot('shellnav-real-action-pill.png'));
+    await s.click('#chk-dryrun');
+    await waitFor(`state.dryRun === true`, 'Test Mode restored');
+    await s.click('#modal-close');
+    await waitFor(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'lib'`, 'back to Tonight');
+
+    // Readiness strip: real status populated (not placeholder em-dash).
+    await s.condition(`document.getElementById('rdy-phone')?.textContent && document.getElementById('rdy-phone').textContent !== '—'`, 5000, 'readiness strip populated');
+    state = await getShellNavState(s);
+    results.assertions.push({ step: 'readiness', readiness: state.readiness });
+    requireGate(Object.values(state.readiness).every(v => v && v !== '—'), 'readiness strip not populated', state.readiness);
+    addShot(phase, await s.screenshot('shellnav-tonight-idle.png'));
+
+    // Keyboard: Enter on a focused nav item activates it.
+    await s.eval(`document.getElementById('nav-modes').focus()`);
     await s.key('Enter');
-    await waitFor(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none' && document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'set'`, 'Enter activates Advanced Options');
-    const afterEnter = await getTopMenuKeyboardState(s);
-    const startsAfterKeyboard = await getStarts(s);
-    const realPowerActionsAfterKeyboard = await getRealPowerActions(s);
-    results.keyboard.push({ step: 'enter-on-open-options', ...afterEnter, starts: startsAfterKeyboard.length, realPowerActions: realPowerActionsAfterKeyboard.length });
-    requireGate(afterEnter.settingsVisible && afterEnter.route === 'set', 'Enter did not activate the focused Advanced Options item', afterEnter);
-    requireGate(startsAfterKeyboard.length === 0 && realPowerActionsAfterKeyboard.length === 0, 'menu keyboard input started a timer or attempted a power action', { startsAfterKeyboard, realPowerActionsAfterKeyboard });
-    addShot(phase, await s.screenshot('topmenu-settings-keyboard-open.png'));
+    await waitFor(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'modes'`, 'Enter activates focused nav item');
+    results.keyboard.push({ step: 'enter-activates-nav' });
+    await s.eval(`document.getElementById('nav-lib').focus()`);
+    await s.key('Enter');
+    await waitFor(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'lib'`, 'Enter returns to Tonight');
 
     report.phases[phase] = { status: 'passed', results };
   } finally {
@@ -1720,91 +1669,61 @@ async function runActiveRunGate() {
 // reset only through supported visible UI between iterations (no restart).
 async function runWarmTopMenuPass(s) {
   const results = { mouse: [], keyboard: [] };
-  // Same measured-overhead basis as runTopMenuGate's waitFor: see the comment there.
+  // Same measured-overhead basis as runShellNavGate's waitFor: see the comment there.
   const waitFor = (expression, label, timeout = 5000) => s.condition(expression, timeout, label);
 
-  await s.click('#menu-power > span');
-  let open = await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'warm Power menu open after native click');
-  requireGate(open, 'warm Power menu did not open on click');
-  results.mouse.push({ step: 'click-power-open', open });
+  // UI-R1 warm nav pass: native clicks through the sidebar destinations.
+  await s.click('#nav-modes');
+  await waitFor(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'modes'`, 'warm Modes nav active');
+  results.mouse.push({ step: 'click-modes' });
 
-  await s.click('#menu-power > span');
-  open = await waitFor(`!document.querySelector('.menu-item.open')`, 'warm Power menu closed after second native click');
-  requireGate(open, 'warm Power trigger did not toggle closed');
-  results.mouse.push({ step: 'click-power-close', closed: open });
+  await s.click('#nav-sch');
+  await waitFor(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'sch'`, 'warm Schedule nav active');
+  results.mouse.push({ step: 'click-schedule' });
 
-  await s.click('#menu-settings > span');
-  open = await waitFor(`document.getElementById('menu-settings').classList.contains('open')`, 'warm Settings menu open after native click');
-  requireGate(open, 'warm Settings menu did not open on click');
-  results.mouse.push({ step: 'click-settings-open', open });
+  await s.click('#nav-lib');
+  await waitFor(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'lib'`, 'warm Tonight nav restored');
+  results.mouse.push({ step: 'click-tonight-restore' });
 
-  await s.click('#menu-help > span');
-  await waitFor(`!document.getElementById('menu-settings').classList.contains('open') && document.getElementById('menu-help').classList.contains('open')`, 'warm Help open and Settings closed');
-  results.mouse.push({ step: 'click-help-closes-settings' });
-
-  const outside = await s.eval(`(r=document.getElementById('ns-hero-card').getBoundingClientRect(), {x:r.x+r.width/2, y:r.y+r.height/2})`);
-  await s.clickXY(outside.x, outside.y);
-  const allClosed = await waitFor(`!document.querySelector('.menu-item.open')`, 'warm outside native click closes every top menu');
-  requireGate(allClosed, 'warm outside click did not close top menu');
-  results.mouse.push({ step: 'outside-click-closes', allClosed });
-
-  await s.click('#menu-power > span');
-  await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'warm Power menu primed for keyboard path');
+  // About via nav, Escape closes.
+  await s.click('#nav-help');
+  await waitFor(`document.getElementById('about-modal')?.classList.contains('active')`, 'warm About modal open');
+  results.mouse.push({ step: 'about-open' });
   await s.key('Escape');
-  await waitFor(`!document.querySelector('.menu-item.open') && document.activeElement?.id === 'menu-power'`, 'warm Power trigger focused after Escape');
+  await waitFor(`!document.getElementById('about-modal')?.classList.contains('active')`, 'warm Escape closes About');
+  results.keyboard.push({ step: 'escape-closes-about' });
+
+  // Keyboard activation on a focused nav item.
+  await s.eval(`document.getElementById('nav-stats').focus()`);
   await s.key('Enter');
-  const powerOpen = await waitFor(`document.getElementById('menu-power').classList.contains('open')`, 'warm Enter opens Power menu');
-  requireGate(powerOpen, 'warm Enter did not open Power');
-  results.keyboard.push({ step: 'enter-opens-power', powerOpen });
-  await s.key('ArrowDown');
-  await waitFor(`document.activeElement?.dataset?.action === 'restart'`, 'warm ArrowDown focuses Restart');
-  results.keyboard.push({ step: 'arrow-down-focuses-restart' });
-  await s.key('Escape');
-  const closedByEscape = await waitFor(`!document.querySelector('.menu-item.open') && document.activeElement?.id === 'menu-power'`, 'warm Escape closes Power and returns focus');
-  requireGate(closedByEscape, 'warm Escape did not close Power and return focus');
-  results.keyboard.push({ step: 'escape-closes', closedByEscape });
+  await waitFor(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'stats'`, 'warm Enter activates Stats nav');
+  results.keyboard.push({ step: 'enter-activates-stats' });
+  await s.eval(`document.getElementById('nav-lib').focus()`);
+  await s.key('Enter');
+  await waitFor(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'lib'`, 'warm Enter returns to Tonight');
 
   return results;
 }
 
 async function runWarmSettingsTogglePass(s) {
   const results = [];
-  // Same measured-overhead basis as runTopMenuGate's waitFor (~2.0s floor per
-  // native click): these post-click assertions follow the identical top-menu
-  // click pattern, so they carry the same widened, finite budget.
-  await s.click('#menu-settings > span');
-  await s.condition(`document.getElementById('menu-settings').classList.contains('open')`, 5000, 'warm Settings menu open for Dry Run toggle');
-  await s.click('#toggle-dryrun');
-  await s.condition(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent === 'OFF'`, 5000, 'warm Dry Run toggle visibly disabled');
-  let indicator = await s.eval(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent`);
-  requireGate(indicator === 'OFF', 'warm Dry Run toggle did not visibly disable', indicator);
+  // UI-R1: the Settings destination is the sidebar nav item; Test Mode now
+  // lives as the chk-dryrun checkbox inside the Settings workspace.
+  await s.click('#nav-set');
+  await s.condition(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none'`, 5000, 'warm Settings workspace open for Test Mode toggle');
+  results.push({ step: 'settings-open' });
+
+  await s.click('#chk-dryrun');
+  await s.condition(`state.dryRun === false`, 5000, 'warm Test Mode checkbox disabled');
+  let indicator = await s.eval(`document.getElementById('testmode-pill')?.textContent`);
+  requireGate(indicator && indicator.includes('REAL ACTION'), 'warm pill did not flip to REAL ACTION', indicator);
   results.push({ step: 'toggle-off', indicator });
 
-  await s.click('#menu-settings > span');
-  await s.condition(`document.getElementById('menu-settings').classList.contains('open')`, 5000, 'warm Settings menu reopened to restore Dry Run');
-  await s.click('#toggle-dryrun');
-  await s.condition(`state.dryRun === true`, 5000, 'warm Dry Run restored');
-  indicator = await s.eval(`document.querySelector('#toggle-dryrun .toggle-indicator').textContent`);
-  requireGate(indicator === 'ON', 'warm Dry Run toggle did not visibly restore', indicator);
+  await s.click('#chk-dryrun');
+  await s.condition(`state.dryRun === true`, 5000, 'warm Test Mode restored');
+  indicator = await s.eval(`document.getElementById('testmode-pill')?.textContent`);
+  requireGate(indicator && indicator.includes('TEST MODE'), 'warm pill did not restore TEST MODE', indicator);
   results.push({ step: 'toggle-on-restore', indicator });
-
-  // W2 (Canonical V5 WARM-01): #toggle-dryrun is itself a .submenu-item, and
-  // every .submenu-item click handler closes all top menus as its first
-  // action (renderer.js: closeAllTopMenus()) -- so the toggle-restore click
-  // above already closed Settings. #open-options lives inside that same
-  // dropdown (.submenu { display:none } while closed), so measuring it now
-  // would return a zero-size hidden rect and correctly fail validateRect's
-  // strict-interior check. Reopen and prove it, exactly like the COLD path
-  // (runTopMenuGate) already does before its own #open-options click.
-  await s.click('#menu-settings > span');
-  await s.condition(`document.getElementById('menu-settings').classList.contains('open')`, 5000, 'warm Settings menu reopened before Advanced Options');
-  results.push({ step: 'settings-reopened-for-advanced-options', open: true });
-
-  await s.click('#open-options');
-  await s.condition(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none'`, 5000, 'warm Advanced Options opens Settings panel');
-  const settingsVisible = await s.eval(`document.getElementById('ns-panel-set').style.display !== 'none'`);
-  requireGate(settingsVisible, 'warm Advanced Options did not open the Settings workspace');
-  results.push({ step: 'advanced-options-opens-settings', settingsVisible });
 
   await s.click('#modal-close');
   await s.condition(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'lib'`, 5000, 'warm native Settings close restores Tonight');
@@ -1842,7 +1761,6 @@ async function runWarmSharedStartPass(s) {
 async function assertWarmBaseline(s, iterationLabel) {
   const baseline = await s.eval(`({
     route: document.querySelector('.ns-nav-item.active')?.dataset?.nsTab || null,
-    openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
     activeModals: Array.from(document.querySelectorAll('.modal.active')).map(modal => modal.id),
     running: state.running,
     paused: state.paused,
@@ -1853,7 +1771,6 @@ async function assertWarmBaseline(s, iterationLabel) {
   })`);
   requireGate(
     baseline.route === 'lib' &&
-    baseline.openMenus.length === 0 &&
     baseline.activeModals.length === 0 &&
     baseline.running === false &&
     baseline.paused === false &&
@@ -1881,10 +1798,9 @@ async function assertWarmBaseline(s, iterationLabel) {
 async function resetToWarmBaseline(s) {
   for (let i = 0; i < 3; i++) {
     const openState = await s.eval(`({
-      openMenus: Array.from(document.querySelectorAll('.menu-item.open')).map(menu => menu.id),
       activeModals: Array.from(document.querySelectorAll('.modal.active')).map(modal => modal.id)
     })`);
-    if (openState.openMenus.length === 0 && openState.activeModals.length === 0) break;
+    if (openState.activeModals.length === 0) break;
     await s.key('Escape');
     await WAIT(150);
   }
@@ -2027,7 +1943,7 @@ async function main() {
     await runWarmMatrix(iterations);
   } else {
     await runStartupGate();
-    await runTopMenuGate();
+    await runShellNavGate();
     await runSharedStartGate();
     await runUseTonightGate();
     await runSettingsGate();

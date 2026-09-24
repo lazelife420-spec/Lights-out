@@ -47,7 +47,7 @@ async function waitForAuthoritativeReadiness(readSnapshot, {
       last.documentReadyState === 'complete' &&
       last.proofExists === true &&
       last.proofReady === true &&
-      last.menusReady === true &&
+      last.navReady === true &&
       !last.openModal
     ) {
       const confirmation = await readSnapshot();
@@ -55,7 +55,7 @@ async function waitForAuthoritativeReadiness(readSnapshot, {
         confirmation?.generation === generation &&
         confirmation.documentReadyState === 'complete' &&
         confirmation.proofReady === true &&
-        confirmation.menusReady === true &&
+        confirmation.navReady === true &&
         !confirmation.openModal
       ) {
         onMilestone({ event: 'renderer-ready', generation, at: Date.now() });
@@ -92,54 +92,51 @@ function assertOwnedEndpoint({
   );
 }
 
-async function exerciseMenuContract({
-  menuId,
+// UI-R1: the unified shell's navigation contract. Nav items are plain
+// buttons -- the contract is "click activates the item (active class +
+// aria-current=page)", or "click opens the About modal" for the help
+// destination, plus no menu machinery remaining anywhere in the DOM.
+async function exerciseNavContract({
+  navId,
   readReadiness,
-  readMenu,
-  clickTrigger,
-  moveToFirstItem,
+  readNav,
+  clickNav,
   pressEscape,
   timeoutMs = 5000,
-  full = false
+  opensModal = false
 }) {
   const readiness = await readReadiness();
-  assert.equal(readiness.menusReady, true, `${menuId} click attempted before menus were ready`);
-  const before = await readMenu();
-  assert.equal(before.connected, true, `${menuId} trigger is detached`);
-  assert.equal(before.visible, true, `${menuId} trigger is not visible`);
-  assert.equal(before.enabled, true, `${menuId} trigger is disabled`);
+  assert.equal(readiness.navReady, true, `${navId} click attempted before nav was ready`);
+  const before = await readNav();
+  assert.equal(before.connected, true, `${navId} nav item is detached`);
+  assert.equal(before.visible, true, `${navId} nav item is not visible`);
+  assert.equal(before.enabled, true, `${navId} nav item is disabled`);
+  assert.equal(before.menuRemnants, 0, 'top-menu remnants still in DOM');
 
-  await clickTrigger();
-  const opened = await waitForCondition(async () => {
-    const state = await readMenu();
-    return state.ariaExpanded === 'true' && state.open && state.menuVisible ? state : null;
-  }, { timeoutMs, description: `${menuId} accessible and visible open state` });
-
-  if (!full) {
+  await clickNav();
+  if (opensModal) {
+    const opened = await waitForCondition(async () => {
+      const state = await readNav();
+      return state.activeModal === 'about-modal' ? state : null;
+    }, { timeoutMs, description: `${navId} opens About modal` });
     await pressEscape();
     const closed = await waitForCondition(async () => {
-      const state = await readMenu();
-      return state.ariaExpanded === 'false' && !state.open && state.focusedId === menuId ? state : null;
-    }, { timeoutMs, description: `${menuId} Escape close and focus restoration` });
+      const state = await readNav();
+      return state.activeModal === null ? state : null;
+    }, { timeoutMs, description: `${navId} Escape closes About modal` });
     return { opened, closed };
   }
 
-  await moveToFirstItem();
-  const pointerTransfer = await waitForCondition(async () => {
-    const state = await readMenu();
-    return state.ariaExpanded === 'true' && state.open && state.menuVisible ? state : null;
-  }, { timeoutMs, description: `${menuId} pointer transfer` });
-  await pressEscape();
-  const closed = await waitForCondition(async () => {
-    const state = await readMenu();
-    return state.ariaExpanded === 'false' && !state.open && state.focusedId === menuId ? state : null;
-  }, { timeoutMs, description: `${menuId} Escape close and focus restoration` });
-  return { opened, pointerTransfer, closed };
+  const activated = await waitForCondition(async () => {
+    const state = await readNav();
+    return state.active === true && state.ariaCurrent === 'page' ? state : null;
+  }, { timeoutMs, description: `${navId} active and aria-current after click` });
+  return { activated };
 }
 
 module.exports = {
   assertOwnedEndpoint,
-  exerciseMenuContract,
+  exerciseNavContract,
   waitForAuthoritativeReadiness,
   waitForCondition
 };

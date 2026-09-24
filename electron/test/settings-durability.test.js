@@ -161,7 +161,7 @@ test('both primary and backup corrupt falls back to DEFAULTS', () => {
     fs.writeFileSync(bakFile(), '{broken', 'utf8');
     reloadSettings();
     const all = settingsModule.getAll();
-    assert.strictEqual(all.customization.accent, '#5b8cff', 'fell back to default accent');
+    assert.strictEqual(all.customization.accent, '#9b93d6', 'fell back to default accent');
   } finally { teardown(); }
 });
 
@@ -172,7 +172,7 @@ test('first run with no files returns DEFAULTS', () => {
   try {
     const all = settingsModule.getAll();
     assert.strictEqual(all.app.action, 'shutdown');
-    assert.strictEqual(all.customization.accent, '#5b8cff');
+    assert.strictEqual(all.customization.accent, '#9b93d6');
     assert.ok(!fs.existsSync(bakFile()), 'no backup on first run');
   } finally { teardown(); }
 });

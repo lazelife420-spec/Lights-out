@@ -170,7 +170,7 @@ const DEFAULTS = {
     verifiedConfigKey: ''
   },
   customization: {
-    accent: '#5b8cff',
+    accent: '#9b93d6',
     theme: 'midnight',
     ringStyle: 'glow',
     opacity: 1,
