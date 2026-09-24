@@ -145,9 +145,9 @@ async function remoteSnooze(peerIp, seconds = 300) {
 
 let commandServer = null;
 
-function reject(res, code, error) {
-  res.writeHead(code, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ success: false, error }));
+function reject(res, httpStatus, error, code) {
+  res.writeHead(httpStatus, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ success: false, error, ...(code ? { code } : {}) }));
 }
 
 // onCommand receives ONLY sanitized, validated commands. The handler enforces
@@ -188,7 +188,7 @@ function startCommandServer(onCommand, bindHost = '0.0.0.0') {
       // 3. Dispatch and report the REAL outcome — never unconditional success.
       const outcome = onCommand(result.command);
       if (outcome && outcome.success === false) {
-        return reject(res, outcome.httpStatus || 409, outcome.error || outcome.code || 'rejected');
+        return reject(res, outcome.httpStatus || 409, outcome.error || outcome.code || 'rejected', outcome.code);
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true, code: (outcome && outcome.code) || 'OK' }));

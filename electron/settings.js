@@ -162,6 +162,7 @@ const DEFAULTS = {
     hueUsername: '',
     hueLightIds: [],
     hueGroupId: '',
+    hueAllowLegacyHttp: false,
     httpUrl: '',
     httpMethod: 'POST',
     httpHeaders: {},

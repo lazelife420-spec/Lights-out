@@ -492,6 +492,10 @@
     const COMMAND_TIMEOUT_MS = 5000;
     let selectedAction = 'shutdown';
     let pcName = '';
+    // Desktop protocol hello: set once per socket generation when the desktop
+    // advertises its version/capabilities. Absent after 3s = legacy desktop.
+    let desktopHello = null;
+    let helloWatchdog = null;
     let connectionState = 'connecting'; // connecting | connected | disconnected | expired | offline
     let latestState = null;
     let lastStateReceivedAt = 0;
@@ -855,6 +859,7 @@
       statusPill.className = `status-pill ${state}`;
       statusText.textContent = msg || state;
       const pcEl = document.getElementById('pc-name');
+      if (pcEl && state === 'connected' && typeof refreshPcLabel === 'function') refreshPcLabel();
       if (state === 'connected') {
         pairCard.style.display = 'none';
         document.body.classList.toggle('stale-state', awaitingInitialState);
@@ -961,6 +966,10 @@
         if (ws !== socket || generation !== socketGeneration) return;
         if (reconnectTimer) clearTimeout(reconnectTimer);
         reconnectTimer = null;
+        // Reset hello expectation; if none arrives, mark the desktop as legacy.
+        desktopHello = null;
+        if (helloWatchdog) clearTimeout(helloWatchdog);
+        helloWatchdog = setTimeout(() => { helloWatchdog = null; if (!desktopHello) refreshPcLabel(); }, 3000);
         setConnectionState('connected', 'Connected — waiting for current PC state…');
         nmCatalogueRefreshing = true;
         if (nmGridVisible) renderNightModeGrid();
@@ -1027,8 +1036,29 @@
       if (!send({ action: 'start', durationSeconds: s, timerAction: selectedAction })) clearPending({ timeout: true });
     }
 
+    function refreshPcLabel() {
+      const pcEl = document.getElementById('pc-name');
+      if (!pcEl) return;
+      const suffix = desktopHello
+        ? ` · v${desktopHello.desktopVersion || '?'}${desktopHello.protocol >= 2 ? '' : ' · older protocol'}`
+        : ' · older desktop';
+      pcEl.textContent = pcName ? `Target PC: ${pcName}${suffix}` : `Target PC connected${suffix}`;
+    }
+
     function handleUpdate(data, generation = socketGeneration) {
       if (generation !== socketGeneration) return;
+      if (data.type === 'hello') {
+        // Consume the advertised protocol/version — a too-old desktop is
+        // surfaced, not silently assumed compatible.
+        desktopHello = {
+          protocol: Number(data.protocol) || 0,
+          desktopVersion: String(data.desktopVersion || ''),
+          capabilities: Array.isArray(data.capabilities) ? data.capabilities : []
+        };
+        if (helloWatchdog) { clearTimeout(helloWatchdog); helloWatchdog = null; }
+        refreshPcLabel();
+        return;
+      }
       if (data.type === 'pairing-revoked') {
         try { localStorage.removeItem(TOKEN_KEY); } catch {}
         pairToken = '';
@@ -1061,8 +1091,7 @@
         if (data.pcName) {
           pcName = data.pcName;
         }
-        const pcEl = document.getElementById('pc-name');
-        pcEl.textContent = pcName ? `Target PC: ${pcName}` : 'Target PC connected';
+        refreshPcLabel();
         pcEl.style.display = stateIsAuthoritative() ? '' : 'none';
 
         timerName.textContent = active ? (data.nightModeTitle || 'Custom Timer') : (data.timerName || 'Last Call');

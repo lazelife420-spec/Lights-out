@@ -83,6 +83,7 @@ describe('family command server truthfulness', () => {
     const denied = await postCommand({ command: 'start', durationSeconds: 120, action: 'shutdown' }, 'test-tok');
     assert.equal(denied.status, 409, 'RUN_ACTIVE must surface as a real rejection');
     assert.equal(denied.body.success, false);
+    assert.equal(denied.body.code, 'RUN_ACTIVE', 'structured rejection code must round-trip');
     assert.match(denied.body.error, /already active/i);
 
     const badToken = await postCommand({ command: 'cancel' }, 'wrong-tok');

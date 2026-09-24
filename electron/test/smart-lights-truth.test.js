@@ -92,11 +92,9 @@ test('Hue verify is a passive read and returns truthful failure', async (t) => {
   const port = await listen(server);
   t.after(() => new Promise(r => server.close(r)));
 
-  smartLights.loadConfig({ provider: 'hue', hueBridgeIp: '127.0.0.1', hueUsername: 'u', enabled: false, verifiedConfigKey: '' });
-  // Point the module at the stub via the IP field being overridden post-load:
-  // loadConfig requires a valid IP; 127.0.0.1 is valid — but the port differs,
-  // so exercise the read path through the stub by monkey-patching config via
-  // the http webhook shape is wrong. Instead use the direct function:
+  // The stub speaks plain HTTP, so enable the explicit legacy opt-in — the
+  // same flag a real pre-HTTPS bridge would need.
+  smartLights.loadConfig({ provider: 'hue', hueBridgeIp: '127.0.0.1', hueUsername: 'u', hueAllowLegacyHttp: true, enabled: false, verifiedConfigKey: '' });
   const res = await smartLights.getHueLights(`127.0.0.1:${port}`, 'u');
   assert.equal(res.success, true);
   assert.equal(res.lights.length, 2);
@@ -119,6 +117,7 @@ test('Hue cancel restoration replays the captured snapshot truthfully', async (t
   const port = await listen(server);
   t.after(() => new Promise(r => server.close(r)));
 
+  smartLights.loadConfig({ provider: 'hue', hueAllowLegacyHttp: true });
   const snapshot = [{ id: '7', on: true, bri: 180, ct: 320 }, { id: '9', on: true, bri: 90, ct: 0 }];
   const res = await smartLights.restoreLightSnapshot(`127.0.0.1:${port}`, 'u', snapshot);
   assert.equal(res.success, true);
@@ -158,7 +157,7 @@ test('HTTP config key covers credential headers — rotating a secret invalidate
   smartLights.loadConfig({ provider: 'none', enabled: false, verifiedConfigKey: '', httpHeaders: {} });
 });
 
-test('hueRequest falls back to HTTP for legacy bridges and reports the transport', async (t) => {
+test('hueRequest uses legacy HTTP only with explicit opt-in', async (t) => {
   const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ bridgeid: 'AABBCCDDEEFF0011', name: 'stub' }));
@@ -166,9 +165,17 @@ test('hueRequest falls back to HTTP for legacy bridges and reports the transport
   const port = await listen(server);
   t.after(() => new Promise(r => server.close(r)));
 
-  const r = await smartLights.hueRequest(`127.0.0.1:${port}`, 'GET', '/api/config', null, 3000);
+  // Default: no silent downgrade — a plain-HTTP responder is refused.
+  smartLights.loadConfig({ provider: 'hue', hueAllowLegacyHttp: false });
+  await assert.rejects(
+    smartLights.hueRequest(`127.0.0.1:${port}`, 'GET', '/api/config', null, 3000),
+    /legacy HTTP|HTTPS/
+  );
+
+  // Explicit opt-in reaches the legacy bridge and reports transport truthfully.
+  const r = await smartLights.hueRequest(`127.0.0.1:${port}`, 'GET', '/api/config', null, 3000, { allowLegacyHttp: true });
   assert.equal(r.ok, true);
-  assert.equal(r.transport, 'http', 'plain-HTTP stub must be reached via the legacy fallback');
+  assert.equal(r.transport, 'http');
   assert.equal(r.data.bridgeid, 'AABBCCDDEEFF0011');
 });
 

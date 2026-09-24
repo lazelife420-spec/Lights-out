@@ -393,6 +393,7 @@ const els = {
   hueBridgeIp: document.getElementById('hue-bridge-ip'),
   hueUsername: document.getElementById('hue-username'),
   hueGroupId: document.getElementById('hue-group-id'),
+  hueLegacyHttp: document.getElementById('hue-legacy-http'),
   btnDiscoverHue: document.getElementById('btn-discover-hue'),
   btnRegisterHue: document.getElementById('btn-register-hue'),
   btnLoadGroups: document.getElementById('btn-load-groups'),
@@ -776,6 +777,7 @@ const state = {
     hueUsername: '',
     hasHueCredential: false,
     hueGroupId: '',
+    hueAllowLegacyHttp: false,
     httpUrl: '',
     httpMethod: 'POST',
     httpBodyTemplate: '{"brightness": {{BRIGHTNESS}}, "color_temp": {{COLOR_TEMP}}, "on": {{ON}}}',
@@ -1376,6 +1378,7 @@ async function saveSettingsPanel() {
     // existing secret, so an untouched field must not overwrite it.
     hueUsername: els.hueUsername?.value || '',
     hueGroupId: els.hueGroupId?.value || '',
+    hueAllowLegacyHttp: Boolean(els.hueLegacyHttp?.checked),
     httpUrl: els.httpUrl?.value || '',
     httpMethod: els.httpMethod?.value || 'POST',
     httpBodyTemplate: els.httpTemplate?.value || '{"brightness": {{BRIGHTNESS}}, "color_temp": {{COLOR_TEMP}}, "on": {{ON}}}',
@@ -1456,6 +1459,7 @@ async function discardSettingsPanelChanges() {
         hueUsername: '',
         hasHueCredential: Boolean(lightConfig.hasHueCredential),
         hueGroupId: lightConfig.hueGroupId || '',
+        hueAllowLegacyHttp: Boolean(lightConfig.hueAllowLegacyHttp),
         httpUrl: lightConfig.httpUrl || '',
         httpMethod: lightConfig.httpMethod || 'POST',
         httpBodyTemplate: lightConfig.httpBodyTemplate || '{"brightness": {{BRIGHTNESS}}, "color_temp": {{COLOR_TEMP}}, "on": {{ON}}}',
@@ -3969,6 +3973,7 @@ if (els.btnClearReceipts) {
     hueBridgeIp: els.hueBridgeIp.value,
     hueUsername: els.hueUsername.value,
     hueGroupId: els.hueGroupId.value,
+    hueAllowLegacyHttp: Boolean(els.hueLegacyHttp?.checked),
     httpUrl: els.httpUrl.value,
     httpMethod: els.httpMethod.value,
     httpBodyTemplate: els.httpTemplate.value,
@@ -4256,6 +4261,7 @@ async function loadInitialData() {
         hueUsername: '',
         hasHueCredential: Boolean(lightConfig.hasHueCredential),
         hueGroupId: lightConfig.hueGroupId || '',
+        hueAllowLegacyHttp: Boolean(lightConfig.hueAllowLegacyHttp),
         httpUrl: lightConfig.httpUrl || '',
         httpMethod: lightConfig.httpMethod || 'POST',
         httpBodyTemplate: lightConfig.httpBodyTemplate || '{"brightness": {{BRIGHTNESS}}, "color_temp": {{COLOR_TEMP}}, "on": {{ON}}}',
@@ -4314,6 +4320,7 @@ function updateLightsUIFromState() {
       : 'Press link button, then Register';
   }
   if (els.hueGroupId) els.hueGroupId.value = state.smartLights.hueGroupId;
+  if (els.hueLegacyHttp) els.hueLegacyHttp.checked = Boolean(state.smartLights.hueAllowLegacyHttp);
   if (els.httpUrl) els.httpUrl.value = state.smartLights.httpUrl;
   if (els.httpMethod) els.httpMethod.value = state.smartLights.httpMethod;
   if (els.httpTemplate) els.httpTemplate.value = state.smartLights.httpBodyTemplate;

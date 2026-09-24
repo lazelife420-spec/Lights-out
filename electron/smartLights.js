@@ -26,6 +26,7 @@ let config = {
   hueUsername: '',
   hueLightIds: [],         // array of light IDs (empty = all)
   hueGroupId: '',          // group/room ID (optional)
+  hueAllowLegacyHttp: false, // explicit opt-in for pre-HTTPS firmware only
   // HTTP settings
   httpUrl: '',
   httpMethod: 'POST',
@@ -113,7 +114,16 @@ function rawHueRequest(transport, host, method, path, bodyObj, timeoutMs) {
       method,
       headers: { 'Content-Type': 'application/json' },
       timeout: timeoutMs,
-      rejectUnauthorized: transport === 'https' ? false : undefined
+      // CA validation can't work for bridge-issued certs, so hostname/CA checks
+      // are off — but identity IS enforced: checkServerIdentity runs BEFORE the
+      // request bytes (and the Hue credential in the path) leave the socket.
+      rejectUnauthorized: transport === 'https' ? false : undefined,
+      checkServerIdentity: transport === 'https'
+        ? (name, cert) => {
+            const check = isHueBridgeCertificate(cert);
+            return check.trusted ? undefined : new Error(`Unrecognized bridge certificate: ${check.reason}`);
+          }
+        : undefined
     }, (res) => {
       let data = '';
       res.on('data', c => { if (data.length < 256 * 1024) data += c; });
@@ -146,11 +156,19 @@ function isHueBridgeCertificate(cert) {
   return { trusted: false, reason: `unrecognized identity (CN=${cn || '?'})` };
 }
 
-async function hueRequest(host, method, path, bodyObj, timeoutMs = 5000) {
+// allowLegacyHttp defaults to the configured opt-in. Pass true explicitly for
+// credential-free probes (discovery fingerprinting) where reporting the legacy
+// transport is the goal, not sending secrets.
+async function hueRequest(host, method, path, bodyObj, timeoutMs = 5000, { allowLegacyHttp = config.hueAllowLegacyHttp } = {}) {
   const cached = hueTransportCache.get(host);
   const order = cached ? [cached] : ['https', 'http'];
   let lastErr = null;
   for (const transport of order) {
+    if (transport === 'http' && !allowLegacyHttp) {
+      const e = new Error('Bridge answered HTTP only — enable "Allow legacy HTTP bridge" to use pre-HTTPS firmware');
+      e.code = 'HTTPS_REQUIRED';
+      throw e;
+    }
     try {
       const r = await rawHueRequest(transport, host, method, path, bodyObj, timeoutMs);
       if (!cached) hueTransportCache.set(host, transport);
@@ -168,7 +186,8 @@ async function hueRequest(host, method, path, bodyObj, timeoutMs = 5000) {
       };
     } catch (err) {
       lastErr = err;
-      // A TLS-handshake mismatch on an old bridge means "speak HTTP" — retry once.
+      // A TLS-handshake mismatch on an old bridge means "speak HTTP" — retry
+      // only when legacy mode was explicitly allowed for this call.
       if (transport === 'https' && isTlsMismatchError(err)) continue;
       throw err;
     }
@@ -178,7 +197,9 @@ async function hueRequest(host, method, path, bodyObj, timeoutMs = 5000) {
 
 function hueFailureFromError(error) {
   const msg = error && error.message ? error.message : String(error);
-  const code = /timeout/i.test(msg) ? 'TIMEOUT' : 'NETWORK_ERROR';
+  const code = error && error.code === 'HTTPS_REQUIRED' ? 'HTTPS_REQUIRED'
+    : /unrecognized bridge certificate/i.test(msg) ? 'CERT_UNRECOGNIZED'
+    : /timeout/i.test(msg) ? 'TIMEOUT' : 'NETWORK_ERROR';
   return failure('hue', code, msg);
 }
 
@@ -282,7 +303,10 @@ function discoverHueBridgeLocal(timeoutMs = 3000) {
         if (!net.isIP(ip) || seen.has(ip)) continue;
         seen.add(ip);
         try {
-          const r = await hueRequest(ip, 'GET', '/api/config', null, 2500);
+          // Fingerprint probe carries no credentials — legacy-allowed here so
+          // an old bridge is still found (and labeled), even though credentialed
+          // API calls to it require the explicit opt-in.
+          const r = await hueRequest(ip, 'GET', '/api/config', null, 2500, { allowLegacyHttp: true });
           if (r.data && r.data.bridgeid) {
             done({ ip, id: r.data.bridgeid, source: 'mdns', transport: r.transport });
           }
@@ -733,8 +757,10 @@ async function verifySmartLightConnection() {
       if (res.lights.length === 0) {
         return failure('hue', 'NO_LIGHTS', 'No lights found - check bridge IP/username');
       }
-      return result('hue', true, 'VERIFIED', `Connected: ${res.lights.length} lights found`,
-        { verifiedConfigKey: configurationKey() });
+      const legacy = res.transport === 'http';
+      return result('hue', true, 'VERIFIED',
+        legacy ? `Connected: ${res.lights.length} lights found (legacy HTTP bridge — update firmware for HTTPS)` : `Connected: ${res.lights.length} lights found`,
+        { verifiedConfigKey: configurationKey(), legacyHttp: legacy });
     }
     case 'http': {
       // A webhook cannot be verified passively: ANY request to it (GET, HEAD,
@@ -791,6 +817,7 @@ function loadConfig(newConfig) {
     dimMinutes: newConfig.dimMinutes !== undefined ? Number(newConfig.dimMinutes) : config.dimMinutes,
     enabled: newConfig.enabled !== undefined ? Boolean(newConfig.enabled) : config.enabled,
     hueBridgeIp: (newConfig.hueBridgeIp && net.isIP(String(newConfig.hueBridgeIp).trim()) !== 0) ? String(newConfig.hueBridgeIp).trim() : config.hueBridgeIp,
+    hueAllowLegacyHttp: newConfig.hueAllowLegacyHttp !== undefined ? Boolean(newConfig.hueAllowLegacyHttp) : config.hueAllowLegacyHttp,
     // Empty string means "keep existing" so a redacted (blanked) renderer field
     // never clobbers the stored credential.
     hueUsername: newConfig.hueUsername || config.hueUsername,
