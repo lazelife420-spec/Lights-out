@@ -148,6 +148,73 @@ test('Test Mode contract: smart lights actuate during dry-run (lights are the re
   assert.equal(src.includes('dryRun'), false, 'smartLights must not consult dry-run state');
 });
 
+test('HTTP config key covers credential headers — rotating a secret invalidates verification', () => {
+  smartLights.loadConfig({ provider: 'http', httpUrl: 'http://10.0.0.5/hook', httpMethod: 'POST', enabled: false, verifiedConfigKey: '', httpHeaders: { Authorization: 'Bearer old' } });
+  const k1 = smartLights.configurationKey();
+  smartLights.loadConfig({ httpHeaders: { Authorization: 'Bearer new' } });
+  const k2 = smartLights.configurationKey();
+  assert.notEqual(k1, k2, 'a credential change must change the verification key');
+  assert.equal(k1.includes('old'), false, 'key must not carry plaintext secrets');
+  smartLights.loadConfig({ provider: 'none', enabled: false, verifiedConfigKey: '', httpHeaders: {} });
+});
+
+test('hueRequest falls back to HTTP for legacy bridges and reports the transport', async (t) => {
+  const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ bridgeid: 'AABBCCDDEEFF0011', name: 'stub' }));
+  });
+  const port = await listen(server);
+  t.after(() => new Promise(r => server.close(r)));
+
+  const r = await smartLights.hueRequest(`127.0.0.1:${port}`, 'GET', '/api/config', null, 3000);
+  assert.equal(r.ok, true);
+  assert.equal(r.transport, 'http', 'plain-HTTP stub must be reached via the legacy fallback');
+  assert.equal(r.data.bridgeid, 'AABBCCDDEEFF0011');
+});
+
+test('isHueBridgeCertificate accepts Hue-looking certs and rejects unrelated ones', () => {
+  const good = smartLights.isHueBridgeCertificate({ subject: { CN: '001788FFFE123456' }, issuer: {} });
+  assert.equal(good.trusted, true);
+  const hueIssuer = smartLights.isHueBridgeCertificate({ subject: { CN: 'weird' }, issuer: { CN: 'Philips Hue CA' } });
+  assert.equal(hueIssuer.trusted, true);
+  const bad = smartLights.isHueBridgeCertificate({ subject: { CN: 'evil.corp' }, issuer: { CN: 'Internal Corp CA' } });
+  assert.equal(bad.trusted, false);
+  const none = smartLights.isHueBridgeCertificate(null);
+  assert.equal(none.trusted, false);
+});
+
+test('mDNS query/parse round-trips a Hue announcement', () => {
+  const q = smartLights.buildMdnsQuery();
+  assert.ok(q.includes(Buffer.from('_hue')), 'query must ask for _hue._tcp.local');
+
+  // Synthesize a response: header + 1 PTR answer + 1 A answer.
+  const name = Buffer.from([4, ...Buffer.from('_hue'), 4, ...Buffer.from('_tcp'), 5, ...Buffer.from('local'), 0]);
+  // Real Hue PTR targets look like 'Philips hue - XXXXXX._hue._tcp.local'.
+  const ptrTarget = Buffer.from([
+    7, ...Buffer.from('hue-abc'),
+    4, ...Buffer.from('_hue'),
+    4, ...Buffer.from('_tcp'),
+    5, ...Buffer.from('local'), 0
+  ]);
+  const header = Buffer.alloc(12);
+  header.writeUInt16BE(1, 6); // ancount=1 (+additional handled by ansum below)
+  // We'll build: header(qd=0, an=2) then RR1: name ptr->_hue._tcp.local TYPE PTR, RR2: TYPE A.
+  header.writeUInt16BE(0, 4);
+  header.writeUInt16BE(2, 6);
+  const rr1head = Buffer.alloc(10);
+  rr1head.writeUInt16BE(12, 0); // TYPE PTR
+  rr1head.writeUInt16BE(1, 2);  // CLASS IN
+  rr1head.writeUInt16BE(ptrTarget.length, 8); // RDLENGTH
+  const rr2head = Buffer.alloc(10);
+  rr2head.writeUInt16BE(1, 0);  // TYPE A
+  rr2head.writeUInt16BE(1, 2);
+  rr2head.writeUInt16BE(4, 8);
+  const packet = Buffer.concat([header, name, rr1head, ptrTarget, name, rr2head, Buffer.from([192, 168, 0, 77])]);
+  const parsed = smartLights.parseMdnsResponse(packet);
+  assert.ok(parsed.ptrNames.some(n => n.includes('hue-abc')), `PTR names: ${parsed.ptrNames}`);
+  assert.ok(parsed.ips.includes('192.168.0.77'), `A ips: ${parsed.ips}`);
+});
+
 test('public config redacts secrets; full config stays in main process', () => {
   smartLights.loadConfig({
     provider: 'hue', hueBridgeIp: '192.168.0.50', hueUsername: 'super-secret-user',

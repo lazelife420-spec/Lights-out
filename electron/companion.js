@@ -14,6 +14,7 @@ const MAX_CLIENTS = 8;              // companion is a personal LAN tool; cap con
 const MAX_MESSAGE = 64 * 1024;      // reject any single frame larger than this
 const MAX_BUFFER = 256 * 1024;      // reject a client that buffers without completing a frame
 const HEARTBEAT_MS = 5000;           // remove network-disconnected phones from truthful client state
+const APP_VERSION = require('./package.json').version;
 let server = null;
 let clients = new Set();
 let heartbeatTimer = null;
@@ -178,6 +179,24 @@ function upgradeHandler(req, socket, head) {
 
   const client = { socket, alive: true, awaitingPong: false, buf: Buffer.alloc(0) };
   clients.add(client);
+
+  // Protocol hello: lets the phone detect a too-old desktop instead of
+  // silently assuming every advertised behavior exists. Unknown messages are
+  // ignored by older companions, so this is backward compatible.
+  try {
+    sendToClient(client, {
+      type: 'hello',
+      protocol: 2,
+      desktopVersion: APP_VERSION,
+      capabilities: [
+        'command-result',
+        'run-active-rejection',
+        'night-modes',
+        'test-mode-authority',
+        'origin-check'
+      ]
+    });
+  } catch { /* hello is best-effort */ }
 
   socket.on('data', (chunk) => {
     if (!client.alive) return;

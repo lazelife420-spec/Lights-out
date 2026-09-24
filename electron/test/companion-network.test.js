@@ -63,6 +63,9 @@ test('companionNetwork uses no Internet host or socket probe', () => {
   assert.equal(src.includes('1.1.1.1'), false, 'no external host literal');
   assert.equal(src.includes('dgram'), false, 'no socket probe');
   assert.match(src, /Get-NetRoute/, 'route-table truth is the mechanism');
+  // Windows prefers the lowest RouteMetric+InterfaceMetric SUM — a two-key
+  // lexicographic sort picks a different (wrong) route.
+  assert.match(src, /RouteMetric \+ \$_.InterfaceMetric/, 'route preference must sort by the metric sum');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

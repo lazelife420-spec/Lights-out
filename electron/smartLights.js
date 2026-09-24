@@ -10,6 +10,7 @@ const https = require('https');
 const http = require('http');
 const net = require('net');
 const dgram = require('dgram');
+const crypto = require('crypto');
 
 const SHIPPED_PROVIDERS = ['none', 'hue', 'http'];
 
@@ -40,10 +41,22 @@ const SECRET_INDICATORS = {
   httpHeaders: 'hasHttpHeaders'
 };
 
+// Canonicalized digest of the webhook headers — included in configurationKey
+// so rotating an Authorization header invalidates the verification without the
+// secret itself ever appearing in the key.
+function httpHeadersDigest(headers) {
+  if (!headers || typeof headers !== 'object') return 'none';
+  const canonical = Object.entries(headers)
+    .filter(([k, v]) => k && v !== undefined && v !== null)
+    .map(([k, v]) => [String(k).toLowerCase().trim(), String(v)])
+    .sort((a, b) => a[0].localeCompare(b[0]));
+  return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex').slice(0, 16);
+}
+
 function configurationKey(value = config) {
   const provider = value.provider || 'none';
   if (provider === 'hue') return `hue:${value.hueBridgeIp || ''}:${value.hueUsername || ''}:${value.hueGroupId || ''}`;
-  if (provider === 'http') return `http:${value.httpMethod || 'POST'}:${value.httpUrl || ''}:${value.httpBodyTemplate || ''}`;
+  if (provider === 'http') return `http:${value.httpMethod || 'POST'}:${value.httpUrl || ''}:${httpHeadersDigest(value.httpHeaders)}:${value.httpBodyTemplate || ''}`;
   return '';
 }
 
@@ -70,30 +83,189 @@ function fetchBounded(url, options = {}, timeoutMs = 5000) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Hue transport
+//
+// Philips Hue firmware after the EU RED change serves the local API over
+// HTTPS only; older bridges still answer HTTP. hueRequest() tries HTTPS first
+// (rejectUnauthorized:false — the bridge cert is self-signed/Hue-CA; the cert
+// is inspected and reported, not blindly trusted) and falls back to HTTP for
+// legacy bridges, reporting the negotiated transport truthfully.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const hueTransportCache = new Map(); // host -> 'https' | 'http'
+
+// Errors that mean "the other side is plain HTTP, not TLS".
+function isTlsMismatchError(err) {
+  const code = err && (err.code || '');
+  const msg = (err && err.message) || '';
+  return code === 'EPROTO' || code === 'ECONNRESET' || code === 'ERR_SSL_WRONG_VERSION_NUMBER'
+    || /wrong version|ssl routines|unknown protocol|packet length too long/i.test(msg);
+}
+
+function rawHueRequest(transport, host, method, path, bodyObj, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const [hostname, portStr] = host.split(':');
+    const client = transport === 'https' ? https : http;
+    const req = client.request({
+      hostname,
+      port: portStr ? Number(portStr) : (transport === 'https' ? 443 : 80),
+      path,
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      timeout: timeoutMs,
+      rejectUnauthorized: transport === 'https' ? false : undefined
+    }, (res) => {
+      let data = '';
+      res.on('data', c => { if (data.length < 256 * 1024) data += c; });
+      res.on('end', () => {
+        let cert = null;
+        try {
+          const c = res.socket && res.socket.getPeerCertificate && res.socket.getPeerCertificate();
+          if (c && c.subject) cert = { subject: c.subject, issuer: c.issuer };
+        } catch { /* not a TLS socket */ }
+        resolve({ status: res.statusCode || 0, body: data, certificate: cert });
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('Request timeout')); });
+    if (bodyObj !== undefined && bodyObj !== null) req.write(JSON.stringify(bodyObj));
+    req.end();
+  });
+}
+
+// Heuristic: a real Hue bridge cert is issued for the bridge (CN is typically
+// the 16-hex-digit bridgeid) by the Hue chain. Returns {trusted, reason}.
+function isHueBridgeCertificate(cert) {
+  if (!cert || !cert.subject) return { trusted: false, reason: 'no peer certificate' };
+  const cn = String(cert.subject.CN || cert.subject.commonName || '');
+  const issuerBlob = JSON.stringify(cert.issuer || {});
+  if (/^[0-9a-fA-F]{16}$/.test(cn)) return { trusted: true, reason: 'bridgeid CN' };
+  if (/hue|philips/i.test(cn) || /hue|philips/i.test(issuerBlob)) {
+    return { trusted: true, reason: 'Hue/Philips identity' };
+  }
+  return { trusted: false, reason: `unrecognized identity (CN=${cn || '?'})` };
+}
+
+async function hueRequest(host, method, path, bodyObj, timeoutMs = 5000) {
+  const cached = hueTransportCache.get(host);
+  const order = cached ? [cached] : ['https', 'http'];
+  let lastErr = null;
+  for (const transport of order) {
+    try {
+      const r = await rawHueRequest(transport, host, method, path, bodyObj, timeoutMs);
+      if (!cached) hueTransportCache.set(host, transport);
+      let parsed = null;
+      try { parsed = JSON.parse(r.body); } catch { /* keep raw */ }
+      const certCheck = transport === 'https' ? isHueBridgeCertificate(r.certificate) : null;
+      return {
+        ok: r.status >= 200 && r.status < 300,
+        status: r.status,
+        data: parsed !== null ? parsed : r.body,
+        transport,
+        tls: transport === 'https'
+          ? { trusted: certCheck.trusted, reason: certCheck.reason }
+          : { legacy: true }
+      };
+    } catch (err) {
+      lastErr = err;
+      // A TLS-handshake mismatch on an old bridge means "speak HTTP" — retry once.
+      if (transport === 'https' && isTlsMismatchError(err)) continue;
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+
+function hueFailureFromError(error) {
+  const msg = error && error.message ? error.message : String(error);
+  const code = /timeout/i.test(msg) ? 'TIMEOUT' : 'NETWORK_ERROR';
+  return failure('hue', code, msg);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Hue Bridge Discovery & Registration
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Parse an SSDP response/location pair into a candidate bridge address, or null.
-// Hue v1 bridges answer M-SEARCH with a LOCATION pointing at description.xml.
-function parseSsdpLocation(raw) {
-  const text = String(raw || '');
-  const match = text.match(/^LOCATION:\s*(https?:\/\/[^\s]+)/im);
-  return match ? match[1].trim() : '';
+// Build a minimal mDNS PTR query for _hue._tcp.local — the discovery method
+// Philips Hue currently supports (UPnP/SSDP discovery was deprecated by Philips).
+function buildMdnsQuery() {
+  const header = Buffer.alloc(12); // id=0, flags=0, qdcount set below
+  header.writeUInt16BE(1, 4);
+  const name = Buffer.from([4, ...Buffer.from('_hue'), 4, ...Buffer.from('_tcp'), 5, ...Buffer.from('local'), 0]);
+  const tail = Buffer.alloc(4);
+  tail.writeUInt16BE(12, 0); // QTYPE PTR
+  tail.writeUInt16BE(1, 2);  // QCLASS IN
+  return Buffer.concat([header, name, tail]);
 }
 
-// Decide whether a fetched bridge descriptor really is a Philips Hue bridge.
-function isHueBridgeDescriptor(xml) {
-  const text = String(xml || '');
-  return /philips\s+hue/i.test(text) || /<modelName>[^<]*hue[^<]*<\/modelName>/i.test(text);
+// Read a possibly-compressed DNS name at offset; returns {name, next}.
+function readDnsName(buf, offset) {
+  const labels = [];
+  let pos = offset;
+  let jumped = false;
+  let next = offset;
+  for (let guard = 0; guard < 128; guard++) {
+    const len = buf[pos];
+    if (len === 0) { if (!jumped) next = pos + 1; break; }
+    if ((len & 0xc0) === 0xc0) {
+      const ptr = ((len & 0x3f) << 8) | buf[pos + 1];
+      if (!jumped) next = pos + 2;
+      jumped = true;
+      pos = ptr;
+      continue;
+    }
+    labels.push(buf.slice(pos + 1, pos + 1 + len).toString());
+    pos += 1 + len;
+    if (!jumped) next = pos;
+  }
+  return { name: labels.join('.'), next };
 }
 
-// LAN-native discovery: SSDP M-SEARCH multicast, then verify each responder by
-// fetching its UPnP description and looking for the Hue model marker. No
-// Internet route required — multicast never leaves the LAN.
+// Parse an mDNS response: returns {ptrNames:[], ips:[], bridgeIds:[]}.
+function parseMdnsResponse(buf) {
+  const out = { ptrNames: [], ips: [], bridgeIds: [] };
+  if (!Buffer.isBuffer(buf) || buf.length < 12) return out;
+  const qd = buf.readUInt16BE(4);
+  const an = buf.readUInt16BE(6) + buf.readUInt16BE(8) + buf.readUInt16BE(10);
+  let pos = 12;
+  for (let i = 0; i < qd; i++) {
+    const q = readDnsName(buf, pos);
+    pos = q.next + 4;
+  }
+  for (let i = 0; i < an && pos + 10 <= buf.length; i++) {
+    const rr = readDnsName(buf, pos);
+    pos = rr.next;
+    const type = buf.readUInt16BE(pos);
+    const rdlen = buf.readUInt16BE(pos + 8);
+    const rdata = pos + 10;
+    if (type === 12) { // PTR
+      const t = readDnsName(buf, rdata);
+      out.ptrNames.push(t.name);
+    } else if (type === 1 && rdlen === 4) { // A
+      out.ips.push(`${buf[rdata]}.${buf[rdata + 1]}.${buf[rdata + 2]}.${buf[rdata + 3]}`);
+    } else if (type === 16) { // TXT
+      let t = rdata;
+      const end = rdata + rdlen;
+      while (t < end) {
+        const l = buf[t];
+        const s = buf.slice(t + 1, t + 1 + l).toString();
+        const m = s.match(/^bridgeid=(.+)$/i);
+        if (m) out.bridgeIds.push(m[1]);
+        t += 1 + l;
+      }
+    }
+    pos = rdata + rdlen;
+  }
+  return out;
+}
+
+// LAN-native discovery: mDNS _hue._tcp.local, then verify each candidate by
+// asking the bridge itself for its config (bridgeid present = real Hue).
+// No Internet route required — multicast never leaves the LAN.
 function discoverHueBridgeLocal(timeoutMs = 3000) {
   return new Promise((resolve) => {
-    const socket = dgram.createSocket('udp4');
-    const found = new Map();
+    const socket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+    const seen = new Set();
     let settled = false;
     const done = (value) => {
       if (settled) return;
@@ -103,30 +275,27 @@ function discoverHueBridgeLocal(timeoutMs = 3000) {
     };
 
     socket.on('message', async (msg) => {
-      const location = parseSsdpLocation(msg.toString());
-      if (!location) return;
-      let host;
-      try { host = new URL(location).hostname; } catch { return; }
-      if (!net.isIP(host) || found.has(host)) return;
-      found.set(host, true);
-      try {
-        const res = await fetchBounded(location, {}, 2500);
-        const xml = await res.text();
-        if (isHueBridgeDescriptor(xml)) done({ ip: host, source: 'ssdp' });
-      } catch { /* not a Hue responder */ }
+      const parsed = parseMdnsResponse(msg);
+      const hueish = parsed.ptrNames.some(n => /_hue\._tcp/i.test(n)) || parsed.bridgeIds.length > 0;
+      if (!hueish) return;
+      for (const ip of parsed.ips) {
+        if (!net.isIP(ip) || seen.has(ip)) continue;
+        seen.add(ip);
+        try {
+          const r = await hueRequest(ip, 'GET', '/api/config', null, 2500);
+          if (r.data && r.data.bridgeid) {
+            done({ ip, id: r.data.bridgeid, source: 'mdns', transport: r.transport });
+          }
+        } catch { /* not a Hue responder */ }
+      }
     });
     socket.on('error', () => done(null));
 
     socket.bind(0, () => {
       try {
-        const query = Buffer.from(
-          'M-SEARCH * HTTP/1.1\r\n' +
-          'HOST: 239.255.255.250:1900\r\n' +
-          'MAN: "ssdp:discover"\r\n' +
-          'MX: 2\r\n' +
-          'ST: urn:schemas-upnp-org:device:basic:1\r\n\r\n'
-        );
-        socket.send(query, 0, query.length, 1900, '239.255.255.250');
+        socket.addMembership('224.0.0.251');
+        const query = buildMdnsQuery();
+        socket.send(query, 0, query.length, 5353, '224.0.0.251');
       } catch { done(null); }
     });
     setTimeout(() => done(null), timeoutMs).unref?.();
@@ -148,7 +317,7 @@ async function discoverHueBridgeCloud() {
   return null;
 }
 
-// Discovery order: LAN SSDP first, cloud only as a labeled fallback.
+// Discovery order: LAN mDNS first, cloud only as a labeled fallback.
 async function findHueBridge() {
   const local = await discoverHueBridgeLocal().catch(() => null);
   if (local) return local;
@@ -157,31 +326,27 @@ async function findHueBridge() {
 
 async function registerHueBridge(bridgeIp) {
   try {
-    const response = await fetchBounded(`http://${bridgeIp}/api`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ devicetype: 'LightsOut#SleepTimer' })
-    }, 10000);
-    const data = await response.json();
-    if (data[0]?.success?.username) {
-      return { username: data[0].success.username };
+    const r = await hueRequest(bridgeIp, 'POST', '/api', { devicetype: 'LightsOut#SleepTimer' }, 10000);
+    const data = r.data;
+    if (Array.isArray(data) && data[0]?.success?.username) {
+      return { username: data[0].success.username, transport: r.transport };
     }
-    if (data[0]?.error) {
+    if (Array.isArray(data) && data[0]?.error) {
       return { error: data[0].error.description };
     }
+    return { error: `Unexpected bridge response (HTTP ${r.status})` };
   } catch (error) {
     return { error: error.message };
   }
-  return null;
 }
 
 // Hue read helpers return { success, ... } — transport failures are truthful,
 // never silently converted into an empty list that looks like "no lights".
 async function getHueLights(bridgeIp, username) {
   try {
-    const response = await fetchBounded(`http://${bridgeIp}/api/${username}/lights`, {}, 5000);
-    if (!response.ok) return failure('hue', 'HTTP_' + response.status, `Bridge returned HTTP ${response.status}`);
-    const data = await response.json();
+    const r = await hueRequest(bridgeIp, 'GET', `/api/${username}/lights`, null, 5000);
+    if (!r.ok) return failure('hue', 'HTTP_' + r.status, `Bridge returned HTTP ${r.status}`);
+    const data = r.data;
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
       return failure('hue', 'INVALID_RESPONSE', 'Unexpected bridge response');
     }
@@ -197,17 +362,17 @@ async function getHueLights(bridgeIp, username) {
         type: light.type
       });
     }
-    return result('hue', true, 'OK', `${lights.length} lights`, { lights });
+    return result('hue', true, 'OK', `${lights.length} lights`, { lights, transport: r.transport, tls: r.tls });
   } catch (error) {
-    return failure('hue', error.name === 'TimeoutError' ? 'TIMEOUT' : 'NETWORK_ERROR', error.message);
+    return hueFailureFromError(error);
   }
 }
 
 async function getHueGroups(bridgeIp, username) {
   try {
-    const response = await fetchBounded(`http://${bridgeIp}/api/${username}/groups`, {}, 5000);
-    if (!response.ok) return failure('hue', 'HTTP_' + response.status, `Bridge returned HTTP ${response.status}`);
-    const data = await response.json();
+    const r = await hueRequest(bridgeIp, 'GET', `/api/${username}/groups`, null, 5000);
+    if (!r.ok) return failure('hue', 'HTTP_' + r.status, `Bridge returned HTTP ${r.status}`);
+    const data = r.data;
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
       return failure('hue', 'INVALID_RESPONSE', 'Unexpected bridge response');
     }
@@ -215,45 +380,37 @@ async function getHueGroups(bridgeIp, username) {
     for (const [id, group] of Object.entries(data)) {
       groups.push({ id: id, name: group.name, type: group.type, lights: group.lights });
     }
-    return result('hue', true, 'OK', `${groups.length} groups`, { groups });
+    return result('hue', true, 'OK', `${groups.length} groups`, { groups, transport: r.transport });
   } catch (error) {
-    return failure('hue', error.name === 'TimeoutError' ? 'TIMEOUT' : 'NETWORK_ERROR', error.message);
+    return hueFailureFromError(error);
   }
 }
 
 async function setHueLightState(bridgeIp, username, lightId, lightState) {
   try {
-    const response = await fetchBounded(`http://${bridgeIp}/api/${username}/lights/${lightId}/state`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(lightState)
-    }, 5000);
-    if (!response.ok) return failure('hue', 'HTTP_' + response.status, `Light ${lightId} returned HTTP ${response.status}`);
-    const data = await response.json();
+    const r = await hueRequest(bridgeIp, 'PUT', `/api/${username}/lights/${lightId}/state`, lightState, 5000);
+    if (!r.ok) return failure('hue', 'HTTP_' + r.status, `Light ${lightId} returned HTTP ${r.status}`);
+    const data = r.data;
     if (Array.isArray(data) && data.some(e => e && e.error)) {
       return failure('hue', 'BRIDGE_ERROR', data.find(e => e.error).error.description || 'Bridge rejected the state');
     }
     return result('hue', true, 'OK', `Light ${lightId} updated`);
   } catch (error) {
-    return failure('hue', error.name === 'TimeoutError' ? 'TIMEOUT' : 'NETWORK_ERROR', error.message);
+    return hueFailureFromError(error);
   }
 }
 
 async function setHueGroupState(bridgeIp, username, groupId, groupState) {
   try {
-    const response = await fetchBounded(`http://${bridgeIp}/api/${username}/groups/${groupId}/action`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(groupState)
-    }, 5000);
-    if (!response.ok) return failure('hue', 'HTTP_' + response.status, `Group ${groupId} returned HTTP ${response.status}`);
-    const data = await response.json();
+    const r = await hueRequest(bridgeIp, 'PUT', `/api/${username}/groups/${groupId}/action`, groupState, 5000);
+    if (!r.ok) return failure('hue', 'HTTP_' + r.status, `Group ${groupId} returned HTTP ${r.status}`);
+    const data = r.data;
     if (Array.isArray(data) && data.some(e => e && e.error)) {
       return failure('hue', 'BRIDGE_ERROR', data.find(e => e.error).error.description || 'Bridge rejected the state');
     }
     return result('hue', true, 'OK', `Group ${groupId} updated`);
   } catch (error) {
-    return failure('hue', error.name === 'TimeoutError' ? 'TIMEOUT' : 'NETWORK_ERROR', error.message);
+    return hueFailureFromError(error);
   }
 }
 
@@ -373,6 +530,30 @@ async function invokeHttpLightAction(brightness = 254, colorTemp = 366, on = tru
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Rate pacing: Philips documents ~10 light commands/sec and ~1 group
+// command/sec. A dim tick fires once per second per LIGHT, so without
+// serialization 12 selected lights would exceed the per-light budget. Sends
+// are serialized with 120ms pacing; a tick that arrives while a batch is
+// still draining is dropped rather than piled into an unbounded queue.
+// ─────────────────────────────────────────────────────────────────────────────
+
+let hueBatchBusy = false;
+const HUE_LIGHT_PACE_MS = 120;
+
+async function sendToHueTargets(ids, lightState) {
+  const results = [];
+  for (let i = 0; i < ids.length; i++) {
+    results.push(await setHueLightState(config.hueBridgeIp, config.hueUsername, ids[i], lightState));
+    if (i < ids.length - 1) await new Promise(r => setTimeout(r, HUE_LIGHT_PACE_MS));
+  }
+  return results;
+}
+
+function countFailures(results) {
+  return results.filter(r => !r.success).length;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Timer Integration
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -417,13 +598,15 @@ function updateSmartLightTick(remainingSeconds) {
       if (config.hueGroupId) {
         setHueGroupState(config.hueBridgeIp, config.hueUsername, config.hueGroupId, lightState)
           .catch(() => {});
-      } else {
+      } else if (!hueBatchBusy) {
         const ids = config.hueLightIds.length > 0
           ? config.hueLightIds
           : (state.originalLightState || []).map(l => l.id);
-        for (const id of ids) {
-          setHueLightState(config.hueBridgeIp, config.hueUsername, id, lightState)
-            .catch(() => {});
+        if (ids.length) {
+          hueBatchBusy = true;
+          sendToHueTargets(ids, lightState)
+            .catch(() => {})
+            .finally(() => { hueBatchBusy = false; });
         }
       }
       break;
@@ -462,7 +645,7 @@ async function invokeSmartLightAction({ on = true, brightness = 254, colorTemp =
         if (!res.success) return res;
         ids = res.lights.map(light => light.id);
       }
-      const results = await Promise.all(ids.map(id => setHueLightState(config.hueBridgeIp, config.hueUsername, id, hueState)));
+      const results = await sendToHueTargets(ids, hueState);
       const failedCount = results.filter(r => !r.success).length;
       if (failedCount === results.length && results.length > 0) {
         return failure('hue', 'ALL_FAILED', `All ${failedCount} light updates failed`);
@@ -505,11 +688,8 @@ async function invokeSmartLightOff() {
         const ids = config.hueLightIds.length > 0
           ? config.hueLightIds
           : (state.originalLightState || []).map(l => l.id);
-        const results = [];
-        for (const id of ids) {
-          results.push(await setHueLightState(config.hueBridgeIp, config.hueUsername, id, lightState));
-        }
-        const failedCount = results.filter(r => !r.success).length;
+        const results = await sendToHueTargets(ids, lightState);
+        const failedCount = countFailures(results);
         res = failedCount === 0
           ? result('hue', true, 'OK', 'Lights off')
           : failure('hue', failedCount === results.length && results.length ? 'ALL_FAILED' : 'PARTIAL', `${failedCount} of ${results.length} lights failed to turn off`);
@@ -690,7 +870,10 @@ module.exports = {
   invokeHttpLightAction,
 
   // Exposed for unit tests
-  parseSsdpLocation,
-  isHueBridgeDescriptor,
+  buildMdnsQuery,
+  parseMdnsResponse,
+  isHueBridgeCertificate,
+  hueRequest,
+  httpHeadersDigest,
   validateHttpTarget
 };

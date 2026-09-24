@@ -47,3 +47,58 @@ describe('family.filterAndRankLocalIPs', () => {
     assert.equal(ips[0], '192.168.0.5', 'real adapter should be selected');
   });
 });
+
+describe('family command server truthfulness', () => {
+  const family = require('../family');
+  const http = require('node:http');
+
+  function postCommand(body, token) {
+    return new Promise((resolve, reject) => {
+      const data = JSON.stringify(body);
+      const req = http.request({
+        hostname: '127.0.0.1', port: 58734, path: '/command', method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data), 'x-lightsout-token': token },
+        timeout: 3000
+      }, res => {
+        let b = '';
+        res.on('data', c => b += c);
+        res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(b || '{}') }));
+      });
+      req.on('error', reject);
+      req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+      req.write(data);
+      req.end();
+    });
+  }
+
+  test('rejected commands report the real outcome, not unconditional success', async (t) => {
+    const started = family.start({ enabled: true, token: 'test-tok', peerName: 'test', bindHost: '127.0.0.1' }, (cmd) => {
+      if (cmd.command === 'start') return { success: false, code: 'RUN_ACTIVE', error: 'A Lights Out run is already active. Stop it before starting another.' };
+      return { success: false, code: 'NOT_RUNNING', error: 'No running timer' };
+    });
+    t.after(() => family.stop());
+    assert.equal(started, true);
+    await new Promise(r => setTimeout(r, 150)); // let the server bind
+
+    const denied = await postCommand({ command: 'start', durationSeconds: 120, action: 'shutdown' }, 'test-tok');
+    assert.equal(denied.status, 409, 'RUN_ACTIVE must surface as a real rejection');
+    assert.equal(denied.body.success, false);
+    assert.match(denied.body.error, /already active/i);
+
+    const badToken = await postCommand({ command: 'cancel' }, 'wrong-tok');
+    assert.equal(badToken.status, 401);
+  });
+
+  test('accepted commands report success with the handler code', async (t) => {
+    family.stop();
+    const started = family.start({ enabled: true, token: 'test-tok', peerName: 'test', bindHost: '127.0.0.1' }, () => ({ success: true, code: 'STARTED' }));
+    t.after(() => family.stop());
+    assert.equal(started, true);
+    await new Promise(r => setTimeout(r, 150));
+
+    const ok = await postCommand({ command: 'start', durationSeconds: 120, action: 'shutdown' }, 'test-tok');
+    assert.equal(ok.status, 200);
+    assert.equal(ok.body.success, true);
+    assert.equal(ok.body.code, 'STARTED');
+  });
+});

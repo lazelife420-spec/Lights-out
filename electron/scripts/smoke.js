@@ -1056,6 +1056,12 @@ check('production truth: companion publishes pairing data only after readiness',
   assert(htmlSrc.includes('id="remote-startup-error"'), 'bind/readiness failure region missing');
   assert(htmlSrc.includes('id="remote-port"'), 'configurable companion port input missing');
   assertMatch(mainSrc, /await companionNetwork\.getDefaultRouteLanIp\(\)/, 'same-wifi host selection must read the OS route table, not an Internet hint');
+  assertMatch(mainSrc, /code: 'RUN_ACTIVE'[\s\S]*A Lights Out run is already active/, 'family start must reject while a run is active');
+  assertMatch(mainSrc, /dryRun: Boolean\(appSettings\.dryRun\)[\s\S]*?}[\s\S]*?case 'pause'/, 'family start must inherit the desktop Dry Run policy');
+  assertMatch(mainSrc, /bindHost: lanIp/, 'family command server must bind the selected LAN interface');
+  const familySrc = fs.readFileSync(path.join(root, 'family.js'), 'utf8');
+  assertMatch(familySrc, /outcome && outcome\.success === false/, 'family command server must report real outcomes, not unconditional success');
+  assertMatch(familySrc, /commandServer\.listen\(COMMAND_PORT, bindHost/, 'family command server must bind a specific host');
   assertMatch(mainSrc, /startCompanionNetworkMonitor\(\)/, 'network changes must trigger stale-pairing recovery');
   assertMatch(rendererSrc, /generation !== remoteQrGeneration \|\| els\.remoteUrl\?\.textContent !== url/, 'stale async QR results must be discarded');
   assertMatch(mainSrc, /shortCode: ready && rc\.token/, 'short code must remain hidden before readiness');

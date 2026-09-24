@@ -152,7 +152,9 @@ function reject(res, code, error) {
 
 // onCommand receives ONLY sanitized, validated commands. The handler enforces
 // the pairing token and command validation before anything is dispatched.
-function startCommandServer(onCommand) {
+// onCommand must return a truthful outcome object ({success, code, error,
+// httpStatus}); a falsy return is reported as success for backward compat.
+function startCommandServer(onCommand, bindHost = '0.0.0.0') {
   if (commandServer) return;
   commandServer = http.createServer((req, res) => {
     if (req.method !== 'POST' || req.url !== '/command') {
@@ -183,9 +185,13 @@ function startCommandServer(onCommand) {
       const result = remoteControl.validateCommand(parsed);
       if (!result.ok) return reject(res, 400, result.error);
 
-      onCommand(result.command);
+      // 3. Dispatch and report the REAL outcome — never unconditional success.
+      const outcome = onCommand(result.command);
+      if (outcome && outcome.success === false) {
+        return reject(res, outcome.httpStatus || 409, outcome.error || outcome.code || 'rejected');
+      }
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: true }));
+      res.end(JSON.stringify({ success: true, code: (outcome && outcome.code) || 'OK' }));
     });
   });
 
@@ -199,8 +205,10 @@ function startCommandServer(onCommand) {
     }
   });
 
-  commandServer.listen(COMMAND_PORT, '0.0.0.0', () => {
-    console.log('Family command server listening (LAN remote control enabled)');
+  // Bind the selected LAN interface only — the same address the companion
+  // advertises — rather than every interface on the host.
+  commandServer.listen(COMMAND_PORT, bindHost, () => {
+    console.log(`Family command server listening on ${bindHost}:${COMMAND_PORT}`);
   });
 }
 
@@ -219,7 +227,7 @@ function start(opts, onCommand) {
   if (!opts || !opts.enabled || !opts.token) return false;
   localToken = String(opts.token);
   startDiscovery(opts.peerName);
-  startCommandServer(onCommand);
+  startCommandServer(onCommand, opts.bindHost || '127.0.0.1');
   return true;
 }
 

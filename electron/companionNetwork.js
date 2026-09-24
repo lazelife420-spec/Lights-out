@@ -41,7 +41,9 @@ function getDefaultRouteLanIp() {
   const ps = [
     "$r = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue",
     "  | Where-Object { $_.NextHop -and $_.NextHop -ne '0.0.0.0' }",
-    '  | Sort-Object -Property RouteMetric, InterfaceMetric | Select-Object -First 1;',
+    // Windows prefers the LOWEST SUM of RouteMetric + InterfaceMetric, not a
+    // lexicographic two-key sort — the sums are not equivalent orderings.
+    '  | Sort-Object -Property @{Expression={$_.RouteMetric + $_.InterfaceMetric}} | Select-Object -First 1;',
     'if ($r) {',
     '  $a = Get-NetIPAddress -InterfaceIndex $r.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue',
     "    | Where-Object { $_.IPAddress -notmatch '^(127\\.|169\\.254\\.)' }",

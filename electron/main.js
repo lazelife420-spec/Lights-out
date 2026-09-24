@@ -1482,27 +1482,44 @@ function broadcastCompanionState() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function familyCommandHandler(cmd) {
-  if (!cmd || !cmd.command) return;
+  if (!cmd || !cmd.command) return { success: false, code: 'INVALID', error: 'Empty command' };
   switch (cmd.command) {
-    case 'start':
-      startTimer({
+    case 'start': {
+      // Same safety authority as the phone path: an active run cannot be
+      // superseded, and Dry Run policy comes from desktop settings — the LAN
+      // client is never authoritative over it.
+      if (timerState.running || timerState.paused || ritualMode.getState().active) {
+        return { success: false, code: 'RUN_ACTIVE', error: 'A Lights Out run is already active. Stop it before starting another.' };
+      }
+      const appSettings = settingsStore.getSection('app') || {};
+      const r = startTimer({
         durationSeconds: cmd.durationSeconds || 1800,
         action: cmd.action || 'shutdown',
-        source: 'remote'
+        source: 'remote',
+        dryRun: Boolean(appSettings.dryRun)
       });
-      break;
+      return r.success
+        ? { success: true, code: 'STARTED' }
+        : { success: false, code: 'START_REJECTED', error: r.error || 'The desktop rejected the start request.' };
+    }
     case 'pause':
-      if (timerState.running && !timerState.paused) pauseTimer();
-      break;
+      if (!timerState.running || timerState.paused) return { success: false, code: 'NOT_RUNNING', error: 'No running timer to pause' };
+      pauseTimer();
+      return { success: true, code: 'PAUSED' };
     case 'resume':
-      if (timerState.running && timerState.paused) resumeTimer();
-      break;
+      if (!timerState.running || !timerState.paused) return { success: false, code: 'NOT_PAUSED', error: 'No paused timer to resume' };
+      resumeTimer();
+      return { success: true, code: 'RESUMED' };
     case 'snooze':
-      if (timerState.running) snoozeTimer(cmd.seconds || 300);
-      break;
+      if (!timerState.running) return { success: false, code: 'NOT_RUNNING', error: 'No running timer to snooze' };
+      snoozeTimer(cmd.seconds || 300);
+      return { success: true, code: 'SNOOZED' };
     case 'cancel':
-      if (timerState.running) cancelTimer();
-      break;
+      if (!timerState.running) return { success: false, code: 'NOT_RUNNING', error: 'No running timer to cancel' };
+      cancelTimer();
+      return { success: true, code: 'CANCELLED' };
+    default:
+      return { success: false, code: 'UNKNOWN_COMMAND', error: `Unsupported command: ${cmd.command}` };
   }
 }
 
@@ -1660,7 +1677,7 @@ async function startRemoteControl() {
     // the listener, and the firewall-scoped Private-network surface all agree.
     const result = await companion.start({ token: rc.token, host: lanIp, port, probeHost: lanIp });
     if (result.ready) {
-      family.start({ enabled: true, token: rc.token, peerName: os.hostname() }, familyCommandHandler);
+      family.start({ enabled: true, token: rc.token, peerName: os.hostname(), bindHost: lanIp }, familyCommandHandler);
     }
     if (!firewall.configured && result.ready) {
       console.warn(`Companion is locally ready, but the firewall rule could not be verified: ${firewall.error}`);
