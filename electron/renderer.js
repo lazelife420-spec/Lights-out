@@ -4325,9 +4325,7 @@ api.onUpdateAvailable?.(data => {
     els.badgeUpdate.style.display = '';
     els.badgeUpdate.textContent = `v${data.latestVersion}`;
     els.badgeUpdate.style.cursor = 'pointer';
-    els.badgeUpdate.addEventListener('click', () => {
-      api.openExternal?.(data.downloadUrl || data.releaseUrl);
-    }, { once: true });
+    els.badgeUpdate.addEventListener('click', openHelpPanel, { once: true });
   }
   // Reflect the same result in the About modal's updater status.
   if (data) renderUpdaterStatus(data);

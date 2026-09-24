@@ -66,6 +66,7 @@
       "streaks.js",
       "alarm.js",
       "updater.js",
+      "updaterPolicy.js",
       "calendarProviders.js",
       "companion.js",
       "companionNetwork.js",

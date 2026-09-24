@@ -19,7 +19,7 @@
 function renderUpdaterStatus(result) {
   if (!els.updaterStatus || !els.updaterStatusText) return;
   const dl = els.updaterDownload;
-  if (dl) { dl.style.display = 'none'; dl.onclick = null; }
+  if (dl) { dl.style.display = 'none'; dl.onclick = null; dl.textContent = 'Download verified ZIP'; }
 
   let state = 'idle';
   let text = 'Check for the latest version';
@@ -29,14 +29,28 @@ function renderUpdaterStatus(result) {
     text = 'Checking for updates...';
   } else if (result && result.error) {
     state = 'error';
-    text = "Couldn't check for updates";
+    text = result.code ? `Couldn't check for updates (${result.code})` : "Couldn't check for updates";
   } else if (result && result.available) {
     state = 'available';
     text = `Update available: v${result.latestVersion}`;
     if (dl) {
-      const url = result.downloadUrl || result.releaseUrl;
-      dl.style.display = url ? '' : 'none';
-      dl.onclick = (e) => { e.preventDefault(); if (url) api.openExternal?.(url); };
+      dl.style.display = result.distribution === 'portable-zip' && result.downloadUrl ? '' : 'none';
+      dl.onclick = async (e) => {
+        e.preventDefault();
+        dl.style.pointerEvents = 'none';
+        els.updaterStatus.dataset.state = 'checking';
+        els.updaterStatusText.textContent = 'Downloading and verifying portable ZIP...';
+        const downloaded = await api.downloadPortableUpdate?.();
+        dl.style.pointerEvents = '';
+        if (downloaded?.success) {
+          els.updaterStatus.dataset.state = 'uptodate';
+          els.updaterStatusText.textContent = 'Verified ZIP saved. Extract it to its own folder, close Lights Out, then run Lights Out.exe from the extracted folder.';
+          dl.style.display = 'none';
+        } else {
+          els.updaterStatus.dataset.state = 'error';
+          els.updaterStatusText.textContent = `Update download failed (${downloaded?.code || 'UNKNOWN_ERROR'})`;
+        }
+      };
     }
   } else if (result && result.available === false) {
     state = 'uptodate';
