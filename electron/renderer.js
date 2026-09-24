@@ -4319,6 +4319,9 @@ api.onOpenSettings(() => {
 api.onBrowserWarning?.(data => {
   if (data?.message) notify(data.message, 'warning', 8000);
 });
+api.onRemoteAction?.(data => {
+  if (data?.message) notify(data.message, 'info');
+});
 
 api.onUpdateAvailable?.(data => {
   if (data?.available && els.badgeUpdate) {

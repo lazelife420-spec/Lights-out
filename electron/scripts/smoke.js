@@ -810,8 +810,27 @@ check('companion C2: Night Mode picker and detail overlay exist in PWA', () => {
 
 check('companion C2: main handles startNightMode and getNightModes', () => {
   assertMatch(mainSrc, /case 'startNightMode':/, 'handleCompanionMessage missing startNightMode case');
+  assertMatch(mainSrc, /code: 'RUN_ACTIVE'/, 'remote generic start does not return structured RUN_ACTIVE rejection');
+  assertMatch(mainSrc, /timerState\.running \|\| timerState\.paused \|\| ritualActive/, 'remote generic start does not reject while a run is active');
   assertMatch(mainSrc, /case 'getNightModes':/, 'handleCompanionMessage missing getNightModes case');
   assertMatch(mainSrc, /companion\.sendToClient\(client, \{ type: 'nightModes', modes: nmCatalogue \}\)/, 'getNightModes does not send catalogue via sendToClient');
+});
+
+check('companion: rejected remote commands return a structured result to the phone', () => {
+  const companionSrc = fs.readFileSync(path.join(root, 'companion.html'), 'utf8');
+  assertMatch(mainSrc, /type: 'commandResult',[\s\S]*success: false,[\s\S]*code: 'RUN_ACTIVE'/, 'main must send commandResult RUN_ACTIVE on duplicate start');
+  assertMatch(companionSrc, /data\.type === 'commandResult'[\s\S]*lastCommandResult = data[\s\S]*setPendingMessage\(data\.message \|\| 'The PC rejected the request', true\)/, 'PWA must surface commandResult rejections on the pending operation');
+});
+
+check('companion: phone timer actions are attributed on the desktop', () => {
+  assertMatch(mainSrc, /function notifyRemoteAction\(message\)[\s\S]*showNativeNotification\('Lights Out', message\)[\s\S]*webContents\.send\('remote-action', \{ message \}\)/, 'main must emit native and renderer feedback for remote actions');
+  assertMatch(mainSrc, /case 'start':[\s\S]*notifyRemoteAction\(`\$\{formatAction\(timerAction\)\} started from your phone/, 'remote timer start attribution missing');
+  assertMatch(mainSrc, /case 'startNightMode':[\s\S]*notifyRemoteAction\(`\$\{resolution\.resolved\.nightModeTitle\} started from your phone/, 'remote Night Mode start attribution missing');
+  assertMatch(mainSrc, /case 'togglePause':[\s\S]*Timer resumed from your phone[\s\S]*Timer paused from your phone/, 'remote pause/resume attribution missing');
+  assertMatch(mainSrc, /case 'snooze':[\s\S]*Timer snoozed from your phone/, 'remote snooze attribution missing');
+  assertMatch(mainSrc, /case 'cancel': \{[\s\S]*const wasActive = timerState\.running \|\| timerState\.paused;[\s\S]*cancelTimer\(\);[\s\S]*if \(wasActive\)[\s\S]*Timer cancelled from your phone/, 'remote cancel must preserve unconditional command execution while only reporting active cancellation');
+  assertMatch(preloadSrc, /onRemoteAction: \(callback\) => \{[\s\S]*ipcRenderer\.on\('remote-action'/, 'preload remote-action bridge missing');
+  assertMatch(rendererSrc, /api\.onRemoteAction\?\.\(data => \{[\s\S]*notify\(data\.message, 'info'\)/, 'renderer remote-action toast missing');
 });
 
 check('companion C2: protocol validates startNightMode and getNightModes', () => {

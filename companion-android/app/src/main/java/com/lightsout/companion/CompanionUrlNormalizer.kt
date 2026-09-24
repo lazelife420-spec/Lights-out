@@ -93,4 +93,35 @@ internal object CompanionUrlNormalizer {
     // full prior URL, so there's no "original port" to preserve.
     fun buildUrl(host: String, token: String): String =
         "http://$host:$DEFAULT_PORT/?t=$token"
+
+    // Extracts just the host from a companion URL, or null if it can't be parsed.
+    fun hostOf(url: String?): String? {
+        if (url.isNullOrBlank()) return null
+        return try {
+            URI(url).host?.takeIf { it.isNotBlank() }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    // Decides whether a previously-stored pairing token should be dropped
+    // because the URL now being loaded doesn't carry a token of its own and
+    // targets a different host than the one the stored token was captured
+    // for. This matters because a saved token is legitimately reused
+    // token-less in two cases -- reconnecting to the *same* host after an app
+    // restart (its token was stripped from the address bar by
+    // history.replaceState, see extractToken) and a subnet-scan/UDP
+    // rediscovery of the *same* pairing at a new IP (see MainActivity) --
+    // both of which pass the matching host through explicitly. Anything else
+    // token-less against a *different* host is a fresh pairing attempt (e.g.
+    // the bare-host auto-detect flow) whose stored token belongs to some
+    // other PC and must not be reused for that PC's scan-based reconnects.
+    fun shouldInvalidateStaleToken(newHost: String?, tokenInUrl: String?, storedTokenHost: String?): Boolean =
+        tokenInUrl == null && newHost != null && storedTokenHost != null && newHost != storedTokenHost
+
+    // True when a recovery scan's captured generation no longer matches the
+    // owner's current generation -- navigation, Activity pause, or a newer
+    // recovery attempt invalidated it and its result must not be applied.
+    fun isStaleScan(capturedGeneration: Int, currentGeneration: Int): Boolean =
+        capturedGeneration != currentGeneration
 }
