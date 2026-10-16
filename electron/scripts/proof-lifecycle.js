@@ -222,8 +222,10 @@ async function windowsProcessTree(rootPid, startedAt = 0) {
 async function inspectProcess(pid) {
   if (!pid) return null;
   if (process.platform !== 'win32') {
+    try { process.kill(pid, 0); } catch (error) {
+      return error.code === 'ESRCH' ? null : { pid, inspectionError: error.code };
+    }
     try {
-      process.kill(pid, 0);
       if (process.platform === 'linux') {
         // PID existence alone cannot establish the ownership token. Linux CI
         // needs the same executable/token checks as the Windows proof runner.
@@ -234,8 +236,13 @@ async function inspectProcess(pid) {
         };
       }
       return { pid };
-    } catch {
-      return null;
+    } catch (error) {
+      // A killed Linux child can still exist as a zombie before Node reaps it.
+      // Missing /proc metadata is not proof the PID has ceased to exist.
+      try { process.kill(pid, 0); } catch (probeError) {
+        if (probeError.code === 'ESRCH') return null;
+      }
+      return { pid, inspectionError: error.code };
     }
   }
   const command = `$p = Get-CimInstance Win32_Process -Filter "ProcessId = ${Number(pid)}" -ErrorAction SilentlyContinue; if ($p) { [pscustomobject]@{ pid = [int]$p.ProcessId; executablePath = [string]$p.ExecutablePath; commandLine = [string]$p.CommandLine; creationDate = [string]$p.CreationDate } | ConvertTo-Json -Compress }`;
