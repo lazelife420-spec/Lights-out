@@ -2,11 +2,12 @@
 
 ## Unreleased
 
-## v11.2.0 — 2026-10-16 (release candidate)
+## v11.2.0 — 2026-10-16
 
 ### Release qualification
 - Fixed Linux proof-process ownership inspection so cleanup tests stop their own child processes; test fixture cleanup also runs after assertions fail.
 - CI uses the supported Node 22 runtime, bounded test execution, explicit Electron provisioning, and isolated Android debug tests/lint/build.
+- Qualified Linux and Windows unit/smoke checks, packaged LAN/firewall and Night Modes behavior, installer/portable integrity, installed settings layouts and clean QA uninstall. Source-extraction fixtures handle Windows line endings; geometry checks preserve exact restore behavior across Windows desktop/server frame differences. Android DST coverage uses historical transitions after Vancouver's timezone-policy change.
 - Windows packaging produces a verified NSIS installer and deterministic portable ZIP, with source/runtime provenance and SHA256 checksums. Installer QA preserves production registration and user data.
 - Android source is reconciled with the standalone timer, direct WiZ controls and native calendar/routine work. Android qualification is debug/emulator only; this Windows release does not include a new production-signed APK.
 - Physical bulb/phone/router reliability is not established by UDP fixtures or emulator results. WiZ automation remains opt-in and experimental.

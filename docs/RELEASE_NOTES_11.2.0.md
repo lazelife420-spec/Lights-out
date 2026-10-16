@@ -30,3 +30,5 @@ CI fixes Linux child-process cleanup, uses the supported Node runtime, and
 qualifies Windows artifacts before publication. Quiet House, School Night,
 household-member management, focus scoring and enforced screen-time limits
 remain deferred.
+
+[Qualification evidence and limits](https://github.com/lazelife420-spec/Lights-out/blob/v11.2.0/docs/RELEASE_QUALIFICATION_11.2.0.md).

@@ -59,11 +59,10 @@ The important behavior is:
 - force shutdown is never the default launcher behavior; it must be chosen explicitly
 - "Run at login" means "start minimized and idle" — login startup never silently
   implies a force shutdown or an active countdown
-- the current release target is `v11.2.0`; verify GitHub Releases before claiming
-  publication. The previous published release is `v11.1.3` — Post-Audit Remediation:
-  updated `tar` transitive resolution, idempotent tray lifecycle for proof runs,
-  lint/syntax/unit/smoke qualification green, and the v11.1.0 Night Modes
-  behavior preserved
+- the current release version is `v11.2.0`; verify GitHub Releases before claiming
+  publication. `docs/RELEASE_QUALIFICATION_11.2.0.md` records the qualified scope
+  and evidence. Windows installer/portable publication and Android debug-source
+  qualification remain separate from Android production signing and physical QA
 - `npm run build` produces a native Windows installer, portable ZIP, checksums
   and source/runtime manifest; installer QA uses isolated paths and registration
 - Electron smoke coverage guards startup wording/flags, tray menu wiring, timer

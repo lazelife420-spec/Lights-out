@@ -4,7 +4,7 @@
 
 ## Current Truth
 
-The current development/release target is **v11.2.0**. The five original product
+The **v11.2.0 release scope is qualified**. The five original product
 pillars are implemented. This release closes the October desktop/settings/WiZ
 work and reconciles the existing Android source; parked features remain outside
 its scope. Published version and downloadable artifacts are authoritative on
@@ -16,6 +16,8 @@ pipeline requires Linux and Windows tests, Android debug tests/lint/build,
 packaged Windows runtime checks, installer/portable verification and checksums.
 Android production APK signing is separate. WiZ remains opt-in/experimental;
 emulator and UDP stand-ins do not establish physical phone/router/bulb reliability.
+The [v11.2.0 qualification record](RELEASE_QUALIFICATION_11.2.0.md) links the
+automated gates and describes the native desktop, Android and artifact evidence.
 Current strongest product promise:
 
 ```text
@@ -70,7 +72,7 @@ build, smoke tests.
 
 Lights Out should feel like a nightly cockpit, not a generic timer.
 
-**Feature scope:** implemented. Current release qualification remains required.
+**Feature scope:** implemented; v11.2.0 qualification passed.
 
 Proof gates: create profile, load profile, auto-start profile if enabled,
 export/import profiles, no layout break at normal window size.
@@ -80,7 +82,7 @@ export/import profiles, no layout break at normal window size.
 The streak UI should make the habit visible without pretending to be
 medical sleep tracking.
 
-**Feature scope:** implemented. Current release qualification remains required.
+**Feature scope:** implemented; v11.2.0 qualification passed.
 
 Avoid (timeless guardrail, not a task list):
 
@@ -95,7 +97,7 @@ nights, display average bedtime, verify all tabs switch.
 
 Lights Out should prove what happened.
 
-**Feature scope:** implemented. Current release qualification remains required.
+**Feature scope:** implemented; v11.2.0 qualification passed.
 
 Proof gates: start timer, complete/cancel session, receipt exists, receipt
 can be viewed, proof can be copied, receipt does not overclaim.
@@ -104,7 +106,7 @@ can be viewed, proof can be copied, receipt does not overclaim.
 
 Remote control should be useful only when safe.
 
-**Feature scope:** implemented. Current release qualification remains required.
+**Feature scope:** implemented; v11.2.0 qualification passed.
 
 **Trusted LAN mode, decided and shipped 2026-07-09:** "trusted" means an
 explicit, informed choice at the moment of exposure, not a new
