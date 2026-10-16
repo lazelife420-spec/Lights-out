@@ -22,9 +22,11 @@ class PhoneCalendarRuleTest {
     @Test fun individualDateDoesNotRepeat() { assertNull(rule("once", date = "2026-10-15").nextAfter(after("2026-10-16T00:00"), zone)) }
     @Test fun disabledRuleHasNoAlarm() { assertNull(rule(enabled = false).nextAfter(Instant.now(), zone)) }
     @Test fun consumedDateIsSkipped() { assertEquals(16, rule().nextAfter(after("2026-10-15T21:59"), zone, setOf("rule-1:2026-10-15"))!!.dayOfMonth) }
-    @Test fun springGapMovesForward() { assertEquals("2027-03-14T03:30", rule("once", time = "02:30", date = "2027-03-14").nextAfter(after("2027-03-14T00:00"), zone)!!.toLocalDateTime().toString()) }
-    @Test fun fallOverlapUsesFirstOccurrence() { assertEquals(ZoneOffset.ofHours(-7), rule("once", time = "01:30", date = "2026-11-01").nextAfter(after("2026-11-01T00:00"), zone)!!.offset) }
-    @Test fun overlapCannotStartTwice() { assertNull(rule("once", time = "01:30", date = "2026-11-01").nextAfter(after("2026-11-01T00:00"), zone, setOf("rule-1:2026-11-01"))) }
+    // Use historical transitions: Vancouver adopted permanent UTC-7 in 2026.
+    // Future dates would test the installed tzdb's policy rather than this rule.
+    @Test fun springGapMovesForward() { assertEquals("2025-03-09T03:30", rule("once", time = "02:30", date = "2025-03-09").nextAfter(after("2025-03-09T00:00"), zone)!!.toLocalDateTime().toString()) }
+    @Test fun fallOverlapUsesFirstOccurrence() { assertEquals(ZoneOffset.ofHours(-7), rule("once", time = "01:30", date = "2025-11-02").nextAfter(after("2025-11-02T00:00"), zone)!!.offset) }
+    @Test fun overlapCannotStartTwice() { assertNull(rule("once", time = "01:30", date = "2025-11-02").nextAfter(after("2025-11-02T00:00"), zone, setOf("rule-1:2025-11-02"))) }
     @Test fun creationDoesNotCatchUpPastMinute() { val r = rule(created = after("2026-10-15T22:00:30").toEpochMilli()); assertEquals(16, r.nextAfter(after("2026-10-15T21:59"), zone)!!.dayOfMonth) }
     @Test(expected = IllegalArgumentException::class) fun weeklyNeedsDays() { rule(days = emptySet()) }
     @Test(expected = IllegalArgumentException::class) fun monthlyNeedsMonths() { rule("monthly", months = emptySet()) }

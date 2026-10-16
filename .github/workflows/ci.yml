@@ -70,6 +70,7 @@ jobs:
       - name: Unit tests, lint and isolated debug APK
         run: ./gradlew --no-daemon --console=plain :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
       - name: Save Android qualification evidence
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: lights-out-android-debug-qa

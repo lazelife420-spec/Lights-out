@@ -1644,7 +1644,7 @@ async function runActiveRunGate() {
       proofHidden: getComputedStyle(document.getElementById('morning-proof-section')).display === 'none',
       cancelVisible: getComputedStyle(document.getElementById('btn-stop')).display !== 'none'
     })`);
-    requireGate(pauseLabel === 'Resume' && /paused/i.test(pausedText), 'paused state did not remain focused', { pauseLabel, pausedText, pausedFocus });
+    requireGate(pauseLabel === 'Resume' && pausedText === 'On hold until you resume', 'paused state did not remain focused', { pauseLabel, pausedText, pausedFocus });
     requireGate(pausedFocus.profilesHidden && pausedFocus.streakHidden && pausedFocus.proofHidden && pausedFocus.cancelVisible, 'paused state restored idle clutter or hid Cancel', pausedFocus);
     results.push({ state: 'paused', pauseLabel, pausedText });
 
