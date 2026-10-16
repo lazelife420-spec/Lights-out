@@ -178,7 +178,7 @@ function encodeTextFrame(obj) {
     await check('companion: HTTP page served as inert pairing shell without token', async () => {
       const res = await httpGet(`http://127.0.0.1:${testPort}/`);
       assert(res.status === 200, `expected 200 pairing shell, got ${res.status}`);
-      assert(res.body.includes('Lights Out PC Companion'), 'page title missing');
+      assert(res.body.includes('<title>Lights Out</title>'), 'page title missing (must match the manifest short_name)');
       assert(res.body.includes('pair-input'), 'pairing input missing');
     });
 

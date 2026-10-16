@@ -90,12 +90,14 @@ async function captureApp() {
     if (typeof state !== 'undefined') {
       state.running = true; state.paused = false; state.totalSeconds = 1680;
       state.remainingSeconds = 300; state.action = 'shutdown'; state.phase = 'dim';
+      state.runGraceMinutes = 2;
       state.endsAt = Date.now() + 300000;
       state.customization = state.customization || {};
       state.customization.ambientVisual = 'fireplace';
     }
+    // The phase comes from state.phase: render() strips forced phase-* classes.
     if (typeof render === 'function') render();
-    document.body.classList.add('phase-dim'); document.body.classList.add('warm-shift');
+    document.body.classList.add('warm-shift');
     if (typeof AmbientVisuals !== 'undefined') {
       AmbientVisuals.init(document.getElementById('ambient-canvas'));
       AmbientVisuals.start('fireplace');
@@ -108,7 +110,9 @@ async function captureApp() {
 
   // 4. Settings: Wind-down system actions (opt-in, default OFF)
   await win.webContents.executeJavaScript(`(function(){
-    document.body.classList.remove('phase-dim'); document.body.classList.remove('warm-shift');
+    if (typeof state !== 'undefined') { state.running = false; state.paused = false; state.phase = 'idle'; state.runGraceMinutes = null; }
+    if (typeof render === 'function') render();
+    document.body.classList.remove('warm-shift');
     if (typeof AmbientVisuals !== 'undefined') AmbientVisuals.stop();
     if (typeof openSettingsPanel === 'function') openSettingsPanel();
     if (typeof switchSettingsCategory === 'function') switchSettingsCategory('wind-down');

@@ -20,7 +20,7 @@ const receiptsPath = path.join(electronRoot, 'runReceipts.js');
 console.log('\nReal Electron Runtime Proof — Night Modes');
 console.log(`Isolated userData: ${isolatedDir}`);
 console.log('Dry Run: ENABLED');
-console.log('Timer acceleration: proof process only\n');
+console.log('Clock acceleration: 1000x, proof main process only\n');
 
 const proofMain = `
 'use strict';
@@ -35,15 +35,16 @@ process.argv.push('--no-auto-start');
 process.chdir(${JSON.stringify(electronRoot)});
 app.setAppPath(${JSON.stringify(electronRoot)});
 
-// Accelerate only main-process intervals whose production cadence is exactly
-// one second. This makes a canonical 15-minute mode complete in under 2s while
-// leaving the shipped source and renderer clock untouched.
+// Countdown completion is based on Date.now()/endsAt, not a number of ticks.
+// Advance that clock as well as its polling cadence in this proof process;
+// the shipped app and the system clock are untouched.
 const nativeSetInterval = global.setInterval;
+const nativeNow = Date.now.bind(Date);
+const clockStart = nativeNow();
+Date.now = () => clockStart + (nativeNow() - clockStart) * 1000;
 global.setInterval = (callback, delay, ...args) => {
   if (delay !== 1000) return nativeSetInterval(callback, delay, ...args);
-  return nativeSetInterval(() => {
-    for (let tick = 0; tick < 50; tick++) callback(...args);
-  }, 10);
+  return nativeSetInterval(callback, 10, ...args);
 };
 
 let resolveWindow;
@@ -127,12 +128,16 @@ windowReady.then(async mainWindow => {
       api: typeof window.electronAPI,
       start: Boolean(document.getElementById('ns-play-btn')),
       cards: document.querySelectorAll('.nm-card').length,
+      readyCards: document.querySelectorAll('#nm-cards-grid .nm-card').length,
+      laterCards: document.querySelectorAll('#nm-later-grid .nm-card').length,
       running: state.running
     })\`);
     assert(loaded.title, 'document title missing');
     assert(loaded.api === 'object', 'preload bridge missing');
     assert(loaded.start, 'start button missing');
     assert(loaded.cards === 6, 'expected 6 rendered cards, got ' + loaded.cards);
+    assert(loaded.readyCards === 4, 'expected 4 ready scene cards, got ' + loaded.readyCards);
+    assert(loaded.laterCards === 2, 'expected 2 Not available yet rows, got ' + loaded.laterCards);
     assert(!loaded.running, 'timer auto-started');
   });
 
@@ -153,9 +158,9 @@ windowReady.then(async mainWindow => {
   await check('Quick Sleep reaches a real dry-run completion receipt', async () => {
     receipts.clearReceipts();
     await clickStart();
-    const deadline = Date.now() + 7000;
+    const deadline = nativeNow() + 7000;
     let receipt = null;
-    while (Date.now() < deadline) {
+    while (nativeNow() < deadline) {
       receipt = receipts.getLatestReceipt();
       if (receipt?.result === 'dry_run_completed') break;
       await wait(50);
@@ -228,7 +233,7 @@ windowReady.then(async mainWindow => {
     })()\`);
     assert(unavailable.armed === null, 'prior ready mode stayed armed');
     assert(unavailable.disabled === true, 'unavailable action is enabled');
-    assert(unavailable.status.includes('not yet supported'), 'honest reason missing');
+    assert(unavailable.status.includes('not built yet'), 'honest reason missing');
   });
 
   await cancelEverything();

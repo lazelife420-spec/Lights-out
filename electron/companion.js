@@ -422,8 +422,8 @@ function requestHandler(req, res) {
       scope: '/',
       display: 'standalone',
       orientation: 'portrait',
-      background_color: '#0d0e11',
-      theme_color: '#0d0e11',
+      background_color: '#0b0f14',
+      theme_color: '#0b0f14',
       // A real 512px PNG so the Add-to-Home-Screen shortcut is crisp. Declared
       // both 'any' and 'maskable' so Android adaptive icons render cleanly.
       // Note: over plain LAN HTTP this stays a shortcut (not a standalone

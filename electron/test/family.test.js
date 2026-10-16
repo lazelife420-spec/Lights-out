@@ -103,3 +103,92 @@ describe('family command server truthfulness', () => {
     assert.equal(ok.body.code, 'STARTED');
   });
 });
+
+// UI-R3 P08: a family command never reports success it did not get, and the
+// pairing token is only ever sent to an address that announced itself.
+describe('family sendRemoteCommand truthfulness (P08)', () => {
+  const family = require('../family');
+  const http = require('node:http');
+
+  // A stand-in peer on 127.0.0.1 that answers with a fixed status and body.
+  async function withPeer(status, body, fn) {
+    const server = http.createServer((req, res) => {
+      req.resume();
+      req.on('end', () => {
+        res.writeHead(status, { 'Content-Type': 'application/json' });
+        res.end(body);
+      });
+    });
+    await new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(58734, '127.0.0.1', resolve);
+    });
+    try {
+      return await fn();
+    } finally {
+      server.closeAllConnections();
+      await new Promise(resolve => server.close(resolve));
+    }
+  }
+
+  test('a 404 with an empty body is never a success', async () => {
+    const r = await withPeer(404, '', () => family.sendRemoteCommand('127.0.0.1', 'pause'));
+    assert.equal(r.success, false);
+    assert.equal(r.statusCode, 404);
+    assert.equal(r.error, 'HTTP 404');
+  });
+
+  test('an empty 200 body and a non-JSON 200 body are never a success', async () => {
+    const empty = await withPeer(200, '', () => family.sendRemoteCommand('127.0.0.1', 'pause'));
+    assert.deepEqual(empty, { success: false, statusCode: 200, error: 'bad response' });
+    const html = await withPeer(200, '<html>ok</html>', () => family.sendRemoteCommand('127.0.0.1', 'cancel'));
+    assert.deepEqual(html, { success: false, statusCode: 200, error: 'bad response' });
+  });
+
+  test('a 401 resolves {success:false, error:"unauthorized"}', async () => {
+    const r = await withPeer(401, JSON.stringify({ success: false, error: 'unauthorized' }), () => family.sendRemoteCommand('127.0.0.1', 'cancel'));
+    assert.equal(r.success, false);
+    assert.equal(r.error, 'unauthorized');
+    assert.equal(r.statusCode, 401);
+  });
+
+  test('a 2xx body claiming success with a non-2xx status is still a failure', async () => {
+    const r = await withPeer(500, JSON.stringify({ success: true, code: 'PAUSED' }), () => family.sendRemoteCommand('127.0.0.1', 'pause'));
+    assert.equal(r.success, false);
+    assert.equal(r.error, 'HTTP 500');
+  });
+
+  test('a real refusal keeps its code; a real success keeps only success and code', async () => {
+    const refused = await withPeer(409, JSON.stringify({ success: false, code: 'NOT_RUNNING', error: 'No running timer to pause' }), () => family.sendRemoteCommand('127.0.0.1', 'pause'));
+    assert.deepEqual(refused, { success: false, statusCode: 409, code: 'NOT_RUNNING', error: 'No running timer to pause' });
+    const ok = await withPeer(200, JSON.stringify({ success: true, code: 'PAUSED', extra: { leak: 1 }, state: { running: true } }), () => family.sendRemoteCommand('127.0.0.1', 'pause'));
+    assert.deepEqual(ok, { success: true, statusCode: 200, code: 'PAUSED' });
+  });
+
+  test('interpretCommandAnswer caps and strips untrusted peer strings', () => {
+    const r = family.interpretCommandAnswer(409, JSON.stringify({ success: false, code: 'X\u0007Y', error: 'e'.repeat(500) }));
+    assert.equal(r.code, 'XY');
+    assert.equal(r.error.length, 160);
+    assert.deepEqual(family.interpretCommandAnswer(200, '[true]'), { success: false, statusCode: 200, error: 'bad response' });
+    assert.deepEqual(family.interpretCommandAnswer(200, JSON.stringify({ code: 'PAUSED' })), { success: false, statusCode: 200, code: 'PAUSED', error: 'bad response' });
+  });
+
+  test('isKnownPeer refuses any address that did not announce itself', () => {
+    assert.equal(family.isKnownPeer('192.168.1.77'), false);
+    assert.equal(family.isKnownPeer(''), false);
+    assert.equal(family.isKnownPeer(undefined), false);
+    assert.equal(family.isKnownPeer({ ip: '192.168.1.77' }), false);
+  });
+
+  test('a peer without a "status" command answers 400 "unknown command" (no protocol change)', async (t) => {
+    family.stop();
+    const started = family.start({ enabled: true, token: 'test-tok', peerName: 'test', bindHost: '127.0.0.1' }, () => ({ success: true, code: 'OK' }));
+    t.after(() => family.stop());
+    assert.equal(started, true);
+    await new Promise(r => setTimeout(r, 150));
+    const r = await family.sendRemoteCommand('127.0.0.1', 'status');
+    assert.equal(r.success, false);
+    assert.equal(r.statusCode, 400);
+    assert.equal(r.error, 'unknown command');
+  });
+});

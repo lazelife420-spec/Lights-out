@@ -194,3 +194,17 @@ test('validateCompanionMessage strips smuggled fields from startNightMode', () =
 test('validateCompanionMessage passes through getNightModes', () => {
   assert.deepEqual(rc.validateCompanionMessage({ action: 'getNightModes' }).message, { action: 'getNightModes' });
 });
+
+// UI-R3 P08: the LAN protocol is unchanged. A read-only 'status' command is a
+// trust-boundary change that needs owner sign-off before it is added.
+test('ALLOWED_COMMANDS is exactly the five reviewed commands', () => {
+  assert.deepEqual([...rc.ALLOWED_COMMANDS].sort(), ['cancel', 'pause', 'resume', 'snooze', 'start']);
+});
+
+test('validateCommand refuses an unreviewed status command', () => {
+  assert.deepEqual(rc.validateCommand({ command: 'status', token: 'x', extra: 1 }), { ok: false, error: 'unknown command' });
+});
+
+test('validateCommand strips extra fields from parameterless commands', () => {
+  assert.deepEqual(rc.validateCommand({ command: 'pause', durationSeconds: 999999, action: 'logout', forceShutdown: true }), { ok: true, command: { command: 'pause' } });
+});

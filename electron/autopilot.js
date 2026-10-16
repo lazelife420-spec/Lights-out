@@ -91,18 +91,24 @@ function schedule(startTimerFn, win) {
 
   // Auto-start timer.
   autopilotTimeout = setTimeout(() => {
-    const duration = appSettings.durationSeconds || 28 * 60;
-    const action = appSettings.action || 'shutdown';
-    startTimerFn({
+    // Read the settings at fire time, hours after scheduling: Test Mode,
+    // action, duration and grace must be what the user has set NOW.
+    const fireSettings = settingsStore.getSection('app') || {};
+    const duration = fireSettings.durationSeconds || 28 * 60;
+    const action = fireSettings.action || 'shutdown';
+    const result = startTimerFn({
       durationSeconds: duration,
       action,
-      dryRun: Boolean(appSettings.dryRun),
-      forceShutdown: Boolean(appSettings.forceShutdown),
-      muteSystem: Boolean(appSettings.muteSystem),
-      gracePeriod: appSettings.graceMinutes ?? 2,
-      source: 'autopilot'
+      dryRun: Boolean(fireSettings.dryRun),
+      forceShutdown: Boolean(fireSettings.forceShutdown),
+      muteSystem: Boolean(fireSettings.muteSystem),
+      gracePeriod: fireSettings.graceMinutes ?? 2,
+      source: 'autopilot',
+      origin: 'autopilot'
     });
-    if (mainWindowRef && !mainWindowRef.isDestroyed()) {
+    // Announce only a start that really happened (it is refused while
+    // another run is active).
+    if (result && result.success && mainWindowRef && !mainWindowRef.isDestroyed()) {
       mainWindowRef.webContents.send('autopilot-started', {
         bedtime: targetBedtime,
         duration

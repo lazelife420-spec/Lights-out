@@ -109,7 +109,7 @@ async function firewallSnapshot() {
   const trimmed = stdout.trim();
   if (!trimmed) return [];
   const parsed = JSON.parse(trimmed);
-  return Array.isArray(parsed) ? parsed : [parsed];
+  return (Array.isArray(parsed) ? parsed : [parsed]).sort((a, b) => a.Name.localeCompare(b.Name));
 }
 
 // Read-only observation of the machine's real adapters, classified by role
@@ -147,9 +147,13 @@ async function main() {
   }
 
   const firewallBefore = await firewallSnapshot();
-  assert.equal(firewallBefore.length, 0, 'no Lights Out Companion firewall rule should exist before the app has run');
+  assert.equal(firewallBefore.filter(rule => path.normalize(rule.Program || '').toLowerCase() === path.normalize(executable).toLowerCase()).length, 0, 'candidate already owns firewall rules');
 
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-network-gate-'));
+  fs.writeFileSync(path.join(userData, 'settings.json'), JSON.stringify({
+    app: { onboarded: true, dryRun: true, forceShutdown: false },
+    remoteControl: { enabled: false, mode: 'off' }
+  }));
   const debugPort = await freePort();
   let child;
   let cdp;
@@ -163,7 +167,7 @@ async function main() {
       cwd: path.dirname(executable),
       windowsHide: true,
       stdio: 'ignore',
-      env: { ...process.env, LIGHTS_OUT_SUPPRESS_TRAY: '1' }
+      env: { ...process.env, LIGHTS_OUT_SUPPRESS_TRAY: '1', LIGHTS_OUT_QA_POWER_LOCK: '1' }
     });
     const target = await waitFor(async () => {
       const targets = await fetchJson(`http://127.0.0.1:${debugPort}/json/list`);
@@ -220,6 +224,7 @@ async function main() {
       powerActions: 0
     }, null, 2));
   } finally {
+    if (cdp) await cdp.evaluate(`electronAPI.setRemoteControlMode('off')`).catch(() => {});
     if (cdp) cdp.close();
     if (child) {
       try { child.kill(); } catch {}
@@ -232,7 +237,7 @@ async function main() {
   await new Promise(resolve => setTimeout(resolve, 500));
   if (testPort) await assertPortFree(testPort);
   const firewallAfter = await firewallSnapshot();
-  assert.equal(firewallAfter.length, 0, 'no Lights Out Companion firewall rule should survive app quit');
+  assert.deepEqual(firewallAfter, firewallBefore, 'network proof changed pre-existing firewall rules');
   console.log('Listener cleanup: confirmed. Firewall cleanup: confirmed.');
 }
 

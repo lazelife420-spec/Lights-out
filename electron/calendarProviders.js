@@ -4,6 +4,7 @@
 const https = require('https');
 const http = require('http');
 const icsParser = require('./calendar');
+const recurrence = require('./calendarRecurrence');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Provider registry
@@ -49,55 +50,104 @@ function normalizeScheduleRules(schedule) {
   }];
 }
 
-const SCHEDULE_DAY_MAP = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
-
 function getDefaultCalendarEvents(schedule, from, withinDays) {
   const rules = normalizeScheduleRules(schedule).filter(r => r && r.enabled !== false);
 
   const events = [];
   const windowStart = new Date(from);
   windowStart.setHours(0, 0, 0, 0);
-  const cutoff = new Date(windowStart.getTime() + withinDays * 86400000);
+  const cutoff = new Date(windowStart);
+  cutoff.setDate(cutoff.getDate() + Math.max(0, Math.min(366, Number(withinDays) || 0)));
 
   for (const rule of rules) {
-    const targetDays = (Array.isArray(rule.days) ? rule.days : [])
-      .map(d => SCHEDULE_DAY_MAP[String(d).toLowerCase()])
-      .filter(n => n !== undefined);
-    if (!targetDays.length) continue;
-
     const [h, m] = String(rule.time || '22:30').split(':').map(Number);
+    if (!Number.isInteger(h) || h < 0 || h > 23 || !Number.isInteger(m) || m < 0 || m > 59) continue;
     const durationMs = Math.max(1, Number(rule.durationMinutes) || 60) * 60000;
     const label = rule.label || 'Bedtime';
     const action = rule.action || 'shutdown';
     const ruleId = rule.id || 'rule';
 
     for (let d = new Date(windowStart); d <= cutoff; d.setDate(d.getDate() + 1)) {
-      if (!targetDays.includes(d.getDay())) continue;
+      if (!recurrence.matchesDate(rule, d)) continue;
       const evtStart = new Date(d);
       evtStart.setHours(h, m, 0, 0);
       if (evtStart <= from) continue;
       events.push({
-        uid: `lo-default-${ruleId}-${d.toISOString().slice(0, 10)}`,
+        uid: `lo-default-${ruleId}-${recurrence.dateKey(d)}`,
         summary: label,
         start: evtStart,
         end: new Date(evtStart.getTime() + durationMs),
         location: '',
         source: 'builtin',
+        repeat: rule.repeat || 'weekly',
+        profileId: typeof rule.profileId === 'string' ? rule.profileId : null,
         action
       });
     }
   }
 
-  events.sort((a, b) => a.start - b.start);
+  const priority = { once: 0, monthly: 1, weekly: 2 };
+  events.sort((a, b) => a.start - b.start || priority[a.repeat] - priority[b.repeat]);
   return events;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Last fetch status (UI-R3 Fire 09): did each configured feed answer?
+// ─────────────────────────────────────────────────────────────────────────────
+// Per provider: { ok: true, at } or { ok: false, reason, at }. The reason is a
+// CATEGORY from fixed checks only, never err.message, a URL or a token (a feed
+// URL or an API key is a secret). Recorded only by a renderer-initiated fetch
+// (fetchAllEvents with recordStatus); each recorded run starts empty, and a
+// provider with no URL / credentials records nothing. A later recorded run
+// supersedes an earlier one still in flight.
+const FETCH_STATUS_REASON = /^(timeout|http-\d{3}|too-large|not-https|parse|unexpected-response|network)$/;
+let lastFetchStatus = {};
+let fetchStatusRun = 0;
+
+function fetchFailureReason(err) {
+  const msg = err && typeof err.message === 'string' ? err.message : '';
+  if (msg === 'Timeout' || msg === 'Request timeout') return 'timeout';
+  // fetchWithTimeout says 'HTTP 404'; calendar.js says 'HTTP 404: Failed to fetch calendar'.
+  const http = /^HTTP (\d{3})(?::|$)/.exec(msg);
+  if (http) return `http-${http[1]}`;
+  if (msg === 'Response too large') return 'too-large';
+  if (msg.startsWith('Calendar feed must be an https URL')) return 'not-https';
+  if (err instanceof SyntaxError || msg.startsWith('Invalid iCalendar file') || msg === 'Downloaded feed is not a valid iCalendar file') return 'parse';
+  return 'network';
+}
+
+function statusNote(report) {
+  return typeof report === 'function' ? report : () => undefined;
+}
+
+function beginFetchStatusRun() {
+  const run = ++fetchStatusRun;
+  lastFetchStatus = {};
+  return provider => status => {
+    if (run !== fetchStatusRun) return;
+    const at = Date.now();
+    lastFetchStatus[provider] = status && status.ok
+      ? { ok: true, at }
+      : { ok: false, reason: FETCH_STATUS_REASON.test(status && status.reason) ? status.reason : 'network', at };
+  };
+}
+
+// A deep copy of plain fields only: a caller can never mutate the record.
+function getLastFetchStatus() {
+  const out = {};
+  for (const [provider, s] of Object.entries(lastFetchStatus)) {
+    out[provider] = s.ok ? { ok: true, at: s.at } : { ok: false, reason: s.reason, at: s.at };
+  }
+  return out;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Google Calendar API (using service account or API key)
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function fetchGoogleEvents(apiKey, calendarId, from, withinDays, maxResults = 50) {
+async function fetchGoogleEvents(apiKey, calendarId, from, withinDays, maxResults = 50, report) {
   if (!apiKey || !calendarId) return [];
+  const note = statusNote(report);
   const timeMin = from.toISOString();
   const timeMax = new Date(from.getTime() + withinDays * 86400000).toISOString();
   const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?key=${apiKey}&timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&maxResults=${maxResults}`;
@@ -105,8 +155,8 @@ async function fetchGoogleEvents(apiKey, calendarId, from, withinDays, maxResult
   try {
     const response = await fetchWithTimeout(url, 10000);
     const data = JSON.parse(response);
-    if (!data.items) return [];
-    return data.items.map(item => ({
+    if (!data.items) { note({ ok: false, reason: 'unexpected-response' }); return []; }
+    const events = data.items.map(item => ({
       uid: item.id,
       summary: item.summary || 'Event',
       start: parseGoogleDate(item.start),
@@ -114,8 +164,12 @@ async function fetchGoogleEvents(apiKey, calendarId, from, withinDays, maxResult
       location: item.location || '',
       source: 'google'
     })).filter(e => e.start);
+    note({ ok: true });
+    return events;
   } catch (err) {
-    console.error('Google Calendar fetch failed:', err.message);
+    const reason = fetchFailureReason(err);
+    console.error('Google Calendar fetch failed:', reason);
+    note({ ok: false, reason });
     return [];
   }
 }
@@ -134,8 +188,9 @@ function parseGoogleDate(dateObj) {
 // Outlook / Microsoft Graph API
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function fetchOutlookEvents(accessToken, from, withinDays, maxResults = 50) {
+async function fetchOutlookEvents(accessToken, from, withinDays, maxResults = 50, report) {
   if (!accessToken) return [];
+  const note = statusNote(report);
   const timeMin = from.toISOString();
   const timeMax = new Date(from.getTime() + withinDays * 86400000).toISOString();
   const url = `https://graph.microsoft.com/v1.0/me/calendarview?startDateTime=${timeMin}&endDateTime=${timeMax}&$top=${maxResults}&$orderby=start/dateTime`;
@@ -145,8 +200,8 @@ async function fetchOutlookEvents(accessToken, from, withinDays, maxResults = 50
       Authorization: `Bearer ${accessToken}`
     });
     const data = JSON.parse(response);
-    if (!data.value) return [];
-    return data.value.map(item => ({
+    if (!data.value) { note({ ok: false, reason: 'unexpected-response' }); return []; }
+    const events = data.value.map(item => ({
       uid: item.id,
       summary: item.subject || 'Event',
       start: new Date(item.start.dateTime + (item.start.timeZone ? '' : 'Z')),
@@ -154,8 +209,12 @@ async function fetchOutlookEvents(accessToken, from, withinDays, maxResults = 50
       location: item.location?.displayName || '',
       source: 'outlook'
     })).filter(e => e.start && !isNaN(e.start.getTime()));
+    note({ ok: true });
+    return events;
   } catch (err) {
-    console.error('Outlook Calendar fetch failed:', err.message);
+    const reason = fetchFailureReason(err);
+    console.error('Outlook Calendar fetch failed:', reason);
+    note({ ok: false, reason });
     return [];
   }
 }
@@ -164,8 +223,9 @@ async function fetchOutlookEvents(accessToken, from, withinDays, maxResults = 50
 // Calendly API (personal access token)
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function fetchCalendlyEvents(personalToken, from, withinDays) {
+async function fetchCalendlyEvents(personalToken, from, withinDays, report) {
   if (!personalToken) return [];
+  const note = statusNote(report);
   const timeMin = from.toISOString();
   const timeMax = new Date(from.getTime() + withinDays * 86400000).toISOString();
   // First get the user URI.
@@ -175,16 +235,16 @@ async function fetchCalendlyEvents(personalToken, from, withinDays) {
     });
     const userData = JSON.parse(userResp);
     const userUri = userData.resource?.uri;
-    if (!userUri) return [];
+    if (!userUri) { note({ ok: false, reason: 'unexpected-response' }); return []; }
 
     const url = `https://api.calendly.com/scheduled_events?user=${encodeURIComponent(userUri)}&min_start_time=${timeMin}&max_start_time=${timeMax}`;
     const eventsResp = await fetchWithTimeout(url, 10000, {
       Authorization: `Bearer ${personalToken}`
     });
     const eventsData = JSON.parse(eventsResp);
-    if (!eventsData.collection) return [];
+    if (!eventsData.collection) { note({ ok: false, reason: 'unexpected-response' }); return []; }
 
-    return eventsData.collection.map(item => ({
+    const events = eventsData.collection.map(item => ({
       uid: item.uri,
       summary: item.name || 'Calendly Event',
       start: new Date(item.start_time),
@@ -192,8 +252,12 @@ async function fetchCalendlyEvents(personalToken, from, withinDays) {
       location: item.location?.location || '',
       source: 'calendly'
     })).filter(e => e.start && !isNaN(e.start.getTime()));
+    note({ ok: true });
+    return events;
   } catch (err) {
-    console.error('Calendly fetch failed:', err.message);
+    const reason = fetchFailureReason(err);
+    console.error('Calendly fetch failed:', reason);
+    note({ ok: false, reason });
     return [];
   }
 }
@@ -202,16 +266,21 @@ async function fetchCalendlyEvents(personalToken, from, withinDays) {
 // ICS URL feed (existing calendar.js)
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function fetchIcsEvents(url, from, withinDays) {
+async function fetchIcsEvents(url, from, withinDays, report) {
   if (!url) return [];
+  const note = statusNote(report);
   try {
     const result = await icsParser.importIcsFromUrl(url);
-    return icsParser.getUpcomingEvents(result.events, from, withinDays).map(e => ({
+    const events = icsParser.getUpcomingEvents(result.events, from, withinDays).map(e => ({
       ...e,
       source: 'ical'
     }));
+    note({ ok: true });
+    return events;
   } catch (err) {
-    console.error('ICS feed fetch failed:', err.message);
+    const reason = fetchFailureReason(err);
+    console.error('ICS feed fetch failed:', reason);
+    note({ ok: false, reason });
     return [];
   }
 }
@@ -220,8 +289,12 @@ async function fetchIcsEvents(url, from, withinDays) {
 // Unified fetch: pulls from all configured providers
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function fetchAllEvents(config, from, withinDays = 14) {
+async function fetchAllEvents(config, from, withinDays = 14, options = {}) {
   const allEvents = [];
+  // Only the renderer's own 14-day Schedule fetch records a status (main's
+  // fetch-calendar-events handler); the 1-day background fetches (auto-start,
+  // morning briefing) never do.
+  const reporter = options && options.recordStatus ? beginFetchStatusRun() : () => undefined;
 
   // Built-in default calendar.
   if (config.builtin?.enabled !== false) {
@@ -231,25 +304,25 @@ async function fetchAllEvents(config, from, withinDays = 14) {
 
   // ICS feed.
   if (config.ical?.url) {
-    const icsEvents = await fetchIcsEvents(config.ical.url, from, withinDays);
+    const icsEvents = await fetchIcsEvents(config.ical.url, from, withinDays, reporter('ical'));
     allEvents.push(...icsEvents);
   }
 
   // Google Calendar.
   if (config.google?.apiKey && config.google?.calendarId) {
-    const gcalEvents = await fetchGoogleEvents(config.google.apiKey, config.google.calendarId, from, withinDays);
+    const gcalEvents = await fetchGoogleEvents(config.google.apiKey, config.google.calendarId, from, withinDays, undefined, reporter('google'));
     allEvents.push(...gcalEvents);
   }
 
   // Outlook.
   if (config.outlook?.accessToken) {
-    const outlookEvents = await fetchOutlookEvents(config.outlook.accessToken, from, withinDays);
+    const outlookEvents = await fetchOutlookEvents(config.outlook.accessToken, from, withinDays, undefined, reporter('outlook'));
     allEvents.push(...outlookEvents);
   }
 
   // Calendly.
   if (config.calendly?.personalToken) {
-    const calendlyEvents = await fetchCalendlyEvents(config.calendly.personalToken, from, withinDays);
+    const calendlyEvents = await fetchCalendlyEvents(config.calendly.personalToken, from, withinDays, reporter('calendly'));
     allEvents.push(...calendlyEvents);
   }
 
@@ -326,5 +399,6 @@ module.exports = {
   fetchCalendlyEvents,
   fetchIcsEvents,
   fetchAllEvents,
-  fetchEvents
+  fetchEvents,
+  getLastFetchStatus
 };

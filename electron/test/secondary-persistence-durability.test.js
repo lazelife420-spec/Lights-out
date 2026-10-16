@@ -103,16 +103,20 @@ test('streaks: crash-safe save creates backup and recovers on primary corruption
     streaks.replaceAll({ streak: 6, bestStreak: 10, events: [{ date: '2026-09-11', bedTime: '22:15', action: 'shutdown' }] });
     assert.ok(fs.existsSync(bak), 'streaks.json.bak created');
 
-    const preCorruptStreak = JSON.parse(fs.readFileSync(bak, 'utf8')).streak;
+    const preCorrupt = JSON.parse(fs.readFileSync(bak, 'utf8'));
 
     // Negative control: simulate zero-byte power loss corruption on primary file
     fs.writeFileSync(file, '', 'utf8');
 
     // Reload module from clean state
     streaks = loadFreshModule(modulePath, dir);
-    const loaded = streaks.getSummary();
+    // The streak is computed at read time from the clock, so recovery is
+    // asserted on the persisted record itself: bestStreak and events.
+    const loaded = streaks.exportData();
 
-    assert.strictEqual(loaded.streak, preCorruptStreak, 'streak retained from backup');
+    assert.strictEqual(loaded.bestStreak, preCorrupt.bestStreak, 'bestStreak retained from backup');
+    assert.deepStrictEqual(loaded.events, preCorrupt.events, 'events retained from backup');
+    assert.strictEqual(loaded.events[0].date, '2026-09-10', 'backup holds the first write');
     assert.ok(fs.statSync(file).size > 0, 'primary file restored on disk');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

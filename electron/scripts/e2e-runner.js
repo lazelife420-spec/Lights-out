@@ -77,14 +77,13 @@ function main() {
     true
   );
 
-  // The night-modes proof is intentionally run as an advisory lane because its
-  // Quick Sleep wall-clock completion assertion has a known timing limitation
-  // (the harness cannot accelerate the real system clock, only the tick loop).
+  // The proof advances its own clock and polling cadence together; a failed
+  // canonical completion or ritual handoff now fails qualification.
   results.nightModes = runLane(
     'night-modes-electron-proof.js',
     [],
     'night-modes-electron-proof',
-    false
+    true
   );
 
   console.log('\n========================================');
@@ -98,19 +97,19 @@ function main() {
     console.log(`desktop-ux-functional-gate: ${results.desktopUx.ok ? 'PASS' : 'FAIL'}`);
   }
   console.log(`packaged-truth-smoke:        ${results.packagedTruth.ok ? 'PASS' : 'FAIL'}`);
-  console.log(`night-modes-electron-proof:  ${results.nightModes.ok ? 'PASS' : 'FAIL (advisory)'}`);
+  console.log(`night-modes-electron-proof:  ${results.nightModes.ok ? 'PASS' : 'FAIL'}`);
   console.log('Real power actions: 0 (enforced by dry-run in harnesses)');
   console.log('========================================');
 
   if (IS_CI_MODE) {
-    if (!results.packagedTruth.ok) {
+    if (!results.packagedTruth.ok || !results.nightModes.ok) {
       process.exit(1);
     }
-    console.log('\nUnattended CI E2E PASSED (packaged-truth-smoke). Full release qualification requires `npm run test:e2e:desktop`.');
+    console.log('\nUnattended CI E2E PASSED (packaged-truth-smoke and night-modes-electron-proof). Full release qualification requires `npm run test:e2e:desktop`.');
     return;
   }
 
-  if (!results.packagedTruth.ok || (!results.desktopUx.ok && !results.desktopUx.environmentUnsupported)) {
+  if (!results.packagedTruth.ok || !results.nightModes.ok || (!results.desktopUx.ok && !results.desktopUx.environmentUnsupported)) {
     process.exit(1);
   }
 

@@ -254,7 +254,9 @@ async function main() {
     // structured rejection if it tries to start over an active run. The
     // existing countdown and its single receipt must remain authoritative.
     const receiptsBeforeRejectedStart = await desktop.evaluate(`electronAPI.listReceipts(20).then(items => items.length)`);
-    await phone.evaluate(`window.confirm = () => true; lastCommandResult = null; startTimer(60); true`);
+    // Fire 06: the branded Start sheet replaced window.confirm; #start-go is
+    // the only phone start path.
+    await phone.evaluate(`lastCommandResult = null; openStartSheet(60); document.getElementById('start-go').click(); true`);
     commandCounts.rejectedStart++;
     const rejectedStart = await waitFor(() => phone.evaluate(`lastCommandResult?.code === 'RUN_ACTIVE' ? ({
       result: lastCommandResult,

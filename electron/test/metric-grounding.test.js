@@ -19,10 +19,6 @@ Module._load = originalLoad;
 
 test.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
 
-function dateDaysAgo(days) {
-  return new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
-}
-
 test('Estimated Bedtime Deficit is explicitly an app-timer estimate', () => {
   assert.equal(deficit.estimateSleepHours('23:30', '07:00'), 7.5);
   const entry = deficit.recordNight('23:30', '07:00', 7.5);
@@ -33,33 +29,49 @@ test('Estimated Bedtime Deficit is explicitly an app-timer estimate', () => {
   assert.match(summary.basis, /not measured sleep/i);
 });
 
+// Local night key N whole calendar nights before the (frozen) current night.
+function nightDaysAgo(days) {
+  const [y, m, d] = streaks.nightKey().split('-').map(Number);
+  const x = new Date(y, m - 1, d - days);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+}
+
 test('Completion count, completion streak, and routine score come only from app events', () => {
-  const events = [
-    { date: dateDaysAgo(2), bedTime: '22:30', snoozed: false, action: 'dry_run' },
-    { date: dateDaysAgo(1), bedTime: '22:45', snoozed: true, action: 'dry_run' },
-    { date: dateDaysAgo(0), bedTime: '22:50', snoozed: false, action: 'dry_run' }
-  ];
-  streaks.replaceAll({ events, streak: 3, bestStreak: 3, achievements: [] });
-  const summary = streaks.getSummary();
-  assert.equal(summary.totalNights, 3, 'Completed Runs must equal stored completion events');
-  assert.equal(summary.streak, 3, 'Completion Streak must come from completion-event state');
-  const score = streaks.getSleepScore();
-  assert.ok(Number.isInteger(score.score));
-  assert.deepEqual(Object.keys(score.breakdown), ['consistency', 'onTime', 'noSnooze', 'ritual']);
+  // Frozen local noon: no midnight/6 AM boundary can shift the night keys.
+  mock.timers.enable({ apis: ['Date'], now: new Date(2024, 0, 10, 12, 0, 0).getTime() });
+  try {
+    const events = [
+      { date: nightDaysAgo(2), bedTime: '22:30', snoozed: false, action: 'shutdown', source: 'real' },
+      { date: nightDaysAgo(1), bedTime: '22:45', snoozed: true, action: 'shutdown', source: 'real' },
+      { date: nightDaysAgo(0), bedTime: '22:50', snoozed: false, action: 'shutdown', source: 'real' }
+    ];
+    // Seed a deliberately wrong stored streak: the read-time value must ignore it.
+    streaks.replaceAll({ events, streak: 99, bestStreak: 0, achievements: [] });
+    const expectedStreak = streaks.currentStreak(events);
+    assert.equal(expectedStreak, 3, 'three consecutive nights ending tonight form a 3-night streak');
+    const summary = streaks.getSummary();
+    assert.equal(summary.totalNights, 3, 'Completed Runs must equal stored completion events');
+    assert.equal(summary.streak, expectedStreak, 'Completion Streak must be derived from the events at read time');
+    const score = streaks.getSleepScore();
+    assert.ok(Number.isInteger(score.score));
+    assert.deepEqual(Object.keys(score.breakdown), ['consistency', 'onTime', 'noSnooze', 'ritual']);
+    assert.equal(score.breakdown.ritual.streak, expectedStreak);
+  } finally {
+    mock.timers.reset();
+  }
 });
 
 test('Before 11 PM and weekly on-time use the real 23:00 boundary', () => {
-  // getTrend() buckets by ISO week (Monday-start); dateDaysAgo(0..2) is only
-  // guaranteed to land in a single bucket if "today" isn't within 2 days of
-  // a Monday. Freeze the clock to a fixed mid-week instant (Wed, UTC noon,
-  // safe against +/-12h local-timezone reinterpretation in trendBucketKey)
-  // so this test doesn't intermittently fail depending on real-world timing.
-  mock.timers.enable({ apis: ['Date'], now: new Date('2024-01-10T12:00:00Z').getTime() });
+  // getTrend() buckets by ISO week (Monday-start); three consecutive nights
+  // only land in a single bucket if tonight isn't within 2 days of a Monday.
+  // Freeze the clock to local noon on Wed 2024-01-10, so the nights are
+  // Mon-Wed in every time zone and this never fails on real-world timing.
+  mock.timers.enable({ apis: ['Date'], now: new Date(2024, 0, 10, 12, 0, 0).getTime() });
   try {
     const events = [
-      { date: dateDaysAgo(2), bedTime: '22:59', snoozed: false },
-      { date: dateDaysAgo(1), bedTime: '23:00', snoozed: false },
-      { date: dateDaysAgo(0), bedTime: '23:01', snoozed: false }
+      { date: nightDaysAgo(2), bedTime: '22:59', snoozed: false, source: 'real' },
+      { date: nightDaysAgo(1), bedTime: '23:00', snoozed: false, source: 'real' },
+      { date: nightDaysAgo(0), bedTime: '23:01', snoozed: false, source: 'real' }
     ];
     const week = streaks.getWeekStats(events);
     assert.deepEqual(week.days.map(day => day.onTime), [true, false, false]);

@@ -39,13 +39,16 @@ function setupAlarmHandlers() {
     document.body.classList.add('first-light-rising');
   });
   api.onFirstLightTick?.((data) => {
-    // Gradually warm the UI during First Light.
-    const warmth = Math.round(data.progress * 20);
-    document.body.style.filter = `sepia(${warmth}%) brightness(${0.6 + data.progress * 0.4})`;
+    // Gradually brighten and warm the room behind the app (.night-env) during
+    // First Light. Never a filter on the body: that would wash out the
+    // Test Mode / REAL truth pill. body.first-light-rising maps this progress
+    // to --env-dark and the warm wash in styles.css.
+    const progress = Math.max(0, Math.min(1, Number(data && data.progress) || 0));
+    document.body.style.setProperty('--first-light-progress', progress.toFixed(3));
   });
   api.onFirstLightEnded?.(() => {
     document.body.classList.remove('first-light-rising');
-    document.body.style.filter = '';
+    document.body.style.removeProperty('--first-light-progress');
     notify('First Light complete. Good morning.', 'success', 5000);
   });
 
@@ -129,7 +132,7 @@ function makeStepRow() {
   return `<div class="seq-step-row">
     <input type="text" placeholder="Headline" class="seq-headline" maxlength="40">
     <input type="text" placeholder="Line" class="seq-line" maxlength="80">
-    <input type="number" placeholder="ms" class="seq-dwell" value="1500" min="200" max="5000" style="width:60px">
+    <input type="number" placeholder="ms" class="seq-dwell set-num" value="1500" min="200" max="5000" aria-label="Step duration in milliseconds">
   </div>`;
 }
 
@@ -204,6 +207,38 @@ function playLastLight(payload) {
 
   clearLastLightTimers();
 
+  // The lights come back up for every new finale (UI-R3 P05): --ll-light is
+  // the room's light level (1 -> 0 as the finale runs down). Only the beam,
+  // the ring and the title glow read it -- never #ll-truth, the stamp or the
+  // footer, which stay at full strength the whole time.
+  els.lastLightOverlay.classList.remove('ll-out');
+  els.lastLightOverlay.style.setProperty('--ll-light', '1');
+
+  // Truth first: the chip and facts are set from THIS payload (previews always
+  // pass dryRun:true) before the overlay becomes visible, so no frame of the
+  // finale can show the wrong mode.
+  const mode = dryRun ? 'test' : 'real';
+  const finaleAction = (payload && payload.action) || state.action;
+  const forced = Boolean(payload && payload.forceShutdown) && (finaleAction === 'shutdown' || finaleAction === 'restart');
+  els.lastLightOverlay.dataset.mode = mode;
+  const llTruth = document.getElementById('ll-truth');
+  if (llTruth) {
+    llTruth.dataset.mode = mode;
+    llTruth.textContent = dryRun
+      ? 'TEST MODE · No PC power action will run'
+      : `REAL ACTION · ${forced ? 'Force ' : ''}${actionLabel(finaleAction)} when this ends`;
+  }
+  // The final stamp carries the mode too (amber TEST / red REAL), static.
+  if (els.llStamp) {
+    els.llStamp.classList.toggle('ll-stamp--test', dryRun);
+    els.llStamp.classList.toggle('ll-stamp--real', !dryRun);
+  }
+  const llFactAction = document.getElementById('ll-fact-action');
+  if (llFactAction) llFactAction.textContent = payload && payload.action ? actionLabel(payload.action) : 'Preview';
+  // Configuration only (cached by updateReadiness): never claims the lights went out.
+  const llFactLights = document.getElementById('ll-fact-lights');
+  if (llFactLights) llFactLights.textContent = typeof lastLightsSummary === 'string' ? lastLightsSummary : '—';
+
   // Reset northstar ring + UNPLUG
   if (els.llRingArc) els.llRingArc.style.strokeDashoffset = '0';
   if (els.llRingTime) els.llRingTime.textContent = '—';
@@ -231,6 +266,7 @@ function playLastLight(payload) {
       els.llRingTime.textContent = fmtSec(secLeft);
       const progress = secLeft / totalSec;
       els.llRingArc.style.strokeDashoffset = String(CIRCUMFERENCE * progress);
+      els.lastLightOverlay.style.setProperty('--ll-light', progress.toFixed(3));
       if (els.llFavorBarFill) els.llFavorBarFill.style.width = String((1 - progress) * 100) + '%';
       if (secLeft === 0) clearInterval(llRingInterval);
     }, 1000);
@@ -254,6 +290,9 @@ function playLastLight(payload) {
   // Final stamp + show UNPLUG
   lastLightTimers.push(setTimeout(() => {
     els.llStamp.textContent = meta.stampLine || '';
+    // The lamp goes out (inline beats the .ll-out class rule).
+    els.lastLightOverlay.classList.add('ll-out');
+    els.lastLightOverlay.style.setProperty('--ll-light', '0');
     if (els.llUnplugBtn) els.llUnplugBtn.style.display = '';
     if (els.llUnplugSub) els.llUnplugSub.style.display = '';
   }, Math.max(0, elapsed - 600)));
@@ -262,8 +301,16 @@ function playLastLight(payload) {
     if (llRingInterval) clearInterval(llRingInterval);
     els.lastLightOverlay.classList.remove('active');
     els.lastLightOverlay.setAttribute('aria-hidden', 'true');
+    els.lastLightOverlay.classList.remove('ll-out');
+    els.lastLightOverlay.style.setProperty('--ll-light', '1');
     if (els.llUnplugBtn) els.llUnplugBtn.style.display = 'none';
     if (els.llUnplugSub) els.llUnplugSub.style.display = 'none';
+    // Back to the conservative default for the next finale.
+    els.lastLightOverlay.dataset.mode = 'real';
+    if (llTruth) {
+      llTruth.dataset.mode = 'real';
+      llTruth.textContent = 'REAL ACTION';
+    }
   }, elapsed + 250));
 }
 

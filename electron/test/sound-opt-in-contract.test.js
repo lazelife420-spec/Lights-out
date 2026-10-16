@@ -209,6 +209,7 @@ test('persisted sound settings remain authoritative', async () => {
   function makeContext(sound, enabled) {
     return {
       console,
+      normalizeClockFace: vm.runInNewContext('(' + extractFunction(settingsSource, 'normalizeClockFace') + ')'),
       state: {
         running: false,
         action: 'shutdown',

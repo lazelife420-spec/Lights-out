@@ -16,6 +16,7 @@ const { NativeInputWorker } = require('./native-input-worker');
 const { decideRitualStepAction, decideWorkareaControlAction } = require('./ritual-step-progression');
 const { assertCursorCustody, assertInputAllowed, assertSendInputComplete, attachDiagnostics, classifyBrowserGestureFailure, createGestureRequestId, reconcileTarget, strictInteriorPoint, strictInteriorPointWithDiagnostics, validateBrowserGesture, validateHit } = require('./native-input-targeting');
 const { composeMoveDiagnostics } = require('./top-menu-move-observability');
+const { cleanupOwnedResources, verifyOwnedCleanup } = require('./proof-lifecycle');
 
 const ELECTRON_ROOT = path.resolve(__dirname, '..');
 const SOURCE_ELECTRON_EXE = path.join(ELECTRON_ROOT, 'node_modules', 'electron', 'dist', 'electron.exe');
@@ -676,31 +677,23 @@ class CdpSession {
 
 async function stopApp(child) {
   if (!child) return true;
-  const userDataDir = child.userDataDir;
   try { child.cdpSession?.ws?.terminate(); } catch {}
-  const runTaskkill = args => new Promise(resolve => {
-    const process = spawn('taskkill', args, { windowsHide: true });
-    process.once('error', () => resolve(false));
-    process.once('close', code => resolve(code === 0));
-  });
-  const hasLightsOutProcess = () => new Promise(resolve => {
-    let stdout = '';
-    const process = spawn('tasklist', ['/FI', 'IMAGENAME eq Lights Out.exe', '/NH'], { windowsHide: true });
-    process.stdout.on('data', data => { stdout += data; });
-    process.once('error', () => resolve(false));
-    process.once('close', () => resolve(stdout.includes('Lights Out.exe')));
-  });
-
-  try { child.kill(); } catch {}
-  await WAIT(500);
-  await runTaskkill(['/F', '/T', '/PID', String(child.pid)]);
-  await WAIT(500);
-  await runTaskkill(['/F', '/IM', 'Lights Out.exe']);
-  for (let check = 0; check < 10; check++) {
-    if (!(await hasLightsOutProcess())) return true;
-    await WAIT(500);
-  }
-  throw new Error(`Lights Out process tree for ${userDataDir} did not terminate`);
+  const resources = {
+    appProcess: {
+      child, pid: child.pid, executable: EXE_PATH,
+      ownershipToken: `--user-data-dir=${child.userDataDir}`,
+      startedAt: child.ownedStartedAt
+    },
+    originalAppPid: child.pid,
+    cdpPort: child.cdpSession?.port,
+    ownedPids: []
+  };
+  const cleanup = await cleanupOwnedResources(resources);
+  const verification = await verifyOwnedCleanup(resources);
+  report.cleanup = report.cleanup || [];
+  report.cleanup.push({ pid: child.pid, cleanup, verification });
+  requireGate(cleanup.errors.length === 0 && verification.ok, 'owned desktop proof cleanup failed', { cleanup, verification });
+  return true;
 }
 
 async function spawnApp(userDataDir, seed = {}, { preserveSettings = false } = {}) {
@@ -724,7 +717,9 @@ async function spawnApp(userDataDir, seed = {}, { preserveSettings = false } = {
   // A leaked ELECTRON_RUN_AS_NODE makes electron.exe run as plain Node
   // ("bad option" on every switch) -- strip it for the child.
   delete spawnEnv.ELECTRON_RUN_AS_NODE;
+  const ownedStartedAt = Date.now();
   const child = spawn(EXE_PATH, launchArgs, { detached: true, windowsHide: false, env: spawnEnv });
+  child.ownedStartedAt = ownedStartedAt;
   child.unref();
   let list = [];
   for (let i = 0; i < 40; i++) {
@@ -1090,7 +1085,7 @@ async function runShellNavGate() {
     results.assertions.push({ step: 'no-menu-remnants', remnants });
 
     const navCount = await s.eval(`document.querySelectorAll('.ns-nav-item').length`);
-    requireGate(navCount === 6, 'unified shell nav must have exactly 6 items', { navCount });
+    requireGate(navCount === 7, 'unified shell nav must have exactly 7 items', { navCount });
     results.assertions.push({ step: 'nav-count', navCount });
 
     // Native-click navigation through each destination.
@@ -1104,6 +1099,10 @@ async function runShellNavGate() {
     await s.click('#nav-sch');
     await waitFor(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'sch'`, 'Schedule nav active after native click');
     addShot(phase, await s.screenshot('shellnav-schedule.png'));
+
+    await s.click('#nav-devices');
+    await waitFor(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'devices'`, 'Devices nav active after native click');
+    addShot(phase, await s.screenshot('shellnav-devices.png'));
 
     await s.click('#nav-stats');
     await waitFor(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'stats'`, 'Stats nav active after native click');
@@ -1150,6 +1149,8 @@ async function runShellNavGate() {
     requireGate(state.testmodePill && state.testmodePill.includes('TEST MODE'), 'TEST MODE pill absent in dry-run', state.testmodePill);
     await s.click('#nav-set');
     await waitFor(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none'`, 'Settings open for Test Mode toggle');
+    await s.click('.settings-rail-btn[data-settings-category="power-safety"]');
+    await s.condition(`document.querySelector('.settings-rail-btn.active')?.dataset.settingsCategory === 'power-safety'`, 3000, 'Power & Safety category selected');
     await s.click('#chk-dryrun');
     await waitFor(`state.dryRun === false`, 'Test Mode checkbox disabled dry run');
     state = await getShellNavState(s);
@@ -1206,11 +1207,18 @@ async function runSharedStartGate() {
     let heroReceipt = null;
     try { heroReceipt = await s.eval('window.electronAPI.getLatestReceipt()'); } catch {}
     results.push({ control: 'ns-play-btn', invocations: heroInvocations.length, payload: heroInvocations[0], receipt: heroReceipt });
+    // UI-R3 P07: let the 1.2 s arrival moment settle so the screenshot and the
+    // #btn-stop measurement see the resting layout, not a mid-rise frame.
+    await s.condition(`!document.body.classList.contains('session-arrive')`, 3000, 'arrival moment settled before the running screenshot');
     addShot(phase, await s.screenshot('active-running-hero.png'));
     await s.click('#btn-stop');
     await s.condition(`!state.running && !state.paused`, 3000, 'native Cancel stops hero-started session');
 
     await clearStarts(s);
+    // UI-R3 P05: after Cancel, keyboard focus returns to #ns-play-btn, so this
+    // Space may arrive as that focused button's native activation instead of
+    // the global shortcut. Both run startTonightPlan() ('play'), so the one
+    // payload asserted below is the same either way.
     await s.key(' ');
     await s.condition(`state.running`, 6000, 'Space enters running state');
     const spaceInvocations = await getStarts(s);
@@ -1227,6 +1235,8 @@ async function runSharedStartGate() {
     const { child: child2, session: s2 } = await spawnApp(userData);
     try {
       await s2.resize(1280, 720);
+      await s2.click('#nav-stats');
+      await s2.condition(`document.querySelector('.ns-nav-item.active')?.dataset.nsTab === 'stats'`, 3000, 'Proof page opens for replay');
       await s2.waitFor('#morning-proof-section');
       await clearStarts(s2);
       await WAIT(500);
@@ -1685,7 +1695,9 @@ async function runWarmTopMenuPass(s) {
   await waitFor(`document.querySelector('.ns-nav-item.active')?.dataset?.nsTab === 'lib'`, 'warm Tonight nav restored');
   results.mouse.push({ step: 'click-tonight-restore' });
 
-  // About via nav, Escape closes.
+  // About via nav, Escape closes. (UI-R3 P05: an open dialog takes focus on
+  // its title, never an action, and .cockpit is inert until it closes;
+  // Escape reaches the document handler from the title unchanged.)
   await s.click('#nav-help');
   await waitFor(`document.getElementById('about-modal')?.classList.contains('active')`, 'warm About modal open');
   results.mouse.push({ step: 'about-open' });
@@ -1713,6 +1725,8 @@ async function runWarmSettingsTogglePass(s) {
   await s.condition(`getComputedStyle(document.getElementById('ns-panel-set')).display !== 'none'`, 5000, 'warm Settings workspace open for Test Mode toggle');
   results.push({ step: 'settings-open' });
 
+  await s.click('.settings-rail-btn[data-settings-category="power-safety"]');
+  await s.condition(`document.querySelector('.settings-rail-btn.active')?.dataset.settingsCategory === 'power-safety'`, 3000, 'warm Power & Safety category selected');
   await s.click('#chk-dryrun');
   await s.condition(`state.dryRun === false`, 5000, 'warm Test Mode checkbox disabled');
   let indicator = await s.eval(`document.getElementById('testmode-pill')?.textContent`);
@@ -1745,6 +1759,8 @@ async function runWarmSharedStartPass(s) {
   await s.condition(`!state.running && !state.paused`, 3000, 'warm native Cancel stops hero-started session');
 
   await clearStarts(s);
+  // UI-R3 P05: focus is back on #ns-play-btn after Cancel (see the cold pass);
+  // Space then activates it natively -- the same startTonightPlan() path.
   await s.key(' ');
   await s.condition(`state.running`, 6000, 'warm Space enters running state');
   invocations = await getStarts(s);
@@ -1823,14 +1839,13 @@ async function resetToWarmBaseline(s) {
   const armed = await s.eval(`state.armedNightMode !== null`);
   if (armed) {
     // A7/toast-occlusion: Stop/Cancel itself fires a production toast (and a
-    // ritual-completion toast may already be stacked above it) through the
-    // real #toast-container (position:fixed, z-index:9999, pointer-events:auto
-    // on .toast), which sits over #armed-mode-clear's point for up to its
-    // ~3s visible duration. The steps above are all no-ops in the common
-    // case, so this click can arrive while that toast still owns the hit
-    // test. Wait for the actual production control to become hit-testable at
-    // its own intended point -- not for toasts to disappear, not a fixed
-    // sleep -- so this stays correct regardless of toast count or duration.
+    // ritual-completion toast may already be stacked above it). Since UI-R3
+    // P05 the real #toast-container sits at the bottom centre of the content
+    // column (z-index 1400, below every dialog) and .toast is
+    // pointer-events:none, so a toast can no longer own a hit test. The
+    // wait below is kept anyway: it checks that the actual production
+    // control is hit-testable at its own intended point (no fixed sleep), so
+    // it stays correct whatever else may briefly overlap that point.
     await s.condition(`(() => {
       const el = document.getElementById('armed-mode-clear');
       if (!el || !el.isConnected) return false;

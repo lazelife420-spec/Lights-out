@@ -9,23 +9,50 @@ const https = require('https');
 // Notification events
 // ─────────────────────────────────────────────────────────────────────────────
 
-const EVENTS = {
-  TIMER_STARTED: { icon: '\u{1F319}', label: 'Wind-down started', color: '#5b8cff' },
-  TIMER_PAUSED: { icon: '\u23F8', label: 'Paused', color: '#ff9800' },
-  TIMER_SNOOZED: { icon: '\u23F0', label: 'Snoozed', color: '#ff9800' },
-  TIMER_CANCELLED: { icon: '\u274C', label: 'Cancelled', color: '#ff4d4d' },
-  TIMER_COMPLETE: { icon: '\u2705', label: 'Completed', color: '#4caf50' },
-  LAST_LIGHT: { icon: '\u{1F4A1}', label: 'Last Light ritual', color: '#d4a50a' },
-  UNSAVED_WORK: { icon: '\u26A0\uFE0F', label: 'Unsaved work detected', color: '#ff4d4d' },
-  OVERRIDE: { icon: '\u{1F6AB}', label: 'Emergency override', color: '#ff4d4d' }
+// Colours follow the app grammar: violet = you act, amber = attention /
+// paused, neutral = cancelled, teal = done, red = override.
+const COLORS = {
+  violet: '#9b93d6',
+  amber: '#f5b83d',
+  neutral: '#91a0af',
+  teal: '#00d1b2',
+  red: '#ff5c7a'
 };
+
+const EVENTS = {
+  TIMER_STARTED: { icon: '\u{1F319}', label: 'Wind-down started', color: COLORS.violet },
+  TIMER_PAUSED: { icon: '\u23F8', label: 'Paused', color: COLORS.amber },
+  TIMER_SNOOZED: { icon: '\u23F0', label: 'Snoozed', color: COLORS.amber },
+  TIMER_CANCELLED: { icon: '\u274C', label: 'Cancelled', color: COLORS.neutral },
+  TIMER_COMPLETE: { icon: '\u2705', label: 'Completed', color: COLORS.teal },
+  LAST_LIGHT: { icon: '\u{1F4A1}', label: 'Last Light ritual', color: COLORS.violet },
+  UNSAVED_WORK: { icon: '\u26A0\uFE0F', label: 'Unsaved work detected', color: COLORS.amber },
+  OVERRIDE: { icon: '\u{1F6AB}', label: 'Emergency override', color: COLORS.red }
+};
+
+// A Test Mode run never leaves the device as a success: every label is
+// prefixed, the completion says no power action ran (no check-mark icon), and
+// the colour is amber. REAL messages keep their wording.
+const TEST_MODE_PREFIX = 'Test Mode: ';
+const TEST_MODE_COMPLETE_LABEL = 'run finished \u00B7 no power action';
+
+function describeEvent(eventType, testMode) {
+  const base = EVENTS[eventType];
+  if (!base) return null;
+  if (!testMode) return { ...base };
+  if (eventType === 'TIMER_COMPLETE') {
+    return { icon: '\u{1F9EA}', label: TEST_MODE_PREFIX + TEST_MODE_COMPLETE_LABEL, color: COLORS.amber };
+  }
+  return { icon: base.icon, label: TEST_MODE_PREFIX + base.label, color: COLORS.amber };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Send notification to all configured partners
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function notifyPartner(eventType, details = {}) {
-  const eventInfo = EVENTS[eventType];
+  const testMode = details.testMode === true;
+  const eventInfo = describeEvent(eventType, testMode);
   if (!eventInfo) return [];
 
   const config = details.config || {};
@@ -52,6 +79,7 @@ async function notifyPartner(eventType, details = {}) {
             phase,
             timestamp,
             color: eventInfo.color,
+            testMode,
             message: `${eventInfo.icon} **${timerName}**: ${eventInfo.label}${remaining ? ` (${remaining})` : ''} at ${timestamp}`
           });
           break;
@@ -154,5 +182,7 @@ async function testPartner(partner) {
 module.exports = {
   notifyPartner,
   testPartner,
-  EVENTS
+  describeEvent,
+  EVENTS,
+  COLORS
 };

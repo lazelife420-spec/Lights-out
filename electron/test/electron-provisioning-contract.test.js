@@ -6,12 +6,13 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
-const { validateElectronProvisioningContract } = require('../scripts/electron-provisioning-contract');
+const { declaredRangeAccepts, validateElectronProvisioningContract } = require('../scripts/electron-provisioning-contract');
 const { runProcess, verifyProvisionedElectron } = require('../scripts/verify-electron-provisioning');
 
 const root = path.join(__dirname, '..');
 const repositoryPackage = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const repositoryLockfile = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
+const lockedElectronVersion = repositoryLockfile.packages['node_modules/electron'].version;
 
 function fixture() {
   return {
@@ -49,7 +50,7 @@ function runtimeFixture() {
   fs.mkdirSync(path.join(electronRoot, 'dist'), { recursive: true });
   fs.writeFileSync(path.join(directory, 'package.json'), JSON.stringify(repositoryPackage));
   fs.writeFileSync(path.join(directory, 'package-lock.json'), JSON.stringify(repositoryLockfile));
-  fs.writeFileSync(path.join(electronRoot, 'package.json'), JSON.stringify({ version: '43.1.0' }));
+  fs.writeFileSync(path.join(electronRoot, 'package.json'), JSON.stringify({ version: lockedElectronVersion }));
   fs.writeFileSync(path.join(electronRoot, 'path.txt'), 'electron.exe');
   fs.writeFileSync(path.join(electronRoot, 'dist', 'electron.exe'), 'fixture');
   return { directory, electronPackagePath: path.join(electronRoot, 'package.json') };
@@ -66,6 +67,18 @@ async function withRuntimeFixture(callback) {
 
 test('real repository satisfies the explicit Electron 42+ installer contract', () => {
   validateElectronProvisioningContract(fixture());
+});
+
+test('version ranges reject versions below the required security floor', () => {
+  for (const [range, version, accepted] of [
+    ['^43.5.0', '43.4.99', false], ['^43.5.0', '43.5.0', true],
+    ['^43.5.0', '43.7.11', true], ['^43.5.0', '44.0.0', false],
+    ['^0.35.5', '0.35.4', false], ['^0.35.5', '0.35.6', true],
+    ['^0.35.5', '0.36.0', false], ['^0.0.5', '0.0.5', true],
+    ['^0.0.5', '0.0.6', false], ['~43.5.2', '43.5.1', false],
+    ['~43.5.2', '43.5.9', true], ['~43.5.2', '43.6.0', false]
+  ]) assert.equal(declaredRangeAccepts(range, version), accepted, `${range}: ${version}`);
+  assertContractFails(value => { value.lockfile.packages['node_modules/electron'].version = '43.1.0'; }, /does not satisfy declared/);
 });
 
 test('provisioning contract rejects missing declaration, lock entry, and incompatible version', () => {
@@ -91,9 +104,9 @@ test('provisioning contract rejects automatic and direct installation commands b
 
 test('verifier accepts normalized matching runtime output and rejects a mismatch', async () => {
   await withRuntimeFixture(async value => {
-    const result = await verifyProvisionedElectron({ root: value.directory, electronPackagePath: value.electronPackagePath, spawnProcess: fakeSpawn({ output: ' \n\u0000v43.1.0\r\n ' }) });
-    assert.equal(result.version, 'v43.1.0');
-    await assert.rejects(() => verifyProvisionedElectron({ root: value.directory, electronPackagePath: value.electronPackagePath, spawnProcess: fakeSpawn({ output: 'v43.1.1' }) }), /does not match locked/);
+    const result = await verifyProvisionedElectron({ root: value.directory, electronPackagePath: value.electronPackagePath, spawnProcess: fakeSpawn({ output: ` \n\u0000v${lockedElectronVersion}\r\n ` }) });
+    assert.equal(result.version, `v${lockedElectronVersion}`);
+    await assert.rejects(() => verifyProvisionedElectron({ root: value.directory, electronPackagePath: value.electronPackagePath, spawnProcess: fakeSpawn({ output: 'v0.0.0' }) }), /does not match locked/);
   });
 });
 

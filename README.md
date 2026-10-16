@@ -46,6 +46,14 @@ One outbound connection by default: a periodic check against the GitHub Releases
 API for a newer version. No personal data. No usage analytics. Smart-light,
 calendar, and Wi-Fi features only reach out when you configure them.
 
+### Standalone phone app
+
+The [Android app](companion-android/README.md) has its own offline reminder timer,
+with the countdown ring, optional analog clock, and native background alerts.
+Use **PC controls** to pair with a desktop and control its timer and routines over
+the same Wi-Fi. Phone and PC timers stay independent; the phone works with the PC
+off. PC power actions and PC-connected lighting routines require a running PC.
+
 ### Proof-backed releases
 
 Every release ships an installer, a portable build, and SHA256 checksums from a
@@ -74,19 +82,42 @@ contributor handoff.
 - **Nightly tray utility** - sit in the tray and show the current time while idle
   (Clock Mode), start common timers (28 min / 1 hour) and pause / resume / snooze /
   cancel straight from the tray, with the live countdown kept in the tray tooltip.
-- **Customizable clock faces** - choose a digital, analog, or hybrid idle clock,
-  with Modern / Bold / Minimal / Neon styles, a custom hand color, and an optional
-  second hand. Right-click the clock to cycle faces.
+- **Countdown ring and optional analog clock** - the countdown ring is the default.
+  Choose Analog clock beneath the idle dial or in Settings > Appearance; your
+  choice is remembered. Active timers always show time remaining, with a clear
+  end time or paused label. Clock size, 12/24-hour format, analog styles, hand
+  color, and an optional second hand remain customizable.
 - **Wind-down phase** - ambient visuals (fireplace, rain, starfield, aurora),
   warm color shift, and optional Night Light / media pause.
 - **Stateful settings** - everything persists to `userData\settings.json` and is
   restored on launch.
 - **Customization console** - accent color, theme (Midnight / Carbon / Aurora),
   ring style, window opacity, and sound volume, applied live.
-- **Smart Lights** - Philips Hue or HTTP webhook (gradual dim, warm shift, off-at-end).
+- **Smart Lights** - WiZ Wi-Fi lights, Philips Hue, or HTTP webhook (gradual dim,
+  warm shift, off-at-end). WiZ discovery and connection verification read status;
+  automatic lighting stays off until enabled. Select individual WiZ lights or
+  locally named room groups, and choose brightness, white temperature, custom
+  color, or a WiZ preset in Settings → Lighting. Discovery keeps your selection.
+  A chosen look applies to already-on lights when dimming begins; Keep current
+  uses their existing brightness. Warm Shift uses warm white. Send test action
+  explicitly turns selected lights on using the chosen brightness and look.
+  Switching a light off in WiZ releases it for the rest of the wind-down,
+  including cancellation. Unreachable lights are skipped until they answer.
+  Morning sunrise also yields to a manual off after its initial wake action.
+  Cancelling restores the pre-dim state only for lights changed by the dimmer
+  that are still under its control.
 - **Saved profiles** - save the current timer as a profile in one click, schedule
   by duration or a specific date/time, and right-click a profile to Start, Edit, or
-  Delete it. Plus **calendar scheduling** (.ics import).
+  Delete it. The calendar supports weekly rules, monthly dates (including the last
+  day), individual dates, and selected months, with saved routines and timers.
+  Imported calendars (.ics and connected providers) remain available.
+- **Settings control room** - browse dedicated categories, use Ctrl+K or / to
+  search, and use arrow keys to move between categories. Compact
+  navigation fits the minimum window; Save and Cancel remain visible. Failed
+  saves leave the form open with your edits intact. WiZ setup groups light
+  selection and appearance into separate blocks.
+  Unsaved changes stay visible. Subtle hidden star signatures follow the
+  Lights Out style and respect reduced motion. Guided breathing has been removed.
 - **Phone Companion Easy Connect** - control Lights Out from your phone on the same
   Wi-Fi via a simple QR scan + pairing code. Off by default, token-protected, and never
   exposes LAN access in "This PC only" mode.

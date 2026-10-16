@@ -56,8 +56,9 @@ function lightsOutProcessCount() {
     '-NoProfile',
     '-NonInteractive',
     '-Command',
-    '@(Get-Process "Lights Out" -ErrorAction SilentlyContinue).Count'
+    `@(Get-CimInstance Win32_Process -Filter "Name = 'Lights Out.exe'" | Where-Object { $_.ExecutablePath -eq '${exePath.replace(/'/g, "''")}' }).Count`
   ], { encoding: 'utf8', windowsHide: true });
+  if (result.status !== 0) throw new Error('Could not inspect candidate processes');
   return Number.parseInt(result.stdout.trim(), 10) || 0;
 }
 

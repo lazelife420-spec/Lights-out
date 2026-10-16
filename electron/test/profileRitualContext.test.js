@@ -17,11 +17,11 @@ const VALID_CONTEXT = {
   profileName: 'Night Owl'
 };
 
-test('eligible origins include play and profile-start only', () => {
+test('explicit starts and assigned calendar routines can enter the ritual gateway', () => {
   assert.ok(ctx.isEligibleOrigin('play'));
   assert.ok(ctx.isEligibleOrigin('profile-start'));
   assert.ok(!ctx.isEligibleOrigin('tray'));
-  assert.ok(!ctx.isEligibleOrigin('calendar'));
+  assert.ok(ctx.isEligibleOrigin('calendar'));
   assert.ok(!ctx.isEligibleOrigin('autopilot'));
   assert.ok(!ctx.isEligibleOrigin('remote'));
   assert.ok(!ctx.isEligibleOrigin('companion'));

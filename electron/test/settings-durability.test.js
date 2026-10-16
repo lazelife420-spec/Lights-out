@@ -227,3 +227,48 @@ test('backup recovery writes recovered data back to primary', () => {
     assert.strictEqual(repaired.app.action, 'hibernate', 'primary has recovered data');
   } finally { teardown(); }
 });
+
+// --- CLOCK HAND COLOUR (UI-R3 P04) ---
+// The old light-blue default (#76c9ff) is mapped to violet at RENDER time
+// (renderer-settings.js effectiveClockHandColor; see accent-grammar.test.js).
+// Owner decision: saved settings are never rewritten, so load() must hand
+// back exactly what was stored, on the primary and on the backup path.
+
+test('clock hand: new installs default to violet, not the old blue', () => {
+  freshSetup();
+  try {
+    assert.strictEqual(settingsModule.DEFAULTS.app.clockHandColor, '#9b93d6');
+    assert.strictEqual(settingsModule.getSection('app').clockHandColor, '#9b93d6');
+  } finally { teardown(); }
+});
+
+test('clock hand: a saved legacy #76c9ff is preserved on load (no data rewrite)', () => {
+  freshSetup();
+  try {
+    fs.writeFileSync(settingsFile(), JSON.stringify({ app: { clockHandColor: '#76c9ff' } }), 'utf8');
+    reloadSettings();
+    const app = settingsModule.getSection('app');
+    assert.strictEqual(app.clockHandColor, '#76c9ff');
+    assert.ok(!('clockHandColorMigratedV1' in app), 'no migration flag is invented');
+    assert.strictEqual(JSON.parse(fs.readFileSync(settingsFile(), 'utf8')).app.clockHandColor, '#76c9ff', 'file untouched');
+  } finally { teardown(); }
+});
+
+test('clock hand: a custom colour is untouched on load', () => {
+  freshSetup();
+  try {
+    fs.writeFileSync(settingsFile(), JSON.stringify({ app: { clockHandColor: '#ff8800' } }), 'utf8');
+    reloadSettings();
+    assert.strictEqual(settingsModule.getSection('app').clockHandColor, '#ff8800');
+  } finally { teardown(); }
+});
+
+test('clock hand: the backup recovery path preserves a saved legacy colour too', () => {
+  freshSetup();
+  try {
+    fs.writeFileSync(bakFile(), JSON.stringify({ app: { clockHandColor: '#76c9ff' } }), 'utf8');
+    fs.writeFileSync(settingsFile(), '', 'utf8');
+    reloadSettings();
+    assert.strictEqual(settingsModule.getSection('app').clockHandColor, '#76c9ff');
+  } finally { teardown(); }
+});

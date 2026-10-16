@@ -61,8 +61,14 @@ function companionFailureMessage(rc) {
 function renderRemoteControl(rc) {
   if (!rc) return;
   const mode = rc.mode || 'off';
+  // UI-R3 P13: a segmented control. aria-pressed follows the real rc.mode, and
+  // teal (live) marks the active segment only once the listener is verified.
+  const live = mode !== 'off' && !rc.failed && Boolean(rc.ready || rc.connected);
   document.querySelectorAll('.btn-mode').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.mode === mode);
+    const active = btn.dataset.mode === mode;
+    btn.classList.toggle('active', active);
+    btn.classList.toggle('is-live', active && live);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
   });
   if (els.remoteModeDescription) {
     els.remoteModeDescription.textContent = rc.failed
@@ -216,57 +222,242 @@ function setupRemoteControlHandlers() {
   });
   api.onRemoteControlStatus?.(renderRemoteControl);
   loadRemoteControlState();
+  setupFamilyPeerSettingsHandlers();
+  setupWifiSelectionHandlers();
+}
+
+// ─── Family peer results: one interpreter for Devices and Settings ─────────
+// Every answer a peer gives (or fails to give) maps to plain words and a tone:
+// ok (teal) for a real success, warn (amber) for a refusal, bad (red) for an
+// error. A success without a known code reads 'Done'. Never 'Command sent'.
+const PEER_RESULT = Object.freeze({
+  PAUSED: 'Paused',
+  RESUMED: 'Resumed',
+  CANCELLED: 'Run stopped',
+  NOT_RUNNING: 'No run active there',
+  NOT_PAUSED: 'Not paused',
+  RUN_ACTIVE: 'A run is already active there',
+  STARTED: 'Timer started there',
+  START_REJECTED: 'That PC refused the start',
+  STATUS: 'State read',
+  INVALID: 'That PC refused the request',
+  UNKNOWN_COMMAND: 'Not supported there'
+});
+const PEER_ERROR = Object.freeze({
+  unauthorized: { text: 'Pairing code differs on that PC', tone: 'bad' },
+  'unknown command': { text: 'State not shared (older Lights Out)', tone: 'warn' },
+  'unknown peer': { text: 'That PC is no longer announcing itself', tone: 'bad' }
+});
+const PEER_TONE_NOTIFY = Object.freeze({ ok: 'success', warn: 'warning', bad: 'error', muted: 'info' });
+
+function interpretPeerResult(r, failure) {
+  if (failure) {
+    const message = String((failure && failure.message) || failure);
+    return /Timeout/.test(message)
+      ? { text: 'No answer (timed out)', tone: 'bad' }
+      : { text: 'Could not reach that PC', tone: 'bad' };
+  }
+  if (!r || typeof r !== 'object') return { text: 'Could not reach that PC', tone: 'bad' };
+  if (r.success === true) {
+    return { text: Object.prototype.hasOwnProperty.call(PEER_RESULT, r.code) ? PEER_RESULT[r.code] : 'Done', tone: 'ok' };
+  }
+  if (typeof r.code === 'string' && Object.prototype.hasOwnProperty.call(PEER_RESULT, r.code)) {
+    return { text: PEER_RESULT[r.code], tone: 'warn' };
+  }
+  const error = typeof r.error === 'string' ? r.error : '';
+  if (Object.prototype.hasOwnProperty.call(PEER_ERROR, error)) return { ...PEER_ERROR[error] };
+  if (!error || error === 'bad response') return { text: 'Unexpected answer from that PC', tone: 'bad' };
+  if (/^HTTP \d+$/.test(error)) return { text: `That PC answered ${error}`, tone: 'bad' };
+  // Any other refusal text comes from the peer (untrusted): shown as text only.
+  return { text: `Refused there: ${error.slice(0, 120)}`, tone: 'warn' };
+}
+
+// ─── Settings › Phone › Family Mode rows ───────────────────────────────────
+// Text buttons, name + mono IP. Start never fires on the first click: it opens
+// an inline confirm bound to that one IP, with 'Keep idle' focused. A
+// re-render (Scan again) cancels a pending confirm and sends nothing.
+let familySettingsPeers = [];
+let familyStartConfirmIp = null;
+
+function familyPeerName(ip) {
+  const peer = familySettingsPeers.find(p => p.ip === ip);
+  return (peer && peer.name) || ip;
 }
 
 function renderFamilyPeers(peers) {
   if (!els.familyPeers) return;
-  if (!peers.length) {
-    els.familyPeers.innerHTML = '<p style="font-size:11px;color:var(--text-muted)">No other Lights Out instances found on your network.</p>';
+  familyStartConfirmIp = null;
+  familySettingsPeers = (Array.isArray(peers) ? peers : []).filter(p => p && typeof p.ip === 'string' && p.ip);
+  if (!familySettingsPeers.length) {
+    els.familyPeers.innerHTML = '<p class="help-text">No other Lights Out instances found on your network.</p>';
     return;
   }
-  els.familyPeers.innerHTML = peers.map(p => `
-    <div class="family-peer" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bg-card)">
-      <span style="flex:1;font-size:12px">&#x1F5A5; ${escapeHtml(p.name || p.ip)} <small style="color:var(--text-muted)">${escapeHtml(p.ip)}</small></span>
-      <button class="btn-tiny" data-peer-ip="${escapeHtml(p.ip)}" data-peer-action="start" title="Start 30-min timer">&#x25B6;</button>
-      <button class="btn-tiny" data-peer-ip="${escapeHtml(p.ip)}" data-peer-action="pause" title="Pause">&#x23F8;</button>
-      <button class="btn-tiny" data-peer-ip="${escapeHtml(p.ip)}" data-peer-action="cancel" title="Cancel">&#x274C;</button>
-    </div>
-  `).join('');
+  els.familyPeers.innerHTML = familySettingsPeers.map(p => {
+    const ip = escapeHtml(p.ip);
+    const name = escapeHtml(p.name || p.ip);
+    return `<div class="set-peer" data-peer-ip="${ip}">
+      <span class="set-peer-id"><span class="set-peer-name">${name}</span><span class="set-peer-ip">${ip}</span></span>
+      <span class="set-peer-actions">
+        <button type="button" class="btn-secondary btn-sm" data-peer-ip="${ip}" data-peer-action="start" aria-label="Start a 30-minute timer on ${name}">Start 30 min</button>
+        <button type="button" class="btn-secondary btn-sm" data-peer-ip="${ip}" data-peer-action="pause" aria-label="Pause the timer on ${name}">Pause</button>
+        <button type="button" class="btn-secondary btn-sm" data-peer-ip="${ip}" data-peer-action="cancel" aria-label="Cancel the timer on ${name}">Cancel timer</button>
+      </span>
+    </div>`;
+  }).join('');
+}
 
-  els.familyPeers.querySelectorAll('button[data-peer-action]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const action = btn.dataset.peerAction;
-      familyRemote(btn.dataset.peerIp, action, action === 'start' ? 30 : undefined);
-    });
+// mode: 'test' | 'real' | null. No read-only peer status exists yet (it is a
+// LAN protocol change awaiting owner sign-off), so callers pass null and the
+// confirm never claims a mode it has not read.
+function familyStartConfirmText(name, ip, mode = null) {
+  const ask = `Start a 30-minute Shutdown timer on ${name} (${ip})?`;
+  if (mode === 'test') return `${ask} ${name} is in Test Mode, so nothing will power off.`;
+  if (mode === 'real') return `${ask} ${name} will really shut down when it ends.`;
+  return `${ask} That PC's own Test Mode setting applies; its mode is unknown.`;
+}
+
+function familyPeerSettingsRow(ip) {
+  if (!els.familyPeers) return null;
+  return [...els.familyPeers.querySelectorAll('.set-peer')].find(el => el.dataset.peerIp === ip) || null;
+}
+
+function closeFamilyStartConfirm({ restoreFocus = false } = {}) {
+  const ip = familyStartConfirmIp;
+  familyStartConfirmIp = null;
+  els.familyPeers?.querySelectorAll('.set-peer-confirm').forEach(box => box.remove());
+  if (restoreFocus && ip) {
+    const start = familyPeerSettingsRow(ip)?.querySelector('button[data-peer-action="start"]');
+    start?.focus();
+  }
+}
+
+function openFamilyStartConfirm(ip) {
+  closeFamilyStartConfirm();
+  const row = familyPeerSettingsRow(ip);
+  if (!row) return;
+  familyStartConfirmIp = ip;
+  const name = familyPeerName(ip);
+  const box = document.createElement('div');
+  box.className = 'set-peer-confirm';
+  box.dataset.confirmIp = ip;
+  box.setAttribute('role', 'group');
+  box.setAttribute('aria-label', `Confirm a timer on ${name}`);
+  const text = document.createElement('p');
+  text.className = 'set-peer-confirm-text';
+  text.textContent = familyStartConfirmText(name, ip, null);
+  const actions = document.createElement('div');
+  actions.className = 'set-peer-confirm-actions';
+  const keep = document.createElement('button');
+  keep.type = 'button';
+  keep.className = 'btn-secondary btn-sm';
+  keep.dataset.confirm = 'keep';
+  keep.textContent = 'Keep idle';
+  const go = document.createElement('button');
+  go.type = 'button';
+  go.className = 'btn-secondary btn-sm set-peer-confirm-go';
+  go.dataset.confirm = 'start';
+  go.textContent = 'Start';
+  actions.append(keep, go);
+  box.append(text, actions);
+  row.after(box);
+  keep.focus();
+}
+
+function setupFamilyPeerSettingsHandlers() {
+  if (!els.familyPeers || els.familyPeers.dataset.wired === '1') return;
+  els.familyPeers.dataset.wired = '1';
+  els.familyPeers.addEventListener('click', (event) => {
+    const confirmBtn = event.target.closest?.('button[data-confirm]');
+    if (confirmBtn) {
+      const ip = confirmBtn.closest('.set-peer-confirm')?.dataset.confirmIp;
+      const confirmed = confirmBtn.dataset.confirm === 'start' && ip && ip === familyStartConfirmIp;
+      closeFamilyStartConfirm({ restoreFocus: true });
+      if (confirmed) void window.familyRemote(ip, 'start', 30);
+      return;
+    }
+    const btn = event.target.closest?.('button[data-peer-action]');
+    if (!btn) return;
+    const ip = btn.dataset.peerIp;
+    const action = btn.dataset.peerAction;
+    if (action === 'start') openFamilyStartConfirm(ip);
+    else if (action === 'pause' || action === 'cancel') void window.familyRemote(ip, action);
+  });
+  els.familyPeers.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || !event.target.closest?.('.set-peer-confirm')) return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeFamilyStartConfirm({ restoreFocus: true });
   });
 }
 
+// Awaits the real answer and reports it through the interpreter.
 window.familyRemote = async function(ip, action, duration) {
+  const calls = {
+    start: () => api.familyRemoteStart?.(ip, (duration || 30) * 60, 'shutdown'),
+    pause: () => api.familyRemotePause?.(ip),
+    resume: () => api.familyRemoteResume?.(ip),
+    cancel: () => api.familyRemoteCancel?.(ip)
+  };
+  const call = calls[action];
+  if (!call) return { text: 'Unknown action', tone: 'bad' };
+  let answer;
+  let failure = null;
   try {
-    if (action === 'start') await api.familyRemoteStart?.(ip, (duration || 30) * 60, 'shutdown');
-    else if (action === 'pause') await api.familyRemotePause?.(ip);
-    else if (action === 'cancel') await api.familyRemoteCancel?.(ip);
-    notify(`Command sent to ${ip}`, 'info');
-  } catch { notify('Command failed', 'error'); }
+    answer = await call();
+  } catch (err) {
+    failure = err || new Error('failed');
+  }
+  const outcome = interpretPeerResult(answer, failure);
+  notify(`${familyPeerName(ip)}: ${outcome.text}`, PEER_TONE_NOTIFY[outcome.tone] || 'info');
+  return outcome;
 };
+
+// ─── Settings › Protection › Wi-Fi Guard device list ───────────────────────
+// A click only SELECTS a device for a future bedtime block: nothing is blocked
+// here, so the row says 'Selected' or 'Select' and never claims a block.
+const WIFI_ROUTER_PROVIDERS = ['tplink', 'asus', 'netgear'];
+
+function wifiSelectedCount() {
+  return Math.max(wifiSelectedDevices.macs.length, wifiSelectedDevices.ips.length);
+}
+
+function renderWifiSelectedSummary() {
+  const out = document.getElementById('wifi-selected-summary');
+  if (!out) return;
+  const n = wifiSelectedCount();
+  const provider = els.selWifiProvider?.value || '';
+  const guardOn = Boolean(els.chkWifiGuard?.checked);
+  const blockOnDim = Boolean(els.chkWifiBlockDim?.checked);
+  const restoreOnCancel = Boolean(els.chkWifiUnblockCancel?.checked);
+  let text;
+  if (provider === 'adapter') {
+    text = `${n} selected · Wi-Fi adapter mode ignores this list: it turns off this PC's own Wi-Fi.`;
+  } else if (guardOn && blockOnDim && (WIFI_ROUTER_PROVIDERS.includes(provider) || provider === 'webhook')) {
+    text = `${n} selected · sent to your ${provider === 'webhook' ? 'webhook' : 'router'} when the dim phase starts`
+      + (restoreOnCancel ? ' · restored if you cancel' : ' · not restored automatically');
+  } else {
+    text = `${n} selected · not blocked automatically`;
+  }
+  out.textContent = text;
+}
 
 function renderWifiDevices(devices) {
   if (!els.wifiDeviceList) return;
-  if (!devices.length) {
-    els.wifiDeviceList.innerHTML = '<p style="font-size:11px;color:var(--text-muted)">No devices found. Make sure you\'re on the same network.</p>';
+  const list = Array.isArray(devices) ? devices : [];
+  if (!list.length) {
+    els.wifiDeviceList.innerHTML = '<p class="help-text">No devices found. Make sure you\'re on the same network.</p>';
+    renderWifiSelectedSummary();
     return;
   }
-  els.wifiDeviceList.innerHTML = devices.map(d => {
-    const macSel = wifiSelectedDevices.macs.includes(d.mac);
-    const ipSel = wifiSelectedDevices.ips.includes(d.ip);
-    const selected = macSel || ipSel;
-    return `<div class="wifi-device${selected ? ' selected' : ''}" data-mac="${escapeHtml(d.mac)}" data-ip="${escapeHtml(d.ip)}" style="display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:4px;cursor:pointer;border:1px solid ${selected ? 'var(--accent-cyan)' : 'var(--bg-card)'};margin-bottom:3px;font-size:11px">
-      <span style="flex:1">&#x1F4F1; ${escapeHtml(d.mac)} <small style="color:var(--text-muted)">${escapeHtml(d.ip)}</small></span>
-      <span style="font-size:9px;color:var(--accent-cyan)">${selected ? 'BLOCKED' : 'click to block'}</span>
-    </div>`;
+  const focusedMac = document.activeElement?.closest?.('.wifi-device')?.dataset.mac;
+  els.wifiDeviceList.innerHTML = list.map(d => {
+    const selected = wifiSelectedDevices.macs.includes(d.mac) || wifiSelectedDevices.ips.includes(d.ip);
+    return `<button type="button" class="wifi-device set-device${selected ? ' is-selected' : ''}" data-mac="${escapeHtml(d.mac)}" data-ip="${escapeHtml(d.ip)}" aria-pressed="${selected ? 'true' : 'false'}">
+      <span class="set-device-id">${escapeHtml(d.mac)}</span><span class="set-device-ip">${escapeHtml(d.ip)}</span><span class="set-device-state">${selected ? 'Selected' : 'Select'}</span>
+    </button>`;
   }).join('');
 
-  // Click handlers to toggle selection.
+  // A native button: Enter/Space already fire click, so no keydown handler.
   els.wifiDeviceList.querySelectorAll('.wifi-device').forEach(el => {
     el.addEventListener('click', () => {
       const mac = el.dataset.mac;
@@ -278,9 +469,21 @@ function renderWifiDevices(devices) {
         wifiSelectedDevices.macs.push(mac);
         wifiSelectedDevices.ips.push(ip);
       }
-      renderWifiDevices(devices);
+      renderWifiDevices(list);
     });
   });
+  // Keep keyboard focus on the device that was just toggled.
+  if (focusedMac) {
+    [...els.wifiDeviceList.querySelectorAll('.wifi-device')].find(el => el.dataset.mac === focusedMac)?.focus();
+  }
+  renderWifiSelectedSummary();
+}
+
+function setupWifiSelectionHandlers() {
+  for (const el of [els.chkWifiBlockDim, els.chkWifiUnblockCancel, els.chkWifiGuard, els.selWifiProvider]) {
+    el?.addEventListener('change', renderWifiSelectedSummary);
+  }
+  renderWifiSelectedSummary();
 }
 
 async function refreshTaxStats() {
@@ -309,4 +512,4 @@ async function refreshAutopilotStatus() {
     }
   } catch {}
 }
-/* exported setupRemoteControlHandlers, renderFamilyPeers, renderWifiDevices, refreshTaxStats, refreshAutopilotStatus */
+/* exported setupRemoteControlHandlers, renderFamilyPeers, renderWifiDevices, renderWifiSelectedSummary, interpretPeerResult, refreshTaxStats, refreshAutopilotStatus */

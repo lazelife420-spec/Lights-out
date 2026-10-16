@@ -3,8 +3,9 @@
 // calendar, so its day filtering, bedtime parsing, and future-only / cutoff
 // windowing need to be correct and deterministic.
 //
-// The network provider fetchers (Google/Outlook/Calendly/ICS) are not covered
-// here — they require live HTTP and are integration-tested elsewhere.
+// The network provider fetchers (Google/Outlook/Calendly/ICS) need live HTTP
+// for real data; only their fetch-status recording (Fire 09) is covered here,
+// with the network stubbed out.
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -132,4 +133,135 @@ test('getDefaultCalendarEvents events are sorted chronologically across rules', 
   const times = events.map(e => e.start.getTime());
   const sorted = [...times].sort((a, b) => a - b);
   assert.deepStrictEqual(times, sorted);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UI-R3 Fire 09: the last fetch status. Network calls are stubbed at the
+// https.request / calendar.importIcsFromUrl seams (the same module objects
+// calendarProviders uses), so nothing leaves this machine.
+// ─────────────────────────────────────────────────────────────────────────────
+const { EventEmitter } = require('node:events');
+const https = require('node:https');
+const icsParser = require('../calendar');
+
+const SECRET_URL = 'https://calendar.example.test/private/s3cr3t-feed-token/basic.ics';
+const SECRET_KEY = 'AIzaSECRETKEY123';
+const SECRET_TOKEN = 'eyJSECRET.TOKEN.value';
+
+async function withStubs(stubs, fn) {
+  const saved = { request: https.request, importIcsFromUrl: icsParser.importIcsFromUrl, error: console.error };
+  const logged = [];
+  if (stubs.request) https.request = stubs.request;
+  if (stubs.importIcsFromUrl) icsParser.importIcsFromUrl = stubs.importIcsFromUrl;
+  console.error = (...args) => { logged.push(args.map(String).join(' ')); };
+  try {
+    return await fn(logged);
+  } finally {
+    https.request = saved.request;
+    icsParser.importIcsFromUrl = saved.importIcsFromUrl;
+    console.error = saved.error;
+  }
+}
+
+// A request that fails with an Error whose message carries the URL, key and token.
+function failingRequest(opts) {
+  const req = new EventEmitter();
+  req.end = () => process.nextTick(() => req.emit('error', new Error(`connect ECONNREFUSED ${SECRET_URL}?key=${SECRET_KEY} ${SECRET_TOKEN} ${opts && opts.path}`)));
+  req.destroy = () => {};
+  return req;
+}
+
+// A 200 response with a JSON body.
+function jsonRequest(body) {
+  return (opts, onResponse) => {
+    const req = new EventEmitter();
+    req.end = () => process.nextTick(() => {
+      const res = new EventEmitter();
+      res.statusCode = 200;
+      res.resume = () => {};
+      onResponse(res);
+      res.emit('data', Buffer.from(JSON.stringify(body)));
+      res.emit('end');
+    });
+    req.destroy = () => {};
+    return req;
+  };
+}
+
+const ALLOWED_REASON = /^(timeout|http-\d{3}|too-large|not-https|parse|unexpected-response|network)$/;
+
+test('fetch status (Fire 09): a failing feed records an allowlisted reason and never the URL, key or token', async () => {
+  await withStubs({
+    request: failingRequest,
+    importIcsFromUrl: async () => { throw new Error(`HTTP 404: Failed to fetch ${SECRET_URL}`); }
+  }, async logged => {
+    const events = await cp.fetchAllEvents({
+      builtin: { rules: [] },
+      ical: { url: SECRET_URL },
+      google: { apiKey: SECRET_KEY, calendarId: 'me@example.test' },
+      outlook: { accessToken: SECRET_TOKEN },
+      calendly: { personalToken: SECRET_TOKEN }
+    }, MON_NOON, 14, { recordStatus: true });
+    assert.deepStrictEqual(events, []);
+    const status = cp.getLastFetchStatus();
+    const json = JSON.stringify(status);
+    for (const secret of [SECRET_URL, SECRET_KEY, SECRET_TOKEN, 's3cr3t', 'example.test']) {
+      assert.ok(!json.includes(secret), `status must not carry ${secret}`);
+      assert.ok(!logged.join('\n').includes(secret), `console lines must not carry ${secret}`);
+    }
+    assert.deepStrictEqual(Object.keys(status).sort(), ['calendly', 'google', 'ical', 'outlook']);
+    assert.strictEqual(status.ical.reason, 'http-404');
+    for (const p of ['google', 'outlook', 'calendly']) assert.strictEqual(status[p].reason, 'network');
+    for (const s of Object.values(status)) {
+      assert.strictEqual(s.ok, false);
+      assert.match(s.reason, ALLOWED_REASON);
+      assert.ok(Number.isFinite(s.at));
+      assert.deepStrictEqual(Object.keys(s).sort(), ['at', 'ok', 'reason']);
+    }
+  });
+});
+
+test('fetch status (Fire 09): a non-throwing missing-items answer records unexpected-response, never ok', async () => {
+  await withStubs({ request: jsonRequest({ error: { code: 400 } }) }, async () => {
+    await cp.fetchAllEvents({ builtin: { rules: [] }, google: { apiKey: 'k', calendarId: 'c' } }, MON_NOON, 14, { recordStatus: true });
+    const status = cp.getLastFetchStatus();
+    assert.deepStrictEqual(Object.keys(status), ['google']);
+    assert.strictEqual(status.google.ok, false);
+    assert.strictEqual(status.google.reason, 'unexpected-response');
+  });
+  await withStubs({ request: jsonRequest({ resource: {} }) }, async () => {
+    await cp.fetchAllEvents({ builtin: { rules: [] }, calendly: { personalToken: 't' } }, MON_NOON, 14, { recordStatus: true });
+    assert.strictEqual(cp.getLastFetchStatus().calendly.reason, 'unexpected-response');
+  });
+});
+
+test('fetch status (Fire 09): reached feeds record ok; unconfigured providers record nothing', async () => {
+  await withStubs({
+    request: jsonRequest({ items: [] }),
+    importIcsFromUrl: async () => ({ events: [] })
+  }, async () => {
+    await cp.fetchAllEvents({ builtin: { rules: [] }, ical: { url: 'https://x.test/a.ics' }, google: { apiKey: 'k', calendarId: '' }, outlook: { accessToken: '' } }, MON_NOON, 14, { recordStatus: true });
+    const status = cp.getLastFetchStatus();
+    assert.deepStrictEqual(Object.keys(status), ['ical'], 'Google without a calendar ID and an empty Outlook token record nothing');
+    assert.deepStrictEqual(Object.keys(status.ical).sort(), ['at', 'ok']);
+    assert.strictEqual(status.ical.ok, true);
+    // A deep copy: mutating it never changes the record.
+    status.ical.ok = false;
+    assert.strictEqual(cp.getLastFetchStatus().ical.ok, true);
+  });
+});
+
+test('fetch status (Fire 09): a 1-day background fetch records nothing and leaves the last status alone', async () => {
+  await withStubs({ importIcsFromUrl: async () => ({ events: [] }) }, async () => {
+    await cp.fetchAllEvents({ builtin: { rules: [] }, ical: { url: 'https://x.test/a.ics' } }, MON_NOON, 14, { recordStatus: true });
+  });
+  const before = JSON.stringify(cp.getLastFetchStatus());
+  await withStubs({ importIcsFromUrl: async () => { throw new Error('Request timeout'); } }, async () => {
+    await cp.fetchAllEvents({ builtin: { rules: [] }, ical: { url: 'https://x.test/a.ics' } }, MON_NOON, 1);
+    await cp.fetchEvents({ builtin: { rules: [] }, ical: { url: 'https://x.test/a.ics' } }, 1, MON_NOON);
+  });
+  assert.strictEqual(JSON.stringify(cp.getLastFetchStatus()), before);
+  // A new recorded run starts empty: a provider removed since is not kept.
+  await cp.fetchAllEvents({ builtin: { rules: [] } }, MON_NOON, 14, { recordStatus: true });
+  assert.deepStrictEqual(cp.getLastFetchStatus(), {});
 });

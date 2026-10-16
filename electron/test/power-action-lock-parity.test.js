@@ -68,7 +68,7 @@ const plain = value => (Array.isArray(value) ? [...value] : { ...value });
 // bodies, with child_process.spawn replaced by a tracked mock that never
 // spawns a real process. Returns the async executePowerAction plus
 // inspectable call logs.
-function createPowerActionSandbox({ desktopUxProof = false, initialReceiptId = 'receipt-1' } = {}) {
+function createPowerActionSandbox({ desktopUxProof = false, qaPowerLock = desktopUxProof, initialReceiptId = 'receipt-1' } = {}) {
   const spawnCalls = [];
   const emitCalls = [];
   const receiptUpdates = [];
@@ -76,6 +76,7 @@ function createPowerActionSandbox({ desktopUxProof = false, initialReceiptId = '
   const sandbox = {
     console,
     DESKTOP_UX_PROOF: desktopUxProof,
+    QA_POWER_LOCK: qaPowerLock,
     realPowerActionLog: [],
     activeReceiptId: initialReceiptId,
     spawn: (cmd, args, opts) => {
@@ -198,6 +199,41 @@ test('Tonight\'s Plan Lock selection corresponds to an actually-executable actio
       `manual selector offers "${action}" but executePowerAction has no case for it -- visible plan would promise an action Start cannot execute`
     );
   }
+});
+
+test('QA power lock blocks every real action: no spawn, blocked receipt, explicit result', async () => {
+  for (const action of ['shutdown', 'restart', 'sleep', 'hibernate', 'lock', 'logout']) {
+    const { executePowerAction, spawnCalls, emitCalls, receiptUpdates } = createPowerActionSandbox({ qaPowerLock: true });
+    const result = await executePowerAction({ action, dryRun: false, forceShutdown: true });
+
+    assert.deepEqual(plain(result), { success: false, blocked: true, error: 'QA power lock' }, `${action} must be refused under the QA lock`);
+    assert.equal(spawnCalls.length, 0, `${action} must never reach spawn under the QA lock`);
+    assert.equal(emitCalls.length, 1);
+    assert.equal(emitCalls[0].type, 'dryrun');
+    assert.match(emitCalls[0].data.message, /^QA power lock: .+ blocked$/);
+    assert.equal(receiptUpdates.length, 1);
+    assert.equal(receiptUpdates[0].patch.result, 'blocked');
+  }
+});
+
+test('Desktop UX proof mode records the attempt AND blocks it (never power-cycles the proof host)', async () => {
+  const { executePowerAction, spawnCalls, sandbox } = createPowerActionSandbox({ desktopUxProof: true });
+  const result = await executePowerAction({ action: 'shutdown', dryRun: false });
+
+  assert.equal(sandbox.realPowerActionLog.length, 1, 'the gate must still see the attempted real action');
+  assert.equal(sandbox.realPowerActionLog[0].action, 'shutdown');
+  assert.equal(result.blocked, true);
+  assert.equal(spawnCalls.length, 0);
+});
+
+test('main.js derives QA_POWER_LOCK from the proof flag or an explicit env opt-in only', () => {
+  assert.match(
+    mainSource,
+    /const QA_POWER_LOCK = DESKTOP_UX_PROOF \|\| process\.env\.LIGHTS_OUT_QA_POWER_LOCK === '1';/
+  );
+  const lockIndex = executePowerActionSource.indexOf('if (QA_POWER_LOCK)');
+  const switchIndex = executePowerActionSource.indexOf('switch (action)');
+  assert.ok(lockIndex > 0 && lockIndex < switchIndex, 'the QA lock must run before any dispatch');
 });
 
 test('safety invariant: no test in this file triggers a real spawn -- every executePowerAction call here runs against the mocked spawn only', () => {

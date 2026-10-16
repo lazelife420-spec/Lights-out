@@ -8,7 +8,7 @@
 'use strict';
 
 // Eligible start origins that may trigger a profile ritual gateway.
-const ELIGIBLE_ORIGINS = Object.freeze(['play', 'profile-start', 'companion-night-mode']);
+const ELIGIBLE_ORIGINS = Object.freeze(['play', 'profile-start', 'companion-night-mode', 'calendar']);
 
 let pendingContext = null;
 
@@ -29,6 +29,8 @@ function createContext(validated) {
     nightModeId: validated.nightModeId || null,
     nightModeTitle: validated.nightModeTitle || null,
     nightModeVersion: validated.nightModeVersion || null,
+    // Display-only run origin (e.g. 'phone'), carried to the ritual timer step.
+    origin: typeof validated.origin === 'string' ? validated.origin : null,
     createdAt: Date.now()
   };
   return pendingContext.token;

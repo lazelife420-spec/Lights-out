@@ -101,6 +101,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   testSmartLightConnection: () => ipcRenderer.invoke('test-smartlight-connection'),
   testSmartLightAction: () => ipcRenderer.invoke('test-smartlight-action'),
   discoverHueBridge: () => ipcRenderer.invoke('discover-hue-bridge'),
+  discoverWizLights: () => ipcRenderer.invoke('discover-wiz-lights'),
   registerHueBridge: (bridgeIp) => ipcRenderer.invoke('register-hue-bridge', bridgeIp),
   getHueLights: (bridgeIp, username) => ipcRenderer.invoke('get-hue-lights', bridgeIp, username),
   getHueGroups: (bridgeIp, username) => ipcRenderer.invoke('get-hue-groups', bridgeIp, username),
@@ -186,6 +187,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   fetchCalendarEvents: (withinDays) => ipcRenderer.invoke('fetch-calendar-events', withinDays),
   saveCalendarSettings: (calSettings) => ipcRenderer.invoke('save-calendar-settings', calSettings),
   getCalendarSettings: () => ipcRenderer.invoke('get-calendar-settings'),
+  // Receive-only (UI-R3 Fire 09): no arguments, reads which calendar feeds the
+  // last Schedule fetch reached. It can never change settings or start anything.
+  getCalendarFetchStatus: () => ipcRenderer.invoke('get-calendar-fetch-status'),
 
   // Companion PWA
   getCompanionStatus: () => ipcRenderer.invoke('get-companion-status'),

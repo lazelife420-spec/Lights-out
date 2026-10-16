@@ -23,8 +23,15 @@ There is one *desktop* app surface: `electron\`.
 It is the primary shipping UI, with a real build and packaging flow.
 The old WinForms UI has been deprecated and removed in favor of this cockpit dashboard.
 
-There is also an optional native Android companion, `companion-android\` — a
-thin WebView wrapper (Kotlin) around `electron\companion.html` with its own QR
+There is also a standalone native Android app, `companion-android\`. Its bundled
+offline home (`HomeActivity`, `assets/phone`) controls a persistent native phone
+reminder timer (`PhoneTimer`, foreground service + AlarmManager). The separate
+phone Lighting/Routines/Calendar tabs use direct native WiZ UDP and native
+calendar alarms (`PhoneLights`, `PhoneCalendar`, `PhoneHomeStore`). They work
+independently of the PC; their settings are not synchronized with desktop ones.
+Calendar auto-start requires Alarms & reminders access. Never claim emulator
+UDP tests establish real phone/router background reliability. The separate
+`MainActivity` WebView controls a paired PC via `electron\companion.html`, with its own QR
 pairing scanner (CameraX + on-device ML Kit), documented in
 `companion-android\README.md`. It is not part of the desktop build/release
 train and has no CI coverage; treat changes to it as a separate, manual
@@ -36,6 +43,13 @@ lost, so if you (the agent) ever generate or touch it, flag that loudly to
 the user rather than treating it as disposable. (`companion-mobile\`, an
 earlier, unfinished Capacitor-based duplicate of this same idea, was removed
 2026-07-09 — if you see references to it in old history, that's why.)
+
+For Android QA, copy only source and Gradle wrapper files into a temporary
+project, excluding signing properties. Use an isolated `ANDROID_USER_HOME` and
+clear release-signing environment variables. The app Gradle file reads signing
+properties even for debug tasks, so do not build QA in the real checkout.
+Run `:app:testDebugUnitTest :app:lintDebug :app:assembleDebug` and test the debug
+package on the emulator. Never replace or uninstall the production package for QA.
 
 ## Current State
 
@@ -54,11 +68,11 @@ The important behavior is:
 - unit tests cover the network trust boundaries: remote-command validation, the
   companion WebSocket handshake + frame codec, the family LAN discovery parser,
   and the wifiGuard input sanitizers
-- Electron is pinned to `^43.0.0` and electron-builder to `^26.0.0` (bumped from
-  30/24 to close 7 high-severity npm-audit CVEs against the old Electron line;
-  `npm audit` is clean); `sharp` is pinned to `^0.35.4` (bumped from `^0.35.3`
-  post-v11.1.3); the prebuilt N-API binary needs no rebuild across the Electron
-  or sharp jumps
+- Electron has a `^43.5.0` minimum and is locked/provisioned at `43.7.11`;
+  `sharp` has a `^0.35.5` minimum. The October 14 qualification also updates
+  vulnerable transitive brace-expansion and undici resolutions. Native Windows
+  packaging uses the provisioned Electron runtime and rcedit, rather than
+  electron-builder. The Sharp N-API binary needs no Electron ABI rebuild.
 - `main.js` installs `process.on('uncaughtException'/'unhandledRejection', ...)`
   handlers that log to `userData/startup.log` and keep the app alive rather than
   letting an unrelated bug silently kill the user's active timer
@@ -94,10 +108,16 @@ These are intentional product constraints. Do not casually remove them.
 ## Files To Treat Carefully
 
 - `dist\`
-  Electron build output. Do not hand-edit files here.
+  Historical electron-builder output and proof/review staging. Do not hand-edit it.
+
+- `dist-native\`
+  Current Windows build output from `electron\scripts\package-native-windows.ps1`.
+  The launcher is `dist-native\win-unpacked\Lights Out.exe`; the portable ZIP is
+  alongside `win-unpacked`. Do not hand-edit it. Isolated build candidates use
+  `dist-native-*\` and can be selected with `LIGHTS_OUT_PACKAGED_EXE`.
 
 - `LightsOut.exe` (root)
-  **Does not exist.** The only valid portable build is `dist\LightsOut.exe`.
+  **Does not exist.** Use the native launcher or versioned portable ZIP above.
 
 - `archive\`, `system-tune-backup-*`
   Historical backups / reference material. Do not edit unless the user explicitly asks.
@@ -133,7 +153,12 @@ These are intentional product constraints. Do not casually remove them.
    - `npm run test:e2e:ci` — Unattended CI lane (`packaged-truth-smoke` required)
    - `npm run test:e2e:desktop` — Interactive Windows desktop lane (`desktop-ux-functional-gate` required; requires unlocked desktop, foreground custody, hands-off mouse/keyboard)
    - `npm run test:e2e` — Full release qualification umbrella runner requiring both CI and Interactive Desktop passes for Full E2E GREEN.
-   - `night-modes-electron-proof` runs as an advisory lane because its Quick Sleep wall-clock completion assertion has a known harness timing limitation.
+   - `night-modes-electron-proof` is required: it advances its proof-process clock
+     and polling cadence together, leaving the system clock and shipped app alone.
+   - `npm run test:packaged-local` — Packaged IPC, navigation, timer controls,
+     occupied-port recovery and cleanup on loopback, with existing firewall rules
+     preserved. It can run alongside an existing app instance. This is not the
+     full Wi-Fi/firewall or interactive desktop release gate.
 
 Current smoke/test expectations include:
 - `npm run test:e2e` as the consolidated real Electron/packaged integration lane
@@ -158,7 +183,7 @@ running Electron itself.
 
 A task is not done until:
 
-- the change landed in `electron\`
+- desktop changes landed in `electron\`, Android changes in `companion-android\`
 - the safest default behavior still makes sense
 - verification was actually run for the surface you changed
 - the smoke/unit suites were updated if the changed behavior should be regression-guarded

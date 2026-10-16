@@ -23,10 +23,16 @@ const {
   verifyOwnedCleanup
 } = require('./proof-lifecycle');
 const { requirePackagedArtifact } = require('./packaged-artifact-resolver');
+const companionNetwork = require('../companionNetwork');
 
 const execFileAsync = promisify(execFile);
 
 const { executable, proofDir } = requirePackagedArtifact();
+// Exercise the packaged app alongside the owner's running instance without
+// opening LAN listeners or changing Windows Firewall. The default lane still
+// requires the full Wi-Fi/firewall contract.
+const localOnly = process.argv.includes('--local-only');
+const captureUiLayouts = process.argv.includes('--ui-layouts');
 const lifecycleStartedAt = Date.now();
 const lifecycle = [];
 
@@ -63,7 +69,19 @@ async function firewallSnapshot() {
   const command = `$rules = @(Get-NetFirewallRule -Group 'Lights Out Companion' -ErrorAction SilentlyContinue); @($rules | ForEach-Object { $app = $_ | Get-NetFirewallApplicationFilter; $port = $_ | Get-NetFirewallPortFilter; [pscustomobject]@{ Name = $_.Name; Profile = [string]$_.Profile; Direction = [string]$_.Direction; Action = [string]$_.Action; Program = $app.Program; Protocol = [string]$port.Protocol; LocalPort = [string]$port.LocalPort } }) | ConvertTo-Json -Compress`;
   const result = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { windowsHide: true, timeout: 15000 });
   const parsed = JSON.parse(result.stdout.trim() || '[]');
-  return Array.isArray(parsed) ? parsed : [parsed];
+  return (Array.isArray(parsed) ? parsed : [parsed]).sort((a, b) => a.Name.localeCompare(b.Name));
+}
+
+function ownedFirewallRules(rules, pid) {
+  return rules.filter(rule =>
+    path.normalize(rule.Program || '').toLowerCase() === path.normalize(executable).toLowerCase()
+    && (!pid || rule.Name.startsWith(`LightsOutCompanion-${pid}-`))
+  );
+}
+
+function assertOtherFirewallRulesUnchanged(rules, baseline, pid) {
+  const names = new Set(ownedFirewallRules(rules, pid).map(rule => rule.Name));
+  assert.deepEqual(rules.filter(rule => !names.has(rule.Name)), baseline, 'proof changed another instance\'s firewall rules');
 }
 
 async function removeFirewallRules(ruleNames) {
@@ -100,6 +118,81 @@ async function waitFor(fn, timeoutMs = 15000, intervalMs = 150) {
     await new Promise(resolve => setTimeout(resolve, intervalMs));
   }
   throw lastError || new Error('Timed out waiting for packaged app state');
+}
+
+async function proveUiLayouts(cdp) {
+  const originalTheme = await cdp.evaluate(`document.body.dataset.theme || ''`);
+  const layouts = [];
+  try {
+    await cdp.click('#nav-lib');
+    await new Promise(resolve => setTimeout(resolve, 700));
+    const nativeReadiness = await cdp.evaluate(`(() => [...document.querySelectorAll('.rdy-label')].map(el => {
+      const range = document.createRange(); range.selectNodeContents(el);
+      const ink = range.getBoundingClientRect(); const box = el.getBoundingClientRect();
+      return { label: el.textContent, dpr: devicePixelRatio, width: box.width, height: box.height,
+        inkWidth: ink.width, inkHeight: ink.height, columns: getComputedStyle(el.parentElement).gridTemplateColumns,
+        fits: ink.width <= box.width + 1 && ink.height <= box.height + 1 };
+    }))()`);
+    fs.writeFileSync(path.join(proofDir, 'ui-native-readiness.json'), JSON.stringify(nativeReadiness, null, 2));
+    assert.ok(nativeReadiness.every(label => label.fits), 'readiness labels must fit at native display scaling');
+    for (const theme of ['midnight', 'dawn']) {
+      await cdp.evaluate(`document.body.dataset.theme = ${JSON.stringify(theme)}`);
+      for (const size of [{ width: 900, height: 640 }, { width: 900, height: 800 }, { width: 1280, height: 800 }]) {
+        await cdp.command('Emulation.setDeviceMetricsOverride', { ...size, deviceScaleFactor: 1, mobile: false });
+        for (const route of ['lib', 'devices']) {
+          await cdp.click('#nav-' + route);
+          await new Promise(resolve => setTimeout(resolve, 700));
+          const measured = await cdp.evaluate(`(() => {
+            const panel = document.getElementById('ns-panel-${route}');
+            const boxes = [];
+            const rect = el => {
+              const b = el.getBoundingClientRect();
+              return { left: b.left, top: b.top, right: b.right, bottom: b.bottom, width: b.width, height: b.height };
+            };
+            const overlaps = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1
+              && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
+            for (const card of panel.querySelectorAll('.device-card')) {
+              const title = rect(card.querySelector('.device-title-wrap'));
+              const status = rect(card.querySelector('.device-status'));
+              boxes.push({ id: card.id, title, status, overlaps: overlaps(title, status) });
+            }
+            const dashboard = document.querySelector('.dashboard');
+            const rail = panel.querySelector('.readiness-strip');
+            const footerTop = document.querySelector('.app-footer').getBoundingClientRect().top;
+            const factOverflow = [...panel.querySelectorAll('.plan-facts dd')].some(el => el.scrollWidth > el.clientWidth + 1);
+            const railOverflow = [...panel.querySelectorAll('.rdy-value')].some(el => el.scrollWidth > el.clientWidth + 1);
+            return { width: innerWidth, height: innerHeight, boxes, factOverflow, railOverflow,
+              railFits: !rail || rail.getBoundingClientRect().bottom <= footerTop + 1,
+              horizontalOverflow: dashboard.scrollWidth > dashboard.clientWidth + 1,
+              panelOverflow: panel.scrollWidth > panel.clientWidth + 1 };
+          })()`);
+          assert.equal(measured.horizontalOverflow, false, `${theme} ${size.width}x${size.height} ${route}: dashboard overflow`);
+          assert.equal(measured.panelOverflow, false, `${theme} ${size.width}x${size.height} ${route}: panel overflow`);
+          assert.equal(measured.factOverflow, false, 'plan facts must fit their columns');
+          assert.equal(measured.railOverflow, false, 'readiness values must fit their cells');
+          assert.equal(measured.railFits, true, 'the readiness strip must fit above the footer');
+          assert.ok(measured.boxes.every(box => !box.overlaps), 'device status overlaps its heading');
+          if (route === 'lib') {
+            const startVisible = await cdp.evaluate(`(() => {
+              const button = document.getElementById('ns-play-btn');
+              button.scrollIntoView({ block: 'nearest' });
+              const b = button.getBoundingClientRect();
+              return b.top >= 0 && b.bottom <= document.querySelector('.app-footer').getBoundingClientRect().top;
+            })()`);
+            assert.equal(startVisible, true, 'Start must be reachable above the footer');
+          }
+          const name = `ui-${theme}-${size.width}x${size.height}-${route}.png`;
+          await cdp.screenshot(name);
+          layouts.push({ theme, ...size, route, screenshot: name, ...measured });
+        }
+      }
+    }
+  } finally {
+    await cdp.command('Emulation.clearDeviceMetricsOverride');
+    await cdp.evaluate(`document.body.dataset.theme = ${JSON.stringify(originalTheme)}`);
+    await cdp.click('#nav-lib');
+  }
+  return layouts;
 }
 
 class CdpClient {
@@ -167,6 +260,8 @@ class CdpClient {
   }
 
   async screenshot(name, directory = proofDir) {
+    // Capture the finished route, after the page/card entrance transitions.
+    await new Promise(resolve => setTimeout(resolve, 650));
     const result = await this.command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
     fs.mkdirSync(directory, { recursive: true });
     fs.writeFileSync(path.join(directory, name), Buffer.from(result.data, 'base64'));
@@ -230,10 +325,11 @@ async function rendererSnapshot(cdp) {
       });
     }
     const navItems = Array.from(document.querySelectorAll('.ns-nav-item'));
+    const expectedNavIds = ['nav-lib', 'nav-modes', 'nav-sch', 'nav-devices', 'nav-stats', 'nav-set', 'nav-help'];
     const navReady = Boolean(
       proof?.ready === true &&
-      navItems.length === 6 &&
-      navItems.every(item => item.isConnected) &&
+      navItems.length === expectedNavIds.length &&
+      expectedNavIds.every(id => navItems.some(item => item.id === id && item.isConnected)) &&
       document.querySelectorAll('.menu-item, .main-menu, .submenu-item').length === 0
     );
     if (proof) proof.navReady = navReady;
@@ -372,6 +468,7 @@ async function main() {
   let cdp;
   let target;
   let readiness;
+  let firewallBefore = [];
   let successReport;
   let primaryError = null;
   let cleanupReport = { cleaned: [], errors: [] };
@@ -396,17 +493,27 @@ async function main() {
     resources.diagnosticStaging = fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-packaged-diagnostics-'));
     resources.diagnosticStagingOriginal = resources.diagnosticStaging;
     fs.writeFileSync(path.join(userData, 'settings.json'), JSON.stringify({
-      app: { onboarded: true, action: 'sleep', durationSeconds: 900 },
+      app: { onboarded: true, action: 'sleep', durationSeconds: 900, dryRun: true, forceShutdown: false },
+      remoteControl: { enabled: false, mode: 'off' },
       calendar: { builtin: { enabled: true, bedtime: '22:15', days: ['mon', 'tue'], action: 'sleep' } }
     }));
     injectFailure(failureStage, 'after-profile-created');
 
     resources.blocker = net.createServer();
-    const firewallBefore = await firewallSnapshot();
-    assert.equal(firewallBefore.length, 0);
+    firewallBefore = await firewallSnapshot();
+    if (!localOnly) assert.equal(ownedFirewallRules(firewallBefore).length, 0, 'candidate already owns firewall rules');
+    const assignedIps = Object.values(os.networkInterfaces()).flat()
+      .filter(address => address.family === 'IPv4' && !address.internal)
+      .map(address => address.address);
+    const blockedHost = localOnly ? '127.0.0.1' : companionNetwork.selectLanIp(
+      assignedIps, '', await companionNetwork.getDefaultRouteLanIp()
+    ).lanIp;
+    assert.ok(blockedHost, 'Wi-Fi proof requires a usable LAN address');
     await new Promise((resolve, reject) => {
       resources.blocker.once('error', reject);
-      resources.blocker.listen(blockedPort, '0.0.0.0', resolve);
+      // Windows can permit a wildcard and a specific-interface listener on
+      // the same port. Reserve the exact address the companion will bind.
+      resources.blocker.listen(blockedPort, blockedHost, resolve);
     });
     injectFailure(failureStage, 'after-blocker-created');
 
@@ -421,6 +528,7 @@ async function main() {
       stdio: 'ignore',
       env: {
         ...process.env,
+        LIGHTS_OUT_QA_POWER_LOCK: '1',
         LIGHTS_OUT_SUPPRESS_TRAY: '1',
         LIGHTS_OUT_DESKTOP_UX_GATE: '1'
       }
@@ -482,8 +590,8 @@ async function main() {
     assert.equal(initialRemote.port, 58732, 'production default companion port must remain 58732');
 
     progress('proving occupied-port failure');
-    await cdp.evaluate(`electronAPI.setRemoteControlMode('wifi')`);
     await cdp.evaluate(`electronAPI.setRemoteControlPort(${blockedPort})`);
+    await cdp.evaluate(`electronAPI.setRemoteControlMode(${JSON.stringify(localOnly ? 'local' : 'wifi')})`);
     const failed = await waitFor(async () => {
       const state = await cdp.evaluate(`electronAPI.getRemoteControl()`);
       return state.failed && state.failureDetails?.pid ? state : null;
@@ -527,33 +635,48 @@ async function main() {
       hasUrl: Boolean(document.getElementById('remote-url').textContent),
       hasShortCode: Boolean(document.getElementById('remote-short-code').textContent)
     }))()`);
-    assert.match(recoveredUi.status, /Desktop endpoint ready/);
-    assert.notEqual(recoveredUi.detailsDisplay, 'none');
+    assert.match(recoveredUi.status, localOnly ? /This PC only/i : /Desktop endpoint ready/);
+    if (localOnly) assert.equal(recoveredUi.detailsDisplay, 'none');
+    else assert.notEqual(recoveredUi.detailsDisplay, 'none');
     assert.equal(recoveredUi.hasUrl, true);
-    assert.equal(recoveredUi.hasShortCode, true);
+    assert.equal(recoveredUi.hasShortCode, !localOnly);
 
     const defaultPort = await cdp.evaluate(`electronAPI.setRemoteControlPort(${testPort})`);
     assert.equal(defaultPort.ready, true);
     assert.equal(defaultPort.port, testPort);
-    const firewallDefault = await firewallSnapshot();
-    assert.equal(firewallDefault.length, 2);
-    resources.firewallRuleNames = firewallDefault.map(rule => rule.Name).filter(Boolean);
-    for (const rule of firewallDefault) {
-      assert.equal(rule.Profile, 'Private');
-      assert.equal(rule.Direction, 'Inbound');
-      assert.equal(rule.Action, 'Allow');
-      assert.equal(path.normalize(rule.Program), path.normalize(executable));
+    const firewallDefaultSnapshot = await firewallSnapshot();
+    const firewallDefault = localOnly ? firewallDefaultSnapshot : ownedFirewallRules(firewallDefaultSnapshot, child.pid);
+    if (localOnly) {
+      assert.equal(defaultPort.mode, 'local');
+      assert.match(defaultPort.url, /^http:\/\/127\.0\.0\.1:/);
+      assert.deepEqual(firewallDefault, firewallBefore, 'local mode changed existing firewall rules');
+    } else {
+      assertOtherFirewallRulesUnchanged(firewallDefaultSnapshot, firewallBefore, child.pid);
+      assert.equal(firewallDefault.length, 2);
+      resources.firewallRuleNames = firewallDefault.map(rule => rule.Name).filter(Boolean);
+      for (const rule of firewallDefault) {
+        assert.equal(rule.Profile, 'Private');
+        assert.equal(rule.Direction, 'Inbound');
+        assert.equal(rule.Action, 'Allow');
+        assert.equal(path.normalize(rule.Program), path.normalize(executable));
+      }
+      assert.ok(firewallDefault.some(rule => rule.Protocol === 'TCP' && rule.LocalPort === String(testPort)));
+      assert.ok(firewallDefault.some(rule => rule.Protocol === 'UDP' && rule.LocalPort === '58733'));
+      injectFailure(failureStage, 'after-firewall-rule-created');
     }
-    assert.ok(firewallDefault.some(rule => rule.Protocol === 'TCP' && rule.LocalPort === String(testPort)));
-    assert.ok(firewallDefault.some(rule => rule.Protocol === 'UDP' && rule.LocalPort === '58733'));
-    injectFailure(failureStage, 'after-firewall-rule-created');
     const alternatePort = await cdp.evaluate(`electronAPI.setRemoteControlPort(${blockedPort})`);
     assert.equal(alternatePort.ready, true);
-    const firewallAlternate = await firewallSnapshot();
-    assert.equal(firewallAlternate.length, 2);
-    resources.firewallRuleNames = firewallAlternate.map(rule => rule.Name).filter(Boolean);
-    assert.ok(firewallAlternate.some(rule => rule.Protocol === 'TCP' && rule.LocalPort === String(blockedPort)));
-    assert.ok(firewallAlternate.some(rule => rule.Protocol === 'UDP' && rule.LocalPort === '58733'));
+    const firewallAlternateSnapshot = await firewallSnapshot();
+    const firewallAlternate = localOnly ? firewallAlternateSnapshot : ownedFirewallRules(firewallAlternateSnapshot, child.pid);
+    if (localOnly) {
+      assert.deepEqual(firewallAlternate, firewallBefore, 'changing a local port changed existing firewall rules');
+    } else {
+      assertOtherFirewallRulesUnchanged(firewallAlternateSnapshot, firewallBefore, child.pid);
+      assert.equal(firewallAlternate.length, 2);
+      resources.firewallRuleNames = firewallAlternate.map(rule => rule.Name).filter(Boolean);
+      assert.ok(firewallAlternate.some(rule => rule.Protocol === 'TCP' && rule.LocalPort === String(blockedPort)));
+      assert.ok(firewallAlternate.some(rule => rule.Protocol === 'UDP' && rule.LocalPort === '58733'));
+    }
     await cdp.evaluate(`electronAPI.setRemoteControlPort(${testPort})`);
 
     progress('proving widget and notifications');
@@ -584,9 +707,15 @@ async function main() {
     progress('proving unified shell nav interaction contract');
     await cdp.evaluate(`window.__desktopUxProof.clearStartInvocations()`);
     const modesNav = await proveNavItem(cdp, readiness, 'nav-modes');
+    await cdp.screenshot('night-modes-current-build.png');
     const schNav = await proveNavItem(cdp, readiness, 'nav-sch');
+    await cdp.screenshot('schedule-current-build.png');
+    const devicesNav = await proveNavItem(cdp, readiness, 'nav-devices');
+    await cdp.screenshot('devices-current-build.png');
     const statsNav = await proveNavItem(cdp, readiness, 'nav-stats');
+    await cdp.screenshot('proof-current-build.png');
     const libNav = await proveNavItem(cdp, readiness, 'nav-lib');
+    await cdp.screenshot('tonight-current-build.png');
     const helpNav = await proveNavItem(cdp, readiness, 'nav-help', { opensModal: true });
     const setNav = await proveNavItem(cdp, readiness, 'nav-set');
     const menuStartInvocations = await cdp.evaluate(`window.__desktopUxProof.getStartInvocations()`);
@@ -630,13 +759,35 @@ async function main() {
     assert.equal(routes.hardStopPresent, false);
     await cdp.screenshot('night-modes-route.png');
 
+    const uiLayouts = captureUiLayouts ? await proveUiLayouts(cdp) : [];
+
     progress('proving off state');
     await cdp.evaluate(`electronAPI.setRemoteControlMode('off')`);
     const off = await cdp.evaluate(`electronAPI.getRemoteControl()`);
     assert.equal(off.ready, false);
     assert.equal(off.url, '');
     const firewallAfter = await firewallSnapshot();
-    assert.equal(firewallAfter.length, 0);
+    assert.deepEqual(firewallAfter, firewallBefore, 'companion shutdown changed unrelated firewall rules');
+
+    progress('proving packaged Test Mode timer controls');
+    await cdp.click('#nav-lib');
+    const started = await cdp.evaluate(`electronAPI.startTimer({ durationSeconds: 120, action: 'sleep', dryRun: true })`);
+    assert.equal(started.success, true);
+    assert.equal(started.state.dryRun, true);
+    await waitFor(() => cdp.evaluate(`state.running && state.dryRun && !state.paused`));
+    assert.equal((await navState(cdp, 'nav-lib')).visible, true, 'starting a timer hid the navigation rail');
+    await cdp.screenshot('timer-running-current-build.png');
+    await cdp.evaluate(`electronAPI.pauseTimer()`);
+    await waitFor(() => cdp.evaluate(`state.running && state.paused`));
+    const pausedRemaining = await cdp.evaluate(`state.remainingSeconds`);
+    await cdp.screenshot('timer-paused-current-build.png');
+    await cdp.evaluate(`electronAPI.snoozeTimer(300)`);
+    await waitFor(() => cdp.evaluate(`state.paused && state.remainingSeconds === ${pausedRemaining + 300}`));
+    await cdp.evaluate(`electronAPI.resumeTimer()`);
+    await waitFor(() => cdp.evaluate(`state.running && !state.paused`));
+    await cdp.evaluate(`electronAPI.cancelTimer()`);
+    await waitFor(() => cdp.evaluate(`!state.running && !state.paused`));
+    assert.deepEqual(await cdp.evaluate(`window.__desktopUxProof.getRealPowerActions()`), [], 'timer proof performed a real power action');
     assert.deepEqual(cdp.consoleErrors, [], 'renderer emitted console errors');
     assert.deepEqual(cdp.pageErrors, [], 'renderer emitted uncaught page errors');
     const finalSnapshot = await rendererSnapshot(cdp);
@@ -644,18 +795,24 @@ async function main() {
 
     successReport = {
       packaged: true,
+      scope: localOnly ? 'local-only; LAN and firewall qualification not run' : 'wifi-and-firewall',
       profiles: { migratedExisting: true, missingDefaultsRestored: true },
       productionDefaultPort: initialRemote.port,
       occupiedPort: { failed: true, ownerPidMatched: true, credentialsHidden: true },
       retry: { ready: true, host: retried.lanIp, port: retried.port },
       defaultPort: { ready: true, port: defaultPort.port },
-      firewall: { before: 0, active: 2, privateOnly: true, exactProgram: true, alternatePortUpdated: true, after: 0 },
+      firewall: localOnly
+        ? { before: firewallBefore.length, after: firewallAfter.length, unchanged: true, lanQualified: false }
+        : { before: firewallBefore.length, ownedActive: 2, privateOnly: true, exactProgram: true, alternatePortUpdated: true, after: firewallAfter.length, ownedAfter: 0, otherRulesPreserved: true },
       widget: { shown: true, hidden: true },
+      timerControls: { testMode: true, start: true, pause: true, addSeconds: 300, resume: true, cancel: true, railVisible: true },
+      uiLayouts,
       notifications: { unreadBeforeOpen: 1, unreadAfterOpen: 0, duplicates: 1 },
       routes: { settingsCanonical: true, restored: routes.restored, modes: routes.modeTitles.length },
       nav: {
         modes: { active: modesNav.activated.active },
         schedule: { active: schNav.activated.active },
+        devices: { active: devicesNav.activated.active },
         stats: { active: statsNav.activated.active },
         lib: { active: libNav.activated.active },
         help: { modalOpened: helpNav.opened.activeModal, escapeClosed: helpNav.closed.activeModal },
@@ -682,8 +839,8 @@ async function main() {
     primaryError = error;
     try {
       const liveRules = await firewallSnapshot();
-      const exactOwnedNames = liveRules
-        .filter(rule => path.normalize(rule.Program || '').toLowerCase() === path.normalize(executable).toLowerCase())
+      const exactOwnedNames = (child?.pid ? ownedFirewallRules(liveRules, child.pid) : [])
+        .filter(rule => !firewallBefore.some(prior => prior.Name === rule.Name))
         .map(rule => rule.Name)
         .filter(Boolean);
       resources.firewallRuleNames = Array.from(new Set([
@@ -722,7 +879,7 @@ async function main() {
     ownedProcesses: 0,
     blockerPortFree: true,
     cdpPortFree: true,
-    firewallRules: 0,
+    ownedFirewallRules: 0,
     tempProfileRemoved: true,
     diagnosticStagingRemoved: true,
     elapsedMs: cleanupVerification.elapsedMs

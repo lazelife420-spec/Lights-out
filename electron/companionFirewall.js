@@ -3,6 +3,9 @@
 const RULE_GROUP = 'Lights Out Companion';
 const TCP_RULE = 'Lights Out Companion TCP';
 const DISCOVERY_RULE = 'Lights Out Companion Discovery UDP';
+const ruleOwner = `${process.pid}-${require('node:crypto').randomUUID()}`;
+const tcpRuleName = `LightsOutCompanion-${ruleOwner}-TCP`;
+const discoveryRuleName = `LightsOutCompanion-${ruleOwner}-UDP`;
 
 function quotePowerShell(value) {
   return `'${String(value || '').replace(/'/g, "''")}'`;
@@ -15,7 +18,8 @@ function validatePort(value) {
 }
 
 function removeOwnedRulesCommand() {
-  return `Get-NetFirewallRule -Group ${quotePowerShell(RULE_GROUP)} -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction Stop`;
+  const names = `@(${quotePowerShell(tcpRuleName)}, ${quotePowerShell(discoveryRuleName)})`;
+  return `Get-NetFirewallRule -Name ${names} -ErrorAction SilentlyContinue | Where-Object { $_.Group -eq ${quotePowerShell(RULE_GROUP)} } | Remove-NetFirewallRule -ErrorAction Stop`;
 }
 
 function configureOwnedRulesCommand(executablePath, port) {
@@ -27,8 +31,8 @@ function configureOwnedRulesCommand(executablePath, port) {
     "$ErrorActionPreference = 'Stop'",
     remove,
     'try {',
-    `New-NetFirewallRule -DisplayName ${quotePowerShell(TCP_RULE)} -Group ${group} -Direction Inbound -Action Allow -Protocol TCP -LocalPort ${safePort} -Program ${program} -Enabled True -Profile Private -ErrorAction Stop | Out-Null`,
-    `New-NetFirewallRule -DisplayName ${quotePowerShell(DISCOVERY_RULE)} -Group ${group} -Direction Inbound -Action Allow -Protocol UDP -LocalPort 58733 -Program ${program} -Enabled True -Profile Private -ErrorAction Stop | Out-Null`,
+    `New-NetFirewallRule -Name ${quotePowerShell(tcpRuleName)} -DisplayName ${quotePowerShell(TCP_RULE)} -Group ${group} -Direction Inbound -Action Allow -Protocol TCP -LocalPort ${safePort} -Program ${program} -Enabled True -Profile Private -ErrorAction Stop | Out-Null`,
+    `New-NetFirewallRule -Name ${quotePowerShell(discoveryRuleName)} -DisplayName ${quotePowerShell(DISCOVERY_RULE)} -Group ${group} -Direction Inbound -Action Allow -Protocol UDP -LocalPort 58733 -Program ${program} -Enabled True -Profile Private -ErrorAction Stop | Out-Null`,
     '} catch {',
     remove,
     'throw',

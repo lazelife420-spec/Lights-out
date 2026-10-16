@@ -19,25 +19,24 @@ app.whenReady().then(async () => {
   // 1. Ready state (main timer)
   await capture(win, 'v10_ready.png');
 
-  // 2. Simulate dim phase with ambient visuals
+  // 2. Simulate dim phase with ambient visuals. The phase is driven through
+  // renderer state (render() strips phase-* body classes on every tick, so a
+  // forced class never survives): a 28 min run, 2 min grace, 18:42 left.
   await win.webContents.executeJavaScript(`
     (function(){
       document.body.classList.add('warm-shift');
-      document.body.classList.add('phase-dim');
+      if (typeof state !== 'undefined') {
+        state.running = true; state.paused = false; state.phase = 'dim';
+        state.totalSeconds = 1680; state.remainingSeconds = 1122;
+        state.runGraceMinutes = 2; state.action = 'shutdown';
+        state.endsAt = new Date(Date.now() + 1122000).toISOString();
+      }
+      if (typeof render === 'function') render();
       // Start fireplace ambient
       if (typeof AmbientVisuals !== 'undefined') {
         AmbientVisuals.init(document.getElementById('ambient-canvas'));
         AmbientVisuals.start('fireplace');
       }
-      // Simulate a running timer
-      document.getElementById('setup-controls').style.display = 'none';
-      document.getElementById('action-bar-running').style.display = '';
-      document.getElementById('timer-main').textContent = '18:42';
-      document.getElementById('timer-label').textContent = 'until shutdown';
-      document.getElementById('timer-name').textContent = 'Last Call';
-      // Show status pill as "Winding Down"
-      var pill = document.querySelector('.status-pill');
-      if (pill) { pill.textContent = 'Winding Down'; pill.className = 'status-pill phase-dim'; }
       return true;
     })();
   `);
@@ -47,21 +46,18 @@ app.whenReady().then(async () => {
   // 3. Customize panel with Calendar / Idle / Bedtime / Ambient settings
   await win.webContents.executeJavaScript(`
     (function(){
-      // Reset dim phase
+      // Reset dim phase (through state, like the shot above)
       document.body.classList.remove('warm-shift');
-      document.body.classList.remove('phase-dim');
       if (typeof AmbientVisuals !== 'undefined') AmbientVisuals.stop();
-      document.getElementById('setup-controls').style.display = '';
-      document.getElementById('action-bar-running').style.display = 'none';
-      document.getElementById('timer-main').textContent = '28:20';
-      document.getElementById('timer-label').textContent = 'until shutdown';
+      if (typeof state !== 'undefined') {
+        state.running = false; state.paused = false; state.phase = 'idle';
+        state.runGraceMinutes = null; state.endsAt = null;
+      }
+      if (typeof render === 'function') render();
       // Open Settings (a real panel, see openSettingsPanel in renderer.js)
       // on the Appearance & Sound category, which holds Customize.
       if (typeof openSettingsPanel === 'function') openSettingsPanel();
       if (typeof switchSettingsCategory === 'function') switchSettingsCategory('appearance');
-      // Click the Library tab to make sure we're on the right tab
-      var libTab = document.querySelector('[data-tab="library"]');
-      if (libTab) libTab.click();
       // Scroll to the customize section
       var cz = document.querySelector('.customize-section');
       if (cz) cz.scrollIntoView({block:'start'});

@@ -1,6 +1,6 @@
 // Emergency Override: you CAN stay up, but it costs.
-// Breaks your streak, notifies your accountability partner,
-// shows you the math, and requires you to type a reason.
+// Logs a REAL night as an override (not a clean night), notifies your
+// accountability partner, shows you the math, and requires you to type a reason.
 
 const accountability = require('./accountability');
 const streaks = require('./streaks');
@@ -28,13 +28,25 @@ function getOverrideConsequences(timerState) {
 
   const consequences = [];
 
-  // 1. Streak will be broken.
+  // 1. What the record will say. executeOverride logs a REAL override as a
+  // snoozed 'override' night (the streak continues, the night isn't clean)
+  // and writes nothing for a Test Mode run, so no streak consequence is
+  // claimed in Test Mode and none is overstated in Real mode.
   const streak = streaks.getSummary()?.streak || 0;
-  if (streak > 0) {
+  if (timerState?.dryRun) {
+    // Always present in Test Mode: the modal states its own mode, and the
+    // list is never empty (the renderer opens nothing for an empty list).
+    consequences.push({
+      type: 'testMode',
+      severity: 'info',
+      message: 'Test Mode: nothing is written to your streak or bedtime record.',
+      icon: '\u{1F9EA}'
+    });
+  } else if (streak > 0) {
     consequences.push({
       type: 'streak',
       severity: 'high',
-      message: `Your ${streak}-night streak will be broken.`,
+      message: `Tonight will be logged as an override, not a clean night (current streak: ${streak}).`,
       icon: '\u{1F525}'
     });
   }
@@ -44,7 +56,9 @@ function getOverrideConsequences(timerState) {
     consequences.push({
       type: 'accountability',
       severity: 'high',
-      message: `Your partner will be notified that you overrode the timer.`,
+      message: timerState?.dryRun
+        ? 'Your partner will get a Test Mode notice that you overrode the timer.'
+        : `Your partner will be notified that you overrode the timer.`,
       icon: '\u{1F4E2}'
     });
   }
@@ -103,25 +117,32 @@ async function executeOverride(reason, timerState) {
         config: accConfig,
         timerName: settingsStore.getSection('app')?.timerName || 'Last Call',
         remainingSeconds: timerState?.remainingSeconds,
-        phase: timerState?.phase
+        phase: timerState?.phase,
+        // Partners see a Test Mode override labelled as such.
+        testMode: timerState?.dryRun === true
       });
     }
   } catch {}
 
-  // 2. Record the override event in streaks (with snooze=true to mark as "not clean").
-  try {
-    streaks.recordEvent(null, 'override', true);
-  } catch {}
+  // A Test Mode run is rehearsal: it never enters the routine record, so an
+  // override of one must not write a streak event or a bedtime-deficit night
+  // either (the record only holds real nights).
+  if (!timerState?.dryRun) {
+    // 2. Record the override event in streaks (with snooze=true to mark as "not clean").
+    try {
+      streaks.recordEvent(null, 'override', true);
+    } catch {}
 
-  // 3. Record the timer-derived bedtime-deficit estimate.
-  try {
-    const sleepDebt = require('./sleepDebt');
-    const appSettings = settingsStore.getSection('app') || {};
-    const bedTime = new Date().toTimeString().slice(0, 5);
-    const estimated = sleepDebt.estimateSleepHours(bedTime, appSettings.wakeTime || '07:00');
-    // Timer-to-wake estimate only; never present this as measured sleep.
-    sleepDebt.recordNight(bedTime, appSettings.wakeTime || '07:00', estimated);
-  } catch {}
+    // 3. Record the timer-derived bedtime-deficit estimate.
+    try {
+      const sleepDebt = require('./sleepDebt');
+      const appSettings = settingsStore.getSection('app') || {};
+      const bedTime = new Date().toTimeString().slice(0, 5);
+      const estimated = sleepDebt.estimateSleepHours(bedTime, appSettings.wakeTime || '07:00');
+      // Timer-to-wake estimate only; never present this as measured sleep.
+      sleepDebt.recordNight(bedTime, appSettings.wakeTime || '07:00', estimated);
+    } catch {}
+  }
 
   return {
     overridden: true,

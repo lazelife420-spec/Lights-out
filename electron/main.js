@@ -45,6 +45,10 @@ const startDecision = require('./startDecision');
 // proof flag is supplied. Never records in normal production runs.
 const DESKTOP_UX_PROOF = process.argv.includes('--desktop-ux-proof') || process.env.LIGHTS_OUT_DESKTOP_UX_GATE === '1';
 const SUPPRESS_AUTOMATION_TRAY = DESKTOP_UX_PROOF || process.env.LIGHTS_OUT_SUPPRESS_TRAY === '1';
+// QA power lock: automated proof/QA launches must never power-cycle the host,
+// even if a run reaches executePowerAction with Test Mode off. It can only
+// remove capability (block a real action); it never enables one.
+const QA_POWER_LOCK = DESKTOP_UX_PROOF || process.env.LIGHTS_OUT_QA_POWER_LOCK === '1';
 const startInvocationLog = [];
 const realPowerActionLog = [];
 
@@ -142,23 +146,24 @@ async function ensureTrayIcons() {
       return await sharp(base16).composite([{ input: dotBuf, blend: 'over' }]).png().toBuffer();
     }
 
-    const [idle, running, paused, dim] = await Promise.all([
+    // The dot encodes the truth of the active run, not its phase: amber is a
+    // Test Mode run (nothing will power off), red is a REAL power action.
+    // Phase and pause live in the tooltip.
+    const [idle, test, real] = await Promise.all([
       withDot('#6b7685', 0.5),
-      withDot('#4caf50', 0.9),
-      withDot('#d4a50a', 0.9),
-      withDot('#5b8cff', 0.9)
+      withDot('#f5b83d', 0.95),
+      withDot('#ff5c7a', 0.95)
     ]);
 
     trayIcons = {
       idle: nativeImage.createFromBuffer(idle, { width: 16, height: 16 }),
-      running: nativeImage.createFromBuffer(running, { width: 16, height: 16 }),
-      paused: nativeImage.createFromBuffer(paused, { width: 16, height: 16 }),
-      dim: nativeImage.createFromBuffer(dim, { width: 16, height: 16 })
+      test: nativeImage.createFromBuffer(test, { width: 16, height: 16 }),
+      real: nativeImage.createFromBuffer(real, { width: 16, height: 16 })
     };
   } catch {
     // Fallback: just use the base icon for all states.
     const base = nativeImage.createFromPath(APP_ICON);
-    trayIcons = { idle: base, running: base, paused: base, dim: base };
+    trayIcons = { idle: base, test: base, real: base };
   }
   return trayIcons;
 }
@@ -193,6 +198,7 @@ const timerState = {
   gracePeriod: 2,
   endsAt: null,
   phase: 'idle',       // idle | focus | dim | lastlight
+  origin: 'this-pc',   // display only: where the run was started
   profileId: null,
   profileName: null,
   nightModeId: null,
@@ -268,10 +274,7 @@ function createWindow() {
     }
 
     if (launchOptions.timerMinutes > 0 && !launchOptions.noAutoStart) {
-      startTimer({
-        durationSeconds: launchOptions.timerMinutes * 60,
-        action: launchOptions.action
-      });
+      startQuickTimer({ minutes: launchOptions.timerMinutes, action: launchOptions.action, origin: 'launch' });
     }
   }
 
@@ -284,7 +287,10 @@ function createWindow() {
     maxWidth: 340,
     maxHeight: 420,
     alwaysOnTop: true,
-    resizable: true
+    resizable: true,
+    // UI-R3 Fire 03: the puck's top strip is a drag region, and a Windows
+    // double-click on a drag region maximizes -- never for the puck.
+    maximizable: false
   } : {
     width: 520,
     height: 800,
@@ -306,7 +312,7 @@ function createWindow() {
     show: false,
     // Match the first painted pixels to the night UI so Windows never exposes
     // a bright native surface while Chromium/CSS is still loading.
-    backgroundColor: '#0d0e11',
+    backgroundColor: '#0b0f14',
     icon: APP_ICON,
     webPreferences: {
       nodeIntegration: false,
@@ -405,7 +411,7 @@ async function createTray() {
   tray = new Tray(trayIcons.idle);
   refreshTrayMenu();
 
-  tray.setToolTip('Lights Out - idle');
+  updateTrayText();
   tray.on('click', toggleMainWindow);
 }
 
@@ -413,6 +419,7 @@ function refreshTrayMenu() {
   if (!tray) return;
 
   const active = timerState.running || timerState.paused;
+  const appDryRun = Boolean((settingsStore.getSection('app') || {}).dryRun);
   const phaseLabel = timerState.phase === 'dim' ? 'Winding Down' : timerState.phase === 'lastlight' ? 'Last Light' : '';
   const statusLine = active
     ? (timerState.paused ? 'Paused' : (phaseLabel || 'Running'))
@@ -457,8 +464,12 @@ function refreshTrayMenu() {
         click: cancelTimer
       }
     ] : [
-      { label: 'Start 28 min', click: () => startTimer({ durationSeconds: 28 * 60, action: 'shutdown' }) },
-      { label: 'Start 1 hour', click: () => startTimer({ durationSeconds: 60 * 60, action: 'shutdown' }) }
+      {
+        label: appDryRun ? 'Test Mode · quick starts won’t power off' : 'Real actions on · quick starts shut down',
+        enabled: false
+      },
+      { label: 'Start 28 min', click: () => startQuickTimer({ minutes: 28, origin: 'tray' }) },
+      { label: 'Start 1 hour', click: () => startQuickTimer({ minutes: 60, origin: 'tray' }) }
     ],
     { type: 'separator' },
     {
@@ -530,6 +541,7 @@ function emitTimerUpdate(type, data = {}) {
     gracePeriod: timerState.gracePeriod,
     endsAt: timerState.endsAt,
     phase: timerState.phase,
+    origin: timerState.origin,
     ...data
   };
 
@@ -549,20 +561,16 @@ function updateTrayText() {
   if (!tray) return;
 
   if (!timerState.running && !timerState.paused) {
-    tray.setToolTip('Lights Out - idle');
+    const appDryRun = Boolean((settingsStore.getSection('app') || {}).dryRun);
+    tray.setToolTip(`Lights Out - idle · ${appDryRun ? 'Test Mode' : 'Real actions on'}`);
     if (trayIcons) tray.setImage(trayIcons.idle);
     return;
   }
 
   const phaseTag = timerState.phase === 'dim' ? 'Winding Down' : timerState.phase === 'lastlight' ? 'Last Light' : '';
   const prefix = timerState.paused ? 'Paused' : (phaseTag || 'Running');
-  tray.setToolTip(`Lights Out - ${prefix}, ${formatTime(timerState.remainingSeconds)} left`);
-  if (trayIcons) {
-    const icon = timerState.paused ? trayIcons.paused
-      : timerState.phase === 'dim' ? trayIcons.dim
-      : trayIcons.running;
-    tray.setImage(icon);
-  }
+  tray.setToolTip(`Lights Out - ${prefix}, ${formatTime(timerState.remainingSeconds)} left · ${timerState.dryRun ? 'Test Mode' : 'REAL ' + formatAction(timerState.action)}`);
+  if (trayIcons) tray.setImage(timerState.dryRun ? trayIcons.test : trayIcons.real);
 }
 
 function clearTimerInterval() {
@@ -587,6 +595,7 @@ function persistActiveTimer() {
     remainingSeconds: timerState.remainingSeconds,
     paused: timerState.paused,
     endsAt: timerState.endsAt,
+    origin: timerState.origin,
     savedAt: new Date().toISOString(),
     // Correlates this recovery snapshot to its run receipt so startup
     // reconciliation can tell a still-recoverable run apart from a truly
@@ -610,10 +619,19 @@ function getRecoverableTimer() {
 }
 
 function normalizeTimerOptions(input, legacyAction) {
+  // Where a run came from, for display only (no behavior depends on it).
+  // Inline on purpose: test/test-mode-inheritance.test.js runs this function
+  // in a vm context that only provides settingsStore.
+  const RUN_ORIGINS = ['this-pc', 'schedule', 'calendar', 'autopilot', 'shortcut', 'tray', 'launch', 'ritual', 'phone', 'family', 'resume'];
   if (typeof input === 'number') {
+    // The legacy numeric form follows the same Test Mode rule as an object
+    // that omits dryRun: it inherits the persisted setting, never REAL by default.
     return {
       durationSeconds: Math.max(1, Math.round(input * 60)),
-      action: legacyAction || 'shutdown'
+      action: legacyAction || 'shutdown',
+      dryRun: Boolean((settingsStore.getSection('app') || {}).dryRun),
+      forceShutdown: false,
+      origin: 'this-pc'
     };
   }
 
@@ -626,26 +644,38 @@ function normalizeTimerOptions(input, legacyAction) {
   return {
     durationSeconds: Math.max(1, Math.round(durationSeconds)),
     action: options.action || legacyAction || 'shutdown',
-    dryRun: Boolean(options.dryRun),
+    // An omitted dryRun inherits the user's Test Mode setting. It used to
+    // become false, so calendar auto-start, the Schedule "Start" buttons, the
+    // tray quick starts, the global quick-start shortcuts and the launch
+    // timer armed REAL power actions even with Test Mode on.
+    dryRun: options.dryRun === undefined
+      ? Boolean((settingsStore.getSection('app') || {}).dryRun)
+      : Boolean(options.dryRun),
     forceShutdown: Boolean(options.forceShutdown),
     muteSystem: Boolean(options.muteSystem),
-    gracePeriod: Number.isFinite(Number(options.gracePeriod)) ? Math.max(0, Number(options.gracePeriod)) : 2,
+    // An omitted grace stays undefined so beginValidatedCountdown inherits the
+    // user's graceMinutes setting (quick starts and calendar auto-start used to
+    // get a fixed 2 min here, while Begin Ritual and autopilot honoured it).
+    gracePeriod: options.gracePeriod !== undefined && options.gracePeriod !== null && Number.isFinite(Number(options.gracePeriod))
+      ? Math.max(0, Number(options.gracePeriod))
+      : undefined,
     profileId: typeof options.profileId === 'string' ? options.profileId : null,
     source: options.source === 'remote' ? 'remote' : 'local',
     startOrigin: typeof options.startOrigin === 'string' ? options.startOrigin : null,
     nightModeId: typeof options.nightModeId === 'string' ? options.nightModeId : null,
+    origin: RUN_ORIGINS.includes(options.origin) ? options.origin : 'this-pc',
     // Set only by resume-recoverable-timer, to reuse the original receipt
     // instead of creating a duplicate for the same run.
     resumeReceiptId: typeof options.resumeReceiptId === 'string' ? options.resumeReceiptId : null
   };
 }
 
-function resolveTimerProfileIdentity(profileId, source) {
+function resolveTimerProfileIdentity(profileId, source, origin) {
   const appSettings = settingsStore.getSection('app') || {};
   return profileIdentity.resolveTimerProfileIdentity({
     source,
     requestedProfileId: profileId,
-    fallbackProfileId: appSettings.lastSelectedProfileId,
+    fallbackProfileId: ['calendar', 'schedule'].includes(origin) ? null : appSettings.lastSelectedProfileId,
     getProfileById: profiles.getById
   });
 }
@@ -653,9 +683,44 @@ function resolveTimerProfileIdentity(profileId, source) {
 // Delegate to nightModes module (single source of truth for canonical resolution).
 const resolveNightModeStart = nightModes.resolveNightModeStart;
 
+// A guided ritual counts as an active run only until its timer step hands off
+// to a countdown. From then on the countdown itself (timerState) is the run.
+// ritualMode keeps the ritual 'active' on its timer and lights steps until
+// someone clicks through the overlay, so without this a ritual whose countdown
+// had already completed or been cancelled kept refusing autopilot, calendar,
+// tray and shortcut starts with a false "already active" message.
+function ritualAwaitingCountdown() {
+  const ritual = ritualMode.getState() || {};
+  if (!ritual.active) return false;
+  const currentId = ritual.currentStepInfo && ritual.currentStepInfo.id;
+  const passed = [...(ritual.completedSteps || []), ...(ritual.skippedSteps || [])];
+  return currentId !== 'timer' && !passed.includes('timer');
+}
+
+// One Lights Out run at a time: a countdown (running or paused) or a guided
+// ritual that has not reached its timer step yet.
+function isRunActive() {
+  return Boolean(timerState.running || timerState.paused || ritualAwaitingCountdown());
+}
+
+const UNATTENDED_RUN_ORIGINS = ['calendar', 'autopilot', 'shortcut', 'tray', 'launch'];
+
 function startTimer(input, legacyAction) {
   const options = normalizeTimerOptions(input, legacyAction);
-  const identity = resolveTimerProfileIdentity(options.profileId, options.source);
+  if (['calendar','schedule'].includes(options.origin) && options.profileId && !profiles.getById(options.profileId)) {
+    return { success: false, code: 'PROFILE_UNAVAILABLE', error: 'The scheduled routine is no longer available. Choose another routine.' };
+  }
+  // Single-run policy: no start may silently replace an active countdown, and
+  // an unattended start (calendar, autopilot, shortcut, tray, launch) never
+  // replaces a ritual someone is walking through. A person's own local start
+  // still supersedes a ritual that has no countdown yet (see below).
+  // (Ritual timer steps never come through here: they call
+  // beginValidatedCountdown directly, so every caller of startTimer is refused.)
+  if (timerState.running || timerState.paused
+    || (UNATTENDED_RUN_ORIGINS.includes(options.origin) && ritualAwaitingCountdown())) {
+    return { success: false, code: 'RUN_ACTIVE', error: 'A Lights Out run is already active. Stop it before starting another.' };
+  }
+  const identity = resolveTimerProfileIdentity(options.profileId, options.source, options.origin);
   const profile = profiles.getById(identity.profileId);
   const nmIdentity = resolveNightModeStart(options);
   const decision = startDecision.resolveStartDecision({ options, identity, profile, nmIdentity });
@@ -676,7 +741,8 @@ function startTimer(input, legacyAction) {
       profileName: identity.profileName,
       nightModeId: nmIdentity.nightModeId,
       nightModeTitle: nmIdentity.nightModeTitle,
-      nightModeVersion: nmIdentity.nightModeVersion
+      nightModeVersion: nmIdentity.nightModeVersion,
+      origin: options.origin
     });
     // Start the standard ritual with run metadata binding the token to this
     // exact run. The ritual's onStep/onComplete callbacks receive the meta.
@@ -684,7 +750,32 @@ function startTimer(input, legacyAction) {
     // through the guided overlay (every step, including "auto" ones, normally
     // requires a click) -- ritualMode fast-forwards those instead of getting
     // stuck on the first step forever.
-    ritualMode.startRitual(null, { profileRitualToken: runToken, remoteOrigin: options.source === 'remote' });
+    const ritual = ritualMode.startRitual(null, { profileRitualToken: runToken, remoteOrigin: options.source === 'remote' || options.origin === 'calendar' });
+    // UI-R3 Fire 08: a ritual that did not start is an honest failure, never
+    // a phantom countdown: the pending context is dropped and the caller
+    // hears why. Nothing else in this path (the single-run policy, the direct
+    // path) changes.
+    // "Started" is judged from evidence, not from the post-call active flag
+    // alone: a remote-origin run fast-forwards every step synchronously inside
+    // startRitual (its timer step really arms the countdown), so it returns
+    // active:false having run. The countdown that is now live proves it.
+    const ritualStarted = Boolean(ritual && ritual.active === true)
+      || Boolean(timerState.running || timerState.paused);
+    if (!ritualStarted) {
+      profileRitualContext.clear();
+      if (!ritual || ritual.reason === 'disabled') {
+        return {
+          success: false,
+          code: 'RITUAL_DISABLED',
+          error: 'The guided ritual is turned off in Settings › Automations. Turn it on, or pick a mode that starts directly.'
+        };
+      }
+      return {
+        success: false,
+        code: 'RITUAL_NOT_STARTED',
+        error: 'The guided ritual could not start its countdown. Nothing is running.'
+      };
+    }
     return { success: true, ritualStarted: true };
   }
 
@@ -701,6 +792,26 @@ function startTimer(input, legacyAction) {
 
   // Direct countdown: canonical Night Mode (ritualId: none) or no mode at all.
   return beginValidatedCountdown(options, identity, nmIdentity);
+}
+
+// Quick starts with nobody looking at the main window (tray items, global
+// shortcuts, the launch timer). They refuse while a run is active and announce
+// a start only when it really started, stating Test Mode or the REAL action.
+function startQuickTimer({ minutes, action = 'shutdown', origin }) {
+  if (isRunActive()) {
+    showNativeNotification('Lights Out', 'A Lights Out run is already active. Pause or cancel it first.');
+    return { success: false, code: 'RUN_ACTIVE' };
+  }
+  const result = startTimer({ durationSeconds: minutes * 60, action, origin });
+  if (result && result.success) {
+    const dryRun = result.state && typeof result.state.dryRun === 'boolean'
+      ? result.state.dryRun
+      : Boolean((settingsStore.getSection('app') || {}).dryRun);
+    showNativeNotification('Lights Out', dryRun
+      ? `${minutes} min Test Mode timer started. Nothing will power off.`
+      : `${formatAction(action)} in ${minutes} min. Cancel with Ctrl+Shift+X or the tray.`);
+  }
+  return result;
 }
 
 // Internal canonical countdown entry. Used by both startTimer (after gateway
@@ -725,10 +836,19 @@ function beginValidatedCountdown(options, identity, nmIdentity) {
   timerState.totalSeconds = options.durationSeconds;
   timerState.remainingSeconds = options.durationSeconds;
   timerState.action = options.action;
-  timerState.dryRun = options.dryRun;
-  timerState.forceShutdown = options.forceShutdown;
-  timerState.muteSystem = options.muteSystem;
-  timerState.gracePeriod = options.gracePeriod;
+  // Defense in depth at the single countdown entry: a countdown can never
+  // carry a non-boolean dryRun (the renderer ignores one and would keep
+  // showing the old mode). Anything not stated inherits Test Mode, and the
+  // grace warning falls back to the user's setting.
+  const appSettings = settingsStore.getSection('app') || {};
+  timerState.dryRun = typeof options.dryRun === 'boolean' ? options.dryRun : Boolean(appSettings.dryRun);
+  timerState.forceShutdown = Boolean(options.forceShutdown);
+  timerState.muteSystem = Boolean(options.muteSystem);
+  const graceOption = options.gracePeriod === undefined || options.gracePeriod === null ? NaN : Number(options.gracePeriod);
+  const graceSetting = appSettings.graceMinutes === undefined || appSettings.graceMinutes === null ? NaN : Number(appSettings.graceMinutes);
+  timerState.gracePeriod = Number.isFinite(graceOption) ? Math.max(0, graceOption)
+    : Number.isFinite(graceSetting) ? Math.max(0, graceSetting) : 2;
+  timerState.origin = typeof options.origin === 'string' ? options.origin : 'this-pc';
   timerState.profileId = identity.profileId;
   timerState.profileName = identity.profileName;
   const nm = nmIdentity || { nightModeId: null, nightModeTitle: null, nightModeVersion: null };
@@ -744,6 +864,16 @@ function beginValidatedCountdown(options, identity, nmIdentity) {
   // 'running' from before a restart, in which case reuse it rather than
   // creating a duplicate receipt for the same run.
   const resumedReceipt = options.resumeReceiptId ? runReceipts.getReceiptById(options.resumeReceiptId) : null;
+  // Safety net: the single-run guards should make this unreachable, but a
+  // receipt that is still 'running' and is not the one being resumed must be
+  // closed honestly rather than left orphaned.
+  if (activeReceiptId && (!resumedReceipt || resumedReceipt.id !== activeReceiptId)) {
+    const previous = runReceipts.getReceiptById(activeReceiptId);
+    if (previous && previous.result === 'running') {
+      runReceipts.updateRunReceipt(activeReceiptId, { result: 'cancelled', cancelReason: 'superseded', endedAt: new Date().toISOString() });
+    }
+    activeReceiptId = null;
+  }
   if (resumedReceipt && resumedReceipt.result === 'running') {
     activeReceiptId = resumedReceipt.id;
   } else {
@@ -782,7 +912,9 @@ function beginValidatedCountdown(options, identity, nmIdentity) {
     // During dim phase, progressively reduce window opacity for a visual wind-down.
     if (timerState.phase === 'dim' && mainWindow && !mainWindow.isDestroyed()) {
       const dimFraction = timerState.remainingSeconds / (timerState.totalSeconds * 0.25);
-      const opacity = 0.55 + 0.45 * Math.max(0, Math.min(1, dimFraction));
+      // Floor 0.88 (was 0.55): the in-app .env-dark layer does the darkening,
+      // so the window never goes see-through behind the truth pill or dialogs.
+      const opacity = 0.88 + 0.12 * Math.max(0, Math.min(1, dimFraction));
       mainWindow.setOpacity(opacity);
     }
 
@@ -796,11 +928,15 @@ function beginValidatedCountdown(options, identity, nmIdentity) {
 
     emitTimerUpdate('tick', { percent, phase: timerState.phase });
     updateWidget();
-    setTaskbarProgress(percent, percent <= 10 ? 'error' : 'normal');
+    // Red taskbar only for a REAL action; a Test Mode run never turns it red.
+    setTaskbarProgress(percent, !timerState.dryRun && percent <= 10 ? 'error' : 'normal');
 
     if (timerState.gracePeriod > 0 && timerState.remainingSeconds === timerState.gracePeriod * 60) {
+      const warningMessage = timerState.dryRun
+        ? `Test Mode: ${formatAction(timerState.action)} would run in ${timerState.gracePeriod} min. Nothing will power off.`
+        : `${formatAction(timerState.action)} in ${timerState.gracePeriod} minutes`;
       emitTimerUpdate('warning', {
-        message: `${formatAction(timerState.action)} in ${timerState.gracePeriod} minutes`
+        message: warningMessage
       });
       // Record warning in receipt.
       if (activeReceiptId) runReceipts.receiptWarning(activeReceiptId);
@@ -875,6 +1011,11 @@ function cancelTimer() {
   timerState.endsAt = null;
   timerState.phase = 'idle';
   setTaskbarProgress(0, 'none');
+  if (smartLights.getConfig().enabled && smartLights.getConfig().provider === 'wiz') {
+    smartLights.restoreWizOriginalState().then(res => {
+      if (!res.success) console.warn('Some WiZ lights could not be restored after cancel.');
+    }).catch(() => console.warn('WiZ restore after cancel failed.'));
+  }
   // Cancellation restores the Hue state captured at dim start (desktop or
   // phone cancel alike — they converge here). Failure is surfaced, not fatal.
   if (smartLights.getConfig().enabled && smartLights.getConfig().provider === 'hue') {
@@ -921,9 +1062,25 @@ async function completeTimer() {
     ? `Test Mode complete: ${formatAction(timerState.action)} skipped.`
     : `Timer complete: ${formatAction(timerState.action)} now.`);
 
+  let rec = null;
+  try { rec = activeReceiptId ? runReceipts.getReceiptById(activeReceiptId) : null; } catch { /* best-effort */ }
   // Record a streak event for the completed ritual.
-  try { streaks.recordEvent(null, timerState.action, false); } catch (e) {
-    console.error('Failed to record streak event:', e);
+  // Only REAL completions feed the routine record (streak, completed runs,
+  // achievements, bedtime-deficit estimate). Test Mode runs stay in Proof via
+  // their dry_run_completed receipt below and never count as a kept night.
+  if (!timerState.dryRun) {
+    try { streaks.recordEvent(null, timerState.action, Boolean(rec && rec.snoozeCount > 0)); } catch (e) {
+      console.error('Failed to record streak event:', e);
+    }
+    // Record an app-timer estimate only; this is not measured sleep.
+    try {
+      const appSettings = settingsStore.getSection('app') || {};
+      const bedTime = new Date().toTimeString().slice(0, 5);
+      const estimated = sleepDebt.estimateSleepHours(bedTime, appSettings.wakeTime || '07:00');
+      sleepDebt.recordNight(bedTime, appSettings.wakeTime || '07:00', estimated);
+    } catch (e) {
+      console.error('Failed to record estimated bedtime deficit:', e);
+    }
   }
   // Update receipt: completing.
   if (activeReceiptId) {
@@ -935,15 +1092,6 @@ async function completeTimer() {
     });
   }
   sendAccountability('TIMER_COMPLETE');
-  // Record an app-timer estimate only; this is not measured sleep.
-  try {
-    const appSettings = settingsStore.getSection('app') || {};
-    const bedTime = new Date().toTimeString().slice(0, 5);
-    const estimated = sleepDebt.estimateSleepHours(bedTime, appSettings.wakeTime || '07:00');
-    sleepDebt.recordNight(bedTime, appSettings.wakeTime || '07:00', estimated);
-  } catch (e) {
-    console.error('Failed to record estimated bedtime deficit:', e);
-  }
 
   // Unsaved work guardian: check for unsaved work before power action.
   if (!timerState.dryRun) {
@@ -975,9 +1123,25 @@ function playLastLightRitual(dryRun) {
 
   const sequence = lastLight.normalizeId(cfg.sequence);
   const durationMs = lastLight.getDurationMs(sequence, Boolean(dryRun));
-  mainWindow.webContents.send('play-last-light', { sequence, dryRun: Boolean(dryRun), sound: cfg.sound });
+  // action/forceShutdown let the finale state the real consequence
+  // ("REAL ACTION · Shutdown when this ends") instead of guessing.
+  mainWindow.webContents.send('play-last-light', {
+    sequence,
+    dryRun: Boolean(dryRun),
+    sound: cfg.sound,
+    action: timerState.action,
+    forceShutdown: Boolean(timerState.forceShutdown)
+  });
   return new Promise(resolve => setTimeout(resolve, durationMs + 300));
 }
+
+// What this run's wind-down actually changed, so restoreAfterTimer undoes only
+// that. The media key is a play/pause TOGGLE: restoreAfterTimer used to send it
+// on every stop, cancel and completion, so when Lights Out had paused nothing
+// it paused whatever the user was playing. Removing the Night Light value when
+// this app never set it could likewise switch off the user's own Night Light.
+// mediaPause holds this run's pause attempt (resolves to { count }).
+const windDownChanges = { mediaPause: null, nightLightSet: false };
 
 // Applies the dim-phase visual wind-down.
 // Enables Windows Night Light (blue-light filter) via registry if the
@@ -985,6 +1149,7 @@ function playLastLightRitual(dryRun) {
 function applyDimPhase(remainingSeconds, totalSeconds) {
   const appSettings = settingsStore.getSection('app') || {};
   if (appSettings.nightLightOnDim === true) {
+    windDownChanges.nightLightSet = true;
     // Enable Windows Night Light (blue-light filter) during dim phase.
     executePowerShell(
       'Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\CloudStore\\Store\\DefaultAccount\\Current\\default$windows.data.bluelightreduction\\windows.data.bluelightreduction.bluelightreductionstate" -Name "Data" -Value ([byte[]](2,0,0,0) ) -ErrorAction SilentlyContinue'
@@ -993,12 +1158,13 @@ function applyDimPhase(remainingSeconds, totalSeconds) {
   // Focus mode: close distracting apps during dim phase.
   applyFocusMode(true);
   // Media auto-pause: pause detected media players during dim phase.
-  if (appSettings.pauseMediaOnDim === true) {
-    media.pauseAllDetectedMedia().then(result => {
+  if (appSettings.pauseMediaOnDim === true && !windDownChanges.mediaPause) {
+    windDownChanges.mediaPause = media.pauseAllDetectedMedia().then(result => {
       if (result.count > 0 && mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('media-paused', { players: result.paused });
       }
-    }).catch(() => {});
+      return result;
+    }).catch(() => ({ count: 0 }));
   }
   // WiFi Guard: block internet for kids during dim phase.
   const wifiConfig = settingsStore.getSection('wifiGuard');
@@ -1055,12 +1221,20 @@ function restoreAfterTimer() {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setOpacity(1);
   // Tell renderer to end dim phase.
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('dim-phase-ended');
-  // Disable Windows Night Light (restore original state).
-  executePowerShell(
-    'Remove-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\CloudStore\\Store\\DefaultAccount\\Current\\default$windows.data.bluelightreduction\\windows.data.bluelightreduction.bluelightreductionstate" -Name "Data" -ErrorAction SilentlyContinue'
-  ).catch(() => {});
-  // Resume media that was auto-paused during dim phase.
-  media.resumeAllMedia().catch(() => {});
+  // Disable Windows Night Light, only if this run's wind-down turned it on.
+  if (windDownChanges.nightLightSet) {
+    windDownChanges.nightLightSet = false;
+    executePowerShell(
+      'Remove-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\CloudStore\\Store\\DefaultAccount\\Current\\default$windows.data.bluelightreduction\\windows.data.bluelightreduction.bluelightreductionstate" -Name "Data" -ErrorAction SilentlyContinue'
+    ).catch(() => {});
+  }
+  // Resume media only if this run's wind-down actually paused a player. The
+  // pause may still be in flight (cancel right after dim starts), so wait for it.
+  const mediaPause = windDownChanges.mediaPause;
+  windDownChanges.mediaPause = null;
+  if (mediaPause) {
+    mediaPause.then(result => (result && result.count > 0 ? media.resumeAllMedia() : null)).catch(() => {});
+  }
   // Restore WiFi access if WiFi Guard was active.
   const wifiConfig = settingsStore.getSection('wifiGuard');
   if (wifiConfig && wifiConfig.enabled && wifiConfig.unblockOnCancel !== false) {
@@ -1105,6 +1279,7 @@ function playFirstLight() {
     const sunriseTickSeconds = 5;
     const totalSunriseSteps = Math.max(1, Math.ceil(FIRST_LIGHT_DURATION / sunriseTickSeconds));
     let sunriseStep = 0;
+    const sunriseManualOff = new Set();
     const slInterval = setInterval(() => {
       sunriseStep++;
       const progress = Math.min(1, sunriseStep / totalSunriseSteps);
@@ -1114,6 +1289,8 @@ function playFirstLight() {
         on: true,
         brightness,
         colorTemp,
+        preservePower: sunriseStep > 1,
+        released: sunriseManualOff,
         transitionTime: sunriseTickSeconds * 10
       }).catch(() => {});
       if (sunriseStep >= totalSunriseSteps) clearInterval(slInterval);
@@ -1190,6 +1367,8 @@ function sendAccountability(eventType, extra = {}) {
     timerName: appSettings.timerName || 'Last Call',
     remainingSeconds: timerState.remainingSeconds,
     phase: timerState.phase,
+    // Partners must never read a Test Mode run as a real completion.
+    testMode: timerState.dryRun === true,
     ...extra
   }).catch(() => {}); // best-effort, never block
 }
@@ -1250,13 +1429,19 @@ function checkContentBlockerSchedules() {
   }
 }
 
+let calendarAutoStartBusy = false;
+const calendarStartedOccurrences = new Set();
+
 async function checkCalendarAutoStart() {
   const calSettings = settingsStore.getSection('calendar') || {};
   if (!calSettings.enabled || !calSettings.autoStartFromEvents) return;
-  if (timerState.running) return; // already running
+  if (isRunActive()) return; // one run at a time: never replace an active run
+  if (calendarAutoStartBusy) return;
+  calendarAutoStartBusy = true;
 
   try {
-    const events = await calProviders.fetchAllEvents(calSettings, new Date(), 1); // within 1 day
+    // Include the last polling minute, and never start before the chosen time.
+    const events = await calProviders.fetchAllEvents(calSettings, new Date(Date.now() - 60000), 1);
     if (!events || !events.length) return;
 
     const now = new Date();
@@ -1269,18 +1454,35 @@ async function checkCalendarAutoStart() {
       // external calendar (Google/Outlook/iCal), where intent is ambiguous.
       if (event.source !== 'builtin' && !isBedtimeEvent(event)) continue;
       const start = new Date(event.start);
+      if (!Number.isFinite(start.getTime())) continue;
       const end = event.end ? new Date(event.end) : new Date(start.getTime() + 60 * 60 * 1000);
       const diffMin = (start - now) / 60000;
-      // If event starts within the next 2 minutes, auto-start.
-      if (diffMin >= -1 && diffMin <= 2) {
+      const occurrence = `${event.uid || ''}@${start.toISOString()}`;
+      if (calendarStartedOccurrences.has(occurrence) || (calSettings.lastStartedOccurrences || []).includes(occurrence)) continue;
+      if (diffMin >= -1 && diffMin <= 0) {
         const duration = Math.max(300, Math.round((end - now) / 1000));
         const action = event.action || calSettings.builtin?.action || 'shutdown';
-        startTimer({ durationSeconds: duration, action });
-        showNativeNotification('Lights Out', `Auto-started from calendar: ${getEventTitle(event) || 'Bedtime'}`);
+        // Test Mode is read from the app section at fire time, like autopilot.
+        const appSettings = settingsStore.getSection('app') || {};
+        const profile = event.profileId ? profiles.getById(event.profileId) : null;
+        // A removed saved routine must not silently fall back to another one.
+        if (event.profileId && !profile) continue;
+        const result = startTimer({ durationSeconds: duration, action,
+          profileId: profile?.id || null, dryRun: Boolean(appSettings.dryRun || profile?.dryRun),
+          forceShutdown: false, muteSystem: Boolean(profile?.muteSystem),
+          gracePeriod: profile?.gracePeriod, startOrigin: 'calendar', origin: 'calendar' });
+        if (result && result.success) {
+          calendarStartedOccurrences.add(occurrence);
+          if (calendarStartedOccurrences.size > 128) calendarStartedOccurrences.delete(calendarStartedOccurrences.values().next().value);
+          const recent = [...(calSettings.lastStartedOccurrences || []), occurrence].slice(-128);
+          settingsStore.updateSection('calendar', { lastStartedOccurrences: recent });
+          showNativeNotification('Lights Out', `Auto-started from calendar: ${getEventTitle(event) || 'Bedtime'}`);
+        }
         break;
       }
     }
   } catch { /* best effort - calendar offline does not crash app */ }
+  finally { calendarAutoStartBusy = false; }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1330,10 +1532,11 @@ function handleCompanionMessage(msg, client) {
         durationSeconds,
         action: timerAction,
         source: 'remote',
+        origin: 'phone',
         dryRun: Boolean(appSettings.dryRun)
       });
       if (result.success) {
-        notifyRemoteAction(`${formatAction(timerAction)} started from your phone (${Math.round(durationSeconds / 60)} min)`);
+        notifyRemoteAction(`${formatAction(timerAction)} started from your phone (${Math.round(durationSeconds / 60)} min)${appSettings.dryRun ? ' · Test Mode, nothing will power off' : ' · REAL'}`);
       } else if (client) {
         companion.sendToClient(client, {
           type: 'commandResult',
@@ -1379,10 +1582,22 @@ function handleCompanionMessage(msg, client) {
         ...resolution.resolved,
         source: 'remote',
         startOrigin: 'companion-night-mode',
+        origin: 'phone',
         dryRun: Boolean(appSettings.dryRun)
       });
       if (result.success) {
-        notifyRemoteAction(`${resolution.resolved.nightModeTitle} started from your phone (${Math.round(resolution.resolved.durationSeconds / 60)} min)`);
+        notifyRemoteAction(`${resolution.resolved.nightModeTitle} started from your phone (${Math.round(resolution.resolved.durationSeconds / 60)} min)${appSettings.dryRun ? ' · Test Mode, nothing will power off' : ' · REAL'}`);
+      } else if (client) {
+        // UI-R3 Fire 08: the same commandResult the RUN_ACTIVE branch above
+        // sends (no new command, no new field), so the phone shows why --
+        // e.g. a ritual mode while the ritual is turned off.
+        companion.sendToClient(client, {
+          type: 'commandResult',
+          action: 'startNightMode',
+          success: false,
+          code: result.code || 'START_REJECTED',
+          message: result.error || 'The desktop rejected the start request.'
+        });
       }
       break;
     }
@@ -1496,6 +1711,7 @@ function familyCommandHandler(cmd) {
         durationSeconds: cmd.durationSeconds || 1800,
         action: cmd.action || 'shutdown',
         source: 'remote',
+        origin: 'family',
         dryRun: Boolean(appSettings.dryRun)
       });
       return r.success
@@ -1593,12 +1809,22 @@ function broadcastRemoteControlState() {
   mainWindow.webContents.send('remote-control-status', getRemoteControlState());
 }
 
+// True only while THIS process has opened the app-owned firewall rules.
+// Removal is gated on it: a launch or quit with Phone Companion off must never
+// run a firewall change, and one Lights Out instance (e.g. a dev build) must
+// never delete rules another instance (e.g. the installed app) opened.
+// companionFirewall also scopes creation, rollback and removal to unique
+// per-process rule names, including when two instances use the same executable.
+let firewallRulesOpenedByThisProcess = false;
+
 async function configureFirewallRules(open, port = companion.PWA_PORT) {
   try {
     if (open) {
       await executePowerShell(companionFirewall.configureOwnedRulesCommand(process.execPath, normalizeCompanionPort(port)));
+      firewallRulesOpenedByThisProcess = true;
     } else {
       await executePowerShell(companionFirewall.removeOwnedRulesCommand());
+      firewallRulesOpenedByThisProcess = false;
     }
     companionFirewallState = { configured: open, error: '', guidance: '' };
     return { ...companionFirewallState };
@@ -1618,7 +1844,7 @@ async function configureFirewallRules(open, port = companion.PWA_PORT) {
 async function stopRemoteControl() {
   try { await companion.stop(); } catch {}
   try { family.stop(); } catch {}
-  await configureFirewallRules(false);
+  if (firewallRulesOpenedByThisProcess) await configureFirewallRules(false);
 }
 
 async function findCompanionPortOwner(port) {
@@ -1684,8 +1910,9 @@ async function startRemoteControl() {
     }
   } else if (mode === 'local') {
     await companion.start({ token: rc.token, host: '127.0.0.1', port });
-    // Family mode (LAN discovery) is disabled in "This PC only" mode.
-    await configureFirewallRules(false);
+    // Family mode (LAN discovery) is disabled in "This PC only" mode. Any
+    // rules this process had opened were already removed by stopRemoteControl.
+    if (firewallRulesOpenedByThisProcess) await configureFirewallRules(false);
   }
 
   return getRemoteControlState();
@@ -1818,6 +2045,19 @@ async function executePowerAction(options = {}) {
     });
   }
 
+  if (QA_POWER_LOCK) {
+    emitTimerUpdate('dryrun', { action, message: `QA power lock: ${formatAction(action)} blocked` });
+    if (activeReceiptId) {
+      runReceipts.updateRunReceipt(activeReceiptId, {
+        result: 'blocked',
+        endedAt: new Date().toISOString(),
+        notes: 'QA power lock - no power action executed'
+      });
+      activeReceiptId = null;
+    }
+    return { success: false, blocked: true, error: 'QA power lock' };
+  }
+
   try {
     // Volume/mute manipulation is intentionally disabled; the app no longer
     // touches the system volume during power actions.
@@ -1944,7 +2184,13 @@ ipcMain.handle('get-app-settings', async () => ({
 }));
 ipcMain.handle('save-app-settings', async (event, settings = {}) => {
   if (typeof settings.runAtLogin === 'boolean') setRunAtLogin(settings.runAtLogin);
-  if (settings.app) settingsStore.updateSection('app', settings.app);
+  if (settings.app) {
+    settingsStore.updateSection('app', settings.app);
+    // A Test Mode toggle reaches the tray and the desktop widget immediately.
+    updateTrayText();
+    refreshTrayMenu();
+    updateWidget();
+  }
   if (settings.customization) settingsStore.updateSection('customization', settings.customization);
   if (settings.lastLight) settingsStore.updateSection('lastLight', settings.lastLight);
   if (settings.calendar) settingsStore.updateSection('calendar', settings.calendar);
@@ -1989,7 +2235,12 @@ ipcMain.handle('get-achievements-catalog', async () => {
   try { return streaks.getAchievementCatalog(); } catch { return []; }
 });
 ipcMain.handle('get-weekly-report', async () => {
-  try { return streaks.getWeeklyReport(); } catch { return null; }
+  // Receipts let the report acknowledge Test Mode runs that never count.
+  try {
+    let receipts = [];
+    try { receipts = runReceipts.getAllReceiptsForExport(); } catch { /* report still works without them */ }
+    return streaks.getWeeklyReport({ receipts });
+  } catch { return null; }
 });
 ipcMain.handle('get-sleep-score', async () => {
   try { return streaks.getSleepScore(); } catch { return { score: null, label: 'Error', breakdown: {} }; }
@@ -2097,7 +2348,9 @@ ipcMain.handle('get-calendar-providers', async () => {
 ipcMain.handle('fetch-calendar-events', async (event, withinDays) => {
   try {
     const calConfig = settingsStore.getSection('calendar') || {};
-    const events = await calProviders.fetchAllEvents(calConfig, new Date(), withinDays || 14);
+    // recordStatus: this renderer-initiated fetch records whether each feed
+    // answered (getLastFetchStatus); the 1-day background fetches never do.
+    const events = await calProviders.fetchAllEvents(calConfig, new Date(), withinDays || 14, { recordStatus: true });
     return events.map(e => ({
       uid: e.uid,
       summary: e.summary,
@@ -2105,12 +2358,19 @@ ipcMain.handle('fetch-calendar-events', async (event, withinDays) => {
       end: e.end?.toISOString() || null,
       location: e.location || '',
       source: e.source,
-      action: e.action || 'shutdown'
+      action: e.action || 'shutdown',
+      // The same rule checkCalendarAutoStart applies, so Schedule can say
+      // "Will auto-start" vs "Listed only" from main's own logic.
+      autoStartEligible: e.source === 'builtin' || isBedtimeEvent(e)
     }));
   } catch (err) {
     return [];
   }
 });
+// UI-R3 Fire 09: additive, read-only, argument-free. Per configured provider,
+// whether the last Schedule fetch reached it ({ ok, at } or { ok:false, reason,
+// at }); the reason is a fixed category, never error text, a URL or a token.
+ipcMain.handle('get-calendar-fetch-status', () => calProviders.getLastFetchStatus());
 ipcMain.handle('save-calendar-settings', async (event, calSettings) => {
   settingsStore.updateSection('calendar', calSettings);
   return { success: true };
@@ -2185,19 +2445,28 @@ ipcMain.handle('retry-remote-control', async () => {
 ipcMain.handle('get-family-peers', async () => {
   return family.getPeers();
 });
+// The pairing token travels with every family command, so a command is only
+// ever sent to an address that announced itself on this network (and has not
+// expired). Any other address is refused here, before anything is sent.
+const UNKNOWN_FAMILY_PEER = Object.freeze({ success: false, error: 'unknown peer' });
 ipcMain.handle('family-remote-start', async (e, ip, durationSeconds, action) => {
+  if (!family.isKnownPeer(ip)) return { ...UNKNOWN_FAMILY_PEER };
   return family.remoteStart(ip, durationSeconds, action);
 });
 ipcMain.handle('family-remote-pause', async (e, ip) => {
+  if (!family.isKnownPeer(ip)) return { ...UNKNOWN_FAMILY_PEER };
   return family.remotePause(ip);
 });
 ipcMain.handle('family-remote-resume', async (e, ip) => {
+  if (!family.isKnownPeer(ip)) return { ...UNKNOWN_FAMILY_PEER };
   return family.remoteResume(ip);
 });
 ipcMain.handle('family-remote-cancel', async (e, ip) => {
+  if (!family.isKnownPeer(ip)) return { ...UNKNOWN_FAMILY_PEER };
   return family.remoteCancel(ip);
 });
 ipcMain.handle('family-remote-snooze', async (e, ip, seconds) => {
+  if (!family.isKnownPeer(ip)) return { ...UNKNOWN_FAMILY_PEER };
   return family.remoteSnooze(ip, seconds || 300);
 });
 ipcMain.handle('get-media-sessions', async () => {
@@ -2386,6 +2655,8 @@ ipcMain.handle('ritual-start', async (e, customSteps) => {
   // Manual Begin Ritual clears any pending profile-sourced context so it cannot
   // leak into this independently triggered ritual (unconditional clear).
   profileRitualContext.clear();
+  // One run at a time: Begin Ritual never replaces an active countdown.
+  if (timerState.running || timerState.paused) return { active: false, reason: 'run-active' };
   return ritualMode.startRitual(customSteps);
 });
 ipcMain.handle('ritual-advance', async () => {
@@ -2450,6 +2721,7 @@ ipcMain.handle('resume-recoverable-timer', async () => {
     forceShutdown: snapshot.forceShutdown,
     muteSystem: snapshot.muteSystem,
     gracePeriod: snapshot.gracePeriod,
+    origin: 'resume',
     resumeReceiptId
   });
   return result;
@@ -2466,6 +2738,7 @@ ipcMain.handle('save-smartlight-config', async (event, settings) => {
 ipcMain.handle('test-smartlight-connection', async () => smartLights.verifySmartLightConnection());
 ipcMain.handle('test-smartlight-action', async () => smartLights.testSmartLightAction());
 ipcMain.handle('discover-hue-bridge', async () => smartLights.findHueBridge());
+ipcMain.handle('discover-wiz-lights', async () => smartLights.discoverWizLights());
 ipcMain.handle('register-hue-bridge', async (event, bridgeIp) => smartLights.registerHueBridge(bridgeIp));
 ipcMain.handle('get-hue-lights', async (event, bridgeIp, username) => smartLights.getHueLights(bridgeIp, username));
 ipcMain.handle('get-hue-groups', async (event, bridgeIp, username) => smartLights.getHueGroups(bridgeIp, username));
@@ -2606,7 +2879,9 @@ async function createWidgetWindow() {
     return visible;
   }
   widgetWindow = new BrowserWindow({
-    width: 180,
+    // Wide enough for the static Test Mode / REAL line ('REAL · HIBERNATE AT
+    // END', 'REAL · FORCED SHUTDOWN') next to the ring and the close button.
+    width: 232,
     height: 52,
     frame: false,
     transparent: true,
@@ -2657,12 +2932,20 @@ function updateWidget() {
   const running = timerState.running || timerState.paused;
   const remaining = running ? formatTime(timerState.remainingSeconds) : '';
   const phase = timerState.phase || 'idle';
+  // The run's own mode while a run is active; the setting while idle.
+  const dryRun = running ? Boolean(timerState.dryRun) : Boolean((settingsStore.getSection('app') || {}).dryRun);
+  const ratio = running && timerState.totalSeconds > 0
+    ? Math.max(0, Math.min(1, timerState.remainingSeconds / timerState.totalSeconds))
+    : 0;
   widgetWindow.webContents.send('widget-update', {
     running,
     paused: timerState.paused,
     remaining,
     phase,
-    action: timerState.action
+    action: timerState.action,
+    dryRun,
+    forceShutdown: Boolean(timerState.forceShutdown),
+    ratio
   });
 }
 
@@ -2768,8 +3051,7 @@ function registerGlobalShortcuts() {
     if (mainWindow) {
       mainWindow.show();
       mainWindow.focus();
-      startTimer({ durationSeconds: 15 * 60, action: 'shutdown' });
-      showNativeNotification('Lights Out', '15 minute timer started');
+      startQuickTimer({ minutes: 15, origin: 'shortcut' });
     }
   });
 
@@ -2782,10 +3064,13 @@ function registerGlobalShortcuts() {
       mainWindow.show();
       mainWindow.focus();
       const cfg = settingsStore.getSection('lastLight') || {};
+      const appCfg = settingsStore.getSection('app') || {};
       mainWindow.webContents.send('play-last-light', {
         sequence: lastLight.normalizeId(cfg.sequence),
         dryRun: true,
-        sound: cfg.sound || 'Off'
+        sound: cfg.sound || 'Off',
+        // Preview only (still dryRun): the facts panel names the configured ending.
+        action: typeof appCfg.action === 'string' ? appCfg.action : undefined
       });
     }
   });
@@ -2819,26 +3104,22 @@ function registerGlobalShortcuts() {
 
   // Ctrl+Shift+1: 30-min timer
   globalShortcut.register('Ctrl+Shift+1', () => {
-    startTimer({ durationSeconds: 30 * 60, action: 'shutdown' });
-    showNativeNotification('Lights Out', '30 minute timer started');
+    startQuickTimer({ minutes: 30, origin: 'shortcut' });
   });
 
   // Ctrl+Shift+2: 45-min timer
   globalShortcut.register('Ctrl+Shift+2', () => {
-    startTimer({ durationSeconds: 45 * 60, action: 'shutdown' });
-    showNativeNotification('Lights Out', '45 minute timer started');
+    startQuickTimer({ minutes: 45, origin: 'shortcut' });
   });
 
   // Ctrl+Shift+3: 60-min timer
   globalShortcut.register('Ctrl+Shift+3', () => {
-    startTimer({ durationSeconds: 60 * 60, action: 'shutdown' });
-    showNativeNotification('Lights Out', '1 hour timer started');
+    startQuickTimer({ minutes: 60, origin: 'shortcut' });
   });
 
   // Ctrl+Shift+4: 90-min timer
   globalShortcut.register('Ctrl+Shift+4', () => {
-    startTimer({ durationSeconds: 90 * 60, action: 'shutdown' });
-    showNativeNotification('Lights Out', '90 minute timer started');
+    startQuickTimer({ minutes: 90, origin: 'shortcut' });
   });
 
   // Ctrl+Shift+W: Toggle widget
@@ -2901,14 +3182,17 @@ function setupRitualCallbacks() {
           beginValidatedCountdown(
             { durationSeconds: ctx.durationSeconds, action: ctx.action, dryRun: ctx.dryRun,
               forceShutdown: ctx.forceShutdown, muteSystem: ctx.muteSystem, gracePeriod: ctx.gracePeriod,
-              source: 'ritual' },
+              source: 'ritual', origin: ctx.origin || 'ritual' },
             { profileId: ctx.profileId, profileName: ctx.profileName },
             { nightModeId: ctx.nightModeId || null, nightModeTitle: ctx.nightModeTitle || null, nightModeVersion: ctx.nightModeVersion || null }
           );
         } else {
+          const app = settingsStore.getSection('app') || {};
           const config = ritualMode.getConfig();
           beginValidatedCountdown(
-            { durationSeconds: config.timerDuration, action: config.timerAction, source: 'ritual' },
+            { durationSeconds: config.timerDuration, action: config.timerAction, source: 'ritual',
+              dryRun: Boolean(app.dryRun), forceShutdown: false, muteSystem: false,
+              gracePeriod: Number.isFinite(Number(app.graceMinutes)) ? Number(app.graceMinutes) : 2, origin: 'ritual' },
             { profileId: null, profileName: null },
             null
           );

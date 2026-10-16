@@ -450,25 +450,50 @@ async function main() {
       controlsResult.failed.push(`Cancel revert failed: blocklist=${afterCancelBlocklist} vs ${origBlocklist2}, runLogin=${afterCancelRunLogin} vs ${origRunLogin}`);
     }
 
-    // Back proof: change settings, click Back, reopen, verify discarded
+    // Back proof: change a staged setting, click Back, reopen, verify discarded.
+    // (UI-R3 P13: Test Mode is data-live -- "Applies now" -- so it is no
+    // longer part of the discard proof; see the positive proof below.)
     await app.session.ensureSettingsOpen();
     await app.session.click(`.settings-rail-btn[data-settings-category="advanced"]`);
     const origBlocklist3 = await app.session.eval(helpers.focusBlocklistValue);
-    const origDryRun = await app.session.eval(helpers.dryRunValue);
     await app.session.eval(`document.getElementById('focus-blocklist').value = 'back,not,saved'`);
-    await app.session.eval(`document.getElementById('chk-dryrun').checked = ${!origDryRun}`);
     await app.session.click('#modal-close');
     await wait(400);
 
     await app.session.ensureSettingsOpen();
     await app.session.click(`.settings-rail-btn[data-settings-category="advanced"]`);
     const afterBackBlocklist = await app.session.eval(helpers.focusBlocklistValue);
-    const afterBackDryRun = await app.session.eval(helpers.dryRunValue);
-    if (afterBackBlocklist === origBlocklist3 && afterBackDryRun === origDryRun) {
-      controlsResult.passed.push('Back to Tonight discarded both changes');
+    if (afterBackBlocklist === origBlocklist3) {
+      controlsResult.passed.push('Back to Tonight discarded the staged change');
     } else {
-      controlsResult.failed.push(`Back discard failed: blocklist=${afterBackBlocklist} vs ${origBlocklist3}, dryRun=${afterBackDryRun} vs ${origDryRun}`);
+      controlsResult.failed.push(`Back discard failed: blocklist=${afterBackBlocklist} vs ${origBlocklist3}`);
     }
+
+    // Applies-now proof: a real change event on #chk-dryrun persists at once,
+    // and Cancel does not revert it. The original value is restored the same
+    // way afterwards, so the harness never leaves the app in a changed mode.
+    await app.session.ensureSettingsOpen();
+    await app.session.click(`.settings-rail-btn[data-settings-category="power-safety"]`);
+    const origDryRun = await app.session.eval(helpers.dryRunValue);
+    const setDryRunLive = value => app.session.eval(`(() => { const el = document.getElementById('chk-dryrun'); el.checked = ${value}; el.dispatchEvent(new Event('change', { bubbles: true })); return el.checked; })()`);
+    await setDryRunLive(!origDryRun);
+    await wait(400);
+    const dirtyAfterLive = await app.session.eval(`document.getElementById('ns-panel-set')?.classList.contains('is-dirty') || false`);
+    await app.session.click('#btn-cancel-opt');
+    await wait(500);
+    const persistedDryRun = await app.session.eval(`(async () => { const s = await window.electronAPI.getAppSettings(); return Boolean(s.app && s.app.dryRun); })()`);
+    await app.session.ensureSettingsOpen();
+    await app.session.click(`.settings-rail-btn[data-settings-category="power-safety"]`);
+    const afterCancelDryRun = await app.session.eval(helpers.dryRunValue);
+    if (persistedDryRun === !origDryRun && afterCancelDryRun === !origDryRun && !dirtyAfterLive) {
+      controlsResult.passed.push('Test Mode applies now: persisted, survived Cancel, never marked unsaved');
+    } else {
+      controlsResult.failed.push(`Test Mode applies-now failed: persisted=${persistedDryRun}, afterCancel=${afterCancelDryRun}, expected=${!origDryRun}, dirty=${dirtyAfterLive}`);
+    }
+    await setDryRunLive(origDryRun);
+    await wait(400);
+    await app.session.click('#btn-cancel-opt');
+    await wait(400);
 
     // Escape proof
     await app.session.ensureSettingsOpen();

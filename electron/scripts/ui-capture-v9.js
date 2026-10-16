@@ -24,22 +24,28 @@ app.whenReady().then(async () => {
   await wait(1500);
   await capture(win, 'v9_cockpit.png');
 
-  // Focus tab
+  // Focus Sessions: Settings > Automations (UI-R3 P10 moved them off Schedule)
   await win.webContents.executeJavaScript(`
     (function(){
-      var btn = document.querySelector('[data-tab="focus"]');
-      if (btn) btn.click();
+      var nav = document.getElementById('nav-set');
+      if (nav) nav.click();
+      var rail = document.querySelector('.settings-rail-btn[data-settings-category="automations"]');
+      if (rail) rail.click();
+      var sec = document.querySelector('.focus-section');
+      if (sec) sec.scrollIntoView({block:'start'});
       return true;
     })();
   `);
   await wait(800);
   await capture(win, 'v9_focus.png');
 
-  // Streaks tab (with sleep score)
+  // Streaks (with the routine score): Proof > Routine (UI-R3 P10)
   await win.webContents.executeJavaScript(`
     (function(){
-      var btn = document.querySelector('[data-tab="streaks"]');
-      if (btn) btn.click();
+      var nav = document.getElementById('nav-stats');
+      if (nav) nav.click();
+      var routine = document.getElementById('proof-routine');
+      if (routine) routine.scrollIntoView({block:'start'});
       return true;
     })();
   `);
@@ -50,8 +56,6 @@ app.whenReady().then(async () => {
   // category shows WiFi Guard + Content Blocker.
   await win.webContents.executeJavaScript(`
     (function(){
-      var btn = document.querySelector('[data-tab="library"]');
-      if (btn) btn.click();
       if (typeof openSettingsPanel === 'function') openSettingsPanel();
       if (typeof switchSettingsCategory === 'function') switchSettingsCategory('protection');
       var sec = document.querySelector('.wifi-guard-section');

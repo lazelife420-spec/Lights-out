@@ -1,5 +1,5 @@
 // Smart Lights Module for Lights Out Electron
-// Shipped providers: Philips Hue Bridge (local HTTP control), Generic HTTP webhook.
+// Shipped providers: WiZ local UDP, Philips Hue Bridge, Generic HTTP webhook.
 // MQTT / Home Assistant / IFTTT were advertised in earlier revisions but were
 // never reachable through the live config path (configurationKey() never
 // produced a key for them, so loadConfig could never enable them). They are
@@ -11,8 +11,9 @@ const http = require('http');
 const net = require('net');
 const dgram = require('dgram');
 const crypto = require('crypto');
+const wizLights = require('./wizLights');
 
-const SHIPPED_PROVIDERS = ['none', 'hue', 'http'];
+const SHIPPED_PROVIDERS = ['none', 'wiz', 'hue', 'http'];
 
 // Configuration state. Only fields for shipped providers live here; unknown
 // persisted keys are pruned by loadConfig.
@@ -21,6 +22,9 @@ let config = {
   mode: 'gradual_dim',     // 'gradual_dim', 'warm_dim', 'off_at_end'
   dimMinutes: 10,          // minutes before end to start dimming
   enabled: false,
+  wizAddresses: [],
+  wizDevices: [],
+  wizLook: wizLights.normalizeLook(),
   // Hue settings
   hueBridgeIp: '',
   hueUsername: '',
@@ -56,6 +60,10 @@ function httpHeadersDigest(headers) {
 
 function configurationKey(value = config) {
   const provider = value.provider || 'none';
+  if (provider === 'wiz') {
+    const ips = wizLights.normalizeAddresses(value.wizAddresses);
+    return ips.length ? `wiz:${ips.join(',')}` : '';
+  }
   if (provider === 'hue') return `hue:${value.hueBridgeIp || ''}:${value.hueUsername || ''}:${value.hueGroupId || ''}`;
   if (provider === 'http') return `http:${value.httpMethod || 'POST'}:${value.httpUrl || ''}:${httpHeadersDigest(value.httpHeaders)}:${value.httpBodyTemplate || ''}`;
   return '';
@@ -68,6 +76,20 @@ let state = {
   dimStartTime: null,
   dimDurationMs: 0
 };
+let wizBatchBusy = false;
+let wizGeneration = 0;
+let wizOperationChain = Promise.resolve();
+function queueWizOperation(operation) {
+  const next = wizOperationChain.then(operation);
+  wizOperationChain = next.catch(() => {});
+  return next;
+}
+async function restoreWizOriginalState() {
+  wizGeneration++;
+  const snapshot = state.wizOriginalState;
+  const pending = state.wizSnapshotPending;
+  return queueWizOperation(async () => wizLights.restoreStates(snapshot || (pending ? await pending : [])));
+}
 
 function result(provider, success, code, message, extra = {}) {
   return { provider, success, code, message, ...extra };
@@ -587,6 +609,14 @@ function startSmartLightDim(remainingSeconds) {
   state.dimStarted = true;
   state.dimStartTime = Date.now();
   state.dimDurationMs = Math.min(remainingSeconds, config.dimMinutes * 60) * 1000;
+  if (config.provider === 'wiz' && config.mode !== 'off_at_end') {
+    const generation = ++wizGeneration;
+    const addresses = [...config.wizAddresses];
+    state.wizSnapshotPending = queueWizOperation(() => wizLights.readStates(addresses)).then(snapshot => {
+      if (generation === wizGeneration) state.wizOriginalState = snapshot;
+      return snapshot;
+    }).catch(() => []);
+  }
 
   if (config.provider === 'hue' && config.hueBridgeIp && config.hueUsername) {
     // Fire-and-forget snapshot; dim ticks proceed even if the snapshot is slow.
@@ -614,6 +644,20 @@ function updateSmartLightTick(remainingSeconds) {
   const transition = 10;
 
   switch (config.provider) {
+    case 'wiz': {
+      if (!wizBatchBusy && state.wizOriginalState) {
+        wizBatchBusy = true;
+        const generation = wizGeneration;
+        const snapshot = state.wizOriginalState;
+        const warm = config.mode === 'warm_dim';
+        const look = config.wizLook;
+        queueWizOperation(() => generation === wizGeneration ? wizLights.dimStates(snapshot, progress, warm, undefined,
+          { look, isCurrent: () => generation === wizGeneration && config.enabled }) : null)
+          .catch(() => {})
+          .finally(() => { wizBatchBusy = false; });
+      }
+      break;
+    }
     case 'hue': {
       const lightState = { bri: targetBri, transitiontime: transition };
       if (config.mode === 'warm_dim') lightState.ct = targetCt;
@@ -643,8 +687,12 @@ function updateSmartLightTick(remainingSeconds) {
   }
 }
 
-async function invokeSmartLightAction({ on = true, brightness = 254, colorTemp = 366, transitionTime = 10 } = {}) {
+async function invokeSmartLightAction({ on = true, brightness = 254, colorTemp = 366, transitionTime = 10, preservePower = false, released } = {}) {
   if (!config.enabled) return failure(config.provider || 'none', 'DISABLED', 'Smart Lights not enabled');
+  return sendSmartLightAction({ on, brightness, colorTemp, transitionTime, preservePower, released });
+}
+
+async function sendSmartLightAction({ on = true, brightness = 254, colorTemp = 366, transitionTime = 10, preservePower = false, released } = {}) {
 
   const targetBri = Math.max(0, Math.min(254, Math.round(Number(brightness) || 0)));
   const targetCt = Math.max(153, Math.min(500, Math.round(Number(colorTemp) || 366)));
@@ -656,6 +704,12 @@ async function invokeSmartLightAction({ on = true, brightness = 254, colorTemp =
   if (targetCt) hueState.ct = targetCt;
 
   switch (config.provider) {
+    case 'wiz': {
+      const generation = wizGeneration, addresses = [...config.wizAddresses];
+      return { provider: 'wiz', ...(await queueWizOperation(() => wizLights.setLights(addresses,
+        { on, brightness: targetBri, colorTemp: targetCt }, undefined,
+        { preservePower, released, isCurrent: () => generation === wizGeneration && config.enabled }))) };
+    }
     case 'hue': {
       if (!config.hueBridgeIp || !config.hueUsername) {
         return failure('hue', 'NOT_CONFIGURED', 'Hue bridge/credential not configured');
@@ -704,6 +758,17 @@ async function invokeSmartLightOff() {
 
   let res;
   switch (config.provider) {
+    case 'wiz': {
+      wizGeneration++;
+      const addresses = [...config.wizAddresses];
+      const snapshot = state.wizOriginalState;
+      res = await queueWizOperation(async () => {
+        const active = snapshot ? addresses.filter(ip => snapshot.some(item => item.ip === ip && item.pilot.state && !item.released)) : addresses;
+        return active.length ? { provider: 'wiz', ...(await wizLights.setLights(active, { on: false })) }
+          : result('wiz', true, 'SKIPPED', 'Selected lights were left under manual control.');
+      });
+      break;
+    }
     case 'hue': {
       const lightState = { on: false, transitiontime: 10 };
       if (config.hueGroupId) {
@@ -732,6 +797,9 @@ async function invokeSmartLightOff() {
 }
 
 function resetSmartLightState() {
+  wizGeneration++;
+  state.wizOriginalState = null;
+  state.wizSnapshotPending = null;
   state.dimStarted = false;
   state.originalLightState = null;
   state.dimStartTime = null;
@@ -748,6 +816,10 @@ function resetSmartLightState() {
 
 async function verifySmartLightConnection() {
   switch (config.provider) {
+    case 'wiz': {
+      const verified = await wizLights.verify(config.wizAddresses);
+      return { provider: 'wiz', ...verified, ...(verified.success ? { verifiedConfigKey: configurationKey() } : {}) };
+    }
     case 'hue': {
       if (!config.hueBridgeIp || !config.hueUsername) {
         return failure('hue', 'NOT_CONFIGURED', 'Hue Bridge not configured');
@@ -776,16 +848,22 @@ async function verifySmartLightConnection() {
   }
 }
 
-// Explicit actuating test. For Hue, pulses configured lights (or all lights)
-// to full brightness briefly, then restores captured state. For HTTP, fires
+// Explicit actuating test. For Hue, turns configured lights (or all lights)
+// on at full brightness. For HTTP, fires
 // the configured webhook once with on=true/brightness=254.
 async function testSmartLightAction() {
   switch (config.provider) {
+    case 'wiz': {
+      const look = config.wizLook;
+      const sent = await queueWizOperation(() => wizLights.setLights(config.wizAddresses,
+        { on: true, brightness: Math.round(look.brightness / 100 * 254), look }));
+      return { provider: 'wiz', ...sent, ...(sent.success ? { verifiedConfigKey: configurationKey() } : {}) };
+    }
     case 'hue': {
       if (!config.hueBridgeIp || !config.hueUsername) {
         return failure('hue', 'NOT_CONFIGURED', 'Hue Bridge not configured');
       }
-      const res = await invokeSmartLightAction({ on: true, brightness: 254, transitionTime: 5 });
+      const res = await sendSmartLightAction({ on: true, brightness: 254, transitionTime: 5 });
       if (!res.success) return res;
       return result('hue', true, 'ACTION_SENT', 'Test action sent to Hue lights',
         { verifiedConfigKey: configurationKey() });
@@ -816,6 +894,9 @@ function loadConfig(newConfig) {
     mode: newConfig.mode || config.mode,
     dimMinutes: newConfig.dimMinutes !== undefined ? Number(newConfig.dimMinutes) : config.dimMinutes,
     enabled: newConfig.enabled !== undefined ? Boolean(newConfig.enabled) : config.enabled,
+    wizAddresses: newConfig.wizAddresses !== undefined ? wizLights.normalizeAddresses(newConfig.wizAddresses) : config.wizAddresses,
+    wizDevices: wizLights.normalizeDevices(newConfig.wizDevices ?? config.wizDevices, newConfig.wizAddresses ?? config.wizAddresses),
+    wizLook: wizLights.normalizeLook(newConfig.wizLook ?? config.wizLook),
     hueBridgeIp: (newConfig.hueBridgeIp && net.isIP(String(newConfig.hueBridgeIp).trim()) !== 0) ? String(newConfig.hueBridgeIp).trim() : config.hueBridgeIp,
     hueAllowLegacyHttp: newConfig.hueAllowLegacyHttp !== undefined ? Boolean(newConfig.hueAllowLegacyHttp) : config.hueAllowLegacyHttp,
     // Empty string means "keep existing" so a redacted (blanked) renderer field
@@ -830,6 +911,8 @@ function loadConfig(newConfig) {
     verifiedConfigKey: newConfig.verifiedConfigKey || ''
   };
   merged.enabled = Boolean(merged.enabled && merged.verifiedConfigKey && merged.verifiedConfigKey === configurationKey(merged));
+  if (!merged.enabled || configurationKey(merged) !== configurationKey(config) || merged.mode !== config.mode
+      || JSON.stringify(merged.wizLook) !== JSON.stringify(config.wizLook)) resetSmartLightState();
   config = merged;
 }
 
@@ -866,6 +949,7 @@ module.exports = {
   getPublicConfig,
   configurationKey,
   SHIPPED_PROVIDERS,
+  discoverWizLights: wizLights.discover,
 
   // Hue functions
   findHueBridge,
@@ -881,6 +965,7 @@ module.exports = {
   applyScene,
   invokeSmartLightOff,
   restoreHueOriginalState,
+  restoreWizOriginalState,
   restoreLightSnapshot,
   resetSmartLightState,
   shouldStartDim,

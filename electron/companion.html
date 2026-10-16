@@ -2,36 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#0d0e11">
+  <meta name="theme-color" content="#0b0f14">
   <meta name="apple-mobile-web-app-title" content="Lights Out">
   <link rel="apple-touch-icon" href="/icon-512.png">
   <link rel="icon" type="image/png" href="/icon-512.png">
   <link rel="manifest" href="/manifest.json">
-  <title>Lights Out PC Companion</title>
+  <title>Lights Out</title>
   <style>
-    :root {
-      --bg: #0d0e11;
-      --accent: #5b8cff;
-      --accent-soft: rgba(91,140,255,0.14);
-      --text: #e8ecf1;
-      --muted: #8a93a6;
-      --dim: #5b6577;
-      --card: #14181f;
-      --card-border: #232a36;
-      --ring: #5b8cff;        /* recolored per phase in JS */
-      --danger: #ff4d4d;
-      --success: #4caf50;
-    }
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    button, input, select, textarea { font-family: inherit; }
     html, body { height: 100%; }
     body {
-      background:
-        radial-gradient(120% 80% at 50% -10%, #1a2030 0%, rgba(26,32,48,0) 60%),
-        radial-gradient(90% 60% at 50% 115%, rgba(91,140,255,0.10) 0%, rgba(91,140,255,0) 55%),
-        var(--bg);
       color: var(--text);
       font-family: -apple-system, 'Segoe UI', system-ui, sans-serif;
       min-height: 100vh;
@@ -47,22 +31,20 @@
 
     .ring-wrap { position: relative; width: 256px; height: 256px; margin: 0 auto 4px; }
     .ring { width: 100%; height: 100%; transform: rotate(-90deg); }
-    .ring-track { fill: none; stroke: #1b2230; stroke-width: 6; }
+    .ring-track { fill: none; stroke: #1b2230; stroke-width: 4; }
     .ring-progress {
-      fill: none; stroke: var(--ring); stroke-width: 6; stroke-linecap: round;
+      fill: none; stroke: var(--ring); stroke-width: 4; stroke-linecap: round;
       filter: drop-shadow(0 0 7px var(--ring));
       transition: stroke-dashoffset 0.9s cubic-bezier(.4,0,.2,1), stroke 0.5s ease;
     }
     .ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
     .timer-name { font-size: 12px; font-weight: 600; color: var(--accent); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .timer-main { font-size: 56px; font-weight: 700; color: #cfe4ff; line-height: 1; letter-spacing: -2px; font-variant-numeric: tabular-nums; text-shadow: 0 0 28px rgba(118,201,255,0.28); }
+    .timer-main { font-size: 56px; font-weight: 700; line-height: 1; letter-spacing: -2px; font-variant-numeric: tabular-nums; }
     .timer-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; margin-top: 9px; }
     .target { font-size: 12px; color: var(--dim); margin-top: 5px; min-height: 14px; }
 
     .status-pill { display: inline-flex; align-items: center; gap: 7px; padding: 7px 16px; border-radius: 999px; background: #161b22; border: 1px solid var(--card-border); font-size: 12px; font-weight: 600; color: var(--muted); margin: 16px 0 22px; }
     .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
-    .status-pill.connecting { background: rgba(91,140,255,0.10); border-color: rgba(91,140,255,0.25); color: #7aa2ff; }
-    .status-pill.connecting .status-dot { background: #5b8cff; animation: pulse 1.2s ease infinite; }
     .status-pill.connected { background: rgba(76,175,80,0.10); border-color: rgba(76,175,80,0.25); color: #5ec763; }
     .status-pill.connected .status-dot { background: #4caf50; }
     .status-pill.disconnected { background: rgba(255,77,77,0.10); border-color: rgba(255,77,77,0.3); color: #ff6b6b; }
@@ -90,55 +72,46 @@
     .action-seg { display: flex; gap: 6px; background: #12161d; border: 1px solid var(--card-border); border-radius: 14px; padding: 5px; }
     .seg-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 9px 4px; border: none; background: transparent; color: var(--muted); border-radius: 10px; cursor: pointer; font-size: 11px; font-weight: 600; transition: background 0.15s ease, color 0.15s ease; }
     .seg-btn svg { width: 18px; height: 18px; }
-    .seg-btn.active { background: var(--accent-soft); color: #cfe0ff; box-shadow: inset 0 0 0 1px rgba(91,140,255,0.35); }
 
-    .quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .btn { padding: 16px 16px; border: none; border-radius: 14px; font-size: 15px; font-weight: 700; cursor: pointer; letter-spacing: 0.2px; transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease; }
     .btn:active { transform: scale(0.96); }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-    .btn-primary { background: linear-gradient(180deg, #6b97ff 0%, #5b8cff 100%); color: #0b0e14; box-shadow: 0 6px 18px rgba(91,140,255,0.28); }
     .btn-secondary { background: #1a1f27; color: #c2cad8; border: 1px solid var(--card-border); }
     .btn-secondary:active { background: #20262f; }
     .btn-danger { background: rgba(255,77,77,0.12); color: #ff6b6b; border: 1px solid rgba(255,77,77,0.22); }
-    .btn-amber { background: rgba(212,165,10,0.12); color: #e2b53a; border: 1px solid rgba(212,165,10,0.24); }
     .feedback-toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 14px; z-index: 800; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
     .feedback-toast.show { opacity: 1; }
     .timer-actions { display: flex; gap: 10px; }
     .timer-actions .btn { flex: 1; }
 
     /* Custom duration */
-    .custom-row { display: flex; gap: 10px; }
     .custom-input { flex: 1; display: flex; align-items: center; gap: 8px; background: #12161d; border: 1px solid var(--card-border); border-radius: 14px; padding: 0 14px; }
     .custom-input input { width: 100%; background: transparent; border: none; outline: none; color: var(--text); font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; padding: 14px 0; -moz-appearance: textfield; appearance: textfield; }
     .custom-input input::-webkit-outer-spin-button, .custom-input input::-webkit-inner-spin-button { -webkit-appearance: none; appearance: none; margin: 0; }
     .custom-input .unit { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; }
-    .btn-custom { flex: 0 0 96px; }
 
     .streak { margin-top: 18px; padding: 14px; border-radius: 14px; background: var(--card); border: 1px solid var(--card-border); display: flex; align-items: center; justify-content: center; gap: 12px; }
-    .streak-flame { font-size: 22px; }
+    .streak-glyph { width: 22px; height: 22px; flex: 0 0 auto; color: var(--teal); opacity: 0.75; }
     .streak-meta { text-align: left; }
     .streak-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
-    .streak-number { font-size: 26px; font-weight: 800; color: #e2b53a; line-height: 1.1; }
+    .streak-number { font-size: 22px; font-weight: 800; color: var(--text); line-height: 1.15; }
 
     .pair-card { background: var(--card); border: 1px solid var(--card-border); border-radius: 18px; padding: 26px 20px; text-align: left; }
-    .pair-icon { width: 52px; height: 52px; border-radius: 14px; background: var(--accent-soft); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
-    .pair-icon svg { width: 24px; height: 24px; color: var(--accent); }
     .pair-title { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 6px; letter-spacing: -0.2px; }
     .pair-hint { font-size: 13px; line-height: 1.55; color: var(--muted); margin-bottom: 18px; }
     .pair-input { width: 100%; padding: 13px 14px; border-radius: 12px; border: 1px solid var(--card-border); background: #0d1016; color: var(--text); font-size: 15px; letter-spacing: 0.8px; outline: none; transition: border-color 0.15s ease; }
     .pair-input::placeholder { color: var(--dim); letter-spacing: 0; font-family: -apple-system, sans-serif; }
-    .pair-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(91,140,255,0.12); }
+    .pair-input:focus { border-color: var(--accent); }
     .pair-submit { width: 100%; padding: 13px 22px; white-space: nowrap; }
     .pair-status { color: #ffb454; font-size: 13px; line-height: 1.45; margin: 0 0 14px; }
     .pair-error { color: #ff6b6b; font-size: 12px; margin-top: 10px; }
     .pair-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
-    .pair-footer { font-size: 11px; color: var(--dim); line-height: 1.4; }
 
     /* ── Companion Stats Section Polish ── */
     .comp-stats { padding: 14px 18px; margin-top: 10px; border-radius: 14px; background: var(--card); border: 1px solid var(--card-border); }
     .comp-stats-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     .comp-stats-label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
-    .comp-autopilot-badge { font-size: 9px; padding: 2px 8px; border-radius: 10px; background: rgba(91,140,255,0.12); color: var(--accent); display: none; font-weight: 600; }
+    .comp-autopilot-badge { font-size: 9px; padding: 2px 8px; border-radius: 10px; color: var(--accent); display: none; font-weight: 600; }
     .comp-stats-body { display: flex; gap: 16px; align-items: center; }
     .comp-score-col { text-align: center; min-width: 56px; }
     .comp-score { font-size: 26px; font-weight: 700; color: var(--text); line-height: 1.1; }
@@ -147,9 +120,9 @@
     .comp-metric { display: flex; justify-content: space-between; font-size: 11px; }
     .comp-metric-label { color: var(--muted); }
     .comp-metric-value { font-weight: 600; }
-    .comp-metric--warn { color: #ff9800; }
-    .comp-metric--good { color: #4caf50; }
-    .comp-metric--danger { color: #ff6b6b; }
+    .comp-metric--warn { color: var(--amber); }
+    .comp-metric--good { color: var(--teal); }
+    .comp-metric--danger { color: var(--danger); }
 
     /* Companion V2 C1: restrained bedside controller. */
     body { justify-content: flex-start; background: #080a0e; }
@@ -157,27 +130,26 @@
     .brand { margin-bottom: 12px; }
     .ring-wrap { width: min(68vw, 256px); height: min(68vw, 256px); }
     .ring-progress { filter: drop-shadow(0 0 3px color-mix(in srgb, var(--ring) 55%, transparent)); transition: stroke-dashoffset 0.9s linear, stroke 0.3s ease; }
-    .timer-main { font-size: clamp(52px, 15vw, 68px); text-shadow: 0 0 12px rgba(118,201,255,0.15); }
+    .timer-main { font-size: clamp(52px, 15vw, 68px); }
     .timer-name { max-width: 210px; font-size: 13px; }
     .timer-label, .target { font-size: 13px; }
     .status-pill { max-width: 100%; min-width: 0; margin: 10px 0 8px; }
     .status-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pc-name { margin: 0 0 12px; font-size: 12px; }
-    .controls, .timer-actions, .custom-row, .action-seg { min-width: 0; }
+    .controls, .timer-actions, .action-seg { min-width: 0; }
     .btn, .seg-btn { min-width: 0; min-height: 48px; }
     button:focus-visible, input:focus-visible, summary:focus-visible {
-      outline: 3px solid #9bb8ff;
+      outline: 2px solid var(--accent);
       outline-offset: 3px;
     }
     .safety-row { display: none; align-items: center; justify-content: center; gap: 8px; margin: 2px 0 8px; }
     .safety-badge { display: inline-flex; align-items: center; gap: 7px; min-height: 30px; padding: 5px 11px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: 1px; }
     .safety-badge::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-    .safety-badge.dry { color: #82c7ff; background: rgba(91,140,255,0.13); border: 1px solid rgba(130,199,255,0.3); }
     .safety-badge.real { color: #ffb454; background: rgba(255,180,84,0.1); border: 1px solid rgba(255,180,84,0.3); }
     .profile-name { color: var(--muted); font-size: 12px; min-height: 16px; }
     .freshness { color: var(--muted); font-size: 12px; min-height: 18px; margin-bottom: 8px; }
     .freshness.stale { color: #ffb454; font-weight: 700; }
-    .pending-status { display: none; min-height: 42px; align-items: center; justify-content: center; padding: 10px 12px; border: 1px solid rgba(91,140,255,0.28); border-radius: 12px; color: #b9cbff; background: rgba(91,140,255,0.08); font-size: 13px; font-weight: 700; }
+    .pending-status { display: none; min-height: 42px; align-items: center; justify-content: center; padding: 10px 12px; border-width: 1px; border-style: solid; border-radius: 12px; font-size: 13px; font-weight: 700; }
     .pending-status.show { display: flex; }
     .pending-status.error { color: #ffb454; border-color: rgba(255,180,84,0.28); background: rgba(255,180,84,0.08); }
     .add-time-label { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-align: left; text-transform: uppercase; }
@@ -190,8 +162,6 @@
     .details-body { padding: 0 10px 10px; }
     .details .streak, .details .comp-stats, .details #companion-system { margin-top: 8px; }
     .idle-safety { padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255,180,84,0.22); background: rgba(255,180,84,0.07); color: #d7b986; font-size: 12px; line-height: 1.45; text-align: left; }
-    .stale-state .ring-wrap, .stale-state .safety-row, .stale-state #active-controls { opacity: 0.48; }
-    .stale-state .timer-main { text-decoration: line-through; text-decoration-thickness: 1px; }
 
     /* ── Night Mode picker (C2) ── */
     .night-mode-section { margin-top: 18px; border-top: 1px solid var(--card-border); padding-top: 18px; }
@@ -202,27 +172,21 @@
     .night-mode-grid.visible { display: grid; }
     .night-mode-grid.refreshing { opacity: 0.65; pointer-events: none; }
     .night-mode-card { text-align: left; background: var(--card); border: 1px solid var(--card-border); border-radius: 14px; padding: 14px; cursor: pointer; min-height: 120px; display: flex; flex-direction: column; gap: 6px; }
-    .night-mode-card.disabled { opacity: 0.45; cursor: not-allowed; }
+    .night-mode-card.disabled { cursor: not-allowed; }
+    .night-mode-card.disabled > :not(.night-mode-reason) { opacity: 0.45; }
     .night-mode-card:not(.disabled):active { transform: scale(0.98); }
     .night-mode-art { font-size: 28px; line-height: 1; }
     .night-mode-name { font-size: 14px; font-weight: 700; color: var(--text); }
     .night-mode-sub { font-size: 11px; color: var(--muted); line-height: 1.35; }
     .night-mode-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
     .night-mode-tag { font-size: 9px; font-weight: 700; letter-spacing: 0.5px; color: var(--accent); background: var(--accent-soft); padding: 3px 7px; border-radius: 8px; text-transform: uppercase; }
-    .night-mode-tag.status { color: #d4a50a; background: rgba(212,165,10,0.12); }
+    .night-mode-tag.status { color: #91a0af; background: rgba(145,160,175,0.10); }
     .night-mode-backdrop { position: fixed; inset: 0; z-index: 900; display: none; align-items: flex-end; justify-content: center; padding: 18px; background: rgba(0,0,0,0.72); }
     .night-mode-backdrop.show { display: flex; }
     .night-mode-detail { width: min(100%, 390px); max-height: calc(100dvh - 36px); overflow-y: auto; padding: 20px; border-radius: 18px; border: 1px solid #384254; background: #12161d; text-align: left; box-shadow: 0 20px 80px rgba(0,0,0,0.6); }
     .night-mode-detail h2 { font-size: 20px; margin-bottom: 6px; }
     .night-mode-detail p { color: var(--muted); font-size: 14px; line-height: 1.5; margin-bottom: 14px; }
-    .night-mode-timeline { list-style: none; margin-bottom: 16px; }
-    .night-mode-timeline li { padding: 7px 0; border-bottom: 1px solid var(--card-border); font-size: 13px; color: #c2cad8; }
-    .night-mode-timeline li:last-child { border-bottom: none; }
-    .night-mode-meta { display: grid; gap: 8px; margin-bottom: 16px; }
-    .night-mode-meta-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
-    .night-mode-meta-row span:last-child { color: var(--text); font-weight: 600; }
     .night-mode-run-type { padding: 10px 12px; border-radius: 10px; margin-bottom: 12px; font-size: 12px; font-weight: 700; text-align: center; }
-    .night-mode-run-type.dry { color: #82c7ff; background: rgba(91,140,255,0.13); border: 1px solid rgba(130,199,255,0.3); }
     .night-mode-run-type.real { color: #ffb454; background: rgba(255,180,84,0.1); border: 1px solid rgba(255,180,84,0.3); }
     .night-mode-actions { display: grid; gap: 10px; }
     .night-mode-actions .btn { width: 100%; }
@@ -243,7 +207,7 @@
       .timer-main { font-size: 50px; }
     }
     @media (max-width: 300px) {
-      .add-time-grid { grid-template-columns: 1fr; }
+      .add-time-grid .btn { font-size: 16px; padding-inline: 2px; }
       .ring-wrap { width: 200px; height: 200px; }
     }
     @media (max-width: 220px) {
@@ -256,6 +220,416 @@
     @media (max-height: 420px) {
       .confirm-backdrop { align-items: flex-start; }
     }
+    /* ── UI-R2: one design system with the desktop. Violet = you act,
+       teal = live/connected, amber = Test Mode/attention, red = real or
+       destructive. Brand motifs from the logo: lamp beam, broken "O" ring,
+       flicker particle. ── */
+    :root {
+      --bg: #0b0f14; --accent: #9b93d6; --accent-soft: rgba(155,147,214,0.14);
+      --ring: #9b93d6;        /* recolored per phase in JS */
+      --text: #f4f7f8; --muted: #91a0af; --dim: #808b90;
+      --card: #151f28; --card-border: #263746;
+      --danger: #ff5c7a; --success: #23d18b; --teal: #00d1b2; --amber: #f5b83d;
+    }
+    body {
+      background:
+        radial-gradient(90% 60% at 50% 115%, rgba(155,147,214,0.10) 0%, rgba(155,147,214,0) 55%),
+        var(--bg);
+    }
+    .brand { display: flex; justify-content: center; margin-bottom: 14px; }
+    .brand .brand-wordmark { display: block; width: auto; height: 30px; }
+    .ring { border-radius: 50%; box-shadow: 0 0 26px -10px color-mix(in srgb, var(--ring) 50%, transparent); }
+    .ring-track { stroke: #1b2633; }
+    .ring-segments { fill: none; stroke: rgba(0,255,209,0.10); stroke-width: 1.2; stroke-dasharray: 121.4 19.5 102.9 14.1 60.7 48.97; stroke-dashoffset: 23.8; }
+    .ring-progress { filter: none; transition: stroke-dashoffset 0.3s cubic-bezier(0.22,0.8,0.24,1), stroke 0.3s ease; }
+    .ring-head { transform-box: view-box; transform-origin: 50% 50%; transition: transform 0.3s cubic-bezier(0.22,0.8,0.24,1), opacity 0.4s ease; opacity: 0; }
+    body.ring-live .ring-head { opacity: 1; }
+    .ring-head-particle { fill: #64fff0; stroke: rgba(0,255,209,0.28); stroke-width: 3; paint-order: stroke; }
+    .timer-name { color: var(--accent); }
+    .timer-main { color: var(--text); text-shadow: 0 0 14px rgba(155,147,214,0.18); }
+    .status-pill { background: #121a22; }
+    .status-pill.connecting { background: rgba(155,147,214,0.10); border-color: rgba(155,147,214,0.28); color: #c9c4f2; }
+    .status-pill.connecting .status-dot { background: var(--accent); }
+    .status-pill.connected, .status-pill.running { background: rgba(0,209,178,0.08); border-color: rgba(0,209,178,0.28); color: #5fe3cf; }
+    .status-pill.connected .status-dot, .status-pill.running .status-dot { background: var(--teal); }
+    .status-pill.paused, .status-pill.dim, .status-pill.offline { background: rgba(245,184,61,0.08); border-color: rgba(245,184,61,0.3); color: var(--amber); }
+    .status-pill.paused .status-dot, .status-pill.dim .status-dot, .status-pill.offline .status-dot { background: var(--amber); }
+    .status-pill.disconnected, .status-pill.expired, .status-pill.lastlight { background: rgba(255,92,122,0.08); border-color: rgba(255,92,122,0.3); color: #ff8aa0; }
+    .status-pill.disconnected .status-dot, .status-pill.expired .status-dot, .status-pill.lastlight .status-dot { background: var(--danger); }
+    .seg-btn { transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease; }
+    .seg-btn.active { background: var(--accent-soft); color: #e6e2ff; box-shadow: inset 0 0 0 1px rgba(155,147,214,0.42); }
+    .btn-primary { background: var(--accent); color: #14101f; border-radius: 999px; box-shadow: 0 6px 18px rgba(155,147,214,0.24); }
+    .btn-secondary { background: #17212b; color: #d3dae3; }
+    .btn-danger { background: rgba(255,92,122,0.10); color: #ff8aa0; border-color: rgba(255,92,122,0.3); }
+    button:focus-visible, input:focus-visible, summary:focus-visible { outline-color: var(--accent); }
+    .safety-badge.dry, .night-mode-run-type.dry { color: var(--amber); background: rgba(245,184,61,0.10); border: 1px solid rgba(245,184,61,0.35); }
+    .safety-badge.real, .night-mode-run-type.real { color: #ff8aa0; background: rgba(255,92,122,0.08); border: 1px solid rgba(255,92,122,0.35); }
+    .pending-status { border-color: rgba(155,147,214,0.3); color: #d9d5f6; background: rgba(155,147,214,0.08); }
+    .comp-autopilot-badge { background: rgba(155,147,214,0.12); }
+    .pair-input:focus { box-shadow: 0 0 0 3px rgba(155,147,214,0.16); }
+    .night-mode-art { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 11px; color: var(--accent); background: rgba(155,147,214,0.08); border: 1px solid rgba(155,147,214,0.2); }
+    .night-mode-card.disabled .night-mode-art { color: var(--dim); background: transparent; border-color: var(--card-border); }
+    .nm-glyph { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .night-mode-tag { color: #cfcaf3; background: rgba(155,147,214,0.12); }
+    .night-mode-tag.status { color: #91a0af; background: rgba(145,160,175,0.10); }
+    .night-mode-card { transition: border-color 0.2s ease, transform 0.15s ease; }
+    /* ── UI-R3 · P09 phone: one link bar, honest states, Night Modes up
+       front. Every colour still follows the grammar (violet = you act,
+       teal = live/ready, amber = Test Mode/paused/attention, red = real or
+       destructive). Nothing loops here: the only motion is the sheet
+       entrance (opening only) and short state transitions, all removed by
+       the reduced-motion block below. ── */
+    :root {
+      --ease-out: cubic-bezier(.22,.8,.24,1);
+      --dur-fast: 140ms; --dur-base: 220ms; --dur-slow: 420ms;
+      --lights-level: 1;
+      --mono: 'Cascadia Mono', 'Cascadia Code', Consolas, ui-monospace, 'SFMono-Regular', Menlo, monospace;
+      /* Fire 05: the desktop's condensed instrument face (system fonts only:
+         Bahnschrift on Windows, DIN on Apple, Roboto Condensed on Android). */
+      --font-instrument: 'Bahnschrift', 'DIN Alternate', 'DIN Condensed', sans-serif-condensed, 'Roboto Condensed', 'Segoe UI Variable Display', system-ui, sans-serif;
+    }
+    /* Safe areas (notched phones): after the UI-R1 shorthand. */
+    .pwa {
+      padding-top: max(18px, env(safe-area-inset-top));
+      padding-right: max(clamp(14px, 5vw, 22px), env(safe-area-inset-right));
+      padding-bottom: max(32px, env(safe-area-inset-bottom));
+      padding-left: max(clamp(14px, 5vw, 22px), env(safe-area-inset-left));
+    }
+    .night-mode-backdrop, .confirm-backdrop {
+      padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+    }
+    .night-mode-detail, .confirm-card {
+      max-height: calc(100dvh - max(18px, env(safe-area-inset-top)) - max(18px, env(safe-area-inset-bottom)));
+    }
+
+    /* Lamp beam: lives on body::before so it can follow the real
+       remaining/total (--lights-level, set from desktop state only). */
+    body::before {
+      content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+      background: conic-gradient(from 100deg at 14% 0%, transparent 0deg, rgba(0,255,209,0.07) 10deg, rgba(0,255,209,0.025) 32deg, transparent 48deg);
+      opacity: calc(0.35 + 0.65 * var(--lights-level, 1));
+      transition: opacity var(--dur-slow) var(--ease-out);
+    }
+
+    /* Ring: paused = amber stroke (PHASE_COLORS.paused) with the head
+       parked; no dash pattern, nothing moves while paused. */
+    .ring-progress { transition: stroke-dashoffset var(--dur-slow) var(--ease-out), stroke var(--dur-base) ease; }
+    .ring-head { transition: transform var(--dur-slow) var(--ease-out), opacity var(--dur-base) ease; }
+    body.is-paused.ring-live .ring-head { opacity: 0; }
+    body.is-paused .timer-label { color: var(--amber); font-weight: 700; }
+    .stale-tag { display: inline-flex; align-items: center; min-height: 20px; margin-bottom: 6px; padding: 2px 9px; border-radius: 999px; border: 1px solid rgba(245,184,61,0.4); background: rgba(245,184,61,0.08); color: var(--amber); font-size: 10px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; }
+    .stale-tag[hidden] { display: none; }
+
+    /* One link bar: connection, target PC, freshness. Static; never dimmed. */
+    .link-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 40px; margin: 0 0 12px; padding: 4px 4px 10px; border-bottom: 1px solid rgba(38,55,70,0.6); text-align: left; }
+    .link-bar .status-pill { flex: 0 1 auto; max-width: 58%; margin: 0; padding: 6px 12px; font-size: 12px; }
+    .link-bar .pc-name { display: flex; align-items: center; gap: 6px; flex: 1 1 0; min-width: 0; margin: 0; color: #e3e9ee; font-size: 13px; font-weight: 600; white-space: nowrap; }
+    .pc-label { flex: 0 0 auto; color: var(--muted); font-size: 11px; font-weight: 600; }
+    .pc-host { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .pc-caveat { flex: 0 0 auto; color: var(--amber); font-size: 11px; font-weight: 700; }
+    .link-bar .freshness { flex: 0 0 auto; min-height: 0; margin: 0; color: var(--muted); font-size: 11px; white-space: nowrap; }
+    .link-bar .freshness.stale { flex: 1 0 100%; order: 3; white-space: normal; color: var(--amber); font-size: 12px; font-weight: 700; line-height: 1.4; }
+    .safety-row { margin: 6px 0 14px; }
+    .safety-badge { min-height: 34px; padding: 6px 15px; font-size: 12px; letter-spacing: 1.1px; }
+
+    /* Pairing: no fake ring, the lamp as the hero, two honest steps. */
+    body.is-pairing .ring-wrap, body.is-pairing #freshness, body.is-pairing #safety-row, body.is-pairing #details-panel, body.is-pairing #outcome-strip { display: none !important; }
+    .pair-card { position: relative; padding: 24px 20px 22px; background: linear-gradient(180deg, rgba(0,209,178,0.035) 0%, rgba(0,209,178,0) 42%), var(--card); }
+    .pair-title { font-size: 20px; margin-bottom: 10px; }
+    .pair-steps { list-style: none; counter-reset: pair-step; display: grid; gap: 12px; margin: 0 0 20px; }
+    .pair-steps li { counter-increment: pair-step; position: relative; min-height: 24px; padding-left: 36px; color: #c9d3dc; font-size: 14px; line-height: 1.5; }
+    .pair-steps li::before { content: counter(pair-step); position: absolute; left: 0; top: 0; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); border: 1px solid rgba(155,147,214,0.5); color: #e6e2ff; font-size: 12px; font-weight: 800; }
+    .pair-input { min-height: 52px; padding: 14px 16px; font-size: 16px; }
+    #pair-host { margin-bottom: 10px; }
+    .pair-submit { margin-top: 14px; min-height: 54px; }
+    .pair-status { color: var(--amber); }
+    .pair-error { color: #ff8aa0; }
+
+    /* Ending selector: real state semantics; REAL policy = red underline. */
+    .seg-btn { min-height: 56px; font-size: 12px; transition: background var(--dur-fast) ease, color var(--dur-fast) ease; }
+    .seg-btn.active { background: rgba(155,147,214,0.20); color: #fff; box-shadow: inset 0 0 0 1.5px rgba(155,147,214,0.6); }
+    #action-seg.is-real .seg-btn.active { box-shadow: inset 0 -2px 0 var(--danger), inset 0 0 0 1.5px rgba(155,147,214,0.6); }
+
+    /* Active controls: violet add-time, glyph Pause/Resume, red Stop. */
+    .btn { transition: transform var(--dur-fast) var(--ease-out), background var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-fast) ease; }
+    .btn-primary:disabled { box-shadow: none; }
+    .btn-addtime { min-height: 52px; display: flex; align-items: baseline; justify-content: center; gap: 3px; background: rgba(155,147,214,0.10); border: 1px solid rgba(155,147,214,0.32); color: #e6e2ff; font-variant-numeric: tabular-nums; }
+    .btn-addtime::after { content: 'min'; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+    .btn-addtime:active { background: rgba(155,147,214,0.18); }
+    .primary-control { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; }
+    .btn-glyph { width: 18px; height: 18px; flex: 0 0 auto; fill: currentColor; }
+    #btn-pause.btn-primary { border: 1px solid transparent; }
+    #btn-cancel { margin-top: 6px; }
+    #btn-cancel .btn-glyph { width: 14px; height: 14px; }
+
+    /* Night Modes up front: ready modes are real buttons; the rest fold
+       into one neutral line with their reasons. */
+    .night-mode-section { margin: 2px 0 6px; padding: 0 0 16px; border-top: 0; border-bottom: 1px solid var(--card-border); }
+    .night-mode-header { margin-bottom: 10px; }
+    .night-mode-title { color: #c9d3dc; }
+    .night-mode-toggle { min-height: 44px; min-width: 44px; padding: 10px 12px; border-radius: 10px; }
+    .night-mode-card { -webkit-appearance: none; appearance: none; width: 100%; min-width: 0; min-height: 0; font: inherit; color: inherit; box-shadow: inset 0 1px 0 rgba(255,255,255,.04); }
+    .night-mode-card > span { display: block; }
+    .night-mode-card > .night-mode-art { display: inline-flex; }
+    .night-mode-card > .night-mode-tags { display: flex; }
+    .night-mode-card:not(.disabled):hover { border-color: rgba(155,147,214,0.42); }
+    .night-mode-empty { grid-column: 1 / -1; padding: 16px; color: var(--muted); font-size: 12px; text-align: center; }
+    .nm-unavailable { margin-top: 10px; color: #91a0af; font-size: 12px; text-align: left; }
+    .nm-unavailable[hidden] { display: none; }
+    .nm-unavailable summary { min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 2px; cursor: pointer; list-style: none; }
+    .nm-unavailable summary::-webkit-details-marker { display: none; }
+    .nm-unavailable summary::after { content: ''; flex: 0 0 auto; width: 6px; height: 6px; margin-left: auto; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); }
+    .nm-unavailable details[open] summary::after { transform: rotate(45deg); }
+    .nm-unavailable ul { list-style: none; display: grid; gap: 8px; padding: 2px 0 4px; }
+    .nm-unavailable li { padding: 10px 12px; border: 1px dashed var(--card-border); border-radius: 12px; }
+    .nm-un-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .nm-un-name { color: #c9d3dc; font-size: 13px; font-weight: 700; }
+    .nm-unavailable .night-mode-tag.status { text-transform: none; letter-spacing: 0.2px; }
+    .night-mode-reason { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.4; }
+
+    /* Details: neutral read-only values, warn only when a value is > 0. */
+    .details > summary { display: flex; align-items: center; gap: 10px; min-height: 52px; list-style: none; }
+    .details > summary::-webkit-details-marker { display: none; }
+    .details-chevron { width: 14px; height: 14px; flex: 0 0 auto; color: var(--muted); transition: transform var(--dur-base) var(--ease-out); }
+    .details[open] .details-chevron { transform: rotate(90deg); }
+    .streak { justify-content: flex-start; padding: 12px 16px; }
+    .comp-metric-value { color: var(--text); }
+    /* The warn modifier must beat the neutral value rule above (same element). */
+    .comp-metric-value.comp-metric--warn { color: var(--amber); }
+    .comp-score-col[hidden] { display: none; }
+    .snooze-tax-indicator { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 6px; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(245,184,61,0.3); background: rgba(245,184,61,0.08); color: var(--amber); font-size: 11px; font-weight: 700; }
+    .snooze-tax-indicator.is-danger { border-color: rgba(255,92,122,0.35); background: rgba(255,92,122,0.08); color: #ff8aa0; }
+    .tax-glyph { width: 14px; height: 14px; flex: 0 0 auto; }
+    .comp-system { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; padding: 12px 16px; border-radius: 12px; background: var(--card); border: 1px solid var(--card-border); }
+    .comp-system-label { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+    .comp-system-value { color: #c9d3dc; font-size: 11px; font-weight: 600; }
+    .comp-version { margin-top: 8px; padding: 0 6px; color: var(--muted); font-size: 11px; text-align: center; }
+    .comp-version[hidden] { display: none; }
+
+    /* Sheets: scrim fade + 28px slide-up only when opening; closing is
+       instant so Keep running / Stop are never delayed. */
+    @keyframes p09ScrimIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes p09SheetIn { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: none; } }
+    .night-mode-backdrop.show, .confirm-backdrop.show { animation: p09ScrimIn var(--dur-base) ease both; }
+    .night-mode-backdrop.show .night-mode-detail, .confirm-backdrop.show .confirm-card { animation: p09SheetIn var(--dur-slow) var(--ease-out) both; }
+
+    @media (max-width: 340px) {
+      .pwa { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
+      .link-bar .pc-name { flex-basis: 100%; order: 2; }
+    }
+    @media (max-width: 220px) {
+      .pwa { padding-left: max(6px, env(safe-area-inset-left)); padding-right: max(6px, env(safe-area-inset-right)); }
+    }
+    /* Short phones: keep Stop in the first frame (320x700). Not below
+       300px wide, where the existing compact ring sizes already apply. */
+    @media (max-height: 700px) and (min-width: 300px) {
+      .ring-wrap { width: min(60vw, 208px); height: min(60vw, 208px); }
+      .btn-addtime, .primary-control { min-height: 48px; padding-block: 12px; }
+    }
+
+    /* ── UI-R3 · Fire 05: phone run ──────────────────────────────────────
+       The desktop's instrument in the hand. A thin 4-unit arc (the 120
+       viewBox twin of the desktop's 5-unit arc) with the logo's broken O
+       just outside it; a paused arc cut by #ring-cut-mask at the O's three
+       gaps; the condensed instrument face on the digits; Add time / Pause /
+       Stop docked in thumb reach with the desktop's one Pause rule (tinted
+       while running, Resume the filled primary, Pause and Stop at the same
+       weight); the PC name as the hero of the link bar; a calm, frozen
+       paused state; an honest receipt after a stop. Static: the only motion
+       is the strip's one-shot opacity entrance and the toast fade, both
+       collapsed by the reduced-motion block. The safety badge row (Test
+       Mode / REAL truth) is never restyled, faded or animated here, and the
+       stale rules below still win. ── */
+
+    /* Type: the instrument face on numerals and labels, never on prose. */
+    .timer-main { font-family: var(--font-instrument); font-weight: 600; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+    .timer-name, .timer-label, .timer-phase, .section-label, .add-time-label, .safety-badge, .night-mode-tag, .btn-addtime { font-family: var(--font-instrument); }
+    .night-mode-tag { font-size: 10.5px; padding: 3px 8px; letter-spacing: .8px; text-transform: none; }
+    .btn { border-radius: 999px; }
+    .btn-addtime { font-size: 18px; }
+
+    /* The ring states the phase and the consequence. Winding down is the
+       violet of the dimmed arc; Last Light is red only for a REAL run. */
+    .timer-phase { margin-bottom: 5px; color: #c9c4f2; font-size: 10px; font-weight: 700; letter-spacing: 1.8px; line-height: 1.2; }
+    .timer-phase:empty { display: none; }
+    .timer-phase.is-lastlight-real { color: #ff8aa0; }
+    .timer-phase.is-lastlight-test { color: var(--amber); }
+    body.is-running .timer-label.is-test { color: var(--amber); font-weight: 700; }
+    body.is-paused .target { color: var(--muted); }
+    /* The target line stays inside the arc's chord. */
+    .ring-center .target { max-width: 72%; text-align: center; }
+    /* Compact rings hold at most four lines: while a phase line shows, or
+       while paused (the label already says "Paused"), the target line stays
+       readable to screen readers only. */
+    @media (max-height: 700px), (max-width: 300px) {
+      .ring-center .timer-phase:not(:empty) ~ .target, body.is-paused .ring-center .target { position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    }
+
+    /* Paused is calm and frozen: a half-strength amber arc cut at the O's
+       gaps, no halo, a faint amber O. Never the badge row. */
+    body.is-paused:not(.stale-state) .ring-progress { mask: url(#ring-cut-mask); }
+    body.is-paused:not(.stale-state) .ring-progress { opacity: .5; }
+    body.is-paused:not(.stale-state) .ring { box-shadow: none; }
+    body.is-paused:not(.stale-state) .ring-segments { stroke: rgba(245,184,61,.2); }
+    body.is-paused:not(.stale-state) .timer-main { opacity: .82; text-shadow: none; }
+    /* The head's halo stays inside the broken O. The diamond is centred
+       at r 54; its rx 0.8 outer apex reaches 54 + 2.5*sqrt2 - 0.8*(sqrt2 - 1)
+       ~ 57.2, and a 1.2 round-joined stroke adds 0.6, so the halo ends at
+       57.8, inside the O's inner edge (58.5 - 0.6 = 57.9). */
+    .ring-head-particle { stroke-width: 1.2; stroke-linejoin: round; }
+
+    /* Link bar: the PC name is the hero. "Target PC:" stays for screen
+       readers; a fresh reading is a static teal dot whose words stay in the
+       DOM; stale keeps the full-width amber line. */
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+    .pc-glyph { width: 14px; height: 14px; flex: 0 0 auto; fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .link-bar .freshness.is-fresh { flex: 0 0 8px; width: 8px; height: 8px; padding: 0; border-radius: 50%; background: var(--teal); font-size: 0; color: transparent; overflow: hidden; }
+
+    /* Thumb dock: only while the phone shows a run (body.has-run, set from
+       an authoritative running/paused state and cleared only by an
+       authoritative idle state or a pairing reset; idle and pairing keep
+       their layouts). A stale flash (e.g. a phone wake) clears is-running /
+       is-paused but never has-run, so the last-known run keeps its layout
+       and nothing jumps under a thumb. The ring and its badge centre in the
+       free space; Add time / Pause / Stop sit at the bottom of the 100dvh
+       column through margin-top: auto. Always normal flow, never sticky or
+       fixed: on a short, landscape or zoomed screen the dock simply
+       scrolls, so it can never cover the TEST MODE / REAL badge, the ring
+       or Details. Flex margins do not collapse, so the ring drops its 4px
+       bottom margin and the ring-to-badge gap stays the old collapsed 6px. */
+    /* flex-shrink: 0 because body is a definite-height flex column: with an
+       explicit min-height, .pwa could otherwise shrink below its content on
+       short phones and squeeze the ring and dock (FIRE05 review round 3). */
+    body.has-run .pwa { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; flex-shrink: 0; }
+    body.has-run .ring-wrap { margin-top: auto; margin-bottom: 0; }
+    body.has-run #active-controls { margin-top: auto; padding: 12px 0 max(12px, env(safe-area-inset-bottom)); }
+
+    /* Add time is one joined instrument. Focus rings sit inside the bar
+       so its clipping never hides them. */
+    .add-time-grid { display: flex; gap: 0; border: 1px solid rgba(155,147,214,.32); border-radius: 16px; overflow: hidden; }
+    .add-time-grid .btn { flex: 1 1 0; border-radius: 0; border: 0; border-left: 1px solid rgba(155,147,214,.18); min-height: 52px; }
+    .add-time-grid .btn:first-child { border-left: 0; }
+    .add-time-grid .btn:focus-visible { outline-offset: -3px; }
+    @media (max-height: 700px) and (min-width: 300px) {
+      .add-time-grid .btn { min-height: 48px; }
+    }
+
+    /* One Pause rule with the desktop: running, Pause is a violet-tinted
+       outline at Stop's weight; paused, Resume is the filled primary. */
+    body.is-running #btn-pause.btn-secondary { background: rgba(155,147,214,.14); color: #e6e2ff; border: 1.5px solid rgba(155,147,214,.55); }
+    body.is-running #btn-pause.btn-secondary:active { background: rgba(155,147,214,.22); }
+    body.has-run #btn-cancel { border-width: 1.5px; }
+    /* Pause and Stop at one 56px weight (decision 2: the desktop rule). */
+    @media (min-height: 701px) {
+      body.has-run #btn-pause, body.has-run #btn-cancel { min-height: 56px; }
+    }
+
+    /* An honest receipt after a stop: a neutral card, only the glyph teal.
+       Not a live region (the toast announces). One-shot opacity entrance. */
+    @keyframes fire05FadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .outcome-strip { display: flex; align-items: center; gap: 10px; min-height: 48px; margin: 0 0 12px; padding: 2px 2px 2px 14px; border-radius: 14px; background: var(--card); border: 1px solid var(--card-border); color: #c9d3dc; font-size: 13px; font-weight: 600; line-height: 1.4; text-align: left; animation: fire05FadeIn var(--dur-base) ease both; }
+    .outcome-strip[hidden] { display: none; }
+    .outcome-glyph { width: 16px; height: 16px; flex: 0 0 auto; fill: none; stroke: var(--teal); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .outcome-text { flex: 1 1 auto; min-width: 0; }
+    /* Dismiss rides the shared .btn / .btn-secondary pill (FIRE01 tactile
+       press, motion tokens) as a quiet 44px icon button. */
+    .btn.outcome-dismiss { flex: 0 0 44px; width: 44px; height: 44px; min-height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; background: transparent; color: var(--muted); }
+    .btn.outcome-dismiss:active { background: rgba(145,160,175,.14); }
+    .outcome-dismiss svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+
+    /* On-brand toast: the card, a hairline and a teal dot. */
+    .feedback-toast { display: inline-flex; align-items: center; gap: 9px; width: max-content; max-width: calc(100vw - 32px); bottom: max(24px, calc(env(safe-area-inset-bottom) + 16px)); padding: 11px 18px 11px 14px; border-radius: 14px; background: #151f28; border: 1px solid var(--card-border); color: var(--text); font-size: 14px; font-weight: 600; line-height: 1.35; box-shadow: 0 12px 40px rgba(0,0,0,.5); }
+    .feedback-toast::before { content: ''; flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: var(--teal); }
+
+    /* ── UI-R3 · Fire 06: phone at rest ─────────────────────────────────
+       Idle reads like the desktop's Tonight's plan. The ring previews the
+       plan only from an authoritative state with a known Test Mode policy
+       (a static violet arc at low strength: you act; no glow, no head, no
+       loop); otherwise it keeps '—'. One plan card holds the duration
+       chips, the ending, a Custom stepper and one live Start pill. Every
+       start goes through the branded Start sheet, whose Test Mode / REAL
+       band is static. The Night Mode sheet states the plan once. Pairing
+       has one lamp, the wordmark: unlit until the PC really answers, then
+       lit once (opacity only, collapsed by the reduced-motion block). ── */
+
+    /* The plan preview: setRing(1, 'idle') draws the full arc in the idle
+       violet with the head hidden; here it drops to low strength. Placed
+       before the stale rules so stale still wins. */
+    body.is-plan .ring-progress { opacity: .28; }
+    body.is-plan .ring { box-shadow: none; }
+    body.is-plan .ring-segments { stroke: rgba(155,147,214,.14); }
+    /* The plan's label and start-now line stay inside the arc's chord. */
+    body.is-plan .ring-center .timer-label { max-width: 78%; text-align: center; }
+
+    /* Tonight's plan: one card. Violet = you act. */
+    .plan-card { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 18px; text-align: left; border: 1px solid var(--card-border); background: linear-gradient(180deg, rgba(155,147,214,.07) 0%, rgba(155,147,214,0) 38%), var(--card); box-shadow: inset 0 1px 0 rgba(255,255,255,.04); }
+    .plan-card .section-label { margin: 2px 2px -4px; }
+    .plan-chips { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+    .btn.plan-chip { min-height: 52px; padding: 6px 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-radius: 16px; background: transparent; border: 1px solid rgba(155,147,214,.32); color: #d9d5f6; font-family: var(--font-instrument); font-size: 20px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+    .plan-chip-unit { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+    .btn.plan-chip[aria-pressed="true"] { background: rgba(155,147,214,.20); color: #fff; border-color: transparent; box-shadow: inset 0 0 0 1.5px rgba(155,147,214,.6); }
+    .btn.plan-chip[aria-pressed="true"] .plan-chip-unit { color: #d9d5f6; }
+    .plan-stepper { display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px; gap: 8px; }
+    .btn.plan-step { min-height: 48px; padding: 0; font-family: var(--font-instrument); font-size: 22px; font-weight: 600; line-height: 1; }
+    .plan-stepper .custom-input { justify-content: center; border-radius: 999px; }
+    .plan-stepper .custom-input input { width: 5ch; flex: 0 0 auto; padding: 12px 0; text-align: right; font-family: var(--font-instrument); font-size: 18px; }
+    .btn.plan-start { width: 100%; min-height: 56px; margin-top: 4px; font-size: 16px; font-variant-numeric: tabular-nums; }
+    .night-mode-section { margin-top: 10px; }
+    @media (max-width: 300px) {
+      .plan-chips { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+
+    /* One Test Mode sentence with the desktop, static (never animated). */
+    .idle-safety.dry { color: var(--amber); border-color: rgba(245,184,61,.35); background: rgba(245,184,61,.08); }
+    .idle-safety.real { color: #ff8aa0; border-color: rgba(255,92,122,.35); background: rgba(255,92,122,.08); }
+    .idle-safety.checking, .night-mode-run-type.checking { color: #c9d3dc; border: 1px solid var(--card-border); background: rgba(145,160,175,.06); }
+    .idle-safety strong, .night-mode-run-type strong { font-family: var(--font-instrument); letter-spacing: 1px; }
+
+    /* The Start sheet: the plan once, the truth band static above Start,
+       and a static red bottom edge on a REAL Start. */
+    .start-eyebrow { color: var(--muted); font-family: var(--font-instrument); font-size: 11px; font-weight: 700; letter-spacing: 1.6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .confirm-card .start-title { margin: 6px 0 12px; color: var(--text); font-family: var(--font-instrument); font-size: 44px; font-weight: 600; line-height: 1; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+    .start-facts { margin: 0 0 14px; border-top: 1px solid var(--card-border); }
+    .start-fact { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--card-border); font-size: 13px; }
+    .start-fact-k { color: var(--muted); }
+    .start-fact-v { min-width: 0; color: var(--text); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+    .start-run-type { margin-bottom: 14px; }
+    #start-go.is-real { box-shadow: inset 0 -3px 0 var(--danger), 0 6px 18px rgba(155,147,214,.24); }
+
+    /* The Night Mode sheet states the plan once: the duration, the real end
+       time (direct starts only), the facts and the ritual line. */
+    .nm-hero { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+    .nm-hero .night-mode-art { flex: 0 0 auto; }
+    .night-mode-detail .nm-hero h2 { min-width: 0; margin: 0; }
+    .night-mode-meta { display: grid; gap: 6px; margin: 0 0 16px; padding: 12px 0; border-top: 1px solid var(--card-border); border-bottom: 1px solid var(--card-border); }
+    .nm-hero-time { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+    #nm-detail-duration { color: var(--text); font-family: var(--font-instrument); font-size: 44px; font-weight: 600; line-height: 1; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+    #nm-detail-ends { color: #c9d3dc; font-size: 13px; font-weight: 600; }
+    #nm-detail-ends[hidden] { display: none; }
+    .nm-detail-facts, .nm-detail-ritual { color: var(--muted); font-size: 12px; }
+
+    /* Pairing: one lamp, the wordmark. Unlit (body.lamp-off) until the PC
+       really answers, then lit once (body.lamp-on, opacity only). Teal
+       stays teal; the lamp never says Test or REAL. */
+    body.is-pairing .brand { margin: 12vh 0 28px; }
+    body.is-pairing .brand .brand-wordmark { height: 56px; }
+    body.lamp-off .wm-beam, body.lamp-off .wm-bulb { opacity: .25; }
+    body.lamp-off .wm-o { opacity: .45; }
+    body.lamp-on .wm-beam, body.lamp-on .wm-bulb, body.lamp-on .wm-o { transition: opacity 600ms var(--ease-out); }
+    #pair-input { font-size: 20px; text-align: center; letter-spacing: 4px; font-family: var(--mono); }
+    #pair-input::placeholder { font-size: 15px; letter-spacing: 0; }
+    .pair-meta { justify-content: center; }
+    .pair-footer { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); line-height: 1.4; }
+    .pair-wifi { width: 14px; height: 14px; flex: 0 0 auto; fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* Stale wins (kept last): one ~0.5 dim on the reading, never on the
+       link bar or the safety badge; the beam drops to a fixed low level. */
+    body.stale-state .ring-head { opacity: 0; }
+    .stale-state .ring, .stale-state .timer-name, .stale-state .timer-main, .stale-state .target { opacity: 0.5; }
+    .stale-state .ring-progress { stroke: #4a5866; }
+    .stale-state .timer-main { text-decoration: none; text-shadow: none; }
+    .stale-state #active-controls { opacity: 0.48; }
+    body.stale-state::before { opacity: 0.2; }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation: none !important; transition-duration: 0.01ms !important; }
     }
@@ -263,21 +637,161 @@
 </head>
 <body>
   <div class="pwa" id="app-shell" tabindex="-1">
-    <div class="brand">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5b8cff" d="M12,3a9,9 0 1 0 9,9c0,-0.46 -0.04,-0.92 -0.1,-1.36a5.389,5.389 0 0 1 -4.4,2.26a5.403,5.403 0 0 1 -3.14,-9.8c-0.44,-0.06 -0.9,-0.1 -1.36,-0.1z"/></svg>
-      <span class="brand-text">Lights Out</span>
+    <div class="brand" role="img" aria-label="Lights Out">
+      <svg class="brand-wordmark" viewBox="44 84 560 122" aria-hidden="true"><defs>
+    <linearGradient id="lo-g-beam" x1="0" y1="0.5" x2="1" y2="0.5">
+      <stop offset="0"   stop-color="#00FFD1" stop-opacity="0.25"/>
+      <stop offset="0.15" stop-color="#00FFD1" stop-opacity="0.12"/>
+      <stop offset="0.6"  stop-color="#64FFF0" stop-opacity="0.04"/>
+      <stop offset="1"    stop-color="#00BFA6" stop-opacity="0.0"/>
+    </linearGradient>
+    <filter id="lo-f-ring" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="lo-f-text" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <linearGradient id="lo-g-lamp" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#33404e"/>
+      <stop offset="0.6" stop-color="#222c37"/>
+      <stop offset="1" stop-color="#151b22"/>
+    </linearGradient>
+    <linearGradient id="lo-g-lamp-hl" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#465463"/>
+      <stop offset="1" stop-color="#2a323c"/>
+    </linearGradient>
+    <radialGradient id="lo-g-lamp-glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#00FFD1" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#00FFD1" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g class="wm-bulb"><circle cx="150" cy="128" r="58" fill="url(#lo-g-lamp-glow)"/></g>
+  <g stroke-linejoin="miter">
+    <ellipse cx="72" cy="194" rx="26" ry="7" fill="#1a222c"/>
+    <ellipse cx="72" cy="193" rx="24" ry="5.5" fill="#27313d"/>
+    <rect x="56" y="182" width="32" height="11" fill="url(#lo-g-lamp)"/>
+    <line x1="56" y1="186" x2="88" y2="186" stroke="#3d4a5a" stroke-width="1.5"/>
+    <line x1="72" y1="184" x2="105" y2="140" stroke="#222c37" stroke-width="8" stroke-linecap="butt"/>
+    <line x1="72" y1="184" x2="105" y2="140" stroke="#3d4a5a" stroke-width="2.5" stroke-linecap="butt"/>
+    <circle cx="105" cy="140" r="5" fill="#1a222c"/>
+    <circle cx="105" cy="140" r="3" fill="#3d4a5a"/>
+    <line x1="105" y1="140" x2="130" y2="100" stroke="#222c37" stroke-width="7" stroke-linecap="butt"/>
+    <line x1="105" y1="140" x2="130" y2="100" stroke="#3d4a5a" stroke-width="2" stroke-linecap="butt"/>
+    <circle cx="130" cy="100" r="4.5" fill="#1a222c"/>
+    <circle cx="130" cy="100" r="2.5" fill="#3d4a5a"/>
+    <polygon points="116,111  138,104  165,146  143,153"
+             fill="url(#lo-g-lamp)" stroke="#0c1016" stroke-width="1.5"/>
+    <polygon points="121,113  136,107  156,145  145,149"
+             fill="url(#lo-g-lamp-hl)"/>
+    <line x1="116" y1="111" x2="138" y2="104"
+          stroke="#22a596" stroke-width="2.5" stroke-linecap="round" opacity="0.75"/>
+    <line x1="143" y1="153" x2="165" y2="146"
+          stroke="#52606f" stroke-width="3.5" stroke-linecap="butt"/>
+    <line x1="126" y1="116" x2="148" y2="148"
+          stroke="#0c1016" stroke-width="1.5" opacity="0.5"/>
+  </g>
+  <polygon class="wm-beam" points="144,153  165,146  636,52  636,158"
+           fill="url(#lo-g-beam)"/>
+  <g stroke="#00FFD1" stroke-opacity="0.04" stroke-width="0.5">
+    <line x1="185" y1="97"  x2="560" y2="97"/>
+    <line x1="185" y1="113" x2="560" y2="113"/>
+    <line x1="185" y1="129" x2="560" y2="129"/>
+    <line x1="185" y1="145" x2="560" y2="145"/>
+    <line x1="185" y1="161" x2="560" y2="161"/>
+  </g>
+  <g fill="#00FFD1" filter="url(#lo-f-text)">
+    <rect x="185" y="108" width="8"  height="60"/>
+    <rect x="193" y="160" width="30" height="8"/>
+    <rect x="233" y="108" width="28" height="8"/>
+    <rect x="247" y="116" width="8"  height="44"/>
+    <rect x="233" y="160" width="28" height="8"/>
+    <rect x="273" y="108" width="30" height="8"/>
+    <rect x="273" y="116" width="8"  height="44"/>
+    <rect x="273" y="160" width="30" height="8"/>
+    <rect x="295" y="136" width="8"  height="24"/>
+    <rect x="281" y="136" width="14" height="6"/>
+    <rect x="315" y="108" width="8"  height="60"/>
+    <rect x="345" y="108" width="8"  height="60"/>
+    <rect x="315" y="136" width="38" height="8"/>
+    <rect x="365" y="108" width="30" height="8"/>
+    <rect x="376" y="116" width="8"  height="52"/>
+    <rect x="405" y="108" width="32" height="8"/>
+    <rect x="405" y="116" width="8"  height="16"/>
+    <rect x="405" y="136" width="30" height="8"/>
+    <rect x="429" y="144" width="8"  height="16"/>
+    <rect x="405" y="160" width="32" height="8"/>
+  </g>
+  <g>
+    <g class="wm-o" transform="translate(467, 108)">
+      <circle cx="28" cy="30" r="25"
+              fill="none" stroke="#00FFD1" stroke-opacity="0.08" stroke-width="4"
+              stroke-dasharray="36 6 34 8 32 6 35 0"/>
+      <circle cx="28" cy="30" r="25"
+              fill="none" stroke="#00FFD1" stroke-width="4.5" stroke-linecap="butt"
+              stroke-dasharray="52 8 44 6 26 35"
+              stroke-dashoffset="10"
+              filter="url(#lo-f-ring)"/>
+      <circle cx="2"  cy="26" r="2.5" fill="#64FFF0" opacity="0.8"/>
+      <circle cx="38" cy="58" r="2"   fill="#64FFF0" opacity="0.7"/>
+      <circle cx="56" cy="42" r="2"   fill="#64FFF0" opacity="0.5"/>
+      <circle cx="5"  cy="48" r="1.8" fill="#64FFF0" opacity="0.4"/>
+    </g>
+    <g fill="#00FFD1" opacity="0.82">
+      <rect x="524" y="108" width="8"  height="52"/>
+      <rect x="532" y="160" width="22" height="8"/>
+      <rect x="554" y="108" width="8"  height="52"/>
+    </g>
+    <g fill="#00FFD1" opacity="0.66">
+      <rect x="574" y="108" width="22" height="8"/>
+      <rect x="582" y="116" width="6"  height="52"/>
+    </g>
+  </g>
+  <g class="wm-bulb"><circle cx="165" cy="146" r="2.5" fill="#64FFF0" opacity="0.7"/>
+  <circle cx="165" cy="146" r="6"   fill="#00FFD1" opacity="0.12"/></g></svg>
+    </div>
+
+    <div class="link-bar" id="link-bar">
+      <div class="status-pill connecting" id="status-pill">
+        <span class="status-dot" id="status-dot"></span>
+        <span class="status-text" id="status-text">Connecting…</span>
+      </div>
+      <div class="pc-name" id="pc-name" style="display:none"></div>
+      <div class="freshness" id="freshness" aria-live="polite"></div>
+    </div>
+
+    <!-- Fire 05: an honest receipt after a confirmed stop (text via
+         textContent only; the toast is the announcement). -->
+    <div class="outcome-strip" id="outcome-strip" hidden>
+      <svg class="outcome-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.2 8.4 6.4 11.4 12.8 4.6"/></svg>
+      <span class="outcome-text" id="outcome-text"></span>
+      <button class="btn btn-secondary outcome-dismiss" type="button" id="outcome-dismiss" aria-label="Dismiss"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
     </div>
 
     <div class="ring-wrap">
-      <svg class="ring" viewBox="0 0 120 120">
+      <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+        <!-- Fire 05: the desktop's paused cut x0.6 (three 4.2-unit cuts at
+             the logo O's gaps; the pattern sums to 339.29 = 2*pi*54). The
+             broken O sits just outside the arc at r=58.5 (367.57 = 2*pi*58.5). -->
+        <defs>
+          <mask id="ring-cut-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="120" height="120">
+            <rect x="0" y="0" width="120" height="120" fill="#fff"/>
+            <circle cx="60" cy="60" r="54" fill="none" stroke="#000" stroke-width="8" stroke-dasharray="0 118.8 4.2 105.9 4.2 81.6 4.2 20.39" stroke-dashoffset="21.6"/>
+          </mask>
+        </defs>
         <circle class="ring-track" cx="60" cy="60" r="54"></circle>
+        <circle class="ring-segments" cx="60" cy="60" r="58.5"></circle>
         <circle class="ring-progress" id="ring-progress" cx="60" cy="60" r="54"
                 stroke-dasharray="339.292" stroke-dashoffset="339.292"></circle>
+        <g class="ring-head" id="ring-head"><rect class="ring-head-particle" x="111.5" y="57.5" width="5" height="5" rx="0.8" transform="rotate(45 114 60)"/></g>
       </svg>
       <div class="ring-center">
-        <div class="timer-name" id="timer-name">Last Call</div>
-        <div class="timer-main" id="timer-main">--:--</div>
-        <div class="timer-label" id="timer-label">Idle</div>
+        <div class="stale-tag" id="stale-tag" hidden>Last known</div>
+        <div class="timer-phase" id="timer-phase" aria-hidden="true"></div>
+        <div class="timer-name" id="timer-name"></div>
+        <div class="timer-main" id="timer-main">—</div>
+        <div class="timer-label" id="timer-label"></div>
         <div class="target" id="target"></div>
       </div>
     </div>
@@ -286,27 +800,23 @@
       <span class="safety-badge dry" id="safety-badge">TEST MODE</span>
       <span class="profile-name" id="profile-name"></span>
     </div>
-    <div class="status-pill connecting" id="status-pill">
-      <span class="status-dot" id="status-dot"></span>
-      <span class="status-text" id="status-text">Connecting…</span>
-    </div>
-    <div class="pc-name" id="pc-name" style="display:none"></div>
-    <div class="freshness" id="freshness" aria-live="polite"></div>
 
-    <!-- Pairing (shown when no token is stored yet) -->
+    <!-- Pairing (shown when no token is stored yet). Fire 06: the wordmark
+         above is the one lamp; it stays unlit (body.lamp-off) until the PC
+         really answers. -->
     <div class="pair-card" id="pair-card" style="display:none">
-      <div class="pair-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
-      </div>
       <div class="pair-title">Connect to this PC</div>
       <div class="pair-status" id="pair-status" role="alert" style="display:none"></div>
-      <div class="pair-hint">Scan the QR code in the desktop app's Remote Control settings, or type the PC address and pairing code shown beneath it.</div>
-      <input class="pair-input" id="pair-host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="PC address (e.g. 192.168.1.5:58732)" aria-label="PC address" style="margin-bottom:8px">
+      <ol class="pair-steps" role="list">
+        <li>On your PC: Lights Out → Settings → Phone Companion → Same Wi-Fi.</li>
+        <li>Scan the QR, or type the address and code shown under it.</li>
+      </ol>
+      <input class="pair-input" id="pair-host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="PC address (e.g. 192.168.1.5:58732)" aria-label="PC address">
       <input class="pair-input" id="pair-input" type="text" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Pairing code" aria-label="Pairing code">
       <button class="btn btn-primary pair-submit" id="pair-submit">Connect</button>
       <div class="pair-error" id="pair-error" style="display:none">Enter the PC address and pairing code to continue.</div>
       <div class="pair-meta">
-        <span class="pair-footer">Phone &amp; PC must be on the same Wi-Fi</span>
+        <span class="pair-footer"><svg class="pair-wifi" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M1.6 6.2a9.2 9.2 0 0 1 12.8 0M3.9 8.6a5.9 5.9 0 0 1 8.2 0M6.2 11a2.6 2.6 0 0 1 3.6 0"/><path d="M8 13.4v.01"/></svg>Phone &amp; PC must be on the same Wi-Fi</span>
       </div>
     </div>
 
@@ -314,71 +824,87 @@
 
     <!-- Start controls (shown when idle) -->
     <div class="controls" id="idle-controls">
-      <div class="idle-safety" id="idle-safety-banner"><strong>REAL ACTION</strong> — timers started from this phone can perform the selected PC action.</div>
-      <div class="section-label">When the timer ends</div>
-      <div class="action-seg" id="action-seg">
-        <button class="seg-btn" data-action="sleep" type="button">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12,3a9,9 0 1 0 9,9c0,-0.46 -0.04,-0.92 -0.1,-1.36a5.39,5.39 0 0 1 -4.4,2.26a5.4,5.4 0 0 1 -3.14,-9.8c-0.44,-0.06 -0.9,-0.1 -1.36,-0.1z"/></svg>
-          Sleep
-        </button>
-        <button class="seg-btn active" data-action="shutdown" type="button">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v8"/><path d="M7.5 7a7 7 0 1 0 9 0"/></svg>
-          Shut down
-        </button>
-        <button class="seg-btn" data-action="restart" type="button">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v5h-5"/></svg>
-          Restart
-        </button>
-      </div>
+      <div class="idle-safety checking" id="idle-safety-banner"><strong>CHECKING</strong> · waiting for the PC to report whether power actions are real or Test Mode.</div>
 
-      <div class="section-label">Quick start</div>
-      <div class="quick-grid">
-        <button class="btn btn-primary" data-min="15">15 min</button>
-        <button class="btn btn-primary" data-min="30">30 min</button>
-        <button class="btn btn-primary" data-min="45">45 min</button>
-        <button class="btn btn-primary" data-min="60">1 hour</button>
-      </div>
+      <!-- Fire 06: Tonight's plan, one card. The duration chips, the ending
+           and the Custom stepper all write one plan (planSeconds); every
+           start opens the branded Start sheet. 'Ends with' sits inside the
+           card, so it visibly applies only to this plan, never to the Night
+           Modes below (each mode carries its own ending). -->
+      <section class="plan-card" id="plan-card" aria-label="Tonight’s plan">
+        <div class="section-label" id="plan-chips-label">Duration</div>
+        <div class="plan-chips" role="group" aria-labelledby="plan-chips-label">
+          <button class="btn plan-chip" type="button" data-min="15" aria-pressed="false" aria-label="15 minutes">15<span class="plan-chip-unit" aria-hidden="true">min</span></button>
+          <button class="btn plan-chip" type="button" data-min="30" aria-pressed="true" aria-label="30 minutes">30<span class="plan-chip-unit" aria-hidden="true">min</span></button>
+          <button class="btn plan-chip" type="button" data-min="45" aria-pressed="false" aria-label="45 minutes">45<span class="plan-chip-unit" aria-hidden="true">min</span></button>
+          <button class="btn plan-chip" type="button" data-min="60" aria-pressed="false" aria-label="1 hour">1<span class="plan-chip-unit" aria-hidden="true">hour</span></button>
+          <button class="btn plan-chip" type="button" data-min="90" aria-pressed="false" aria-label="90 minutes">90<span class="plan-chip-unit" aria-hidden="true">min</span></button>
+        </div>
 
-      <div class="custom-row">
-        <label class="custom-input">
-          <input id="custom-min" type="number" inputmode="numeric" min="1" max="1440" value="90" aria-label="Custom minutes">
-          <span class="unit">min</span>
-        </label>
-        <button class="btn btn-secondary btn-custom" id="custom-start">Start</button>
-      </div>
+        <div class="section-label" id="action-seg-label">Ends with</div>
+        <div class="action-seg" id="action-seg" role="group" aria-labelledby="action-seg-label">
+          <button class="seg-btn" data-action="sleep" type="button" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12,3a9,9 0 1 0 9,9c0,-0.46 -0.04,-0.92 -0.1,-1.36a5.39,5.39 0 0 1 -4.4,2.26a5.4,5.4 0 0 1 -3.14,-9.8c-0.44,-0.06 -0.9,-0.1 -1.36,-0.1z"/></svg>
+            Sleep
+          </button>
+          <button class="seg-btn active" data-action="shutdown" type="button" aria-pressed="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v8"/><path d="M7.5 7a7 7 0 1 0 9 0"/></svg>
+            Shut down
+          </button>
+          <button class="seg-btn" data-action="restart" type="button" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v5h-5"/></svg>
+            Restart
+          </button>
+        </div>
 
-      <!-- Night Mode picker (C2) -->
+        <div class="section-label" id="custom-label">Custom</div>
+        <div class="plan-stepper" role="group" aria-labelledby="custom-label">
+          <button class="btn btn-secondary plan-step" type="button" id="custom-minus" aria-label="5 minutes less">−</button>
+          <label class="custom-input">
+            <input id="custom-min" type="number" inputmode="numeric" min="1" max="1440" step="5" value="30" aria-label="Custom minutes">
+            <span class="unit">min</span>
+          </label>
+          <button class="btn btn-secondary plan-step" type="button" id="custom-plus" aria-label="5 minutes more">+</button>
+        </div>
+
+        <button class="btn btn-primary plan-start" type="button" id="plan-start">Start · 30 min</button>
+      </section>
+
+      <!-- Night Mode picker (C2), after the plan: each mode carries its own
+           duration and ending. -->
       <div class="night-mode-section" id="night-mode-section">
         <div class="night-mode-header">
-          <span class="night-mode-title">Start a Night Mode</span>
-          <button class="night-mode-toggle" id="night-mode-toggle" type="button">Show</button>
+          <span class="night-mode-title" id="night-mode-title">Or pick a Night Mode</span>
+          <button class="night-mode-toggle" id="night-mode-toggle" type="button" aria-expanded="true" aria-controls="night-mode-grid">Hide</button>
         </div>
-        <div class="night-mode-grid" id="night-mode-grid" role="list"></div>
+        <div class="night-mode-grid visible" id="night-mode-grid" role="group" aria-labelledby="night-mode-title"></div>
+        <div class="nm-unavailable" id="nm-unavailable" hidden></div>
       </div>
     </div>
 
     <!-- Timer actions (shown when running) -->
     <div class="controls" id="active-controls" style="display:none">
-      <div class="add-time-label">Add time</div>
-      <div class="add-time-grid">
-        <button class="btn btn-amber timer-mutation" data-add-seconds="300">+5</button>
-        <button class="btn btn-amber timer-mutation" data-add-seconds="900">+15</button>
-        <button class="btn btn-amber timer-mutation" data-add-seconds="1800">+30</button>
+      <div class="add-time-label" id="add-time-label">Add time</div>
+      <div class="add-time-grid" role="group" aria-labelledby="add-time-label">
+        <button class="btn btn-addtime timer-mutation" data-add-seconds="300" type="button" aria-label="Add 5 minutes">+5</button>
+        <button class="btn btn-addtime timer-mutation" data-add-seconds="900" type="button" aria-label="Add 15 minutes">+15</button>
+        <button class="btn btn-addtime timer-mutation" data-add-seconds="1800" type="button" aria-label="Add 30 minutes">+30</button>
       </div>
-      <button class="btn btn-secondary primary-control timer-mutation" id="btn-pause">Pause</button>
-      <button class="btn btn-danger primary-control timer-mutation" id="btn-cancel">Stop Tonight’s Run</button>
+      <button class="btn btn-secondary primary-control timer-mutation" id="btn-pause" type="button"><svg class="btn-glyph" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg><span class="btn-label">Pause</span></button>
+      <button class="btn btn-danger primary-control timer-mutation" id="btn-cancel" type="button"><svg class="btn-glyph" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="5" width="14" height="14" rx="2.5"/></svg>Stop tonight’s run</button>
     </div>
 
     <details class="details" id="details-panel">
-      <summary>Details</summary>
+      <summary><svg class="details-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 3.5 10.5 8 6 12.5"/></svg>Details</summary>
       <div class="details-body">
-        <div class="snooze-tax-indicator" id="snooze-tax-indicator" style="display:none;text-align:center;padding:8px;margin-top:6px;border-radius:10px;background:rgba(255,77,77,0.08);border:1px solid rgba(255,77,77,0.18)">
-          <span id="snooze-tax-msg" style="font-size:11px;color:#ff6b6b"></span>
+        <div class="snooze-tax-indicator" id="snooze-tax-indicator" style="display:none">
+          <svg class="tax-glyph" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 1.8 14.6 13.6H1.4z"/><path d="M8 6.2v3.4M8 11.6v.1"/></svg>
+          <span id="snooze-tax-msg"></span>
         </div>
         <div class="streak" id="streak-section" style="display:none">
-          <span class="streak-flame">&#x1F525;</span>
+          <svg class="streak-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3c1 3 4 4.5 4 8.5A4 4 0 0 1 8 11.5c0-1.6.8-2.6 1.6-3.4.2 1.4 1 2.2 1.9 2.4C11 8 11.5 5.5 12 3z"/><path d="M7 20.5h10"/></svg>
           <div class="streak-meta">
-            <div class="streak-label">Night Streak</div>
+            <div class="streak-label">Night streak</div>
             <div class="streak-number" id="streak-count">0</div>
           </div>
         </div>
@@ -390,43 +916,47 @@
             <span class="comp-autopilot-badge" id="comp-autopilot-badge">Autopilot ON</span>
           </div>
           <div class="comp-stats-body">
-            <div class="comp-score-col">
+            <div class="comp-score-col" hidden>
               <div class="comp-score" id="comp-score">--</div>
               <div class="comp-score-label" id="comp-score-label">Routine Score</div>
             </div>
             <div class="comp-metrics">
-              <div class="comp-metric"><span class="comp-metric-label">Est. deficit</span><span class="comp-metric-value comp-metric--warn" id="comp-debt">--</span></div>
-              <div class="comp-metric"><span class="comp-metric-label">Streak</span><span class="comp-metric-value comp-metric--good" id="comp-streak">--</span></div>
-              <div class="comp-metric"><span class="comp-metric-label">Tax debt</span><span class="comp-metric-value comp-metric--danger" id="comp-tax-debt">--</span></div>
+              <div class="comp-metric"><span class="comp-metric-label">Est. deficit</span><span class="comp-metric-value" id="comp-debt">--</span></div>
+              <div class="comp-metric"><span class="comp-metric-label">Tax debt</span><span class="comp-metric-value" id="comp-tax-debt">--</span></div>
             </div>
           </div>
         </div>
 
         <!-- PC System Info (phone view) -->
-        <div id="companion-system" style="display:none;padding:12px 16px;margin-top:8px;border-radius:12px;background:var(--card,rgba(255,255,255,0.04));border:1px solid var(--card-border)">
-          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between;align-items:center">
-            <span style="font-size:11px;color:var(--muted,#999);font-weight:600">PC STATUS</span>
-            <span id="comp-battery" style="font-size:10px;color:var(--accent);font-weight:600">Battery: --</span>
-            <span id="comp-power-plan" style="font-size:10px;color:var(--accent);font-weight:600">Plan: --</span>
-          </div>
+        <div class="comp-system" id="companion-system" style="display:none">
+          <span class="comp-system-label">PC status</span>
+          <span class="comp-system-value" id="comp-battery">Battery: --</span>
+          <span class="comp-system-value" id="comp-power-plan">Plan: --</span>
         </div>
+        <div class="comp-version" id="pc-version" hidden></div>
       </div>
     </details>
 
-    <div id="toast" class="feedback-toast"></div>
+    <div id="toast" class="feedback-toast" role="status" aria-live="polite"></div>
   </div>
 
-    <!-- Night Mode detail overlay (C2) -->
-    <div class="night-mode-backdrop" id="night-mode-backdrop" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="nm-detail-title">
+    <!-- Night Mode detail overlay (C2). Fire 06: a real modal (inert
+         background, focus trap, focus restored) that states the plan once. -->
+    <div class="night-mode-backdrop" id="night-mode-backdrop" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="nm-detail-title" aria-describedby="nm-detail-run-type">
       <div class="night-mode-detail">
-        <div id="nm-detail-art" class="night-mode-art" style="margin-bottom:8px"></div>
-        <h2 id="nm-detail-title"></h2>
+        <div class="nm-hero">
+          <div id="nm-detail-art" class="night-mode-art"></div>
+          <h2 id="nm-detail-title"></h2>
+        </div>
         <p id="nm-detail-subtitle"></p>
-        <ul class="night-mode-timeline" id="nm-detail-timeline"></ul>
-        <div class="night-mode-meta" id="nm-detail-meta"></div>
-        <div class="night-mode-run-type" id="nm-detail-run-type">REAL ACTION</div>
+        <div class="night-mode-meta" id="nm-detail-meta">
+          <div class="nm-hero-time"><span id="nm-detail-duration"></span><span id="nm-detail-ends" hidden></span></div>
+          <div class="nm-detail-facts" id="nm-detail-facts"></div>
+          <div class="nm-detail-ritual" id="nm-detail-ritual"></div>
+        </div>
+        <div class="night-mode-run-type checking" id="nm-detail-run-type"><strong>CHECKING</strong> · waiting for the PC to report whether power actions are real or Test Mode.</div>
         <div class="night-mode-actions">
-          <button class="btn btn-primary" id="nm-detail-start" type="button">Start Tonight’s Run</button>
+          <button class="btn btn-primary" id="nm-detail-start" type="button">Start</button>
           <button class="btn btn-secondary" id="nm-detail-close" type="button">Close</button>
         </div>
       </div>
@@ -434,12 +964,31 @@
 
     <div class="confirm-backdrop" id="cancel-confirm" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="cancel-title" aria-describedby="cancel-copy cancel-connection-status">
       <div class="confirm-card">
-        <h2 id="cancel-title">Stop Tonight’s Run?</h2>
+        <h2 id="cancel-title">Stop tonight’s run?</h2>
         <p id="cancel-copy"></p>
         <div class="cancel-connection-status" id="cancel-connection-status" role="status" hidden>PC connection unavailable. Stop is disabled until current PC state returns.</div>
         <div class="confirm-actions">
-          <button class="btn btn-secondary" id="cancel-keep">Keep Running</button>
-          <button class="btn btn-danger timer-mutation" id="cancel-stop">Stop Tonight’s Run</button>
+          <button class="btn btn-secondary" id="cancel-keep">Keep running</button>
+          <button class="btn btn-danger timer-mutation" id="cancel-stop">Stop tonight’s run</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fire 06: the branded Start sheet (replaces the browser confirm). The
+         plan once, then the static Test Mode / REAL band above Start. Every
+         text that holds the PC name (LAN data) is set with textContent. -->
+    <div class="confirm-backdrop" id="start-sheet" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="start-title" aria-describedby="start-run-type">
+      <div class="confirm-card">
+        <div class="start-eyebrow" id="start-eyebrow">TONIGHT’S PLAN</div>
+        <h2 class="start-title" id="start-title">30:00</h2>
+        <div class="start-facts">
+          <div class="start-fact"><span class="start-fact-k">Ends with</span><span class="start-fact-v" id="start-action"></span></div>
+          <div class="start-fact"><span class="start-fact-k" id="start-when-label">Lights out ≈</span><span class="start-fact-v" id="start-when"></span></div>
+        </div>
+        <div class="night-mode-run-type start-run-type checking" id="start-run-type"><strong>CHECKING</strong> · waiting for the PC to report whether power actions are real or Test Mode.</div>
+        <div class="confirm-actions">
+          <button class="btn btn-primary" id="start-go" type="button">Start</button>
+          <button class="btn btn-secondary" id="start-cancel" type="button">Not now</button>
         </div>
       </div>
     </div>
@@ -448,6 +997,7 @@
     const timerMain = document.getElementById('timer-main');
     const timerLabel = document.getElementById('timer-label');
     const timerName = document.getElementById('timer-name');
+    const timerPhase = document.getElementById('timer-phase');
     const targetEl = document.getElementById('target');
     const statusPill = document.getElementById('status-pill');
     const statusText = document.getElementById('status-text');
@@ -456,6 +1006,7 @@
     const streakSection = document.getElementById('streak-section');
     const streakCount = document.getElementById('streak-count');
     const ringProgress = document.getElementById('ring-progress');
+    const ringHead = document.getElementById('ring-head');
     const actionSeg = document.getElementById('action-seg');
     const customMin = document.getElementById('custom-min');
     const pairCard = document.getElementById('pair-card');
@@ -468,6 +1019,12 @@
     const safetyBadge = document.getElementById('safety-badge');
     const profileNameEl = document.getElementById('profile-name');
     const freshnessEl = document.getElementById('freshness');
+    // The ticking "last seen" age sits in an aria-hidden span so the polite
+    // live region announces only real changes of the stale message itself.
+    const freshnessText = document.createElement('span');
+    const freshnessAge = document.createElement('span');
+    freshnessAge.className = 'freshness-age';
+    freshnessAge.setAttribute('aria-hidden', 'true');
     const pendingStatus = document.getElementById('pending-status');
     const detailsPanel = document.getElementById('details-panel');
     const cancelConfirm = document.getElementById('cancel-confirm');
@@ -481,16 +1038,57 @@
     const nmDetailArt = document.getElementById('nm-detail-art');
     const nmDetailTitle = document.getElementById('nm-detail-title');
     const nmDetailSubtitle = document.getElementById('nm-detail-subtitle');
-    const nmDetailTimeline = document.getElementById('nm-detail-timeline');
     const nmDetailMeta = document.getElementById('nm-detail-meta');
+    const nmDetailDuration = document.getElementById('nm-detail-duration');
+    const nmDetailEnds = document.getElementById('nm-detail-ends');
+    const nmDetailFacts = document.getElementById('nm-detail-facts');
+    const nmDetailRitual = document.getElementById('nm-detail-ritual');
     const nmDetailRunType = document.getElementById('nm-detail-run-type');
     const nmDetailStart = document.getElementById('nm-detail-start');
     const nmDetailClose = document.getElementById('nm-detail-close');
+    // Fire 06: the plan card and the branded Start sheet.
+    const planStart = document.getElementById('plan-start');
+    const customMinus = document.getElementById('custom-minus');
+    const customPlus = document.getElementById('custom-plus');
+    const startSheet = document.getElementById('start-sheet');
+    const startEyebrow = document.getElementById('start-eyebrow');
+    const startTitle = document.getElementById('start-title');
+    const startActionEl = document.getElementById('start-action');
+    const startWhenLabel = document.getElementById('start-when-label');
+    const startWhen = document.getElementById('start-when');
+    const startRunType = document.getElementById('start-run-type');
+    const startGo = document.getElementById('start-go');
+    const startCancel = document.getElementById('start-cancel');
+    const linkBar = document.getElementById('link-bar');
+    const staleTag = document.getElementById('stale-tag');
+    const pcVersionEl = document.getElementById('pc-version');
+    const nmUnavailable = document.getElementById('nm-unavailable');
+    const outcomeStrip = document.getElementById('outcome-strip');
+    const outcomeText = document.getElementById('outcome-text');
+    const outcomeDismiss = document.getElementById('outcome-dismiss');
+    const PAUSE_GLYPH = 'M7 5h3.5v14H7zM13.5 5H17v14h-3.5z';
+    const RESUME_GLYPH = 'M8 5.2v13.6L19 12z';
 
     const RING_C = 2 * Math.PI * 54;
-    const PHASE_COLORS = { focus: '#5b8cff', dim: '#d4a50a', lastlight: '#ff4d4d', idle: '#5b8cff' };
+    // Fire 05: the desktop's phase truth. Winding down is the violet dimmed
+    // (never amber, so it never reads as paused); Last Light is red only for
+    // a REAL run and amber for a Test Mode (or unknown) run.
+    const PHASE_COLORS = { focus: '#9b93d6', dim: 'rgba(155,147,214,0.62)', lastlight: '#ff5c7a', 'lastlight-test': '#f5b83d', paused: '#f5b83d', idle: '#9b93d6' };
+    // One vocabulary for the run's own ending. The action is LAN data, so
+    // only own keys of these maps are words (never a prototype property).
+    const ACTION_NOUN = { shutdown: 'shutdown', sleep: 'sleep', restart: 'restart', hibernate: 'hibernate', lock: 'lock', logout: 'log out' };
+    const ACTION_VERB = { shutdown: 'shut down', sleep: 'sleep', restart: 'restart', hibernate: 'hibernate', lock: 'lock', logout: 'log out' };
+    const DEFAULT_TIMER_NAME = 'Last Call';
+    const OUTCOME_MAX_MS = 10 * 60 * 1000;
     const COMMAND_TIMEOUT_MS = 5000;
     let selectedAction = 'shutdown';
+    // Fire 06: tonight's plan, client-only (a start still carries only
+    // durationSeconds and timerAction). Clamped to 1 min .. 24 h.
+    let planSeconds = 30 * 60;
+    let startSheetSeconds = planSeconds;
+    let startSheetOpener = null;
+    let nmDialogOpener = null;
+    let lampOnTimer = null;
     let pcName = '';
     // Desktop protocol hello: set once per socket generation when the desktop
     // advertises its version/capabilities. Absent after 3s = legacy desktop.
@@ -499,7 +1097,12 @@
     let connectionState = 'connecting'; // connecting | connected | disconnected | expired | offline
     let latestState = null;
     let lastStateReceivedAt = 0;
+    // Display only ("last seen …"): never feeds stateIsAuthoritative() or
+    // syncMutationControls(), and is not cleared by a disconnect.
+    let lastSeenAt = 0;
     let pendingOperation = null;
+    // When the Fire 05 outcome strip was shown (0 = hidden).
+    let outcomeShownAt = 0;
     let lastCommandResult = null;
     let pendingTimeout = null;
     let pendingErrorTimeout = null;
@@ -507,24 +1110,98 @@
     let nmCatalogueRefreshing = false;
     let nmSelectedId = null;
     let nmSelectedVersion = null;
-    let nmGridVisible = false;
+    let nmGridVisible = true;
     let catalogueRequestedGeneration = null;
     let catalogueAcceptedGeneration = null;
 
     const NM_ARTWORK = {
-      'quick-sleep': '\u{1F319}',
-      'lights-down': '\u{1F506}',
-      'movie-wind-down': '\u{1F3AC}',
-      'full-shutdown': '\u{26A1}',
-      'quiet-house': '\u{1F3E0}',
-      'school-night': '\u{1F4DA}'
+      'quick-sleep': `<svg class="nm-glyph" viewBox="0 0 28 28" aria-hidden="true"><path d="M21.5 16.6A8.6 8.6 0 0 1 11.4 6.5a8.6 8.6 0 1 0 10.1 10.1z"/><path d="M18.6 4.4l-2 3.6h3l-2 3.6"/></svg>`,
+      'lights-down': `<svg class="nm-glyph" viewBox="0 0 28 28" aria-hidden="true"><path d="M10.6 18.6c0-2.2-3-3.6-3-7.4a6.4 6.4 0 0 1 12.8 0c0 3.8-3 5.2-3 7.4z"/><path d="M11 21.6h6M12.2 24.4h3.6"/><path d="M10.4 11.4a3.6 3.6 0 0 1 3.6-3.6"/></svg>`,
+      'movie-wind-down': `<svg class="nm-glyph" viewBox="0 0 28 28" aria-hidden="true"><rect x="3.6" y="5.6" width="20.8" height="13.6" rx="2"/><path d="M12 9.4v6l5-3z"/><path d="M10 23.2h8"/></svg>`,
+      'full-shutdown': `<svg class="nm-glyph" viewBox="0 0 28 28" aria-hidden="true"><path d="M14 3.8v9.4"/><path d="M8.2 7.6a8.8 8.8 0 1 0 11.6 0"/></svg>`,
+      'quiet-house': `<svg class="nm-glyph" viewBox="0 0 28 28" aria-hidden="true"><path d="M4.4 13.2 14 5l9.6 8.2"/><path d="M7 11.4v11.4h14V11.4"/><path d="M12 22.8v-5.4h4v5.4"/></svg>`,
+      'school-night': `<svg class="nm-glyph" viewBox="0 0 28 28" aria-hidden="true"><path d="M4.6 7.4c3.2-1 6.4-.8 9.4.8v15c-3-1.6-6.2-1.8-9.4-.8z"/><path d="M14 8.2c3-1.6 6.2-1.8 9.4-.8v15c-3.2-1-6.4-.8-9.4.8"/><path d="M20.4 3.4a2.6 2.6 0 0 0 2.8 3.4 3.2 3.2 0 1 1-2.8-3.4z"/></svg>`
     };
+
+    // Which PHASE_COLORS key paints the ring. Pure: paused wins; Last Light
+    // is 'lastlight' (red) only when this run's dryRun is exactly false.
+    function ringPhaseKey(running, paused, phase, dryRun) {
+      if (paused) return 'paused';
+      if (!running) return 'idle';
+      if (phase === 'lastlight') return dryRun === false ? 'lastlight' : 'lastlight-test';
+      return typeof phase === 'string' && phase ? phase : 'idle';
+    }
+
+    function actionWords(action) {
+      if (typeof action !== 'string' || !Object.prototype.hasOwnProperty.call(ACTION_NOUN, action)) return null;
+      return { noun: ACTION_NOUN[action], verb: ACTION_VERB[action] };
+    }
+
+    // The ring says what will happen, keyed on the run's own dryRun (like the
+    // safety badge): Test -> 'Test · no shutdown', REAL -> 'then shut down',
+    // unknown -> 'until end'.
+    function phoneRingLabel(running, paused, dryRun, action) {
+      if (!running) return 'Idle';
+      if (paused) return 'Paused';
+      const words = actionWords(action);
+      if (dryRun === true) return `Test · no ${words ? words.noun : 'power action'}`;
+      if (dryRun === false) return words ? `then ${words.verb}` : 'until end';
+      return 'until end';
+    }
+
+    // The phase line above the name: only for winding down and Last Light,
+    // only while running (not paused, not stale). The first phase shows
+    // nothing ('Focus' belongs to Focus Sessions).
+    function phoneRunPhase(running, paused, stale, phase, dryRun) {
+      if (!running || paused || stale) return null;
+      if (phase === 'dim') return { text: 'WINDING DOWN', tone: 'dim' };
+      if (phase === 'lastlight') return { text: 'LAST LIGHT', tone: dryRun === false ? 'lastlight-real' : 'lastlight-test' };
+      return null;
+    }
+    function setPhaseLine(info) {
+      if (!timerPhase) return;
+      timerPhase.textContent = info ? info.text : '';
+      timerPhase.classList.toggle('is-lastlight-real', Boolean(info) && info.tone === 'lastlight-real');
+      timerPhase.classList.toggle('is-lastlight-test', Boolean(info) && info.tone === 'lastlight-test');
+    }
+
+    // One session name with the desktop (renderer-utils sessionDisplayName):
+    // the Night Mode, else the name the user typed, else 'Countdown'; the
+    // stored default 'Last Call' never names a run. The profile is not used
+    // here because the phone already shows it beside the safety badge.
+    function phoneSessionTitle(state) {
+      const clean = v => (typeof v === 'string' ? v.trim() : '');
+      const s = state || {};
+      const typed = clean(s.timerName);
+      return clean(s.nightModeTitle) || (typed && typed !== DEFAULT_TIMER_NAME ? typed : '') || 'Countdown';
+    }
 
     function setRing(fraction, phase) {
       const f = Math.max(0, Math.min(1, fraction || 0));
       ringProgress.style.strokeDashoffset = String(RING_C * (1 - f));
+      if (ringHead) ringHead.style.transform = `rotate(${(f * 360).toFixed(2)}deg)`;
+      document.body.classList.toggle('ring-live', f > 0 && f < 1);
       document.documentElement.style.setProperty('--ring', PHASE_COLORS[phase] || PHASE_COLORS.idle);
     }
+
+    // Body classes mirror the desktop's real run state (is-running,
+    // is-paused, phase-*). --lights-level is remaining/total clamped to
+    // [.25, 1] and only ever comes from desktop numbers (NaN -> 1).
+    function applyRunClasses(running, paused, phase, level) {
+      const body = document.body;
+      body.classList.toggle('is-running', running && !paused);
+      body.classList.toggle('is-paused', paused);
+      ['focus', 'dim', 'lastlight'].forEach(p => body.classList.toggle(`phase-${p}`, running && !paused && phase === p));
+      const lvl = Number.isFinite(level) ? Math.min(1, Math.max(0.25, level)) : 1;
+      document.documentElement.style.setProperty('--lights-level', lvl.toFixed(3));
+    }
+    function clearRunClasses() { applyRunClasses(false, false, 'idle', 1); }
+    // The thumb-dock layout (body.has-run). Deliberately NOT part of
+    // applyRunClasses / clearRunClasses: markStale clears the run classes on
+    // every stale flash, and the dock must not jump while the last-known
+    // run is still on screen. Only handleUpdate (authoritative state) and
+    // forgetLastKnownState (pairing reset) write it.
+    function setRunLayout(on) { document.body.classList.toggle('has-run', Boolean(on)); }
 
     // ── Night Mode helpers (C2) ──
     function formatNmDuration(seconds) {
@@ -541,113 +1218,229 @@
       return map[action] || action;
     }
 
-    function getNmStatusText(status, availability) {
-      if (status === 'ready') return null;
-      if (status === 'coming_soon') return 'Coming soon';
-      if (availability && availability.reason) return availability.reason;
-      return status.replace(/_/g, ' ');
+    // One vocabulary with the desktop (renderer-night-modes.js). The reason
+    // line comes only from availability.reason, never from this label.
+    function getNmStatusLabel(status) {
+      if (status === 'coming_soon') return 'Coming later';
+      if (status === 'needs_router_setup') return 'Needs router control';
+      if (status === 'needs_device_setup') return 'Needs device setup';
+      return 'Unavailable';
     }
 
-    function renderNightModeGrid() {
-      nightModeGrid.innerHTML = '';
-      if (nmCatalogueRefreshing) {
-        nightModeGrid.classList.add('refreshing');
-      } else {
-        nightModeGrid.classList.remove('refreshing');
+    function renderNmUnavailable(modes) {
+      if (!nmUnavailable) return;
+      const previous = nmUnavailable.querySelector('details');
+      const wasOpen = Boolean(previous && previous.open);
+      nmUnavailable.replaceChildren();
+      if (!modes.length || !nmGridVisible) { nmUnavailable.hidden = true; return; }
+      const details = document.createElement('details');
+      details.open = wasOpen;
+      const summary = document.createElement('summary');
+      summary.textContent = `Not ready on this PC: ${modes.map(mode => mode.title).join(', ')}`;
+      const list = document.createElement('ul');
+      for (const mode of modes) {
+        const item = document.createElement('li');
+        const head = document.createElement('div');
+        head.className = 'nm-un-head';
+        const name = document.createElement('span');
+        name.className = 'nm-un-name';
+        name.textContent = mode.title;
+        const tag = document.createElement('span');
+        tag.className = 'night-mode-tag status';
+        tag.textContent = getNmStatusLabel(mode.status);
+        head.append(name, tag);
+        item.appendChild(head);
+        const reason = mode.availability && mode.availability.reason;
+        if (reason) {
+          const reasonLine = document.createElement('span');
+          reasonLine.className = 'night-mode-reason';
+          reasonLine.textContent = reason;
+          item.appendChild(reasonLine);
+        }
+        list.appendChild(item);
       }
-      if (!nmCatalogue.length) {
-        const empty = document.createElement('div');
-        empty.textContent = 'Loading bedtime modes…';
-        empty.style.cssText = 'grid-column: 1 / -1; text-align: center; color: var(--dim); font-size: 12px; padding: 16px;';
-        nightModeGrid.appendChild(empty);
+      details.append(summary, list);
+      nmUnavailable.appendChild(details);
+      nmUnavailable.hidden = false;
+    }
+
+    // Only ready modes become cards (real <button>s, span children); every
+    // other mode folds into the #nm-unavailable line with its own reason.
+    function renderNightModeGrid() {
+      nightModeGrid.replaceChildren();
+      nightModeGrid.classList.toggle('refreshing', nmCatalogueRefreshing);
+      const ready = nmCatalogue.filter(mode => mode.status === 'ready');
+      renderNmUnavailable(nmCatalogue.filter(mode => mode.status !== 'ready'));
+      if (!ready.length) {
+        let message = '';
+        if (nmCatalogueRefreshing) message = 'Loading bedtime modes…';
+        else if (catalogueAcceptedGeneration !== null) message = 'No Night Modes are ready on this PC';
+        if (message) {
+          const empty = document.createElement('p');
+          empty.className = 'night-mode-empty';
+          empty.textContent = message;
+          nightModeGrid.appendChild(empty);
+        }
         return;
       }
-      for (const mode of nmCatalogue) {
-        const card = document.createElement('div');
-        card.className = 'night-mode-card' + (mode.status !== 'ready' ? ' disabled' : '');
-        card.setAttribute('role', 'listitem');
-        card.setAttribute('tabindex', mode.status === 'ready' ? '0' : '-1');
-        const statusTag = getNmStatusText(mode.status, mode.availability);
-        const artDiv = document.createElement('div');
-        artDiv.className = 'night-mode-art';
-        artDiv.textContent = NM_ARTWORK[mode.artworkId] || '\u{1F319}';
-        const nameDiv = document.createElement('div');
-        nameDiv.className = 'night-mode-name';
-        nameDiv.textContent = mode.title;
-        const subDiv = document.createElement('div');
-        subDiv.className = 'night-mode-sub';
-        subDiv.textContent = mode.subtitle;
-        const tagsDiv = document.createElement('div');
-        tagsDiv.className = 'night-mode-tags';
+      for (const mode of ready) {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'night-mode-card';
+        const art = document.createElement('span');
+        art.className = 'night-mode-art';
+        art.innerHTML = NM_ARTWORK[mode.artworkId] || NM_ARTWORK['quick-sleep'];
+        const name = document.createElement('span');
+        name.className = 'night-mode-name';
+        name.textContent = mode.title;
+        const sub = document.createElement('span');
+        sub.className = 'night-mode-sub';
+        sub.textContent = mode.subtitle;
+        const tags = document.createElement('span');
+        tags.className = 'night-mode-tags';
         const durTag = document.createElement('span');
         durTag.className = 'night-mode-tag';
         durTag.textContent = formatNmDuration(mode.durationSeconds);
-        tagsDiv.appendChild(durTag);
         const actTag = document.createElement('span');
         actTag.className = 'night-mode-tag';
         actTag.textContent = formatNmAction(mode.action);
-        tagsDiv.appendChild(actTag);
-        if (statusTag) {
-          const statSpan = document.createElement('span');
-          statSpan.className = 'night-mode-tag status';
-          statSpan.textContent = statusTag;
-          tagsDiv.appendChild(statSpan);
-        }
-        card.append(artDiv, nameDiv, subDiv, tagsDiv);
-        if (mode.status === 'ready') {
-          card.addEventListener('click', () => openNightModeDetail(mode.id));
-          card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openNightModeDetail(mode.id); } });
-        }
+        tags.append(durTag, actTag);
+        card.append(art, name, sub, tags);
+        card.addEventListener('click', () => openNightModeDetail(mode.id));
         nightModeGrid.appendChild(card);
       }
     }
 
-    function buildNightModeTimeline(mode) {
-      const steps = [];
-      if (mode.ritualId === 'standard') steps.push('Begin the standard wind-down ritual.');
-      steps.push(`Run a ${formatNmDuration(mode.durationSeconds)} countdown.`);
-      steps.push(`${formatNmAction(mode.action)} this PC when the countdown completes.`);
-      return steps;
+    // ── Fire 06: three dialogs (stop, Start, Night Mode). Only one is ever
+    // open, and the page behind is released only when none is showing.
+    function anyDialogOpen() {
+      return cancelConfirm.classList.contains('show')
+        || startSheet.classList.contains('show')
+        || nightModeBackdrop.classList.contains('show');
+    }
+    function releaseShellIfNoDialog() {
+      if (anyDialogOpen()) return;
+      appShell.inert = false;
+      appShell.removeAttribute('aria-hidden');
+    }
+    function isUsableFocusTarget(el) {
+      return Boolean(el && el.isConnected && !el.disabled && el.getClientRects().length > 0);
+    }
+    function focusFirstUsable(candidates) {
+      const target = candidates.find(isUsableFocusTarget) || appShell;
+      if (target) target.focus();
+    }
+    // Tab wraps between a dialog's enabled buttons (disabled ones are skipped).
+    function trapDialogTab(event, buttons) {
+      const focusable = buttons.filter(button => button && !button.disabled);
+      if (!focusable.length) return;
+      event.preventDefault();
+      const current = focusable.indexOf(document.activeElement);
+      const direction = event.shiftKey ? -1 : 1;
+      const next = current < 0
+        ? (event.shiftKey ? focusable.length - 1 : 0)
+        : (current + direction + focusable.length) % focusable.length;
+      focusable[next].focus();
+    }
+
+    // ── Fire 06: one Test Mode sentence with the desktop. Pure: the tone and
+    // the words come only from the PC's reported policy (true = TEST MODE,
+    // false = REAL ACTION, anything else = CHECKING). Static, never animated.
+    function truthBand(policy, action) {
+      if (policy === true) return { tone: 'dry', word: 'TEST MODE', rest: ' · No PC power action will run.' };
+      if (policy === false) {
+        const words = actionWords(action);
+        return { tone: 'real', word: 'REAL ACTION', rest: words ? ` · This run will ${words.verb} this PC.` : ' · Runs started here use real PC power actions.' };
+      }
+      return { tone: 'checking', word: 'CHECKING', rest: ' · waiting for the PC to report whether power actions are real or Test Mode.' };
+    }
+    function applyTruthBand(el, baseClass, policy, action) {
+      if (!el) return;
+      const band = truthBand(policy, action);
+      const cls = `${baseClass} ${band.tone}`;
+      if (el.className === cls && el.textContent === band.word + band.rest) return;
+      const strong = document.createElement('strong');
+      strong.textContent = band.word;
+      el.replaceChildren(strong, document.createTextNode(band.rest));
+      el.className = cls;
+    }
+
+    // The Night Mode sheet's end line, for direct starts only: a start-now
+    // estimate in the phone's clock. Test policy -> 'Test would end ≈ …';
+    // REAL -> '<Action> ≈ …'; an unknown policy -> nothing; a ritual mode
+    // has no known length -> 'after a guided wind-down', never a clock.
+    function nmEndsLine(mode, policy) {
+      if (!mode) return '';
+      if (mode.ritualId === 'standard') return 'after a guided wind-down';
+      if (typeof policy !== 'boolean') return '';
+      const d = Number(mode.durationSeconds);
+      if (!Number.isFinite(d) || d <= 0) return '';
+      return policy
+        ? `Test would end ≈ ${clockAt(d)} if started now`
+        : `${formatNmAction(mode.action)} ≈ ${clockAt(d)} if started now`;
+    }
+
+    function nmSelectedMode() {
+      return nmSelectedId ? (nmCatalogue.find(m => m.id === nmSelectedId) || null) : null;
     }
 
     function openNightModeDetail(id) {
       const mode = nmCatalogue.find(m => m.id === id);
       if (!mode || mode.status !== 'ready') return;
+      const alreadyOpen = nightModeBackdrop.classList.contains('show');
+      // One dialog at a time: never over the Start sheet or the stop sheet.
+      if (!alreadyOpen && (startSheet.classList.contains('show') || cancelConfirm.classList.contains('show'))) return;
       nmSelectedId = id;
       nmSelectedVersion = mode.version;
-      nmDetailArt.textContent = NM_ARTWORK[mode.artworkId] || '\u{1F319}';
+      nmDetailArt.innerHTML = NM_ARTWORK[mode.artworkId] || NM_ARTWORK['quick-sleep'];
       nmDetailTitle.textContent = mode.title;
       nmDetailSubtitle.textContent = mode.subtitle;
-      nmDetailTimeline.innerHTML = '';
-      for (const step of buildNightModeTimeline(mode)) {
-        const li = document.createElement('li');
-        li.textContent = step;
-        nmDetailTimeline.appendChild(li);
-      }
-      nmDetailMeta.innerHTML = '';
-      [['Duration', formatNmDuration(mode.durationSeconds)],
-       ['Action', formatNmAction(mode.action)],
-       ['Ritual', mode.ritualId === 'standard' ? 'Standard wind-down' : 'Direct start']].forEach(([label, value]) => {
-        const row = document.createElement('div');
-        row.className = 'night-mode-meta-row';
-        const lbl = document.createElement('span');
-        lbl.textContent = label;
-        const val = document.createElement('span');
-        val.textContent = value;
-        row.append(lbl, val);
-        nmDetailMeta.appendChild(row);
-      });
+      // The plan once (LAN data: textContent only): the duration on the
+      // instrument face, the end line, one facts line and the ritual line.
+      nmDetailDuration.textContent = formatTime(mode.durationSeconds);
+      nmDetailFacts.textContent = `${formatNmDuration(mode.durationSeconds)} · ${formatNmAction(mode.action)}`;
+      nmDetailRitual.textContent = mode.ritualId === 'standard' ? 'Standard wind-down' : 'Direct start';
+      nmDetailStart.textContent = `Start ${mode.title}`;
       updateNightModeRunType();
+      // A refresh (validateNightModeSelection) never re-stores the opener,
+      // never adds a second trap and never steals focus.
+      if (alreadyOpen) return;
+      nmDialogOpener = document.activeElement;
       nightModeBackdrop.classList.add('show');
       nightModeBackdrop.setAttribute('aria-hidden', 'false');
-      nmDetailStart.focus();
+      appShell.inert = true;
+      appShell.setAttribute('aria-hidden', 'true');
+      document.addEventListener('keydown', handleNightModeKeydown, true);
+      (nmDetailStart.disabled ? nmDetailClose : nmDetailStart).focus();
     }
 
     function closeNightModeDetail() {
+      const wasOpen = nightModeBackdrop.classList.contains('show');
       nightModeBackdrop.classList.remove('show');
       nightModeBackdrop.setAttribute('aria-hidden', 'true');
+      document.removeEventListener('keydown', handleNightModeKeydown, true);
       nmSelectedId = null;
       nmSelectedVersion = null;
+      if (!wasOpen) return;
+      releaseShellIfNoDialog();
+      const opener = nmDialogOpener;
+      nmDialogOpener = null;
+      // The opener card; else the first visible card; else the toggle; else
+      // the active controls (the sheet closed because a run went active);
+      // else the shell.
+      const firstCard = [...nightModeGrid.querySelectorAll('.night-mode-card')].find(isUsableFocusTarget);
+      focusFirstUsable([opener, firstCard, nightModeToggle, document.getElementById('btn-pause')]);
+    }
+
+    // The one Escape path for the Night Mode sheet, plus its focus trap.
+    function handleNightModeKeydown(event) {
+      if (!nightModeBackdrop.classList.contains('show')) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeNightModeDetail();
+        return;
+      }
+      if (event.key === 'Tab') trapDialogTab(event, [nmDetailStart, nmDetailClose]);
     }
 
     function validateNightModeSelection() {
@@ -664,41 +1457,205 @@
     }
 
     function updateNightModeRunType() {
-      // The phone cannot choose Dry Run — it only displays whatever the desktop
+      // The phone cannot choose Test Mode: it shows only what the desktop
       // has authoritatively decided (latestState.dryRunPolicy from settingsStore).
-      const dryRun = Boolean(latestState && latestState.dryRunPolicy);
-      nmDetailRunType.textContent = dryRun
-        ? 'TEST MODE — no PC power action will execute'
-        : 'This run will be: REAL ACTION';
-      nmDetailRunType.className = `night-mode-run-type ${dryRun ? 'dry' : 'real'}`;
+      const policy = latestState ? latestState.dryRunPolicy : undefined;
+      const mode = nmSelectedMode();
+      applyTruthBand(nmDetailRunType, 'night-mode-run-type', policy, mode ? mode.action : null);
+      const ends = nmEndsLine(mode, policy);
+      if (nmDetailEnds.textContent !== ends) nmDetailEnds.textContent = ends;
+      nmDetailEnds.hidden = !ends;
     }
 
     function updateIdleSafetyBanner() {
-      const banner = document.getElementById('idle-safety-banner');
-      if (!banner) return;
-      const dryRun = Boolean(latestState && latestState.dryRunPolicy);
-      banner.textContent = '';
-      const strong = document.createElement('strong');
-      strong.textContent = dryRun ? 'TEST MODE' : 'REAL ACTION';
-      banner.appendChild(strong);
-      banner.appendChild(document.createTextNode(dryRun
-        ? ' — no PC power action will execute.'
-        : ' — timers started from this phone can perform the selected PC action.'));
+      // Unknown is not "real": until the PC reports its policy, CHECKING.
+      applyTruthBand(document.getElementById('idle-safety-banner'), 'idle-safety', latestState ? latestState.dryRunPolicy : undefined, null);
+    }
+
+    // ── Fire 06: tonight's plan ──
+    function clampPlanSeconds(seconds) {
+      const n = Number(seconds);
+      if (!Number.isFinite(n) || n <= 0) return null;
+      return Math.max(60, Math.min(24 * 60 * 60, Math.round(n)));
+    }
+    function planPolicyKnown() {
+      return Boolean(latestState) && typeof latestState.dryRunPolicy === 'boolean';
+    }
+    function actionLabel(action) {
+      const words = actionWords(action);
+      return words ? words.verb.charAt(0).toUpperCase() + words.verb.slice(1) : 'Its PC action';
+    }
+    function setText(el, text) {
+      if (el && el.textContent !== text) el.textContent = text;
+    }
+
+    // The idle ring previews the plan only from an authoritative idle state
+    // with a boolean Test Mode policy (Test Mode never reads 'then shut
+    // down'); otherwise '—' and empty labels. No run classes, no ticking
+    // digits (they change only with the plan); the clock line follows the
+    // 1 s freshness tick. The arc is setRing(1, 'idle'): the idle violet,
+    // with the head hidden.
+    function renderIdlePlan() {
+      if (!latestState || latestState.running || latestState.paused) return;
+      const on = stateIsAuthoritative() && planPolicyKnown();
+      document.body.classList.toggle('is-plan', on);
+      if (!on) {
+        setText(timerName, '');
+        setText(timerMain, '—');
+        setText(timerLabel, '');
+        setText(targetEl, '');
+        setRing(0, 'idle');
+        return;
+      }
+      const test = latestState.dryRunPolicy === true;
+      const words = actionWords(selectedAction);
+      setText(timerName, 'Tonight’s plan');
+      setText(timerMain, formatTime(planSeconds));
+      setText(timerLabel, test ? 'Test run · no power action' : `then ${words ? words.verb : 'its PC action'}`);
+      setText(targetEl, `${test ? 'Test would end' : 'Lights out'} ${clockAt(planSeconds)} if started now`);
+      setRing(1, 'idle');
+    }
+
+    function renderPlanControls() {
+      const minutes = Math.round(planSeconds / 60);
+      document.querySelectorAll('.plan-chip').forEach(chip => {
+        chip.setAttribute('aria-pressed', String(Number(chip.dataset.min) === minutes));
+      });
+      setText(planStart, `Start · ${formatNmDuration(planSeconds)}`);
+    }
+    // One plan state: the chips and the Custom stepper both write
+    // planSeconds; the chip highlight, the Start pill and the preview follow.
+    function setPlanSeconds(seconds, fromInput = false) {
+      const s = clampPlanSeconds(seconds);
+      if (s === null) return false;
+      planSeconds = s;
+      if (!fromInput) customMin.value = String(Math.round(s / 60));
+      renderPlanControls();
+      renderIdlePlan();
+      return true;
+    }
+    // A valid custom value is a whole number of minutes in 1..1440.
+    function customMinutesValue() {
+      const mins = Number(customMin.value);
+      return Number.isInteger(mins) && mins >= 1 && mins <= 1440 ? mins : null;
+    }
+    function stepCustom(direction) {
+      const current = customMinutesValue() || Math.round(planSeconds / 60);
+      const next = direction > 0 ? Math.floor(current / 5) * 5 + 5 : Math.ceil(current / 5) * 5 - 5;
+      setPlanSeconds(Math.max(1, Math.min(1440, next)) * 60);
+    }
+
+    // ── Fire 06: the branded Start sheet (replaces the browser confirm) ──
+    // The same two taps as before (a chip, then Start). It opens only from
+    // an authoritative state with a boolean policy; confirmStartSheet checks
+    // both again and reads the policy and the ending at click time.
+    function startSheetReady() {
+      return stateIsAuthoritative() && planPolicyKnown() && !pendingOperation;
+    }
+    function openStartSheet(seconds) {
+      if (!stateIsAuthoritative() || !planPolicyKnown()) return false;
+      const s = clampPlanSeconds(seconds);
+      if (s === null) return false;
+      // One dialog at a time.
+      if (cancelConfirm.classList.contains('show') || nightModeBackdrop.classList.contains('show')) return false;
+      startSheetSeconds = s;
+      if (startSheet.classList.contains('show')) {
+        renderStartSheet();
+        return true;
+      }
+      startSheetOpener = document.activeElement;
+      startSheet.classList.add('show');
+      startSheet.setAttribute('aria-hidden', 'false');
+      appShell.inert = true;
+      appShell.setAttribute('aria-hidden', 'true');
+      document.addEventListener('keydown', handleStartSheetKeydown, true);
+      renderStartSheet();
+      startCancel.focus();
+      return true;
+    }
+    // Re-rendered from the current state on every update and every tick, so
+    // the band, the clock and the Start label never go stale. pcName is LAN
+    // data: textContent only.
+    function renderStartSheet() {
+      if (!startSheet.classList.contains('show')) return;
+      const policy = latestState ? latestState.dryRunPolicy : undefined;
+      const test = policy === true;
+      const words = actionWords(selectedAction);
+      setText(startEyebrow, `TONIGHT’S PLAN · ${pcName || 'this PC'}`);
+      setText(startTitle, formatTime(startSheetSeconds));
+      setText(startActionEl, test ? `${actionLabel(selectedAction)} · test only` : actionLabel(selectedAction));
+      setText(startWhenLabel, test ? 'Test would end ≈' : 'Lights out ≈');
+      setText(startWhen, clockAt(startSheetSeconds));
+      applyTruthBand(startRunType, 'night-mode-run-type start-run-type', policy, selectedAction);
+      setText(startGo, test ? 'Start test run' : (policy === false ? `Start · will ${words ? words.verb : 'run its PC action'}` : 'Start'));
+      startGo.classList.toggle('is-real', policy === false);
+      startGo.disabled = !startSheetReady();
+    }
+    function closeStartSheet() {
+      const wasOpen = startSheet.classList.contains('show');
+      startSheet.classList.remove('show');
+      startSheet.setAttribute('aria-hidden', 'true');
+      document.removeEventListener('keydown', handleStartSheetKeydown, true);
+      if (!wasOpen) return;
+      releaseShellIfNoDialog();
+      const opener = startSheetOpener;
+      startSheetOpener = null;
+      focusFirstUsable([opener, planStart, document.getElementById('btn-pause')]);
+    }
+    function handleStartSheetKeydown(event) {
+      if (!startSheet.classList.contains('show')) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeStartSheet();
+        return;
+      }
+      if (event.key === 'Tab') trapDialogTab(event, [startCancel, startGo]);
+    }
+    // #start-go: the only place a phone start is sent. Authority and the
+    // boolean policy are checked again now; the policy and the ending are
+    // read now, so the send and the success copy match what the sheet says.
+    function confirmStartSheet() {
+      if (!startSheet.classList.contains('show')) return;
+      if (!stateIsAuthoritative() || !planPolicyKnown()) {
+        closeStartSheet();
+        return;
+      }
+      const s = Math.max(60, Math.min(24 * 60 * 60, Math.round(startSheetSeconds)));
+      const dryRun = latestState.dryRunPolicy === true;
+      const timerAction = selectedAction;
+      if (!beginPending({
+        kind: 'start',
+        success: dryRun ? 'Timer started — TEST MODE' : 'Timer started — REAL ACTION',
+        matches: state => Boolean(state.running || state.paused)
+      })) return;
+      closeStartSheet();
+      if (!send({ action: 'start', durationSeconds: s, timerAction })) clearPending({ timeout: true });
+    }
+
+    // ── Fire 06: the lamp. Unlit while pairing (and after any pairing
+    // reset); lit only by handleUpdate's authoritative state branch.
+    function setLampOff() {
+      if (lampOnTimer) { clearTimeout(lampOnTimer); lampOnTimer = null; }
+      document.body.classList.remove('lamp-on');
+      document.body.classList.add('lamp-off');
     }
 
     function toggleNightModeGrid() {
       nmGridVisible = !nmGridVisible;
       nightModeGrid.classList.toggle('visible', nmGridVisible);
       nightModeToggle.textContent = nmGridVisible ? 'Hide' : 'Show';
+      nightModeToggle.setAttribute('aria-expanded', String(nmGridVisible));
       if (nmGridVisible) renderNightModeGrid();
+      else if (nmUnavailable) nmUnavailable.hidden = true;
     }
 
-    // Formats the wall-clock time the action will fire, e.g. "11:30 PM".
+    // The wall-clock time secondsFromNow from now, in the PHONE's own clock
+    // format ('1:14 AM' on a US phone, '01:14' on most others). The LAN state
+    // carries no clock preference and adding one would change the protocol,
+    // so every phone clock follows the phone's locale through this helper.
     function clockAt(secondsFromNow) {
       const d = new Date(Date.now() + secondsFromNow * 1000);
-      let h = d.getHours(); const m = d.getMinutes();
-      const ampm = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12;
-      return `${h}:${String(m).padStart(2, '0')} ${ampm}`;
+      return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     }
 
     let ws = null;
@@ -738,6 +1695,7 @@
     function resolveToken() {
       const fromUrl = new URLSearchParams(location.search).get('t');
       if (fromUrl) {
+        pairTokenFromLink = true;
         try { localStorage.setItem(TOKEN_KEY, fromUrl); } catch {}
         try { history.replaceState(null, '', location.pathname); } catch {}
         return fromUrl;
@@ -746,6 +1704,9 @@
       try { stored = localStorage.getItem(TOKEN_KEY) || ''; } catch {}
       return stored;
     }
+    // Fire 06: a token from the QR / link (?t=) is a fresh pairing, so the
+    // lamp starts unlit until the PC answers.
+    let pairTokenFromLink = false;
     let pairHost = resolveHost();
     let pairToken = resolveToken();
 
@@ -777,6 +1738,7 @@
       document.querySelectorAll('.timer-mutation').forEach(btn => { btn.disabled = !available; });
       document.querySelectorAll('#idle-controls .btn, #idle-controls .seg-btn').forEach(btn => { btn.disabled = !available; });
       if (nmDetailStart) nmDetailStart.disabled = !available;
+      if (startGo) startGo.disabled = !(available && planPolicyKnown());
     }
 
     function clearPending({ success = '', timeout = false } = {}) {
@@ -804,6 +1766,7 @@
       if (pendingErrorTimeout) clearTimeout(pendingErrorTimeout);
       pendingErrorTimeout = null;
       pendingOperation = operation;
+      if (operation.kind === 'start' || operation.kind === 'startNightMode') hideOutcome();
       setPendingMessage('Waiting for PC…');
       syncMutationControls();
       pendingTimeout = setTimeout(() => clearPending({ timeout: true }), COMMAND_TIMEOUT_MS);
@@ -812,44 +1775,111 @@
 
     function confirmPendingFromState(state) {
       if (!pendingOperation || !pendingOperation.matches(state)) return;
-      const success = pendingOperation.success;
+      // Read the kind and the Stop snapshot BEFORE clearPending nulls them.
+      const { kind, success, snapshot } = pendingOperation;
       clearPending({ success });
+      if (outcomeEligible(kind, snapshot)) showOutcome(snapshot);
+    }
+
+    // ── Fire 05: an honest receipt after a stop ──
+    // Pure gate: only a confirmed cancel that still had a safe margin when
+    // Stop was pressed (>= 15 s left, not Last Light). Without that margin
+    // the run may already have reached its action, and the state carries no
+    // outcome field (adding one would be a LAN protocol change): toast only.
+    function outcomeEligible(kind, snapshot) {
+      if (kind !== 'cancel' || !snapshot) return false;
+      const remaining = Number(snapshot.remainingSeconds);
+      return Number.isFinite(remaining) && remaining >= 15 && snapshot.phase !== 'lastlight';
+    }
+    // Speaks only about this run; no 'from this phone' (a desktop stop can
+    // race the phone's) and nothing about later runs.
+    function outcomeStripText(snapshot, name, time) {
+      const target = name || 'the PC';
+      if (snapshot && snapshot.dryRun === true) return `Test run stopped · ${time} · no power action was planned on ${target}`;
+      const words = actionWords(snapshot && snapshot.action);
+      return `Run stopped · ${time} · ${target} will not ${words ? words.verb : 'run its power action'} for this run`;
+    }
+    function showOutcome(snapshot) {
+      if (!outcomeStrip || !outcomeText) return;
+      outcomeText.textContent = outcomeStripText(snapshot, pcName, clockAt(0));
+      outcomeStrip.hidden = false;
+      outcomeShownAt = Date.now();
+    }
+    function hideOutcome() {
+      if (outcomeStrip) outcomeStrip.hidden = true;
+      outcomeShownAt = 0;
+    }
+    function expireOutcome(now) {
+      if (outcomeShownAt && now - outcomeShownAt >= OUTCOME_MAX_MS) hideOutcome();
+    }
+    // Any authoritative running or paused state (from any device) ends it.
+    function syncOutcomeWithState(state) {
+      if (state && (state.running || state.paused)) hideOutcome();
+    }
+
+    // "12s ago" / "3 min ago": the phone clock against a real receipt time.
+    function formatSeenAge(ms) {
+      const seconds = Math.max(0, Math.floor(ms / 1000));
+      if (seconds < 60) return `${seconds}s ago`;
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return `${minutes} min ago`;
+      return `${Math.floor(minutes / 60)} h ago`;
+    }
+    function setFreshness(text, ageText = '') {
+      if (freshnessText.parentNode !== freshnessEl || freshnessAge.parentNode !== freshnessEl) freshnessEl.replaceChildren(freshnessText, freshnessAge);
+      if (freshnessText.textContent !== text) freshnessText.textContent = text;
+      if (freshnessAge.textContent !== ageText) freshnessAge.textContent = ageText;
+    }
+    function lastSeenSuffix() {
+      return lastSeenAt > 0 ? ` · last seen ${formatSeenAge(Date.now() - lastSeenAt)}` : '';
+    }
+    function markStale(text, withAge = false) {
+      setFreshness(text, withAge ? lastSeenSuffix() : '');
+      freshnessEl.classList.remove('is-fresh');
+      freshnessEl.classList.add('stale');
+      document.body.classList.add('stale-state');
+      clearRunClasses();
+      setPhaseLine(null);
+      hideOutcome();
+    }
+    // "Last known" shows only while stale AND a real state was received.
+    function syncStaleTag() {
+      if (staleTag) staleTag.hidden = !(document.body.classList.contains('stale-state') && latestState);
+    }
+    // Red underline under the chosen ending only when the PC reports a REAL
+    // policy for this authoritative state; cleared when unknown/disconnected.
+    function syncActionSegTruth() {
+      actionSeg.classList.toggle('is-real', Boolean(latestState) && latestState.dryRunPolicy === false && stateIsAuthoritative());
     }
 
     function updateFreshness() {
       if (connectionState === 'connected' && (awaitingInitialState || authoritativeGeneration !== socketGeneration || !lastStateReceivedAt)) {
-        freshnessEl.textContent = 'Waiting for current PC state…';
-        freshnessEl.classList.add('stale');
-        document.body.classList.add('stale-state');
-        syncMutationControls();
-        return;
-      }
-      if (connectionState !== 'connected') {
-        freshnessEl.textContent = 'State may be stale · PC unavailable';
-        freshnessEl.classList.add('stale');
-        document.body.classList.add('stale-state');
-        syncMutationControls();
-        return;
-      }
-      if (!lastStateReceivedAt) {
-        freshnessEl.textContent = '';
-        freshnessEl.classList.add('stale');
-        document.body.classList.add('stale-state');
-        syncMutationControls();
-        return;
-      }
-      const ageSeconds = Math.max(0, Math.floor((Date.now() - lastStateReceivedAt) / 1000));
-      if (ageSeconds > 6) {
-        freshnessEl.textContent = 'State may be stale';
-        freshnessEl.classList.add('stale');
-        document.body.classList.add('stale-state');
+        markStale('Waiting for current PC state…', true);
+      } else if (connectionState !== 'connected') {
+        markStale('State may be stale · PC unavailable', true);
+      } else if (!lastStateReceivedAt) {
+        markStale('');
       } else {
-        const age = ageSeconds < 5 ? 'Updated just now' : `Updated ${ageSeconds}s ago`;
-        freshnessEl.textContent = age;
-        freshnessEl.classList.remove('stale');
-        document.body.classList.remove('stale-state');
+        const ageSeconds = Math.max(0, Math.floor((Date.now() - lastStateReceivedAt) / 1000));
+        if (ageSeconds > 6) {
+          markStale('State may be stale', true);
+        } else {
+          const age = ageSeconds < 5 ? 'Updated just now' : `Updated ${ageSeconds}s ago`;
+          setFreshness(age);
+          freshnessEl.classList.remove('stale');
+          freshnessEl.classList.add('is-fresh');
+          document.body.classList.remove('stale-state');
+        }
       }
+      syncStaleTag();
+      syncActionSegTruth();
       syncMutationControls();
+      expireOutcome(Date.now());
+      // Fire 06: the idle plan preview ('—' while checking or stale), the
+      // open Start sheet and the open Night Mode sheet follow the tick.
+      renderIdlePlan();
+      renderStartSheet();
+      if (nightModeBackdrop.classList.contains('show')) updateNightModeRunType();
     }
 
     setInterval(updateFreshness, 1000);
@@ -861,13 +1891,14 @@
       const pcEl = document.getElementById('pc-name');
       if (pcEl && state === 'connected' && typeof refreshPcLabel === 'function') refreshPcLabel();
       if (state === 'connected') {
-        pairCard.style.display = 'none';
+        setPairingVisible(false);
         document.body.classList.toggle('stale-state', awaitingInitialState);
       } else {
         discardPendingForConnectionLoss();
         invalidateAuthoritativeState();
         document.body.classList.add('stale-state');
         if (cancelConfirm.classList.contains('show')) cancelConnectionStatus.hidden = false;
+        if (startSheet.classList.contains('show')) closeStartSheet();
       }
       if (pcEl) pcEl.style.display = (state === 'connected' && stateIsAuthoritative() && pcName) ? '' : 'none';
       syncMutationControls();
@@ -878,9 +1909,43 @@
       updateFreshness();
     }
 
+    // One helper keeps body.is-pairing in sync with the pair card; the link
+    // bar is hidden while pairing and restored with it.
+    function setPairingVisible(visible) {
+      pairCard.style.display = visible ? '' : 'none';
+      if (linkBar) linkBar.style.display = visible ? 'none' : '';
+      document.body.classList.toggle('is-pairing', visible);
+    }
+    // A pairing reset forgets the last reading: no "Last known" for a PC
+    // this phone is no longer paired with, and no fake idle ring.
+    function forgetLastKnownState() {
+      latestState = null;
+      lastSeenAt = 0;
+      // The previous PC's hello/version is not this pairing's truth.
+      desktopHello = null;
+      if (pcVersionEl) { pcVersionEl.textContent = ''; pcVersionEl.hidden = true; }
+      timerName.textContent = '';
+      timerMain.textContent = '—';
+      timerLabel.textContent = '';
+      timerLabel.classList.remove('is-test');
+      targetEl.textContent = '';
+      setPhaseLine(null);
+      hideOutcome();
+      setRing(0, 'idle');
+      clearRunClasses();
+      setRunLayout(false);
+      document.body.classList.remove('is-plan');
+      closeStartSheet();
+      setLampOff();
+      syncStaleTag();
+      syncActionSegTruth();
+      updateIdleSafetyBanner();
+    }
+
     function showPairing(message = '') {
-      pairCard.style.display = '';
-      statusPill.style.display = 'none';
+      forgetLastKnownState();
+      setLampOff();
+      setPairingVisible(true);
       idleControls.style.display = 'none';
       activeControls.style.display = 'none';
       safetyRow.style.display = 'none';
@@ -894,8 +1959,7 @@
       setTimeout(() => { try { pairInput.focus(); } catch {} }, 80);
     }
     function hidePairing() {
-      pairCard.style.display = 'none';
-      statusPill.style.display = '';
+      setPairingVisible(false);
     }
     function applyPairToken() {
       const host = (hostInput.value || '').trim();
@@ -942,6 +2006,7 @@
           if (response.status === 401 || response.status === 403) {
             localStorage.removeItem(TOKEN_KEY);
             pairToken = '';
+            forgetLastKnownState();
             setConnectionState('expired', 'Pairing expired');
             showPairing('Pairing expired. Enter the current pairing code from the desktop app.');
             return;
@@ -991,6 +2056,7 @@
         if (e.code === 1008) {
           localStorage.removeItem(TOKEN_KEY);
           pairToken = '';
+          forgetLastKnownState();
           setConnectionState('expired', 'Pairing expired');
           showPairing('Pairing expired. Enter the current pairing code from the desktop app.');
           return;
@@ -1019,30 +2085,55 @@
       return true;
     }
 
-    function startTimer(seconds) {
-      if (!stateIsAuthoritative()) return;
-      const s = Math.max(60, Math.min(24 * 60 * 60, Math.round(seconds)));
-      const destination = pcName || 'this PC';
-      const dryRun = Boolean(latestState && latestState.dryRunPolicy);
-      const confirmMsg = dryRun
-        ? `TEST MODE: Start a ${selectedAction} timer on ${destination} for ${Math.round(s / 60)} minutes? No PC power action will execute.`
-        : `REAL ACTION: Start a ${selectedAction} timer on ${destination} for ${Math.round(s / 60)} minutes?`;
-      if (!confirm(confirmMsg)) return;
-      if (!beginPending({
-        kind: 'start',
-        success: dryRun ? 'Timer started — TEST MODE' : 'Timer started — REAL ACTION',
-        matches: state => Boolean(state.running || state.paused)
-      })) return;
-      if (!send({ action: 'start', durationSeconds: s, timerAction: selectedAction })) clearPending({ timeout: true });
+    // pcName comes from the LAN: built with textContent only. The plain
+    // version moves to Details (#pc-version); compatibility caveats stay in
+    // the link bar because they are real warnings.
+    function pcGlyph() {
+      const NS = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(NS, 'svg');
+      svg.setAttribute('class', 'pc-glyph');
+      svg.setAttribute('viewBox', '0 0 16 16');
+      svg.setAttribute('aria-hidden', 'true');
+      svg.setAttribute('focusable', 'false');
+      const screen = document.createElementNS(NS, 'rect');
+      screen.setAttribute('x', '1.75'); screen.setAttribute('y', '2.5');
+      screen.setAttribute('width', '12.5'); screen.setAttribute('height', '8.5'); screen.setAttribute('rx', '1.5');
+      const stand = document.createElementNS(NS, 'path');
+      stand.setAttribute('d', 'M8 11v2.5M5.25 13.5h5.5');
+      svg.append(screen, stand);
+      return svg;
     }
 
     function refreshPcLabel() {
       const pcEl = document.getElementById('pc-name');
       if (!pcEl) return;
-      const suffix = desktopHello
-        ? ` · v${desktopHello.desktopVersion || '?'}${desktopHello.protocol >= 2 ? '' : ' · older protocol'}`
+      const caveat = desktopHello
+        ? (desktopHello.protocol >= 2 ? '' : ' · older protocol')
         : ' · older desktop';
-      pcEl.textContent = pcName ? `Target PC: ${pcName}${suffix}` : `Target PC connected${suffix}`;
+      // The PC name is the hero: with a name, 'Target PC: ' stays for screen
+      // readers only; without one, 'Target PC connected' stays visible.
+      const label = document.createElement('span');
+      label.className = pcName ? 'pc-label sr-only' : 'pc-label';
+      label.textContent = pcName ? 'Target PC: ' : 'Target PC connected';
+      const parts = [pcGlyph(), label];
+      if (pcName) {
+        const host = document.createElement('span');
+        host.className = 'pc-host';
+        host.textContent = pcName;
+        parts.push(host);
+      }
+      if (caveat) {
+        const note = document.createElement('span');
+        note.className = 'pc-caveat';
+        note.textContent = caveat;
+        parts.push(note);
+      }
+      pcEl.replaceChildren(...parts);
+      if (pcVersionEl) {
+        const version = desktopHello ? desktopHello.desktopVersion : '';
+        pcVersionEl.textContent = version ? `Lights Out on this PC: v${version}` : '';
+        pcVersionEl.hidden = !version;
+      }
     }
 
     function handleUpdate(data, generation = socketGeneration) {
@@ -1062,6 +2153,7 @@
       if (data.type === 'pairing-revoked') {
         try { localStorage.removeItem(TOKEN_KEY); } catch {}
         pairToken = '';
+        forgetLastKnownState();
         setConnectionState('expired', 'Pairing expired');
         showPairing('Pairing changed on the desktop. Scan the new QR or enter the current code.');
         return;
@@ -1086,19 +2178,40 @@
         awaitingInitialState = false;
         latestState = { ...data, running, paused };
         lastStateReceivedAt = Date.now();
+        lastSeenAt = lastStateReceivedAt;
         document.body.classList.remove('stale-state');
+        // Fire 06: the lamp lights only when the PC really answers: after the
+        // connected / OPEN / generation guard above, with an authoritative
+        // state. One-shot (opacity only); never tied to Test or REAL.
+        if (document.body.classList.contains('lamp-off') && stateIsAuthoritative()) {
+          document.body.classList.remove('lamp-off');
+          document.body.classList.add('lamp-on');
+          if (lampOnTimer) clearTimeout(lampOnTimer);
+          lampOnTimer = setTimeout(() => { lampOnTimer = null; document.body.classList.remove('lamp-on'); }, 900);
+        }
 
         if (data.pcName) {
           pcName = data.pcName;
         }
         refreshPcLabel();
-        pcEl.style.display = stateIsAuthoritative() ? '' : 'none';
+        // 5c11f5e moved the `pcEl` lookup into refreshPcLabel(); this line kept
+        // using the vanished binding and threw on every state update, so the
+        // phone never rendered PC state. Look the element up locally.
+        const pcLabelEl = document.getElementById('pc-name');
+        if (pcLabelEl) pcLabelEl.style.display = stateIsAuthoritative() ? '' : 'none';
 
-        timerName.textContent = active ? (data.nightModeTitle || 'Custom Timer') : (data.timerName || 'Last Call');
+        timerName.textContent = active ? phoneSessionTitle(data) : (data.timerName || DEFAULT_TIMER_NAME);
         timerMain.textContent = formatTime(data.remainingSeconds);
-        timerLabel.textContent = running ? (paused ? 'Paused' : `until ${data.action || 'shutdown'}`) : 'Idle';
-        targetEl.textContent = (running && !paused && data.remainingSeconds > 0)
-          ? `lights out ≈ ${clockAt(data.remainingSeconds)}` : '';
+        // Keyed on the run's own dryRun, like the safety badge: a Test Mode run
+        // never reads "then shut down", and is never red.
+        timerLabel.textContent = phoneRingLabel(running, paused, data.dryRun, data.action);
+        timerLabel.classList.toggle('is-test', running && !paused && data.dryRun === true);
+        setPhaseLine(phoneRunPhase(running, paused, false, phase, data.dryRun));
+        // Phone time format (clockAt); paused says the clock is frozen.
+        targetEl.textContent = (running && paused)
+          ? 'Clock stopped'
+          : (running && data.remainingSeconds > 0)
+            ? `${data.dryRun === true ? 'Test ends' : 'Lights out'} ${clockAt(data.remainingSeconds)}` : '';
 
         safetyRow.style.display = active ? 'flex' : 'none';
         safetyBadge.textContent = data.dryRun === true ? 'TEST MODE' : 'REAL ACTION';
@@ -1107,7 +2220,14 @@
 
         const total = Number(data.totalSeconds) || 0;
         const remaining = Number(data.remainingSeconds) || 0;
-        setRing(running && total > 0 ? remaining / total : 0, running ? phase : 'idle');
+        setRing(running && total > 0 ? remaining / total : 0, ringPhaseKey(running, paused, phase, data.dryRun));
+        if (active) applyRunClasses(running, paused, phase, total > 0 ? remaining / total : NaN);
+        else clearRunClasses();
+        setRunLayout(active);
+        syncActionSegTruth();
+        // Fire 06: idle previews tonight's plan; a run drops the preview.
+        if (active) document.body.classList.remove('is-plan');
+        else renderIdlePlan();
 
         if (connectionState === 'connected') {
           statusPill.className = 'status-pill connected';
@@ -1119,6 +2239,7 @@
         activeControls.style.display = active ? '' : 'none';
         detailsPanel.classList.toggle('visible', active);
         if (active && nightModeBackdrop.classList.contains('show')) closeNightModeDetail();
+        if (active && startSheet.classList.contains('show')) closeStartSheet();
         if (!active) {
           detailsPanel.open = false;
           if (cancelConfirm.classList.contains('show')) closeCancelConfirmation();
@@ -1127,8 +2248,16 @@
           cancelConnectionStatus.hidden = true;
         }
 
+        // Only the label and glyph change; Resume becomes the primary action.
         const btnPause = document.getElementById('btn-pause');
-        if (btnPause) btnPause.textContent = paused ? 'Resume' : 'Pause';
+        if (btnPause) {
+          const pauseLabel = btnPause.querySelector('.btn-label');
+          const pauseGlyph = btnPause.querySelector('.btn-glyph path');
+          if (pauseLabel) pauseLabel.textContent = paused ? 'Resume' : 'Pause';
+          if (pauseGlyph) pauseGlyph.setAttribute('d', paused ? RESUME_GLYPH : PAUSE_GLYPH);
+          btnPause.classList.toggle('btn-primary', paused);
+          btnPause.classList.toggle('btn-secondary', !paused);
+        }
 
         // Override Tax indicator.
         const taxInd = document.getElementById('snooze-tax-indicator');
@@ -1138,20 +2267,24 @@
           const cost = tax.nextSnoozeCost;
           if (cost && cost.level > 0) {
             taxInd.style.display = '';
+            // Amber by default; red only when the next snooze costs tomorrow.
+            taxInd.classList.toggle('is-danger', cost.level >= 2);
             const msgs = [];
             if (cost.level >= 2) msgs.push(`Tomorrow: -${tax.tomorrowDebt + 15}m`);
             if (cost.requireReason) msgs.push('Reason required');
             else msgs.push(`Snooze #${cost.snoozeNumber} will be logged`);
-            taxMsg.textContent = `\u26A0 ${msgs.join(' \u00B7 ')}`;
+            taxMsg.textContent = msgs.join(' \u00B7 ');
           } else {
             taxInd.style.display = 'none';
           }
         }
 
+        syncOutcomeWithState(latestState);
         confirmPendingFromState(latestState);
         syncMutationControls();
         updateNightModeRunType();
         updateIdleSafetyBanner();
+        renderStartSheet();
       }
 
       if (data.type === 'nightModes') {
@@ -1164,37 +2297,42 @@
         validateNightModeSelection();
       }
 
-      if (data.type === 'streaks') {
-        if (data.streak > 0) { streakSection.style.display = ''; streakCount.textContent = data.streak; }
-      }
+      if (data.type === 'streaks') showStreak(data.streak);
 
       // Stats summary (delivered with timer updates).
       if (data.stats) {
         const statsEl = document.getElementById('companion-stats');
         if (statsEl) statsEl.style.display = '';
         const score = data.stats.sleepScore;
-        if (score && score.score !== null) {
+        const hasScore = Boolean(score) && score.score !== null && score.score !== undefined;
+        const scoreCol = document.querySelector('.comp-score-col');
+        if (scoreCol) scoreCol.hidden = !hasScore;
+        if (hasScore) {
           const el = document.getElementById('comp-score');
           const lbl = document.getElementById('comp-score-label');
           if (el) el.textContent = score.score;
           if (lbl) lbl.textContent = score.label || 'Routine Score';
         }
+        // Neutral by default; amber only for a real value above zero.
         if (data.stats.sleepDebt) {
           const el = document.getElementById('comp-debt');
-          if (el) el.textContent = `${data.stats.sleepDebt.netDebt || 0}h`;
+          const netDebt = Number(data.stats.sleepDebt.netDebt) || 0;
+          if (el) {
+            el.textContent = `${netDebt}h`;
+            el.classList.toggle('comp-metric--warn', netDebt > 0);
+          }
         }
-        if (data.stats.streak !== undefined) {
-          const el = document.getElementById('comp-streak');
-          if (el) el.textContent = `${data.stats.streak} nights`;
-        }
+        if (data.stats.streak !== undefined) showStreak(data.stats.streak);
         if (data.stats.tomorrowDebt !== undefined) {
           const el = document.getElementById('comp-tax-debt');
-          if (el) el.textContent = `${data.stats.tomorrowDebt}m`;
+          const tomorrowDebt = Number(data.stats.tomorrowDebt) || 0;
+          if (el) {
+            el.textContent = `${tomorrowDebt}m`;
+            el.classList.toggle('comp-metric--warn', tomorrowDebt > 0);
+          }
         }
-        if (data.stats.autopilotEnabled) {
-          const badge = document.getElementById('comp-autopilot-badge');
-          if (badge) badge.style.display = '';
-        }
+        const badge = document.getElementById('comp-autopilot-badge');
+        if (badge) badge.style.display = data.stats.autopilotEnabled ? 'inline-block' : 'none';
       }
 
       if (data.systemInfo) {
@@ -1205,7 +2343,8 @@
           const plan = document.getElementById('comp-power-plan');
           if (bat) {
             const batVal = data.systemInfo.battery;
-            bat.textContent = `Battery: ${batVal === 'N/A' ? 'N/A (Plugged In)' : `${batVal}%`}`;
+            // 'N/A' means the PC could not read it; nothing is inferred from that.
+            bat.textContent = `Battery: ${batVal === 'N/A' ? 'not reported' : batVal + '%'}`;
           }
           if (plan) {
             plan.textContent = `Plan: ${data.systemInfo.powerPlan || 'Unknown'}`;
@@ -1214,8 +2353,16 @@
       }
     }
 
+    // One streak readout (Details), shown only for a real streak above zero.
+    function showStreak(value) {
+      const nights = Number(value);
+      const hasStreak = Number.isFinite(nights) && nights > 0;
+      streakSection.style.display = hasStreak ? '' : 'none';
+      if (hasStreak) streakCount.textContent = `${nights} ${nights === 1 ? 'night' : 'nights'}`;
+    }
+
     function formatTime(sec) {
-      if (!sec && sec !== 0) return '--:--';
+      if (!sec && sec !== 0) return '—';
       const h = Math.floor(sec / 3600);
       const m = Math.floor((sec % 3600) / 60);
       const s = sec % 60;
@@ -1223,25 +2370,54 @@
       return `${m}:${String(s).padStart(2,'0')}`;
     }
 
-    // Action selector
+    // Action selector: .active and aria-pressed always move together (the
+    // desktop action-chip pattern). Default and reset = 'shutdown'.
+    function setSelectedAction(action) {
+      selectedAction = action;
+      actionSeg.querySelectorAll('.seg-btn').forEach(b => {
+        const pressed = b.dataset.action === action;
+        b.classList.toggle('active', pressed);
+        b.setAttribute('aria-pressed', String(pressed));
+      });
+    }
     actionSeg.querySelectorAll('.seg-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        selectedAction = btn.dataset.action;
-        actionSeg.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b === btn));
+        setSelectedAction(btn.dataset.action);
+        renderIdlePlan();
       });
     });
+    setSelectedAction('shutdown');
 
-    // Quick-start presets
-    document.querySelectorAll('[data-min]').forEach(btn => {
-      btn.addEventListener('click', () => startTimer(parseInt(btn.dataset.min) * 60));
+    // Tonight's plan (Fire 06). A chip sets the plan AND opens the Start
+    // sheet: two taps, exactly as the old chip + browser confirm. The
+    // stepper only sets the plan; #plan-start opens the sheet for it. An
+    // invalid custom value never opens the sheet.
+    document.querySelectorAll('.plan-chip[data-min]').forEach(chip => {
+      chip.addEventListener('click', () => {
+        if (setPlanSeconds(Number(chip.dataset.min) * 60)) openStartSheet(planSeconds);
+      });
     });
-
-    // Custom duration
-    document.getElementById('custom-start').addEventListener('click', () => {
-      const mins = parseInt(customMin.value, 10);
-      if (Number.isFinite(mins) && mins >= 1) startTimer(mins * 60);
+    customMinus.addEventListener('click', () => stepCustom(-1));
+    customPlus.addEventListener('click', () => stepCustom(1));
+    customMin.addEventListener('input', () => {
+      const mins = customMinutesValue();
+      if (mins !== null) setPlanSeconds(mins * 60, true);
     });
-    customMin.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('custom-start').click(); });
+    customMin.addEventListener('change', () => {
+      if (customMinutesValue() === null) customMin.value = String(Math.round(planSeconds / 60));
+    });
+    customMin.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      const mins = customMinutesValue();
+      if (mins === null) { customMin.value = String(Math.round(planSeconds / 60)); return; }
+      setPlanSeconds(mins * 60, true);
+      openStartSheet(planSeconds);
+    });
+    planStart.addEventListener('click', () => openStartSheet(planSeconds));
+    startGo.addEventListener('click', confirmStartSheet);
+    startCancel.addEventListener('click', closeStartSheet);
+    startSheet.addEventListener('click', (e) => { if (e.target === startSheet) closeStartSheet(); });
+    renderPlanControls();
 
     // Night Mode picker (C2)
     nightModeToggle.addEventListener('click', toggleNightModeGrid);
@@ -1263,9 +2439,6 @@
       if (!send({ action: 'startNightMode', nightModeId: requestedNightModeId })) clearPending({ timeout: true });
     });
     nightModeBackdrop.addEventListener('click', (e) => { if (e.target === nightModeBackdrop) closeNightModeDetail(); });
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && nightModeBackdrop.classList.contains('show')) closeNightModeDetail();
-    });
 
     // Running controls. Each command is sent once, then the UI waits for a
     // matching authoritative desktop state. C1 intentionally does not add a
@@ -1296,11 +2469,20 @@
       if (!send({ action: 'togglePause' })) clearPending({ timeout: true });
     });
 
+    // What stopping does, exactly: this run's action will not happen. The
+    // Test Mode sentence reads the run's own dryRun (like the badge).
+    function cancelCopyText(state, target) {
+      const head = `${phoneSessionTitle(state)} has ${formatTime(state.remainingSeconds)} remaining on ${target}.`;
+      // A Test Mode run planned no power action, so it never claims one is
+      // being called off.
+      if (state.dryRun === true) return `${head} This will stop the timer. This is a Test Mode run: no power action was planned.`;
+      const words = actionWords(state.action);
+      return `${head} This will stop the timer, and this run’s ${words ? words.noun : 'power action'} will not happen.`;
+    }
     function updateCancelConfirmationCopy() {
       if (!latestState) return;
-      const title = latestState.nightModeTitle || 'Custom Timer';
-      const target = pcName || 'the connected PC';
-      cancelCopy.textContent = `${title} has ${formatTime(latestState.remainingSeconds)} remaining on ${target}. This will stop the timer.`;
+      // pcName is LAN data: textContent only.
+      cancelCopy.textContent = cancelCopyText(latestState, pcName || 'the connected PC');
     }
 
     function handleCancelDialogKeydown(event) {
@@ -1327,8 +2509,7 @@
       cancelConfirm.classList.remove('show');
       cancelConfirm.setAttribute('aria-hidden', 'true');
       document.removeEventListener('keydown', handleCancelDialogKeydown, true);
-      appShell.inert = false;
-      appShell.removeAttribute('aria-hidden');
+      releaseShellIfNoDialog();
       cancelConnectionStatus.hidden = true;
       const fallback = document.getElementById('btn-cancel');
       const openerIsUsable = cancelDialogOpener && cancelDialogOpener.isConnected
@@ -1356,9 +2537,18 @@
 
     document.getElementById('cancel-keep')?.addEventListener('click', closeCancelConfirmation);
     document.getElementById('cancel-stop')?.addEventListener('click', () => {
+      // Snapshot what Stop was pressed against: the outcome strip may speak
+      // only if this run still had a safe margin (outcomeEligible).
+      const snapshot = latestState ? {
+        remainingSeconds: latestState.remainingSeconds,
+        phase: latestState.phase,
+        dryRun: latestState.dryRun,
+        action: latestState.action
+      } : null;
       if (!beginPending({
         kind: 'cancel',
         success: 'Tonight’s run stopped',
+        snapshot,
         matches: state => !state.running && !state.paused
       })) {
         cancelConnectionStatus.hidden = false;
@@ -1369,6 +2559,12 @@
     });
     cancelConfirm.addEventListener('click', event => {
       if (event.target === cancelConfirm) closeCancelConfirmation();
+    });
+    // The dismiss button hides its own strip: hand focus to the shell so
+    // keyboard / screen-reader focus never falls back to <body>.
+    outcomeDismiss?.addEventListener('click', () => {
+      hideOutcome();
+      if (appShell) appShell.focus({ preventScroll: true });
     });
     // Test-only hook for verifying generation-aware catalogue refresh without altering behavior.
     window.__nightModeTest = {
@@ -1386,6 +2582,7 @@
       injectCatalogueReply: (modes, generation) => handleUpdate({ type: 'nightModes', modes }, generation)
     };
 
+    if (!pairToken || pairTokenFromLink) setLampOff();
     if (pairToken) connect();
     else showPairing();
   </script>

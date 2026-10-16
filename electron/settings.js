@@ -115,15 +115,15 @@ const DEFAULTS = {
     lockoutOnDim: false,
     // Clock Mode: show current time when idle instead of countdown input.
     clockMode: true,
-    // Clock face style when idle in Clock Mode: 'digital' | 'analog' | 'hybrid'.
-    clockFace: 'hybrid',
+    // Countdown ring is the default; analog is an optional idle clock face.
+    clockFace: 'digital',
     // Analog/hybrid clock customization.
     clockStyle: 'modern',          // 'modern' | 'bold' | 'minimal' | 'neon' | 'classic'
     clockDial: 'bars',             // 'bars' | 'minutes' | 'arabic' | 'roman' | 'auto'
     clockFormat: '24h',            // '24h' | '12h'
     clockScale: 1,                 // 0.8 - 1.35
     clockShowDate: false,
-    clockHandColor: '#76c9ff',     // hand + cap accent color
+    clockHandColor: '#9b93d6',     // hand + cap accent color (violet; legacy #76c9ff maps to violet at render time)
     clockSeconds: true,            // show the second hand
     clockSweep: true,              // smooth sweep vs per-second tick
     // Northstar UI state
@@ -156,6 +156,9 @@ const DEFAULTS = {
   smartLights: {
     enabled: false,
     provider: 'none',
+    wizAddresses: [],
+    wizDevices: [],
+    wizLook: { mode: 'current', brightness: 50, temperature: 2700, color: '#ff9f43', sceneId: 14 },
     mode: 'gradual_dim',
     dimMinutes: 10,
     hueBridgeIp: '',

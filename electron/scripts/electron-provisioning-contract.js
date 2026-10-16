@@ -16,8 +16,9 @@ function declaredRangeAccepts(declared, locked) {
   if (caret) {
     const [major, minor, patch] = caret.slice(1).map(Number);
     if (lockedMajor !== major) return false;
-    if (major > 0) return true;
+    if (major > 0) return lockedMinor > minor || (lockedMinor === minor && lockedPatch >= patch);
     if (lockedMinor !== minor) return false;
+    if (minor === 0) return lockedPatch === patch;
     return lockedPatch >= patch;
   }
   const tilde = /^~(\d+)\.(\d+)\.(\d+)$/.exec(declared || '');

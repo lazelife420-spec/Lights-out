@@ -4,10 +4,23 @@
   <meta charset="UTF-8">
   <title>Lights Out Widget</title>
   <style>
+    /* UI-R3 Fire 04: the widget speaks the Tonight instrument. Every colour
+       comes from this token block (the colour grammar: violet = you act,
+       amber = Test Mode / paused, red = a REAL action). */
+    :root {
+      --w-violet: #9b93d6;
+      --w-amber: #f5b83d;
+      --w-red: #ff5c7a;
+      --w-ink: #e8ecf1;
+      --w-muted: #9aa6b2;
+      --w-close: #6b7685;
+      --w-field: rgba(11, 15, 20, 0.9);
+      --w-hair: rgba(155, 147, 214, 0.28);
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       background: transparent;
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
       overflow: hidden;
       -webkit-app-region: drag;
     }
@@ -15,120 +28,121 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      background: rgba(13, 14, 17, 0.88);
+      background: var(--w-field);
       backdrop-filter: blur(12px);
-      border: 1px solid rgba(91, 140, 255, 0.25);
+      border: 1px solid var(--w-hair);
       border-radius: 10px;
-      padding: 8px 14px;
+      padding: 8px 12px;
       cursor: pointer;
       user-select: none;
     }
-    .widget.phase-dim { border-color: rgba(212, 165, 10, 0.4); }
-    .widget.phase-lastlight { border-color: rgba(255, 77, 77, 0.4); }
-    .widget-ring {
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      border: 2px solid rgba(91, 140, 255, 0.5);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 10px;
-      color: #5b8cff;
-      flex-shrink: 0;
-    }
-    .widget.running .widget-ring {
-      border-color: #4caf50;
-      color: #4caf50;
-      animation: pulse 2s ease infinite;
-    }
-    .widget.paused .widget-ring {
-      border-color: #d4a50a;
-      color: #d4a50a;
-    }
-    .widget.phase-dim .widget-ring {
-      border-color: #d4a50a;
-      color: #d4a50a;
-    }
-    .widget.phase-lastlight .widget-ring {
-      border-color: #ff4d4d;
-      color: #ff4d4d;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
+    /* Countdown ring: the logo's broken O as the track, plus an arc whose
+       length is the remaining ratio. Violet while running, a dimmed violet
+       while winding down (never amber), amber when paused or in a Test Mode
+       last light, red only for a REAL action in last light. No animation. */
+    .widget-ring { width: 28px; height: 28px; flex-shrink: 0; display: block; }
+    .widget-ring circle { fill: none; stroke-width: 2.5; }
+    .widget-ring .ring-track { stroke: color-mix(in srgb, var(--w-violet) 18%, transparent); }
+    .widget-ring .ring-arc { stroke: var(--w-violet); stroke-linecap: round; }
+    .widget.idle .widget-ring .ring-arc { stroke: transparent; }
+    .widget.running.phase-dim .widget-ring .ring-arc { stroke: color-mix(in srgb, var(--w-violet) 62%, transparent); }
+    .widget.paused .widget-ring .ring-arc,
+    .widget.test.phase-lastlight .widget-ring .ring-arc { stroke: var(--w-amber); }
+    .widget.real.phase-lastlight .widget-ring .ring-arc { stroke: var(--w-red); }
+    .widget.real.phase-lastlight { border-color: color-mix(in srgb, var(--w-red) 45%, transparent); }
+    .widget.test.phase-lastlight,
+    .widget.paused { border-color: color-mix(in srgb, var(--w-amber) 40%, transparent); }
     .widget-info {
       display: flex;
       flex-direction: column;
+      flex: 1;
+      min-width: 0;
     }
+    /* The instrument face (Bahnschrift on Windows), tabular figures. */
     .widget-remaining {
+      font-family: 'Bahnschrift', 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
       font-size: 15px;
-      font-weight: 700;
-      color: #e8ecf1;
+      font-weight: 600;
+      color: var(--w-ink);
       line-height: 1;
+      font-variant-numeric: tabular-nums;
     }
+    /* Static truth line: amber Test Mode, red REAL. Never animated. */
     .widget-label {
-      font-size: 8px;
-      color: #6b7685;
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--w-muted);
       text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-top: 1px;
+      letter-spacing: 0.06em;
+      margin-top: 2px;
+      white-space: nowrap;
     }
+    .widget.test .widget-label { color: var(--w-amber); }
+    .widget.real .widget-label { color: var(--w-red); }
     .widget-close {
       -webkit-app-region: no-drag;
       background: none;
       border: none;
-      color: #6b7685;
+      color: var(--w-close);
       font-size: 14px;
       cursor: pointer;
       padding: 0 2px;
       line-height: 1;
+      margin-left: auto;
     }
-    .widget-close:hover { color: #ff4d4d; }
-    .idle .widget-remaining { color: #6b7685; font-size: 11px; font-weight: 500; }
+    .widget-close:hover { color: var(--w-ink); }
+    .idle .widget-remaining { color: var(--w-muted); font-size: 11px; font-weight: 600; }
   </style>
 </head>
 <body>
   <div class="widget idle" id="widget">
-    <div class="widget-ring" id="widget-ring">&#x263E;</div>
+    <svg class="widget-ring" id="widget-ring" viewBox="0 0 28 28" aria-hidden="true">
+      <circle class="ring-track" cx="14" cy="14" r="11" pathLength="100" stroke-dasharray="30 4 24 4 18 20" transform="rotate(-90 14 14)"/>
+      <circle class="ring-arc" id="widget-ring-arc" cx="14" cy="14" r="11" pathLength="100" stroke-dasharray="0 100" transform="rotate(-90 14 14)"/>
+    </svg>
     <div class="widget-info">
       <span class="widget-remaining" id="widget-remaining">Lights Out</span>
-      <span class="widget-label" id="widget-label">idle</span>
+      <span class="widget-label" id="widget-label">Checking mode</span>
     </div>
-    <button class="widget-close" id="widget-close">&times;</button>
+    <button class="widget-close" id="widget-close" aria-label="Close widget">&times;</button>
   </div>
   <script>
     const api = window.electronAPI || {};
     const widget = document.getElementById('widget');
-    const ring = document.getElementById('widget-ring');
+    const arc = document.getElementById('widget-ring-arc');
     const remaining = document.getElementById('widget-remaining');
     const label = document.getElementById('widget-label');
     const closeBtn = document.getElementById('widget-close');
+    const ACTION_WORDS = { shutdown: 'SHUTDOWN', restart: 'RESTART', sleep: 'SLEEP', hibernate: 'HIBERNATE', lock: 'LOCK', logout: 'LOG OUT' };
 
     api.onWidgetUpdate?.((data) => {
       widget.className = 'widget';
-      const running = data.running;
-      const paused = data.paused;
+      const running = Boolean(data.running);
+      const paused = Boolean(data.paused);
       const phase = data.phase || 'idle';
+      const dryRun = data.dryRun === true;
+      const action = ACTION_WORDS[data.action] || 'POWER ACTION';
+      const forced = data.forceShutdown === true && (data.action === 'shutdown' || data.action === 'restart');
+      widget.classList.add(dryRun ? 'test' : 'real');
 
       if (!running) {
         widget.classList.add('idle');
         remaining.textContent = 'Lights Out';
-        label.textContent = 'idle';
-        ring.innerHTML = '&#x263E;';
-      } else {
-        if (paused) {
-          widget.classList.add('paused');
-          label.textContent = 'PAUSED';
-        } else {
-          widget.classList.add('running');
-          label.textContent = phase === 'dim' ? 'WINDING DOWN' : phase === 'lastlight' ? 'LAST LIGHT' : 'until bed';
-        }
-        if (phase && phase !== 'idle') widget.classList.add('phase-' + phase);
-        remaining.textContent = data.remaining || '--:--';
-        ring.innerHTML = '&#x1F534;';
+        label.textContent = dryRun ? 'Test Mode on' : 'Real actions on';
+        arc.setAttribute('stroke-dasharray', '0 100');
+        widget.title = 'Lights Out - idle';
+        return;
       }
+
+      widget.classList.add(paused ? 'paused' : 'running');
+      if (phase && phase !== 'idle') widget.classList.add('phase-' + phase);
+      remaining.textContent = data.remaining || '--:--';
+      // Short enough to fit the widget at every action; the truth word comes first.
+      label.textContent = dryRun ? 'TEST · NO POWER ACTION' : forced ? `REAL · FORCED ${action}` : `REAL · ${action} AT END`;
+      const ratio = Math.max(0, Math.min(1, Number(data.ratio) || 0));
+      const filled = (ratio * 100).toFixed(1);
+      arc.setAttribute('stroke-dasharray', `${filled} ${(100 - Number(filled)).toFixed(1)}`);
+      widget.title = paused ? 'Paused' : phase === 'dim' ? 'Winding down' : phase === 'lastlight' ? 'Last light' : 'Running';
     });
 
     closeBtn.addEventListener('click', () => {

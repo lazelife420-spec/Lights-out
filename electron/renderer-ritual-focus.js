@@ -1,28 +1,10 @@
-// Renderer: Ritual Mode overlay, Guided Breathing (4-7-8), Focus Sessions,
-// Sleep Debt, and Emergency Override modal. Loaded as a classic sibling
-// <script>, after the five existing shards and before renderer.js.
-//
-// SCOPE CHANGE, same pattern as renderer-receipts.js / renderer-family-remote.js:
-// all 10 functions here were nested inside wireEvents() in renderer.js.
-// Verified via wireEvents.toString() before touching anything (same
-// ground-truth technique that caught the setupRemoteControlHandlers bug in
-// the previous slice). Their bootstrap-adjacent call sites
-// (startGuidedBreathing from an api.onPlayLastLight callback, showOverrideModal
-// from an addEventListener callback) are both deferred event/IPC callbacks,
-// not synchronous top-level bootstrap statements, so unlike the previous
-// slice this extraction is a straightforward scope hoist with no additional
-// "throws on every launch" bug attached.
-//
-// RITUAL_ICONS/RITUAL_DESCS/BREATHING_PHASES/BREATHING_CYCLES/breathingActive/
-// breathingTimer were also wireEvents()-local; hoisted here alongside the
-// functions that use them (updateRitualOverlay reads the first two;
-// startGuidedBreathing/stopGuidedBreathing read and mutate the rest).
+// Renderer: ritual overlay, focus sessions, sleep debt, and override.
+// Loaded before renderer.js; event handlers use its shared state and elements.
 const RITUAL_ICONS = {
-  breathe: '\u{1F4A8}', block: '\u{1F6AB}', dim: '\u{1F319}',
-  timer: '\u{23F0}', lights: '\u{1F4A1}'
+  block: 'block', dim: 'moon',
+  timer: 'clock', lights: 'lamp'
 };
 const RITUAL_DESCS = {
-  breathe: 'Take a moment to breathe deeply and relax.',
   block: 'Blocking distracting websites and apps.',
   dim: 'Dimming your environment for sleep.',
   timer: 'Starting your wind-down countdown.',
@@ -49,7 +31,10 @@ function updateRitualOverlay(state) {
   els.ritualOverlay.classList.add('active');
   els.ritualOverlay.setAttribute('aria-hidden', 'false');
 
-  els.ritualStepIcon.textContent = RITUAL_ICONS[step.id] || '\u{1F319}';
+  const glyphName = Object.prototype.hasOwnProperty.call(RITUAL_ICONS, step.id) ? RITUAL_ICONS[step.id] : 'moon';
+  // typeof-guarded: the ritual lifecycle tests load this file without
+  // renderer-utils.js.
+  if (typeof loGlyph === 'function') els.ritualStepIcon.innerHTML = loGlyph(glyphName, 'ritual-step-glyph');
   els.ritualStepTitle.textContent = step.label;
   els.ritualStepDesc.textContent = RITUAL_DESCS[step.id] || '';
   els.btnRitualSkip.style.display = step.skippable ? '' : 'none';
@@ -70,65 +55,6 @@ function hideRitualOverlay() {
   els.ritualOverlay.classList.remove('active');
   els.ritualOverlay.style.display = 'none';
   els.ritualOverlay.setAttribute('aria-hidden', 'true');
-}
-
-const BREATHING_PHASES = [
-  { name: 'Inhale', duration: 4 },
-  { name: 'Hold', duration: 7 },
-  { name: 'Exhale', duration: 8 }
-];
-const BREATHING_CYCLES = 4;
-let breathingActive = false;
-let breathingTimer = null;
-
-function startGuidedBreathing() {
-  if (breathingActive) return;
-  breathingActive = true;
-  let cycle = 0;
-  let phaseIdx = 0;
-  let count = BREATHING_PHASES[0].duration;
-
-  function tick() {
-    if (!breathingActive) return;
-    const phase = BREATHING_PHASES[phaseIdx];
-
-    if (els.breathingOverlay) els.breathingOverlay.classList.add('active');
-    if (els.breathingLabel) els.breathingLabel.textContent = phase.name;
-    if (els.breathingCount) els.breathingCount.textContent = count;
-    if (els.breathingInstruction) els.breathingInstruction.textContent = phase.name.toUpperCase();
-    if (els.breathingCycles) els.breathingCycles.textContent = `Cycle ${cycle + 1} of ${BREATHING_CYCLES}`;
-
-    // Animate the breathing circle.
-    if (els.breathingCircle) {
-      els.breathingCircle.classList.remove('inhale', 'hold', 'exhale');
-      if (phase.name === 'Inhale') els.breathingCircle.classList.add('inhale');
-      else if (phase.name === 'Hold') els.breathingCircle.classList.add('hold');
-      else els.breathingCircle.classList.add('exhale');
-    }
-
-    count--;
-    if (count < 0) {
-      phaseIdx++;
-      if (phaseIdx >= BREATHING_PHASES.length) {
-        phaseIdx = 0;
-        cycle++;
-        if (cycle >= BREATHING_CYCLES) {
-          if (typeof stopGuidedBreathing === 'function') stopGuidedBreathing();
-          return;
-        }
-      }
-      count = BREATHING_PHASES[phaseIdx].duration;
-    }
-    breathingTimer = setTimeout(tick, 1000);
-  }
-  tick();
-}
-
-function stopGuidedBreathing() {
-  breathingActive = false;
-  if (breathingTimer) { clearTimeout(breathingTimer); breathingTimer = null; }
-  if (els.breathingOverlay) els.breathingOverlay.classList.remove('active');
-  if (els.breathingCircle) els.breathingCircle.classList.remove('inhale', 'hold', 'exhale');
 }
 
 function renderFocusSession(fs) {
@@ -174,7 +100,9 @@ function renderSleepDebt(debt) {
   const label = debt.netDebt <= 0 ? 'No estimated deficit' :
     debt.netDebt <= 2 ? 'Small estimate' :
     debt.netDebt <= 5 ? 'Moderate estimate' : 'Large estimate';
-  const colors = { 'No estimated deficit': '#4caf50', 'Small estimate': '#8bc34a', 'Moderate estimate': '#ff9800', 'Large estimate': '#ff5722' };
+  // Grammar: no deficit reads teal (steady); any estimated deficit reads
+  // amber (attention), never red -- it is an estimate, not a failure.
+  const colors = { 'No estimated deficit': 'var(--pf-teal)', 'Small estimate': 'var(--accent-amber)', 'Moderate estimate': 'var(--accent-amber)', 'Large estimate': 'var(--accent-amber)' };
   if (els.debtAmount) {
     els.debtAmount.textContent = `${debt.netDebt > 0 ? '+' : ''}${debt.netDebt}h`;
     els.debtAmount.style.color = colors[label] || 'var(--text-primary)';
@@ -189,9 +117,9 @@ function renderSleepDebt(debt) {
       return `<div class="debt-day" style="display:flex;align-items:center;gap:4px;font-size:10px">
         <span style="width:28px;color:var(--text-muted)">${dayLabel}</span>
         <div style="flex:1;height:4px;background:var(--bg-card);border-radius:2px;overflow:hidden">
-          <div style="width:${barW}%;height:100%;background:${isDebt ? '#ff9800' : '#4caf50'};border-radius:2px"></div>
+          <div style="width:${barW}%;height:100%;background:${isDebt ? 'var(--accent-amber)' : 'var(--pf-teal)'};border-radius:2px"></div>
         </div>
-        <span style="width:36px;color:${isDebt ? '#ff9800' : '#4caf50'}">${isDebt ? '-' : '+'}${isDebt ? d.debt?.toFixed(1) : d.surplus?.toFixed(1)}h</span>
+        <span style="width:36px;color:${isDebt ? 'var(--accent-amber)' : 'var(--pf-teal)'}">${isDebt ? '-' : '+'}${isDebt ? d.debt?.toFixed(1) : d.surplus?.toFixed(1)}h</span>
       </div>`;
     }).join('') : '<p style="font-size:10px;color:var(--text-muted)">No data yet</p>';
   }
@@ -221,4 +149,4 @@ async function showOverrideModal() {
 function hideOverrideModal() {
   if (els.overrideModal) els.overrideModal.classList.remove('active');
 }
-/* exported showRitualOverlay, startGuidedBreathing, renderFocusSession, loadSleepDebt, showOverrideModal, hideOverrideModal */
+/* exported showRitualOverlay, renderFocusSession, loadSleepDebt, showOverrideModal, hideOverrideModal */

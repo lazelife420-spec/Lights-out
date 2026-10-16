@@ -34,6 +34,7 @@ const vm = require('node:vm');
 
 const rendererPath = path.join(__dirname, '..', 'renderer.js');
 const rendererSource = fs.readFileSync(rendererPath, 'utf8');
+const settingsSource = fs.readFileSync(path.join(__dirname, '..', 'renderer-settings.js'), 'utf8');
 
 function extractFunction(source, name) {
   const headerMatch = source.match(new RegExp(`(?:async\\s+)?function ${name}\\s*\\(`));
@@ -220,7 +221,7 @@ test('a panel-open render() no longer syncs the OTHER fields (unchanged, narrow-
 
 // --- Behavioral: saveSettingsPanel() no longer reverts a newer Dry Run ---
 
-function createSaveSettingsPanelSandbox({ state, checkboxChecked }) {
+function createSaveSettingsPanelSandbox({ state, checkboxChecked, failLights = false }) {
   const calls = { saveAppSettings: [], notify: [], render: 0 };
   const els = {
     selAction: { value: state.action },
@@ -249,6 +250,8 @@ function createSaveSettingsPanelSandbox({ state, checkboxChecked }) {
   const sandbox = {
     state,
     els,
+    document: { getElementById: () => null },
+    wizDeviceDraft: [],
     console,
     clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
     collectAppSettings: () => ({ dryRun: state.dryRun, forceShutdown: state.forceShutdown }),
@@ -263,11 +266,12 @@ function createSaveSettingsPanelSandbox({ state, checkboxChecked }) {
     notify: (...args) => { calls.notify.push(args); },
     api: {
       saveAppSettings: async payload => { calls.saveAppSettings.push(payload); return {}; },
-      saveSmartLightConfig: async cfg => cfg
+      saveSmartLightConfig: async cfg => { if (failLights) throw new Error('disk full'); return cfg; }
     }
   };
 
   const context = vm.createContext(sandbox);
+  vm.runInContext(extractFunction(settingsSource, 'collectWizSettings'), context);
   const source = extractFunction(rendererSource, 'saveSettingsPanel');
   vm.runInContext(`${source}\nthis.__saveSettingsPanel = saveSettingsPanel;`, context);
   return { saveSettingsPanel: context.__saveSettingsPanel, calls, els };
@@ -300,6 +304,15 @@ test('Save still persists whatever Dry Run genuinely is when the checkbox and ca
 
   assert.equal(state.dryRun, true);
   assert.equal(calls.saveAppSettings[0].app.dryRun, true);
+});
+
+test('Settings Save reports failure so the view stays open with unsaved edits', async () => {
+  const state = { action: 'shutdown', dryRun: true, forceShutdown: false, muteSystem: false, graceMinutes: 2, smartLights: {}, lastLight: {} };
+  const failed = createSaveSettingsPanelSandbox({ state, checkboxChecked: true, failLights: true });
+  assert.equal(await failed.saveSettingsPanel(), false);
+  assert.ok(failed.calls.notify.some(([message]) => message.includes('disk full')));
+  const saved = createSaveSettingsPanelSandbox({ state, checkboxChecked: true });
+  assert.equal(await saved.saveSettingsPanel(), true);
 });
 
 // --- Cancel / reload semantics (unchanged, verified not to regress) -----

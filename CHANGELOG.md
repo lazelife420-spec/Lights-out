@@ -3,8 +3,338 @@
 ## Unreleased
 
 ### Changed
-- Bumped `sharp` from `^0.35.3` to `^0.35.4` post-release; the prebuilt N-API
-  binary needs no rebuild across this patch.
+- Polished the desktop Settings layout with a compact search header, consistent
+  icon navigation, readable forms, grouped WiZ controls and a persistent save
+  footer. All categories fit the minimum-height window. Ctrl+K or / focuses
+  search; arrow keys and Home/End navigate categories. Failed saves keep the
+  form open with unsaved edits, and repeated Save clicks are blocked in flight.
+- Desktop WiZ settings now include individual light selection, locally named
+  rooms, brightness, white temperature, custom color, and WiZ presets. Discovery
+  preserves selection. Chosen looks apply to already-on lights at dim start;
+  Send test action explicitly applies the selected brightness and look.
+- WiZ wind-down rechecks live power before each change and never sends power-on
+  with a dim command. Switching a light off in WiZ releases it for the run,
+  including cancel and completion. Disabling or changing the setup invalidates
+  pending dim operations. Cancel restores only lights changed by the dimmer.
+  Morning sunrise also stops updating a WiZ light switched off manually after
+  its initial wake action.
+- Android now opens to a standalone offline phone timer with the countdown ring,
+  optional analog idle clock, pause/resume/add/cancel, saved native countdowns,
+  foreground notification controls and screen-off completion alerts. A separate
+  PC controls screen preserves QR pairing and remote desktop control. Android
+  permissions are explained in-app; the local native bridge is isolated from
+  the remote PC WebView. Debug installs remain separate from production.
+- Redesigned Settings with a searchable category menu, clearer section hierarchy,
+  and a dedicated Lighting page using the existing Lights Out colours and type.
+- Added WiZ local discovery, passive verification, explicit test actions, gradual
+  dimming from current brightness, and restoration on cancel. Existing Hue and
+  webhook connections remain available; automatic lighting remains opt-in.
+- Added a month planner and weekly, monthly, and individual-date rules with saved
+  routines, countdowns, selected months, and last-day support. Scheduled runs wait
+  until their chosen time, record each occurrence to prevent repeats, preserve
+  Test Mode, and skip deleted routines. Failed saves restore the previous rules.
+- Removed the breathing overlay, its automatic Last Light trigger, and breathing
+  steps from default and legacy saved routines. Added two hidden decorative star
+  signatures with reduced-motion support.
+- Countdown ring is now the default clock face, with Analog clock available
+  beneath the idle dial and in Appearance settings. Explicit analog preferences
+  are preserved; the old hybrid default displays the countdown ring.
+- The clock uses a clean, thin ring and a larger reading. Active timers show
+  time remaining and their end time; paused timers say they are on hold.
+  Mini mode, fullscreen layouts, Dawn, and 12/24-hour readings use the same faces.
+- Tonight now groups the plan in a clear card, with the Start action after
+  duration and ending choices. Readiness cells keep consistent spacing and fit
+  the minimum window. Dawn uses a light clock face with readable dial marks.
+- Devices keeps status badges clear of headings. Phone badges distinguish
+  local access, waiting for a phone, connected phones and failures; the full
+  endpoint status stays available below the heading and in the readiness tooltip.
+- Packaged UI checks now cover dark and light layouts at three window sizes.
+  Native tests open Power & Safety and Proof before interacting with their controls.
+- Updated the locked Electron runtime to 43.7.11 and Sharp to 0.35.5, with patched
+  brace-expansion and undici resolutions. Provisioning now checks the declared
+  minimum version, including its minor and patch numbers.
+- Wi-Fi firewall creation, port changes, rollback and removal now target unique
+  rules owned by the current process, preserving other running Lights Out builds.
+- Night Modes runtime qualification now advances its own clock as well as its
+  polling cadence. Its completion check is required in CI and full E2E runs.
+- Packaged validation now has a local-only lane (`npm run test:packaged-local`)
+  that checks the seven-item navigation, Test Mode timer controls and companion
+  recovery without opening LAN access or changing existing firewall rules.
+- Companion runtime proof now verifies that a duplicate desktop start preserves
+  the active run, then explicitly cancels it before testing a new run on reconnect.
+- Sharp's prebuilt N-API binary needs no Electron ABI rebuild for these updates.
+- Proof: the receipts ledger's "Clear All Receipts" is now a two-step
+  "Delete all receipts…" with an inline confirm (Keep is focused). Deleting is
+  still permanent. The Proof hero no longer has Close / dismiss buttons, and
+  "Play Tonight Again" reads "Start tonight's plan".
+- Buttons, fields and chips share one system: every control uses the app
+  font (nothing falls back to Arial), buttons are pills (violet primary with
+  dark ink, a deeper red with white ink only for destructive actions), fields
+  are dark in every dialog with light native pickers kept in Dawn, and chips
+  share one pill shape (Test Mode / Forced chips read uppercase). Page,
+  dialog and onboarding titles use the Bahnschrift display face. Button labels
+  read in sentence case, including the Start and Night Mode CTAs.
+- Hovers follow the chosen accent: the hover colour is now the accent
+  darkened, so every hover visibly changes for every accent (it was the
+  accent itself, so many hovers did nothing).
+- The Saved Profiles dialog is now the dark My Modes manager ("Save tonight’s
+  plan as a mode", Name, Kind, "Save mode", "Your modes", "Search modes…").
+  New modes default to Routine; saved modes keep their kind and avatars.
+- Times follow your 12-hour / 24-hour setting everywhere on the desktop: the
+  session end, Proof's hero and history, the ledger, the Schedule hint, its
+  start notice and Tonight's Schedule note. 12-hour times read "5:53 PM",
+  with no leading zero.
+- The ledger groups runs by night ("Night of Tue, Oct 6"); a run after
+  midnight under that night shows its time with a "+1 day" marker.
+- The footer keeps the mode after a run: it reads "Test Mode | Cancelled" or
+  "Real · Shutdown | Done" instead of replacing the mode with the outcome, and
+  shows an outcome only while the mode still matches. The branding line, the
+  version and the footer buttons are easier to read.
+- The default session is called "Countdown" (Tonight: "Countdown · 28 min" /
+  "Start countdown"; Proof: "Countdown"); a Night Mode, a My Mode or a name
+  typed on the ring is used instead. A session's first phase reads "Running";
+  "Focus" now means only Focus Sessions.
+- Test Mode now lists the wind-down effects that still run (for example
+  "closes 2 apps · blocks sites") in Settings › Power & Safety and on
+  Tonight's plan. Test Mode holds back only the power action; that has not
+  changed, the app now says so.
+- Toasts on Tonight sit above the readiness rail, and pausing or resuming on
+  Tonight goes to the notification centre without a toast.
+- The navigation rail stays during a session: starting a run (from Tonight,
+  the phone, Schedule or the tray) no longer removes it or shifts the page.
+  The Tonight icon turns teal while a session runs and amber while it is
+  paused. Mini mode and the full-screen clock stay rail-less.
+- During a session the footer status pill leads back to the session: on any
+  other page it opens Tonight (it never opens Settings or changes the mode
+  mid-run). Idle, it still opens Power & Safety.
+- Tonight's readiness cells (Phone, Lights, Network, Safety) open the place
+  where you fix them: the matching Devices card, briefly outlined, or
+  Power & Safety. They work while idle; during a session the values stay
+  fully readable.
+- The mini window can be moved by its top strip. The strip disappears while
+  any dialog, overlay, first-run setup or menu is open, and double-clicking it
+  never maximizes the mini window.
+- About fits one screen: the wordmark is the title, the version is a single
+  chip, the update check sits in one row and the full key map is shown in two
+  columns.
+- The window header is open in the night themes (Dawn keeps its solid
+  header), the rail starts under it, and rail labels sit on one line. The
+  header lockup reads LIGHTS OUT (the O is drawn at the weight of its
+  letters), the lamp's beam reads a little stronger, and its flicker dust
+  stays inside the beam. Launch and the full-screen clock no longer paint a
+  keyboard focus ring on the rail.
+- Tonight's ring is a thinner instrument: a fine arc over a calm scale, with
+  the logo's broken O just outside it while a run is active, and larger
+  digits sized by the ring that no longer wrap. A small mark shows where
+  winding down begins, only when the run really has a winding-down phase.
+- Winding down no longer looks paused: it dims the violet instead of turning
+  amber. A paused run shows the arc cut at the O's three gaps (amber), and a
+  REAL Last Light is red and thinner (a Test Mode Last Light stays amber).
+- The default session name ("Last Call") no longer shows during a run or on
+  the full-screen clock; idle it is muted but still editable. A name you
+  chose still shows.
+- The session console has one Pause rule: Pause is a violet-tinted control
+  while running, and Resume is the filled violet button while paused. The
+  room's flicker dust no longer shows through Pause, Snooze, Cancel session,
+  the dial, Night Mode cards or the Session History card.
+- Tonight's plan makes the end time its largest fact, and the Ending choices
+  keep their widths when you change the selection (they no longer carry
+  glyphs). The full-screen button is a quiet "Full screen" label under the
+  dial.
+- The full-screen clock fits the window: it is laid out at real size (no
+  scaled blow-up), with no scrollbar, no wrapped labels and no lamp beam from
+  an empty corner. The Test Mode / REAL pill and the exit stay visible, and
+  your clock size still applies.
+- The desktop widget matches the ring: the instrument digits, the broken-O
+  track and a dimmed violet while winding down. Its Test Mode / REAL line is
+  unchanged.
+- The phone's run screen is the desktop's instrument: a thinner arc with the
+  logo's broken O just outside it, and the arc is cut at the O's three gaps
+  while paused. Winding down is a dimmed violet (no longer amber, so it never
+  looks paused), and a Test Mode Last Light is amber on the phone, never red.
+  The digits use the condensed instrument face, and Night Mode chips read in
+  sentence case ("15 min", "Sleep").
+- The phone ring says what will happen: "Test · no shutdown" (amber) or
+  "then shut down", with "Test ends …" / "Lights out …", and a "WINDING DOWN"
+  or "LAST LIGHT" line only in those phases. Paused reads "Clock stopped" on
+  a dimmed, haloless ring (on short or narrow phones the ring keeps just
+  "Paused"); the TEST MODE / REAL ACTION badge stays at full strength.
+- Phone times follow the phone's own clock format ("1:14 AM" on a US phone,
+  "01:14" on most others). The PC does not send its 12/24-hour setting, and
+  sending it would change the phone protocol.
+- The phone names a run like the desktop: its Night Mode, the name you typed,
+  or "Countdown" ("Custom Timer" is gone).
+- On the phone, Add time (one joined +5 / +15 / +30 bar), Pause and Stop sit
+  at the bottom in thumb reach while a run is active, with the ring centred
+  above them. They stay in the page flow (never pinned over it), so on a
+  short, landscape or zoomed screen they scroll and never cover the TEST
+  MODE / REAL ACTION badge or the ring. Pause is a violet-tinted control at
+  Stop's weight while running; Resume is the filled violet button while
+  paused. Details still opens below Stop and is never covered. When the
+  reading briefly goes stale (for example when the phone wakes), the layout
+  holds still; only the dimming changes, so nothing moves under your thumb.
+- The phone's link bar leads with the PC's name (no "Target PC:" prefix on
+  screen, a small monitor glyph instead) and shows a fresh reading as a small
+  teal dot; a stale reading still shows the full amber line.
+- Stopping from the phone says exactly what it does: "This will stop the
+  timer, and this run's shutdown will not happen"; a Test Mode run says "This
+  will stop the timer. This is a Test Mode run: no power action was
+  planned." After a confirmed stop with at least 15 seconds left (and not in
+  Last Light), a calm strip says "Run stopped · <time> · <PC> will not shut
+  down for this run" for up to 10 minutes, until the next run, until you
+  dismiss it, or until the phone's reading goes stale (for example after the
+  phone sleeps). The phone toast is a branded card, and the buttons
+  read "Stop tonight's run" / "Keep running".
+- At rest, the phone previews tonight's plan instead of a dead "LAST CALL
+  0:00 IDLE" ring: "Tonight's plan · 30:00 · then shut down" with "Lights out
+  <time> if started now" (in Test Mode: "Test run · no power action" / "Test
+  would end …"). The preview shows only once the PC has reported whether it
+  is in Test Mode; while checking or stale the ring shows "—".
+- One plan card holds the duration chips (15 / 30 / 45 / 1 hour / 90), the
+  "Ends with" choice, a Custom stepper (5-minute steps) and one Start pill
+  that names the duration. Night Modes follow it under "Or pick a Night
+  Mode".
+- Every phone start now goes through a branded Start sheet instead of the
+  browser's confirm box. It shows the duration, the ending and the estimated
+  end time, and states Test Mode or the real action ("Start test run" /
+  "Start · will shut down") from the PC's setting at the moment you tap
+  Start. A duration chip still takes two taps (the chip, then Start), as it
+  did with the old confirm; the desktop's chips still start in one tap.
+- The phone says Test Mode the way the desktop does: "TEST MODE · No PC power
+  action will run."
+- The phone's Night Mode sheet states the plan once: the duration, the
+  estimated end time for a direct start ("Test would end ≈ …" in Test Mode,
+  nothing for a guided wind-down), the action and the ritual. It is now a
+  proper dialog: the page behind it can't be reached, Tab stays inside, and
+  focus returns where you were when it closes. Night Mode cards lose their
+  teal top edge (teal now only means live / connected).
+- The phone connection mode is called "Same Wi-Fi" everywhere: the desktop
+  mode button (it read "Connect Phone"), the status pill, the Devices hint,
+  the phone's pairing steps and the Android companion README.
+- Phone pairing shows one lamp, the Lights Out wordmark, instead of a second
+  grey lamp tile. Its beam stays dim until the PC really answers, then lights
+  up once. The pairing-code field is larger and centred, and the "same Wi-Fi"
+  note is easier to read.
+- Devices: a satellite that is off says what it does ("Pause, add time or
+  stop from bed…") instead of "Off." again, keeps its honest Off status, and
+  carries one violet call to action ("Set up phone", "Set up Same Wi-Fi",
+  "Connect lights", "Choose devices"); the whole card opens its settings, and
+  only those cards react to hover. Ready and live devices carry the teal beam
+  and glow; attention, error and off cards never do. This PC is the hub: the
+  logo's broken-O ring coloured by its real state, a digital sub-grid, the
+  host name as an identifier and the strip values in the instrument face
+  (Test Mode amber and REAL red still win). Family PC rows have pill
+  controls, with Stop in the red outline grammar. Card hairlines follow every
+  theme (Dawn, Ember, Carbon) instead of a fixed dark blue-grey.
+- Devices says which features still act in Test Mode: in Test Mode, the
+  Smart Lights and Wi-Fi Guard cards state that they run too (Test Mode only
+  holds back PC power actions), from the same reading as Settings and
+  Tonight. Outside Test Mode the notes are hidden.
+- Night Modes reads as a library: each Ready card has its own poster from the
+  Lights Out world (a crescent over a broken horizon, the desk lamp and its
+  beam, a screen with end credits, the lamp with its beam cut short), and the
+  duration ring is an instrument with a big numeral over its unit ("15 / MIN",
+  ">2 / HRS"), so the duplicate duration chip is gone from full cards. Modes
+  that hand the screen to the guided ritual say "Ritual" on the card.
+- My Modes now sit right after the presets, before "Not available yet", with
+  a "N saved" count; the not-available shelf is one row of ghost pills. My
+  Mode cards are keyboard-reachable (Tab, then Enter or Space), show the
+  duration in the same words as Night Modes, and a card click or Enter while
+  idle loads the mode and lands on Tonight with that plan.
+- A Night Mode's detail opens as a poster spread whose ring draws once
+  (instantly with reduced motion), with a one-line "Direct start" / "Guided
+  ritual" spec instead of the repeated Details table, and a forward chevron on
+  Use Tonight (it arms the plan; it never starts it). In Test Mode the detail
+  also lists the wind-down effects that still run.
+- The "Not available yet" reasons no longer deny multi-device control: Quiet
+  House is "a house-wide mode that settles every device at once", not built
+  yet; School Night needs router-level Wi-Fi control Lights Out does not have
+  yet.
+- The My Modes manager asks inline before deleting or replacing a mode (press
+  "Delete" then "Delete?", or Save mode twice), with no browser dialogs. Its
+  rows no longer overlap, and reordering uses labelled chevron buttons. The
+  right-click "Delete…" opens the manager at that mode with Delete armed; it
+  never deletes in one click.
+- Schedule's hero is now an instrument: the next lights-out in big numerals
+  inside the logo's broken-O dial, a line that spells out "Countdown from
+  22:30 · Shutdown at 23:30" ("Test ends" in Test Mode), and the one
+  Auto-start switch right beside it, with what it means underneath. It says
+  "Next lights-out" only while Auto-start is on; otherwise "Next bedtime".
+  When every rule is switched off it says so.
+- Bedtime rule cards lead with the time the action lands, show a 7-day track
+  with today marked, and use icon Edit / Delete buttons. Deleting a rule now
+  asks for a second click ("Delete?") within 4 seconds, the same way My Modes
+  does; Escape, leaving the button or waiting cancels it.
+- The rule editor is a dark two-column form whose labels focus their fields
+  ("Minutes before the action" for the countdown length).
+- Calendar checks say what happened: the button reads "Check feed" / "Check
+  calendar", shows "Checking…", then "Reached · N events in the next 14
+  days" or a fixed reason ("Couldn't reach this feed (timed out)", "Sign-in
+  expired or not allowed"). A broken feed no longer looks like an empty one,
+  and no feed URL or token ever appears in the status or the logs.
+- The One night only date field stays hidden until its switch is on (no
+  empty "mm/dd/yyyy" box), and choosing a time says "Test Mode countdown to
+  …" or "Shutdown at …" instead of "Schedule target selected".
+- Proof shows how long a countdown really ran: a Test Mode run cancelled after
+  10 seconds reads "RAN <1m of 25m" in the hero, "ran <1m of 25m" in Session
+  History and "<1m / 25m" in the ledger. A snoozed or unfinished run says
+  "25m planned" instead of inventing a number.
+- The ledger separates mode from outcome: "0 real · 59 Test Mode · 59 on this
+  PC" sits above the outcome bar, whose Test segment now reads "Test
+  completed". Interrupted keeps its attention amber as a solid square, so only
+  the hatched dot means Test Mode. The ledger lists every stored receipt (up
+  to 100), never fewer rows than its total.
+- The Proof hero is one instrument strip (Ran, Action with its pauses and
+  snoozes, Started, Ended) with a single Test Mode / REAL mark. The receipt
+  total moved to the page head ("59 receipts · this PC"), and "Open receipt"
+  opens the ledger on that run's row.
+- "Start tonight's plan" on Proof now goes to Tonight first and starts there;
+  if Tonight can't open, nothing starts.
+- Routine drops the achievement trophies, the score ring and the 30-day grid
+  that called Test Mode nights "Missed". Its details are one strip of real
+  numbers (Real streak, Best, Real completions, Avg lights-out, Before 11 PM ·
+  last 7 nights, Routine score) and the weekly report no longer counts
+  achievements. The streak line stays muted until a real streak exists.
+- With no receipts yet, Proof says "No runs yet" and offers "Plan tonight",
+  which opens Tonight without starting anything.
+- Copy proof copies a complete receipt: its id, the Test Mode / REAL line
+  first, the result in words (never "Completed" for a Test Mode run), the
+  action, planned and ran lengths, start and end times. The button itself
+  confirms with "Copied".
+
+### Fixed
+- Starting a ritual Night Mode (Lights Down, Movie Wind-Down, Full Shutdown)
+  while the guided ritual is turned off in Settings › Automations now fails
+  with a clear message, on the desktop and on the phone, instead of showing a
+  countdown that never ran. With the ritual on, a phone start of those modes
+  (which runs the ritual straight through to its countdown) is reported as
+  started, on the phone and on the desktop.
+- Wi-Fi Guard on Devices no longer says "Armed" when nothing will block: with
+  "block at wind-down" off it reads "Manual only", a provider that cannot
+  block another device is not armed, and the Wi-Fi adapter mode reads "Armed
+  · this PC's Wi-Fi" (it ignores the device list) and states its cost: this
+  PC's own Wi-Fi turns off at wind-down, so a phone or other PCs reaching it
+  over Wi-Fi disconnect until it is restored.
+- A failed phone companion on Devices explains itself in one plain line (for
+  example "Port 58732 is already used by another app. Change the port in Phone
+  settings.") and its link reads "Fix in Phone settings". No address or
+  pairing code is shown.
+- The This PC strip shows only real facts: Battery hides when the PC does not
+  report one, the labels read "Ending" and "Ends at", and "Ends at" reads
+  "Not running" when idle (never "Idle"). Any hidden cell reflows the strip.
+- Stopping, cancelling or finishing a timer no longer pauses the music or
+  video you are playing. The Windows media key is a play/pause toggle, and
+  Lights Out sent it on every stop to "resume" media even when it had paused
+  nothing. It now resumes only players its own wind-down paused (with "Pause
+  media at wind-down" on), and turns Night Light back off only if the
+  wind-down turned it on.
+- Loading a My Mode no longer turns Test Mode off: a mode saved in Test Mode
+  can turn it on, and a REAL mode loaded under Test Mode stays a test and says
+  so. My Modes chips show what a load would really do now.
+- Ctrl+1..9 loads the mode shown on that card (pinned first) and never starts
+  a timer; Ctrl+1..6 used to also start a 5–120 min preset. A digit typed into
+  the session name no longer starts a preset either. The right-click menu reads
+  "Load and start", "Edit…" (opens that mode in the manager) and "Delete…".
 
 ## v11.1.3 — Post-Audit Remediation (2026-09-15)
 

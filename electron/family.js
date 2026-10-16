@@ -86,6 +86,44 @@ function stopDiscovery() {
 // Remote commands: send timer actions to a peer via HTTP.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// A peer's answer is untrusted LAN data. Only these fields are kept, as short
+// strings, so a misbehaving peer can never inject anything else.
+const MAX_ANSWER_FIELD = 160;
+function answerField(value) {
+  return typeof value === 'string' ? value.replace(/[\x00-\x1f\x7f]/g, '').slice(0, MAX_ANSWER_FIELD) : '';
+}
+
+// Turn the peer's HTTP answer into a truthful outcome. Success is reported
+// ONLY for a 2xx answer whose JSON body says success:true. A non-2xx status,
+// an empty body or non-JSON never becomes a success.
+function interpretCommandAnswer(statusCode, body) {
+  const status = Number(statusCode) || 0;
+  const ok2xx = status >= 200 && status < 300;
+  let parsed = null;
+  try { parsed = JSON.parse(body); } catch { parsed = null; }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { success: false, statusCode: status, error: ok2xx ? 'bad response' : `HTTP ${status}` };
+  }
+  const code = answerField(parsed.code);
+  const error = answerField(parsed.error);
+  if (ok2xx && parsed.success === true) {
+    return { success: true, statusCode: status, ...(code ? { code } : {}) };
+  }
+  return {
+    success: false,
+    statusCode: status,
+    ...(code ? { code } : {}),
+    error: error || (ok2xx ? 'bad response' : `HTTP ${status}`)
+  };
+}
+
+// Only an address that announced itself on this network (and has not expired)
+// may receive a command carrying the pairing token.
+function isKnownPeer(ip) {
+  if (typeof ip !== 'string' || !ip) return false;
+  return getPeers().some(peer => peer.ip === ip);
+}
+
 function sendRemoteCommand(peerIp, command, payload = {}) {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify({ command, ...payload });
@@ -99,16 +137,23 @@ function sendRemoteCommand(peerIp, command, payload = {}) {
         'Content-Length': Buffer.byteLength(data),
         [TOKEN_HEADER]: localToken // peer must share the same pairing token
       },
+      // One fresh connection per command: a pooled keep-alive socket to a peer
+      // that restarted would fail with a reset instead of reaching it.
+      agent: false,
       timeout: 5000
     };
 
     const req = http.request(options, (res) => {
       let body = '';
-      res.on('data', chunk => body += chunk);
-      res.on('end', () => {
-        try { resolve(JSON.parse(body)); }
-        catch { resolve({ success: true }); }
+      res.on('data', chunk => {
+        body += chunk;
+        // A real answer is a few dozen bytes; never buffer an unbounded body.
+        if (body.length > 8192) {
+          res.destroy();
+          resolve({ success: false, statusCode: res.statusCode || 0, error: 'bad response' });
+        }
       });
+      res.on('end', () => resolve(interpretCommandAnswer(res.statusCode, body)));
     });
 
     req.on('error', reject);
@@ -305,8 +350,10 @@ module.exports = {
   startCommandServer,
   stopCommandServer,
   getPeers,
+  isKnownPeer,
   getLocalIPs,
   sendRemoteCommand,
+  interpretCommandAnswer,
   remoteStart,
   remotePause,
   remoteResume,

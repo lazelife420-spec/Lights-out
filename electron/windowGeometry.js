@@ -57,6 +57,9 @@ function enterMiniMode(win) {
   if (!win.normalModeMinimum) win.normalModeMinimum = win.getMinimumSize();
   win.wasMaximizedBeforeMini = win.isMaximized();
   if (win.wasMaximizedBeforeMini) win.unmaximize();
+  // The puck's top strip is a drag region (UI-R3 Fire 03): a double-click on
+  // it must never maximize the always-on-top puck.
+  if (typeof win.setMaximizable === 'function') win.setMaximizable(false);
 
   // Electron enforces the active minimum when setSize() runs, so the minimum
   // must change before requesting Mini Mode's exact geometry.
@@ -65,6 +68,8 @@ function enterMiniMode(win) {
 }
 
 function exitMiniMode(win, screenApi) {
+  // Before any maximize() below: the full window is maximizable again.
+  if (typeof win.setMaximizable === 'function') win.setMaximizable(true);
   const minimum = Array.isArray(win.normalModeMinimum)
     ? win.normalModeMinimum
     : [NORMAL_MINIMUM.width, NORMAL_MINIMUM.height];

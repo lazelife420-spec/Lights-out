@@ -16,8 +16,17 @@
 // `els.btnCheckUpdate?.addEventListener('click', runUpdateCheck);` wiring
 // statement also stays in renderer.js for the same reason (it needs `els`,
 // declared there, to already exist).
+// About and Settings › General show one updater line (separate ids, same
+// result). The download link lives in About only, so General points there.
+function writeUpdaterLine(stateName, text, generalText = text) {
+  if (els.updaterStatus) els.updaterStatus.dataset.state = stateName;
+  if (els.updaterStatusText) els.updaterStatusText.textContent = text;
+  if (els.setUpdaterStatus) els.setUpdaterStatus.dataset.state = stateName;
+  if (els.setUpdaterStatusText) els.setUpdaterStatusText.textContent = generalText;
+}
+
 function renderUpdaterStatus(result) {
-  if (!els.updaterStatus || !els.updaterStatusText) return;
+  if (!els.updaterStatusText && !els.setUpdaterStatusText) return;
   const dl = els.updaterDownload;
   if (dl) { dl.style.display = 'none'; dl.onclick = null; dl.textContent = 'Download verified ZIP'; }
 
@@ -38,17 +47,14 @@ function renderUpdaterStatus(result) {
       dl.onclick = async (e) => {
         e.preventDefault();
         dl.style.pointerEvents = 'none';
-        els.updaterStatus.dataset.state = 'checking';
-        els.updaterStatusText.textContent = 'Downloading and verifying portable ZIP...';
+        writeUpdaterLine('checking', 'Downloading and verifying portable ZIP...');
         const downloaded = await api.downloadPortableUpdate?.();
         dl.style.pointerEvents = '';
         if (downloaded?.success) {
-          els.updaterStatus.dataset.state = 'uptodate';
-          els.updaterStatusText.textContent = 'Verified ZIP saved. Extract it to its own folder, close Lights Out, then run Lights Out.exe from the extracted folder.';
+          writeUpdaterLine('uptodate', 'Verified ZIP saved. Extract it to its own folder, close Lights Out, then run Lights Out.exe from the extracted folder.');
           dl.style.display = 'none';
         } else {
-          els.updaterStatus.dataset.state = 'error';
-          els.updaterStatusText.textContent = `Update download failed (${downloaded?.code || 'UNKNOWN_ERROR'})`;
+          writeUpdaterLine('error', `Update download failed (${downloaded?.code || 'UNKNOWN_ERROR'})`);
         }
       };
     }
@@ -57,12 +63,14 @@ function renderUpdaterStatus(result) {
     text = result.currentVersion ? `You're on the latest version (v${result.currentVersion})` : "You're on the latest version";
   }
 
-  els.updaterStatus.dataset.state = state;
-  els.updaterStatusText.textContent = text;
+  const downloadInAbout = Boolean(dl) && dl.style.display !== 'none';
+  writeUpdaterLine(state, text, downloadInAbout ? `${text}. Download it from About.` : text);
 }
 
 async function runUpdateCheck() {
-  if (els.btnCheckUpdate) els.btnCheckUpdate.disabled = true;
+  // About and Settings › General run this same check; both buttons wait for it.
+  const buttons = [els.btnCheckUpdate, els.setBtnCheckUpdate].filter(Boolean);
+  buttons.forEach(btn => { btn.disabled = true; });
   renderUpdaterStatus('checking');
   try {
     const result = await api.checkForUpdate?.();
@@ -70,7 +78,7 @@ async function runUpdateCheck() {
   } catch (err) {
     renderUpdaterStatus({ error: err?.message || String(err) });
   } finally {
-    if (els.btnCheckUpdate) els.btnCheckUpdate.disabled = false;
+    buttons.forEach(btn => { btn.disabled = false; });
   }
 }
 
@@ -92,12 +100,15 @@ async function applyAppVersion() {
     const version = await api.getAppVersion?.();
     if (!version) return;
     if (els.version) els.version.textContent = `v${version}`;
-    if (els.aboutVersion) els.aboutVersion.textContent = `Version ${version}`;
+    // UI-R3 Fire 03: About shows the version once, as a chip.
+    if (els.aboutVersion) els.aboutVersion.textContent = `v${version}`;
+    if (els.setAppVersion) els.setAppVersion.textContent = `v${version}`;
   } catch { /* keep static fallback text */ }
 }
 
 let onboardStep = 1;
-let onboardData = { bedtime: null, focus: null, sequence: null, sound: false };
+// runMode: 'test' | 'real' | null -- step 3 requires an explicit choice.
+let onboardData = { bedtime: null, focus: null, sequence: null, runMode: null, sound: false };
 
 function showOnboarding() {
   if (!els.onboarding) return;
@@ -107,11 +118,17 @@ function showOnboarding() {
 function hideOnboarding() {
   if (!els.onboarding) return;
   els.onboarding.style.display = 'none';
-  // Persist onboarded flag.
+  // Persist onboarded flag together with the explicit run-mode choice
+  // (dryRun is an immediate-commit field, so it rides in the same save).
   const app = { onboarded: true };
+  if (onboardData.runMode === 'test' || onboardData.runMode === 'real') app.dryRun = onboardData.runMode === 'test';
   if (onboardData.bedtime) app.bedtime = onboardData.bedtime;
   if (onboardData.focus) app.focusBlocklist = onboardData.focus.split(',').map(s => s.trim()).filter(Boolean);
   api.saveAppSettings({ app });
+  if (typeof app.dryRun === 'boolean') {
+    state.dryRun = app.dryRun;
+    render();
+  }
   // Apply selected ritual.
   if (onboardData.sequence) {
     const custom = { lastLightEnabled: true, lastLightSequence: onboardData.sequence, lastLightSound: onboardData.sound ? 'Soft' : 'Off' };
@@ -143,6 +160,18 @@ function hideOnboarding() {
   }
 }
 
+// What the REAL choice really does, in words that match the configured action.
+function onboardRealActionSentence(action = state.action) {
+  return {
+    shutdown: 'This PC really shuts down.',
+    restart: 'This PC really restarts.',
+    sleep: 'This PC really goes to sleep.',
+    hibernate: 'This PC really hibernates.',
+    lock: 'This PC really locks.',
+    logout: 'This PC really logs you out.'
+  }[action] || `This PC really runs ${actionLabel(action)}.`;
+}
+
 function updateOnboardingUI() {
   // Update step dots.
   document.querySelectorAll('.onboarding-step-dot').forEach(dot => {
@@ -154,8 +183,21 @@ function updateOnboardingUI() {
   if (activePanel) activePanel.classList.add('active');
   // Back button visibility.
   if (els.onboardBack) els.onboardBack.style.visibility = onboardStep > 1 ? 'visible' : 'hidden';
-  // Next button text.
-  if (els.onboardNext) els.onboardNext.textContent = onboardStep >= 3 ? "Let's go" : 'Continue';
+  // Next button text. Step 3 cannot finish until a run mode is chosen.
+  if (els.onboardNext) {
+    els.onboardNext.textContent = onboardStep >= 3 ? "Let's go" : 'Continue';
+    els.onboardNext.disabled = onboardStep >= 3 && !onboardData.runMode;
+  }
+  // The REAL choice names the action this PC will actually run.
+  const realLabel = document.getElementById('onboard-mode-real-label');
+  if (realLabel) realLabel.textContent = `Real: ${actionLabel()} when the timer ends`;
+  const realSub = document.getElementById('onboard-mode-real-sub');
+  if (realSub) realSub.textContent = onboardRealActionSentence();
+  document.querySelectorAll('.onboard-mode-choice').forEach(btn => {
+    const selected = btn.dataset.runMode === onboardData.runMode;
+    btn.classList.toggle('selected', selected);
+    btn.setAttribute('aria-pressed', String(selected));
+  });
 }
 
 function setupOnboarding() {
@@ -177,6 +219,16 @@ function setupOnboarding() {
       document.querySelectorAll('.onboard-ritual').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
       onboardData.sequence = btn.dataset.seq;
+    });
+  });
+
+  // Run mode (step 3): an explicit Test Mode / Real choice, neither preselected.
+  document.querySelectorAll('.onboard-mode-choice').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const mode = btn.dataset.runMode;
+      if (mode !== 'test' && mode !== 'real') return;
+      onboardData.runMode = mode;
+      updateOnboardingUI();
     });
   });
 
@@ -213,7 +265,7 @@ function setupOnboarding() {
     if (onboardStep < 3) {
       onboardStep++;
       updateOnboardingUI();
-    } else {
+    } else if (onboardData.runMode) {
       hideOnboarding();
     }
   });

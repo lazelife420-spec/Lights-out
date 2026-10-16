@@ -9,6 +9,9 @@ const STREAKS_FILE = 'streaks.json';
 let cache = null;
 
 const DEFAULTS = {
+  // New events: { date: <nightKey>, bedTime, action, snoozed, source: 'real' }.
+  // Legacy events (no source) keep their original UTC date keys; they are never
+  // rewritten. Any event flagged testMode === true is kept but never counted.
   events: [],       // [{ date: '2026-06-10', bedTime: '22:30', action: 'shutdown', snoozed: false }]
   streak: 0,
   bestStreak: 0,
@@ -69,88 +72,218 @@ function deepMerge(target, source) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Night keys and read-time truth
+// ─────────────────────────────────────────────────────────────────────────────
+
+// A "night" is a local calendar date, shifted back 6 hours so a 00:30 run
+// belongs to the previous evening's night.
+const NIGHT_OFFSET_MS = 6 * 3600 * 1000;
+
+function localDateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function nightKey(d = new Date()) {
+  const t = d instanceof Date ? d.getTime() : new Date(d).getTime();
+  return localDateKey(new Date(t - NIGHT_OFFSET_MS));
+}
+
+// Shift a YYYY-MM-DD key by whole local calendar days (DST-safe).
+function shiftKey(key, days) {
+  const [y, m, d] = String(key).split('-').map(Number);
+  return localDateKey(new Date(y, m - 1, d + days));
+}
+
+// Only real completions count. Events flagged testMode stay on disk but are
+// excluded from every count, streak and achievement.
+function isCounted(e) {
+  return Boolean(e) && typeof e.date === 'string' && e.testMode !== true;
+}
+
+function countedEvents(events) {
+  return (Array.isArray(events) ? events : []).filter(isCounted);
+}
+
+// New events carry source:'real'; anything counted without it predates Test
+// Mode tracking and cannot be told apart (it may have been a Test Mode run).
+function isRealSourced(e) {
+  return Boolean(e) && e.source === 'real';
+}
+
+// Legacy events (no source) were keyed by the UTC date of the moment they were
+// written, and their bedTime is the LOCAL time of that same moment (old
+// recordEvent: date = toISOString().slice(0, 10), bedTime = formatTime()).
+// Together they pin the local night without rewriting anything on disk: find
+// the local date whose bedTime instant has that UTC date. A 23:00 run in New
+// York was stored under the next UTC day; this reads it back as its own night,
+// so it can't collide with the following night's REAL event. Anything that
+// can't be resolved keeps its stored date.
+function legacyNightKey(e) {
+  const date = String(e.date);
+  const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  const tm = /^(\d{1,2}):(\d{2})$/.exec(String(e.bedTime || ''));
+  if (!dm || !tm) return date;
+  const h = Number(tm[1]);
+  const mi = Number(tm[2]);
+  if (h > 23 || mi > 59) return date;
+  for (const k of [0, -1, 1]) {
+    const local = new Date(Number(dm[1]), Number(dm[2]) - 1, Number(dm[3]) + k, h, mi);
+    if (!Number.isNaN(local.getTime()) && local.toISOString().slice(0, 10) === date) return nightKey(local);
+  }
+  return date;
+}
+
+// The night an event belongs to. REAL events are already keyed by nightKey(),
+// and an entry from countedNights() (it carries storedDate) is already mapped,
+// so mapping is never applied twice.
+function nightOf(e) {
+  if (isRealSourced(e) || typeof e.storedDate === 'string') return e.date;
+  return legacyNightKey(e);
+}
+
+// Every count is per NIGHT, never per event: one entry per night over the
+// counted events, sorted oldest first, with date = that night. A REAL event
+// wins over a legacy one on the same night; otherwise the later entry wins
+// (the old one-event-per-day rule). storedDate keeps the on-disk key.
+function countedNights(events) {
+  const byNight = new Map();
+  for (const e of countedEvents(events)) {
+    const night = nightOf(e);
+    const prev = byNight.get(night);
+    if (prev && isRealSourced(prev) && !isRealSourced(e)) continue;
+    byNight.set(night, { ...e, date: night, storedDate: e.date });
+  }
+  return [...byNight.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function nightDatesAsc(events) {
+  return countedNights(events).map(e => e.date);
+}
+
+function dayGap(a, b) {
+  // Both are date-only keys, parsed as UTC midnight: no DST drift.
+  return Math.round((new Date(b) - new Date(a)) / 86400000);
+}
+
+// Computed when read, never frozen at write time: 0 unless the newest counted
+// night is tonight or last night, otherwise the length of the consecutive run.
+function currentStreak(events, now = new Date()) {
+  const dates = nightDatesAsc(events);
+  if (!dates.length) return 0;
+  const lastNight = shiftKey(nightKey(now), -1);
+  // A legacy key that couldn't be resolved can sit one day "ahead" of the
+  // local night key; anything at or after last night still counts as live.
+  if (dates[dates.length - 1] < lastNight) return 0;
+  let run = 1;
+  for (let i = dates.length - 1; i > 0; i--) {
+    if (dayGap(dates[i - 1], dates[i]) === 1) run++;
+    else break;
+  }
+  return run;
+}
+
+// Full-history longest consecutive run over counted events.
+function longestRun(events) {
+  const dates = nightDatesAsc(events);
+  if (!dates.length) return 0;
+  let best = 1;
+  let run = 1;
+  for (let i = 1; i < dates.length; i++) {
+    run = dayGap(dates[i - 1], dates[i]) === 1 ? run + 1 : 1;
+    best = Math.max(best, run);
+  }
+  return best;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Public API
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Callers only record REAL completions (main.js completeTimer and
+// emergencyOverride skip Test Mode runs), so new events carry source:'real'.
 function recordEvent(bedTime, action, snoozed) {
   const data = load();
-  const today = new Date().toISOString().slice(0, 10);
-  // Only one event per day (use the latest bedtime).
-  data.events = data.events.filter(e => e.date !== today);
-  data.events.push({ date: today, bedTime: bedTime || formatTime(), action: action || 'shutdown', snoozed: Boolean(snoozed) });
+  const tonight = nightKey();
+  // One REAL event per night (the latest bedtime wins). Only earlier real
+  // events for tonight are replaced: a legacy event (no source) is never
+  // deleted, even when its old UTC date key equals tonight's local night key
+  // (an evening run in a UTC-negative zone was keyed to the next UTC day).
+  data.events = data.events.filter(e => !(e && e.source === 'real' && e.date === tonight));
+  data.events.push({ date: tonight, bedTime: bedTime || formatTime(), action: action || 'shutdown', snoozed: Boolean(snoozed), source: 'real' });
 
   // Keep last 365 days.
   if (data.events.length > 365) data.events = data.events.slice(-365);
 
-  // Recompute streak.
-  const streakInfo = computeStreak(data.events);
-  data.streak = streakInfo.current;
-  data.bestStreak = Math.max(data.bestStreak || 0, streakInfo.current);
+  // Stored for backward compatibility only; every read recomputes it.
+  data.streak = currentStreak(data.events);
+  data.bestStreak = Math.max(data.bestStreak || 0, data.streak);
 
-  // Check achievements.
-  data.achievements = checkAchievements(data);
+  // Stored achievements only ever grow (kept for older builds that read the
+  // file). Every read rebuilds them from the counted events instead, so a
+  // stale stored id is never shown -- but the disk record is never narrowed.
+  const stored = Array.isArray(data.achievements) ? data.achievements : [];
+  data.achievements = [...stored, ...checkAchievements(data).filter(id => !stored.includes(id))];
 
   save();
   return getSummary();
 }
 
-function computeStreak(events) {
-  if (!events.length) return { current: 0 };
-  const sorted = [...events].sort((a, b) => a.date.localeCompare(b.date));
-  let current = 1;
-  let best = 1;
-  for (let i = sorted.length - 1; i > 0; i--) {
-    const prev = new Date(sorted[i - 1].date);
-    const curr = new Date(sorted[i].date);
-    const diffDays = Math.round((curr - prev) / 86400000);
-    if (diffDays === 1) {
-      current++;
-      best = Math.max(best, current);
-    } else {
-      break;
-    }
-  }
-  return { current, best: Math.max(best, current) };
-}
-
+// Rebuilt from an EMPTY list over counted nights every time -- never a union
+// with stale stored achievements, so a Test Mode history unlocks nothing.
 function checkAchievements(data) {
-  const unlocked = [...(data.achievements || [])];
+  const counted = countedNights(data && data.events);
+  const unlocked = [];
   const add = (id) => { if (!unlocked.includes(id)) unlocked.push(id); };
+  const best = longestRun(data && data.events);
 
-  if (data.events.length >= 1) add('first_light');
-  if (data.events.length >= 7) add('weekly_warrior');
-  if (data.streak >= 3) add('3_night_streak');
-  if (data.streak >= 7) add('7_night_streak');
-  if (data.streak >= 14) add('14_night_streak');
-  if (data.streak >= 30) add('30_night_streak');
-  if (data.bestStreak >= 100) add('centurion');
-  // No-snooze for 7 consecutive days.
-  const recent7 = data.events.slice(-7);
-  if (recent7.length === 7 && recent7.every(e => !e.snoozed)) add('no_snooze_7');
+  if (counted.length >= 1) add('first_light');
+  if (counted.length >= 7) add('weekly_warrior');
+  if (best >= 3) add('3_night_streak');
+  if (best >= 7) add('7_night_streak');
+  if (best >= 14) add('14_night_streak');
+  if (best >= 30) add('30_night_streak');
+  if (best >= 100) add('centurion');
+  // No-snooze for 7 consecutive logged nights.
+  for (let i = 0; i + 7 <= counted.length; i++) {
+    if (counted.slice(i, i + 7).every(e => !e.snoozed)) { add('no_snooze_7'); break; }
+  }
   // Used Last Light at least once.
-  if (data.events.some(e => e.action === 'lastlight')) add('last_light_activated');
+  if (counted.some(e => e.action === 'lastlight')) add('last_light_activated');
 
   return unlocked;
+}
+
+// Read from the counted events, not the stored number: a stored bestStreak
+// can predate this fix and include Test Mode runs, and the record must never
+// show a figure the events can't back.
+function readBestStreak(data) {
+  return longestRun(data.events);
 }
 
 function getSummary() {
   const data = load();
   const week = getWeekStats(data.events);
   return {
-    streak: data.streak || 0,
-    bestStreak: data.bestStreak || 0,
-    totalNights: data.events.length,
-    achievements: data.achievements || [],
+    streak: currentStreak(data.events),
+    bestStreak: readBestStreak(data),
+    totalNights: countedNights(data.events).length,
+    achievements: checkAchievements(data),
     weekAvg: week.avgBedTime,
     weekOnTime: week.onTimePercent,
     weekDays: week.days
   };
 }
 
-function getWeekStats(events) {
-  const now = new Date();
-  const weekAgo = new Date(now - 7 * 86400000).toISOString().slice(0, 10);
-  const recent = events.filter(e => e.date >= weekAgo);
+// The last 7 local nights, tonight included.
+function weekStartKey(now = new Date()) {
+  return shiftKey(nightKey(now), -6);
+}
+
+function getWeekStats(events, now = new Date()) {
+  // Callers that pass nothing (statsDashboard, smartSuggestions) read the store.
+  if (events === undefined) events = load().events;
+  const weekAgo = weekStartKey(now);
+  const recent = countedNights(events).filter(e => e.date >= weekAgo);
   if (!recent.length) return { avgBedTime: '--:--', onTimePercent: 0, days: [] };
 
   // Average bedtime.
@@ -188,12 +321,51 @@ function getAchievementCatalog() {
 }
 
 // Digital wellbeing report: a weekly summary with trend data.
-function getWeeklyReport() {
+// opts.receipts (optional): the run-receipt ledger, so Test Mode runs this week
+// can be acknowledged even though they never become streak events.
+// legacyEvents: counted events without source. An old build recorded Test
+// Mode runs too, keyed by the run's UTC date with bedTime = the local time it
+// was written (the same moment the receipt ended). A Test Mode receipt that
+// matches a legacy event on both is the same run, already reported neutrally
+// as a legacy night, so it is not counted again as "not counted". Each legacy
+// event accounts for at most one receipt.
+function sameRunAsLegacy(at, e) {
+  if ((e.storedDate || e.date) !== at.toISOString().slice(0, 10)) return false;
+  const [h, m] = String(e.bedTime || '').split(':').map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return true; // date is all we have
+  const diff = Math.abs((at.getHours() * 60 + at.getMinutes()) - (h * 60 + m));
+  return Math.min(diff, 1440 - diff) <= 2;
+}
+
+function countTestModeReceipts(receipts, weekAgo, legacyEvents = []) {
+  if (!Array.isArray(receipts)) return 0;
+  const unmatched = [...legacyEvents];
+  return receipts.filter(r => {
+    if (!r || r.dryRun !== true || r.result !== 'dry_run_completed') return false;
+    const at = new Date(r.endedAt || r.startedAt);
+    if (Number.isNaN(at.getTime()) || nightKey(at) < weekAgo) return false;
+    const i = unmatched.findIndex(e => sameRunAsLegacy(at, e));
+    if (i === -1) return true;
+    unmatched.splice(i, 1);
+    return false;
+  }).length;
+}
+
+function getWeeklyReport(opts = {}) {
   const data = load();
   const now = new Date();
-  const weekAgo = new Date(now - 7 * 86400000).toISOString().slice(0, 10);
-  const recent = data.events.filter(e => e.date >= weekAgo);
-  const total = data.events.length;
+  const weekAgo = weekStartKey(now);
+  const weekEnd = nightKey(now);
+  // Nights, not events: at most one entry per night, and the window is the
+  // last 7 nights, so nightsThisWeek can never exceed 7.
+  const counted = countedNights(data.events);
+  const recent = counted.filter(e => e.date >= weekAgo && e.date <= weekEnd);
+  const total = counted.length;
+  const flaggedThisWeek = (data.events || []).filter(e => e && e.testMode === true && nightOf(e) >= weekAgo).length;
+  const legacyEvents = counted.filter(e => !isRealSourced(e));
+  // Flagged events and Test Mode receipts can describe the same run, so take
+  // the larger count rather than summing them.
+  const testModeRunsThisWeek = Math.max(flaggedThisWeek, countTestModeReceipts(opts && opts.receipts, weekAgo, legacyEvents));
 
   // Bedtime trend (last 7 days, oldest first).
   const trend = recent.map(e => {
@@ -213,22 +385,32 @@ function getWeeklyReport() {
   const snoozeCount = recent.filter(e => e.snoozed).length;
   const snoozeRate = recent.length ? Math.round(snoozeCount / recent.length * 100) : 0;
 
-  // Action breakdown.
+  // Action breakdown: every counted night, plus the subset recorded as REAL
+  // completions (source:'real'). Legacy nights are reported separately.
   const actionCounts = {};
-  recent.forEach(e => { actionCounts[e.action] = (actionCounts[e.action] || 0) + 1; });
+  const realActionCounts = {};
+  let legacyNightsThisWeek = 0;
+  recent.forEach(e => {
+    actionCounts[e.action] = (actionCounts[e.action] || 0) + 1;
+    if (isRealSourced(e)) realActionCounts[e.action] = (realActionCounts[e.action] || 0) + 1;
+    else legacyNightsThisWeek++;
+  });
 
   const report = {
     weekStart: weekAgo,
-    weekEnd: now.toISOString().slice(0, 10),
+    weekEnd,
     nightsThisWeek: recent.length,
     totalNights: total,
-    streak: data.streak || 0,
-    bestStreak: data.bestStreak || 0,
+    testModeRunsThisWeek,
+    streak: currentStreak(data.events, now),
+    bestStreak: readBestStreak(data),
     consistency,
     snoozeRate,
     actionCounts,
+    realActionCounts,
+    legacyNightsThisWeek,
     trend,
-    achievements: data.achievements || []
+    achievements: checkAchievements(data)
   };
   report.narrative = buildWeeklyNarrative(report);
   return report;
@@ -241,6 +423,9 @@ function getWeeklyReport() {
 // it's testable without touching the events store.
 function buildWeeklyNarrative(report) {
   if (!report || !report.nightsThisWeek) {
+    if (report && Number(report.testModeRunsThisWeek) > 0) {
+      return 'No real completions this week. Test Mode runs are recorded in Proof but don\'t count toward your routine.';
+    }
     return 'No nights logged this week yet. Start a timer tonight to begin this week\'s report.';
   }
   const lines = [];
@@ -250,12 +435,25 @@ function buildWeeklyNarrative(report) {
     lines.push(`Bedtime varied by about ${report.consistency} minutes night to night this week.`);
   }
   lines.push(`Snoozed on ${report.snoozeRate}% of logged nights this week.`);
-  const actionParts = Object.entries(report.actionCounts)
+  // Only events recorded as REAL (source:'real') are called Real-mode. The
+  // record is written before executePowerAction runs, so this states what was
+  // completed in Real mode -- not that a power action ran.
+  const actionParts = Object.entries(report.realActionCounts || {})
     .map(([action, count]) => `${count} ${action}`);
-  if (actionParts.length) lines.push(`Actions taken: ${actionParts.join(', ')}.`);
-  if (report.achievements.length) {
-    lines.push(`${report.achievements.length} achievement${report.achievements.length === 1 ? '' : 's'} unlocked so far.`);
+  if (actionParts.length) lines.push(`Real-mode completions: ${actionParts.join(', ')}.`);
+  // Older nights can't be told apart (they may include Test Mode runs), so
+  // they are stated neutrally, never as Real-mode.
+  const legacyNights = Number(report.legacyNightsThisWeek) || 0;
+  if (legacyNights > 0) {
+    lines.push(`${legacyNights} logged night${legacyNights === 1 ? '' : 's'} ${legacyNights === 1 ? 'was' : 'were'} recorded before Test Mode tracking.`);
   }
+  const testRuns = Number(report.testModeRunsThisWeek) || 0;
+  if (testRuns > 0) {
+    lines.push(`${testRuns} Test Mode run${testRuns === 1 ? '' : 's'} this week ${testRuns === 1 ? 'is' : 'are'} recorded in Proof and not counted.`);
+  }
+  // UI-R3 Fire 10: Routine no longer shows achievements, so the narrative
+  // stops counting them (read-out only: report.achievements and every stored
+  // field are unchanged).
   return lines.join('\n');
 }
 
@@ -267,7 +465,7 @@ function buildWeeklyNarrative(report) {
 function getSleepScore() {
   const data = load();
   const now = new Date();
-  const recent30 = data.events.filter(e => {
+  const recent30 = countedNights(data.events).filter(e => {
     const d = new Date(e.date + 'T12:00:00');
     return (now - d) < 30 * 86400000;
   });
@@ -297,8 +495,10 @@ function getSleepScore() {
   const noSnoozeScore = Math.round(25 * noSnoozeRate);
 
   // 4. Ritual completion (0-20): streak bonus + achievements.
-  const streakBonus = Math.min(10, (data.streak || 0) * 2);
-  const achievementBonus = Math.min(10, (data.achievements || []).length * 2);
+  const streakNow = currentStreak(data.events, now);
+  const achievementsNow = checkAchievements(data);
+  const streakBonus = Math.min(10, streakNow * 2);
+  const achievementBonus = Math.min(10, achievementsNow.length * 2);
   const ritualScore = streakBonus + achievementBonus;
 
   const totalScore = Math.min(100, consistencyScore + onTimeScore + noSnoozeScore + ritualScore);
@@ -317,7 +517,7 @@ function getSleepScore() {
       consistency: { score: consistencyScore, max: 30, stdDev: Math.round(stdDev) },
       onTime: { score: onTimeScore, max: 25, rate: Math.round(onTimeRate * 100) },
       noSnooze: { score: noSnoozeScore, max: 25, rate: Math.round(noSnoozeRate * 100) },
-      ritual: { score: ritualScore, max: 20, streak: data.streak || 0, achievements: (data.achievements || []).length }
+      ritual: { score: ritualScore, max: 20, streak: streakNow, achievements: achievementsNow.length }
     }
   };
 }
@@ -337,7 +537,7 @@ function trendBucketKey(dateStr, granularity) {
   const diffToMonday = day === 0 ? -6 : 1 - day;
   const monday = new Date(d);
   monday.setDate(d.getDate() + diffToMonday);
-  return monday.toISOString().slice(0, 10); // bucket key = that week's Monday
+  return localDateKey(monday); // bucket key = that week's Monday (local date)
 }
 
 function trendBucketLabel(key, granularity) {
@@ -354,7 +554,7 @@ function getTrend(granularity = 'week', limit = 12) {
   const data = load();
 
   const buckets = new Map();
-  for (const e of data.events) {
+  for (const e of countedNights(data.events)) {
     const key = trendBucketKey(e.date, normGranularity);
     if (!buckets.has(key)) buckets.set(key, []);
     buckets.get(key).push(e);
@@ -403,12 +603,13 @@ function exportData() {
 
 function getHistory30() {
   const data = load();
-  const now = new Date();
+  const tonight = nightKey(new Date());
+  const counted = countedNights(data.events);
   const days = [];
   for (let i = 29; i >= 0; i--) {
-    const d = new Date(now - i * 86400000);
-    const dateStr = d.toISOString().slice(0, 10);
-    const found = data.events.find(e => e.date === dateStr);
+    const dateStr = shiftKey(tonight, -i);
+    // A Test-Mode-only night is not a filled cell.
+    const found = counted.find(e => e.date === dateStr);
     days.push({
       date: dateStr,
       hasEvent: !!found,
@@ -420,14 +621,15 @@ function getHistory30() {
   return days;
 }
 
+// Import/restore. Event fields (including source and testMode) and a top-level
+// truthVersion round-trip untouched. Imported streak, bestStreak and
+// achievements are recomputed from the counted events, never trusted.
 function replaceAll(nextData) {
   const normalized = deepMerge(clone(DEFAULTS), nextData && typeof nextData === 'object' ? nextData : {});
   normalized.events = Array.isArray(normalized.events) ? normalized.events.slice(-365) : [];
-  normalized.achievements = Array.isArray(normalized.achievements) ? normalized.achievements : [];
-  normalized.streak = Number.isFinite(Number(normalized.streak)) ? Math.max(0, Number(normalized.streak)) : 0;
-  normalized.bestStreak = Number.isFinite(Number(normalized.bestStreak))
-    ? Math.max(normalized.streak, Number(normalized.bestStreak))
-    : normalized.streak;
+  normalized.streak = currentStreak(normalized.events);
+  normalized.bestStreak = longestRun(normalized.events);
+  normalized.achievements = checkAchievements(normalized);
   cache = normalized;
   save();
   return getSummary();
@@ -439,6 +641,8 @@ function formatTime() {
 }
 
 module.exports = {
+  nightKey,
+  currentStreak,
   recordEvent,
   getSummary,
   getWeekStats,
@@ -451,6 +655,9 @@ module.exports = {
   exportData,
   replaceAll,
   // Testing helpers.
+  _longestRun: longestRun,
+  _countedNights: countedNights,
+  _checkAchievements: checkAchievements,
   _load: load,
   _reset: () => { cache = null; }
 };

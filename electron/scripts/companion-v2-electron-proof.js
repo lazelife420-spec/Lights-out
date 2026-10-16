@@ -247,6 +247,16 @@ async function runElectronProof() {
   const phoneEval = code => phone.webContents.executeJavaScript(code);
   await waitFor(() => phoneEval("document.getElementById('status-text').textContent === 'Connected'"), 'phone did not connect');
   await waitFor(() => phoneEval("document.getElementById('freshness').textContent.includes('Updated')"), 'initial authoritative state missing');
+  await check('P09: connecting clears is-pairing and shows the link bar', async () => {
+    const value = await phoneEval("({ pairing: document.body.classList.contains('is-pairing'), bar: getComputedStyle(document.getElementById('link-bar')).display, inBar: ['status-pill', 'pc-name', 'freshness'].every(id => document.getElementById('link-bar').contains(document.getElementById(id))) })");
+    assert(!value.pairing && value.bar !== 'none' && value.inBar, JSON.stringify(value));
+  });
+
+  // P09: sheets slide in on open; measure only after the entrance settles.
+  async function settleSheets() {
+    await phoneEval(`Promise.all([...document.querySelectorAll('.confirm-backdrop, .confirm-card, .night-mode-backdrop, .night-mode-detail')]
+      .flatMap(el => el.getAnimations()).map(animation => animation.finished.catch(() => null))).then(() => true)`);
+  }
 
   async function capture(name) {
     const image = await phone.webContents.capturePage();
@@ -261,7 +271,7 @@ async function runElectronProof() {
       const controls = [...document.querySelectorAll('#active-controls button')];
       const boxes = controls.map(button => {
         const box = button.getBoundingClientRect();
-        return { text: button.textContent.trim(), left: box.left, right: box.right, top: box.top, bottom: box.bottom, height: box.height };
+        return { text: button.textContent.trim(), key: button.id || ('add-' + button.dataset.addSeconds), left: box.left, right: box.right, top: box.top, bottom: box.bottom, height: box.height };
       });
       return {
         innerWidth,
@@ -269,16 +279,22 @@ async function runElectronProof() {
         boxes,
         badge: document.getElementById('safety-badge').textContent,
         pc: document.getElementById('pc-name').textContent,
-        stop: document.getElementById('btn-cancel').textContent
+        stop: document.getElementById('btn-cancel').textContent,
+        linkBar: ['pc-name', 'freshness'].map(id => {
+          const el = document.getElementById(id);
+          const box = el.getBoundingClientRect();
+          return { id, visible: getComputedStyle(el).display !== 'none' && box.width > 0, inBar: document.getElementById('link-bar').contains(el), left: box.left, right: box.right };
+        })
       };
     })()`);
+    assert(layout.linkBar.every(item => item.visible && item.inBar && item.left >= 0 && item.right <= layout.innerWidth), `${width}px link bar clips pc-name/freshness ${JSON.stringify(layout.linkBar)}`);
     assert(layout.scrollWidth <= layout.innerWidth, `${width}px has horizontal overflow ${layout.scrollWidth}/${layout.innerWidth}`);
     assert(layout.boxes.every(box => box.left >= 0 && box.right <= layout.innerWidth && box.height >= 48), `${width}px clips or shrinks a primary control`);
-    const stopBox = layout.boxes.find(box => box.text === 'Stop Tonight’s Run');
-    assert(stopBox && stopBox.top >= 0 && stopBox.bottom <= height, `${width}px Stop Tonight’s Run is outside the initial frame`);
+    const stopBox = layout.boxes.find(box => box.text === 'Stop tonight’s run');
+    assert(stopBox && stopBox.top >= 0 && stopBox.bottom <= height, `${width}px Stop tonight’s run is outside the initial frame`);
     assert(layout.badge === 'TEST MODE', `${width}px safety badge missing`);
     assert(layout.pc.includes('Target PC:'), `${width}px target PC missing`);
-    assert(layout.stop === 'Stop Tonight’s Run', `${width}px stop control missing`);
+    assert(layout.stop === 'Stop tonight’s run', `${width}px stop control missing`);
     await capture(name);
   }
 
@@ -289,7 +305,7 @@ async function runElectronProof() {
       const addButtons = [...document.querySelectorAll('[data-add-seconds]')];
       const project = element => {
         const box = element.getBoundingClientRect();
-        return { id: element.id || element.textContent.trim(), left: box.left, right: box.right,
+        return { id: element.id || (element.dataset.addSeconds ? ('add-' + element.dataset.addSeconds) : element.textContent.trim()), left: box.left, right: box.right,
           top: box.top + scrollY, bottom: box.bottom + scrollY, height: box.height,
           visible: getComputedStyle(element).display !== 'none' };
       };
@@ -298,14 +314,19 @@ async function runElectronProof() {
         scrollHeight: document.documentElement.scrollHeight,
         items: [...elements, ...addButtons].map(project),
         stopBottom: project(document.getElementById('btn-cancel')).bottom,
-        detailsTop: project(document.getElementById('details-panel')).top
+        detailsTop: project(document.getElementById('details-panel')).top,
+        // Fire 05 fix round 1: the dock never overlays the truth (badge row,
+        // digits). Measured as rendered, so a sticky dock would fail here.
+        dockTop: project(document.getElementById('active-controls')).top,
+        truthBottom: Math.max(project(document.getElementById('safety-row')).bottom, project(document.getElementById('timer-main')).bottom)
       };
     })()`);
     assert(layout.scrollWidth <= layout.innerWidth, `${label} has horizontal overflow ${layout.scrollWidth}/${layout.innerWidth}`);
     assert(layout.items.every(item => item.visible && item.left >= 0 && item.right <= layout.innerWidth), `${label} clips a required item`);
-    assert(layout.items.filter(item => ['btn-pause', 'btn-cancel', '+5', '+15', '+30'].includes(item.id)).every(item => item.height >= 48), `${label} shrinks a control below 48px`);
+    assert(layout.items.filter(item => ['btn-pause', 'btn-cancel', 'add-300', 'add-900', 'add-1800'].includes(item.id)).every(item => item.height >= 48), `${label} shrinks a control below 48px`);
     assert(layout.items.every(item => item.bottom <= layout.scrollHeight + 1), `${label} has an unreachable item`);
     assert(layout.detailsTop >= layout.stopBottom, `${label} Details displaced primary controls`);
+    assert(layout.dockTop >= layout.truthBottom - 1, `${label} dock overlays the safety row / digits (${layout.dockTop} < ${layout.truthBottom})`);
     assert(layout.scrollHeight >= layout.innerHeight, `${label} vertical layout is invalid`);
   }
 
@@ -363,9 +384,9 @@ async function runElectronProof() {
     const value = await phoneEval("({ dryRun: latestState.dryRun, badge: safetyBadge.textContent })");
     assert(value.dryRun === true && value.badge === 'TEST MODE', JSON.stringify(value));
   });
-  await check('missing Night Mode renders Custom Timer', async () => {
+  await check('missing Night Mode renders Countdown', async () => {
     const title = await phoneEval("handleUpdate({ ...latestState, type: 'state', nightModeId: null, nightModeTitle: null, nightModeVersion: null }); timerName.textContent");
-    assert(title === 'Custom Timer', `title was ${title}`);
+    assert(title === 'Countdown', `title was ${title}`);
   });
   await check('active UI renders Real Action only from projected false', async () => {
     const badge = await phoneEval("handleUpdate({ ...latestState, type: 'state', dryRun: false }); safetyBadge.textContent");
@@ -423,6 +444,13 @@ async function runElectronProof() {
   for (const [width, height] of viewports) {
     await check(`${width}px active layout has no clipping`, () => layoutAt(width, height, `01-active-${width}x${height}`));
   }
+  // P09: the link bar holds at 280-430 wide (wraps below 340), no overflow.
+  for (const width of [280, 320, 360, 390, 412, 430]) {
+    phone.setContentSize(width, 900);
+    await wait(100);
+    await phoneEval('window.scrollTo(0, 0)');
+    await check(`P09: ${width}px link bar keeps pc-name and freshness visible`, () => assertReachableLayout(`${width}px link bar`));
+  }
 
   phone.setContentSize(390, 844);
   await phoneEval("(() => { const panel = document.getElementById('details-panel'); panel.open = true; panel.scrollIntoView({ block: 'start' }); })()");
@@ -433,6 +461,19 @@ async function runElectronProof() {
   await waitFor(() => desktopEval('state.paused === true'), 'desktop did not pause');
   await waitFor(() => phoneEval("document.getElementById('pending-status').classList.contains('show') === false"), 'pause pending state did not clear');
   await capture('04-paused');
+  await wait(500); // let the head's opacity transition settle before reading it
+  await check('P09: paused shows an amber ring, no head, and Resume as the primary action', async () => {
+    const value = await phoneEval(`({
+      paused: document.body.classList.contains('is-paused'),
+      running: document.body.classList.contains('is-running'),
+      ring: getComputedStyle(document.documentElement).getPropertyValue('--ring').trim().toLowerCase(),
+      dash: getComputedStyle(document.getElementById('ring-progress')).strokeDasharray,
+      head: getComputedStyle(document.getElementById('ring-head')).opacity,
+      label: document.querySelector('#btn-pause .btn-label').textContent,
+      primary: document.getElementById('btn-pause').classList.contains('btn-primary')
+    })`);
+    assert(value.paused && !value.running && value.ring === '#f5b83d' && value.head === '0' && value.label === 'Resume' && value.primary && !String(value.dash).startsWith('6'), JSON.stringify(value));
+  });
   await check('Pause sends one toggle', () => assert(commandLog.filter(message => message.action === 'togglePause').length === 1, 'pause sent more than once'));
   await check('Pending Pause clears only after authoritative paused state', async () => {
     const value = await phoneEval("({ paused: latestState.paused, pending: pendingOperation })");
@@ -584,7 +625,18 @@ async function runElectronProof() {
   const staleRemainingBeforeDesktopChange = await phoneEval('latestState.remainingSeconds');
   await companion.stop();
   await waitFor(() => phoneEval("statusText.textContent === 'PC unavailable'"), 'desktop-change proof did not go offline');
-  await desktopEval(`window.electronAPI.startTimer(${JSON.stringify({ durationSeconds: 1200, action: 'sleep', dryRun: true, profileId: profile.id, nightModeId: 'quick-sleep' })})`);
+  const replacementOptions = { durationSeconds: 1200, action: 'sleep', dryRun: true, profileId: profile.id, nightModeId: 'quick-sleep' };
+  await check('desktop duplicate start while the phone is offline preserves the active run', async () => {
+    const receiptId = receipts.getLatestReceipt()?.id;
+    const result = await desktopEval(`window.electronAPI.startTimer(${JSON.stringify(replacementOptions)})`);
+    assert(result.success === false && result.code === 'RUN_ACTIVE', JSON.stringify(result));
+    assert(receipts.getLatestReceipt()?.id === receiptId, 'duplicate start replaced the active receipt');
+  });
+  // A new local countdown requires explicitly ending the existing run first.
+  // Reconnection must then replace the phone's stale view with this new run.
+  await desktopEval('window.electronAPI.cancelTimer()');
+  const replacement = await desktopEval(`window.electronAPI.startTimer(${JSON.stringify(replacementOptions)})`);
+  assert(replacement.success === true, `replacement timer did not start: ${JSON.stringify(replacement)}`);
   companion.start({ token, host: '127.0.0.1' });
   await waitFor(() => phoneEval("stateIsAuthoritative() && latestState.running && latestState.remainingSeconds <= 1200"), 'desktop-changed timer did not replace stale phone state', 10000);
   await check('desktop timer change while disconnected replaces old phone state', async () => {
@@ -598,8 +650,9 @@ async function runElectronProof() {
   companion.start({ token, host: '127.0.0.1' });
   await waitFor(() => phoneEval("stateIsAuthoritative() && !latestState.running && !latestState.paused"), 'completed timer did not restore idle', 10000);
   await check('timer completion while disconnected restores honest idle', async () => {
-    const value = await phoneEval("({ idle: timerLabel.textContent === 'Idle', activeHidden: activeControls.style.display === 'none', stale: document.body.classList.contains('stale-state') })");
-    assert(value.idle && value.activeHidden && !value.stale, JSON.stringify(value));
+    // Fire 06: idle previews tonight's plan (body.is-plan) instead of 'Idle'.
+    const value = await phoneEval("({ plan: document.body.classList.contains('is-plan') && timerName.textContent === 'Tonight’s plan', activeHidden: activeControls.style.display === 'none', stale: document.body.classList.contains('stale-state') })");
+    assert(value.plan && value.activeHidden && !value.stale, JSON.stringify(value));
   });
 
   await desktopEval(`window.electronAPI.startTimer(${JSON.stringify({ durationSeconds: 900, action: 'sleep', dryRun: true, profileId: profile.id, nightModeId: 'quick-sleep' })})`);
@@ -631,6 +684,10 @@ async function runElectronProof() {
     const value = await phoneEval("({ stale: document.body.classList.contains('stale-state'), text: freshnessEl.textContent })");
     assert(value.stale && value.text.includes('State may be stale'), JSON.stringify(value));
   });
+  await check('P09: offline shows a Last known tag with a last-seen age and no strike-through', async () => {
+    const value = await phoneEval("({ tag: !document.getElementById('stale-tag').hidden, tagText: document.getElementById('stale-tag').textContent, text: freshnessEl.textContent, deco: getComputedStyle(timerMain).textDecorationLine, badgeOpacity: getComputedStyle(document.getElementById('safety-row')).opacity })");
+    assert(value.tag && value.tagText === 'Last known' && value.text.includes('last seen') && value.deco === 'none' && value.badgeOpacity === '1', JSON.stringify(value));
+  });
   await phoneEval('connect()');
   await waitFor(() => phoneEval("stateIsAuthoritative()"), 'phone did not recover after explicit reconnect', 10000);
 
@@ -649,6 +706,7 @@ async function runElectronProof() {
     await check(`${width}x${height} landscape keeps controls reachable`, () => assertReachableLayout(`${width}x${height}`));
     await phoneEval("document.getElementById('btn-cancel').click()");
     await waitFor(() => phoneEval("cancelConfirm.classList.contains('show')"), `${width}x${height} cancel dialog did not open`);
+    await settleSheets();
     await check(`${width}x${height} cancel dialog fits or scrolls safely`, async () => {
       const value = await phoneEval(`(() => {
         const card = document.querySelector('.confirm-card');
@@ -709,11 +767,12 @@ async function runElectronProof() {
     assert(value.open && value.inert && !value.unavailable, JSON.stringify(value));
   });
   await phoneEval("document.getElementById('cancel-keep').click()");
-  await waitFor(() => phoneEval("document.activeElement.id === 'btn-cancel'"), 'Keep Running did not restore opener focus');
+  await waitFor(() => phoneEval("document.activeElement.id === 'btn-cancel'"), 'Keep running did not restore opener focus');
 
   await phoneEval("document.getElementById('btn-cancel').focus()");
   await sendKey('Enter');
   await waitFor(() => phoneEval("cancelConfirm.classList.contains('show') && document.activeElement.id === 'cancel-keep'"), 'final keyboard dialog did not open');
+  await settleSheets();
   await capture('09-cancel-confirmation');
   await check('cancel confirmation names run, PC, remaining time, and consequence', async () => {
     const copy = await phoneEval('cancelCopy.textContent');
@@ -734,21 +793,28 @@ async function runElectronProof() {
   });
   await check('desktop cancelled receipt behavior remains intact', () => assert(receipts.getLatestReceipt()?.result === 'cancelled', 'cancelled receipt missing'));
 
-  await check('phone start confirm reflects desktop-authoritative Dry Run (ON)', async () => {
+  await check('phone Start sheet reflects desktop-authoritative Dry Run (ON)', async () => {
     // Desktop Dry Run is ON in this harness's seeded settings.json — the phone
     // cannot choose Dry Run itself, but it must display the desktop's actual
-    // policy rather than an unconditional "REAL ACTION" claim.
-    const message = await phoneEval(`(() => {
-      let captured = '';
-      window.confirm = text => { captured = text; return false; };
+    // policy rather than an unconditional "REAL ACTION" claim. Fire 06: the
+    // branded Start sheet replaced window.confirm; Not now sends nothing.
+    const startsBefore = commandLog.filter(message => message.action === 'start').length;
+    const value = await phoneEval(`(() => {
       document.querySelector('[data-min="15"]').click();
-      return captured;
+      const sheet = document.getElementById('start-sheet');
+      const result = { open: sheet.classList.contains('show'), text: sheet.textContent, inert: appShell.inert, focus: document.activeElement.id };
+      document.getElementById('start-cancel').click();
+      result.closed = !sheet.classList.contains('show');
+      result.released = !appShell.inert;
+      return result;
     })()`);
-    assert(message.includes('TEST MODE') && message.includes('No PC power action will execute'), message);
+    assert(value.open && value.text.includes('TEST MODE') && value.text.includes('No PC power action will run') && value.inert && value.focus === 'start-cancel' && value.closed && value.released, JSON.stringify(value));
+    await wait(300);
+    assert(commandLog.filter(message => message.action === 'start').length === startsBefore, 'Not now must not send a start');
   });
   await check('phone idle banner reflects desktop-authoritative Dry Run (ON)', async () => {
     const text = await phoneEval("document.querySelector('.idle-safety').textContent");
-    assert(text.includes('TEST MODE') && text.includes('no PC power action will execute'), text);
+    assert(text.includes('TEST MODE') && text.includes('No PC power action will run'), text);
   });
   await check('phone cannot overwrite desktop identity fields', () => {
     const forged = commandLog.some(message => 'nightModeId' in message || 'profileId' in message || 'dryRun' in message || 'forceShutdown' in message);
@@ -759,11 +825,20 @@ async function runElectronProof() {
   await check('remote hibernate remains impossible', () => assert(!commandLog.some(message => message.timerAction === 'hibernate'), 'hibernate accepted'));
 
   // ── C2: Canonical Night Mode start from phone ──
-  await phoneEval("document.getElementById('night-mode-toggle').click()");
-  await waitFor(() => phoneEval("document.getElementById('night-mode-grid').classList.contains('visible')"), 'Night Mode grid did not open');
-  await check('C2: Night Mode picker expands from idle controls', async () => {
-    const value = await phoneEval("({ visible: document.getElementById('night-mode-grid').classList.contains('visible'), cards: document.querySelectorAll('.night-mode-card').length })");
-    assert(value.visible && value.cards >= 4, JSON.stringify(value));
+  // Fire 06: the plan card (with 'Ends with' inside it) precedes the Night
+  // Modes, so the ending visibly applies only to the plan.
+  await check('Fire 06: Night Modes are visible by default after the plan card, which holds the ending selector', async () => {
+    const value = await phoneEval(`({
+      visible: document.getElementById('night-mode-grid').classList.contains('visible'),
+      planFirst: Boolean(document.getElementById('plan-card').compareDocumentPosition(document.getElementById('night-mode-section')) & Node.DOCUMENT_POSITION_FOLLOWING),
+      segInPlan: document.getElementById('plan-card').contains(document.getElementById('action-seg'))
+    })`);
+    assert(value.visible && value.planFirst && value.segInPlan, JSON.stringify(value));
+  });
+  await waitFor(() => phoneEval("nmCatalogue.length > 0 && !nmCatalogueRefreshing"), 'Night Mode catalogue did not arrive');
+  await check('C2: Night Mode picker shows one card per ready mode', async () => {
+    const value = await phoneEval("({ visible: document.getElementById('night-mode-grid').classList.contains('visible'), cards: document.querySelectorAll('.night-mode-card').length, ready: nmCatalogue.filter(m => m.status === 'ready').length })");
+    assert(value.visible && value.cards >= 4 && value.cards === value.ready, JSON.stringify(value));
   });
 
   await check('C2: catalogue request yields canonical modes from main', async () => {
@@ -771,9 +846,21 @@ async function runElectronProof() {
     assert(value.count >= 4 && value.hasQuickSleep && value.hasFullShutdown && value.disabled >= 2, JSON.stringify(value));
   });
 
-  await check('C2: disabled mode card is non-interactive', async () => {
-    const value = await phoneEval("(() => { const card = [...document.querySelectorAll('.night-mode-card')].find(c => c.querySelector('.night-mode-name').textContent.includes('Quiet House') || c.querySelector('.night-mode-name').textContent.includes('School Night')); return { exists: !!card, disabled: card && card.classList.contains('disabled'), tabindex: card && card.getAttribute('tabindex') }; })()");
-    assert(value.exists && value.disabled && value.tabindex === '-1', JSON.stringify(value));
+  await check('P09: non-ready modes fold into #nm-unavailable with their reasons, never as cards', async () => {
+    const value = await phoneEval(`(() => {
+      const notReady = nmCatalogue.filter(m => m.status !== 'ready');
+      const line = document.getElementById('nm-unavailable');
+      const names = [...document.querySelectorAll('.night-mode-card .night-mode-name')].map(el => el.textContent);
+      return {
+        count: notReady.length,
+        shown: !line.hidden,
+        listed: notReady.every(m => line.textContent.includes(m.title)),
+        reasons: notReady.every(m => !m.availability || !m.availability.reason || line.textContent.includes(m.availability.reason)),
+        noCards: notReady.every(m => !names.includes(m.title)),
+        tagColor: getComputedStyle(line.querySelector('.night-mode-tag.status')).color
+      };
+    })()`);
+    assert(value.count >= 2 && value.shown && value.listed && value.reasons && value.noCards && value.tagColor === 'rgb(145, 160, 175)', JSON.stringify(value));
   });
 
   // Responsive catalogue captures.
@@ -787,10 +874,17 @@ async function runElectronProof() {
   await waitFor(() => phoneEval("document.getElementById('night-mode-backdrop').classList.contains('show')"), 'Night Mode detail did not open');
   await check('C2: detail shows canonical duration, action, and ritual from desktop', async () => {
     const value = await phoneEval("({ title: nmDetailTitle.textContent, duration: nmDetailMeta.textContent, action: nmDetailMeta.textContent, ritual: nmDetailMeta.textContent, runType: nmDetailRunType.textContent })");
-    assert(value.title === 'Quick Sleep' && value.duration.includes('15 min') && value.action.includes('Sleep') && value.ritual.includes('Direct start') && value.runType.includes('TEST MODE'), JSON.stringify(value));
+    assert(value.title === 'Quick Sleep' && value.duration.includes('15 min') && value.duration.includes('15:00') && value.action.includes('Sleep') && value.ritual.includes('Direct start') && value.runType.includes('TEST MODE'), JSON.stringify(value));
+  });
+  // Fire 06: the Night Mode sheet is a real modal; under Test Mode its end
+  // line never names a power action.
+  await check('Fire 06: the Night Mode sheet makes the page inert, traps focus and says "Test would end"', async () => {
+    const value = await phoneEval("({ inert: appShell.inert, hidden: appShell.getAttribute('aria-hidden'), focus: document.activeElement.id, ends: document.getElementById('nm-detail-ends').textContent })");
+    assert(value.inert && value.hidden === 'true' && ['nm-detail-start', 'nm-detail-close'].includes(value.focus) && value.ends.startsWith('Test would end ≈') && !/Sleep/.test(value.ends), JSON.stringify(value));
   });
   await phone.setContentSize(390, 844);
   await phoneEval('window.scrollTo(0,0)');
+  await settleSheets();
   await capture('c2-quick-sleep-detail');
 
   const nmStartBefore = commandLog.length;
@@ -831,6 +925,10 @@ async function runElectronProof() {
   await waitFor(() => phoneEval("!latestState.running && !latestState.paused"), 'desktop did not cancel Night Mode start');
   await phoneEval("document.getElementById('nm-detail-close')?.click()");
   await wait(300);
+  await check('Fire 06: after the Night Mode sheet closes, the page is no longer inert', async () => {
+    const value = await phoneEval("({ open: nightModeBackdrop.classList.contains('show'), inert: appShell.inert, hidden: appShell.getAttribute('aria-hidden') })");
+    assert(!value.open && !value.inert && value.hidden === null, JSON.stringify(value));
+  });
 
   // Ritual-mode proof: Full Shutdown should enter the standard wind-down ritual.
   await phoneEval("(() => { const card = [...document.querySelectorAll('.night-mode-card')].find(c => c.querySelector('.night-mode-name').textContent === 'Full Shutdown'); if (card) card.click(); })()");
@@ -842,6 +940,7 @@ async function runElectronProof() {
   });
   await phone.setContentSize(390, 844);
   await phoneEval('window.scrollTo(0,0)');
+  await settleSheets();
   await capture('c2-full-shutdown-detail');
   await waitFor(() => phoneEval("stateIsAuthoritative() && !nmDetailStart.disabled"), 'Full Shutdown Start button not enabled');
   const ritualStartBefore = commandLog.length;
@@ -1083,8 +1182,9 @@ async function runElectronProof() {
 
   await check('C2: reconnect does not duplicate catalogue cards', async () => {
     const state = await getNmTestState();
+    const ready = state.nmCatalogue.filter(m => m.status === 'ready').length;
     const cards = await phoneEval("document.querySelectorAll('.night-mode-card').length");
-    assert(cards === state.nmCatalogueLength, `expected ${state.nmCatalogueLength} cards, got ${cards}`);
+    assert(cards === ready, `expected ${ready} ready-mode cards, got ${cards}`);
   });
 
   await check('C2: pending Night Mode start is not replayed on reconnect', async () => {
@@ -1167,6 +1267,8 @@ async function runElectronProof() {
     assert(after.nmSelectedId === null, 'selected mode not cleared after disable');
     const closed = await phoneEval("!document.getElementById('night-mode-backdrop').classList.contains('show')");
     assert(closed, 'detail not closed after mode disabled');
+    const folded = await phoneEval("({ card: [...document.querySelectorAll('.night-mode-card')].some(c => c.querySelector('.night-mode-name').textContent === 'Quick Sleep'), listed: document.getElementById('nm-unavailable').textContent.includes('Quick Sleep'), reason: document.getElementById('nm-unavailable').textContent.includes('Test disabled') })");
+    assert(!folded.card && folded.listed && folded.reason, `newly disabled Quick Sleep must leave the cards for #nm-unavailable: ${JSON.stringify(folded)}`);
   });
 
   await check('C2: catalogue refresh does not alter active desktop timer state', async () => {
@@ -1186,7 +1288,6 @@ async function runElectronProof() {
   });
 
   await phoneEval("document.getElementById('nm-detail-close')?.click()");
-  await phoneEval("document.getElementById('night-mode-toggle').click()");
 
   console.log(`\nCompanion V2 Electron proof: ${passed} passed, ${failed} failed`);
   console.log(`Commands observed: ${commandLog.length}`);

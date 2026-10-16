@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const ELECTRON_ROOT = path.resolve(__dirname, '..');
 const PACKAGE_JSON = JSON.parse(fs.readFileSync(path.join(ELECTRON_ROOT, 'package.json'), 'utf8'));
@@ -35,4 +36,35 @@ test('unsupported desktop execution environment returns exit code 2 (INTERACTIVE
 
 test('full E2E qualification requires both unattended CI and interactive desktop evidence', () => {
   assert.match(E2E_RUNNER_SRC, /Full release qualification requires `npm run test:e2e:desktop`/);
+});
+
+test('CI qualification fails if either required runtime proof fails', () => {
+  function runWithStatuses(statuses) {
+    const calls = [];
+    let exit = 0;
+    try {
+      vm.runInNewContext(E2E_RUNNER_SRC, {
+        __dirname: path.join(ELECTRON_ROOT, 'scripts'),
+        console: { log() {}, error() {} },
+        process: { argv: ['node', 'e2e-runner.js', '--ci'], execPath: 'node', env: {}, exit(code) { throw { requestedExit: code }; } },
+        require(name) {
+          if (name === 'node:child_process') return { spawnSync(_command, args) {
+            const script = path.basename(args[0]);
+            calls.push(script);
+            return { status: statuses[script] || 0 };
+          } };
+          if (name === './packaged-artifact-resolver') return { requirePackagedArtifact() {} };
+          return require(name);
+        }
+      });
+    } catch (error) {
+      if (!Object.hasOwn(error, 'requestedExit')) throw error;
+      exit = error.requestedExit;
+    }
+    assert.deepEqual(calls, ['packaged-truth-smoke.js', 'night-modes-electron-proof.js']);
+    return exit;
+  }
+  assert.equal(runWithStatuses({}), 0);
+  assert.equal(runWithStatuses({ 'packaged-truth-smoke.js': 1 }), 1);
+  assert.equal(runWithStatuses({ 'night-modes-electron-proof.js': 1 }), 1);
 });

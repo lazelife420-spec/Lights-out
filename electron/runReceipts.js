@@ -68,6 +68,8 @@ function createRunReceipt(timerState) {
     nightModeTitle: timerState.nightModeTitle || null,
     nightModeVersion: timerState.nightModeVersion || null,
     durationSeconds: timerState.totalSeconds || 0,
+    // Display only: where the run started (older receipts simply lack it).
+    origin: typeof timerState.origin === 'string' ? timerState.origin : null,
     remainingSeconds: null,
     dryRun: !!timerState.dryRun,
     forceShutdown: !!timerState.forceShutdown,
@@ -210,15 +212,32 @@ function prune(data) {
   }
 }
 
-// Get summary stats across all receipts.
+// Get summary stats across all receipts. Two independent axes:
+// - Outcome: every receipt lands in exactly one bucket, so completed +
+//   cancelled + dryRun + blocked + interrupted + other always equals total
+//   ('other' = running, completing or an unknown result). 'completed' is a
+//   REAL completion only (power_executed / completed with dryRun !== true);
+//   a completed result on a Test Mode receipt joins the 'dryRun' (Test
+//   completed) bucket, so a Test Mode run is never counted as real.
+// - Mode (UI-R3 Fire 10): testRuns (dryRun === true) + realRuns (dryRun ===
+//   false) + unknownModeRuns (anything else, e.g. a receipt with no dryRun
+//   field) always equals total. A missing mode is never counted as real.
+// Read-only: nothing stored is changed.
 function getReceiptStats() {
   const data = load();
-  const total = data.receipts.length;
-  const completed = data.receipts.filter(r => r.result === 'power_executed' || r.result === 'completed').length;
-  const cancelled = data.receipts.filter(r => r.result === 'cancelled').length;
-  const dryRun = data.receipts.filter(r => r.result === 'dry_run_completed').length;
-  const blocked = data.receipts.filter(r => r.result === 'blocked' || r.result === 'error').length;
-  return { total, completed, cancelled, dryRun, blocked };
+  const receipts = data.receipts;
+  const total = receipts.length;
+  const isFinished = r => r.result === 'power_executed' || r.result === 'completed';
+  const completed = receipts.filter(r => isFinished(r) && r.dryRun !== true).length;
+  const cancelled = receipts.filter(r => r.result === 'cancelled').length;
+  const dryRun = receipts.filter(r => r.result === 'dry_run_completed' || (isFinished(r) && r.dryRun === true)).length;
+  const blocked = receipts.filter(r => r.result === 'blocked' || r.result === 'error').length;
+  const interrupted = receipts.filter(r => r.result === 'interrupted').length;
+  const other = total - completed - cancelled - dryRun - blocked - interrupted;
+  const testRuns = receipts.filter(r => r.dryRun === true).length;
+  const realRuns = receipts.filter(r => r.dryRun === false).length;
+  const unknownModeRuns = total - testRuns - realRuns;
+  return { total, completed, cancelled, dryRun, blocked, interrupted, other, testRuns, realRuns, unknownModeRuns };
 }
 
 function reset() {

@@ -214,7 +214,7 @@ function createFakeDocument({ elementsById = {}, navItems = [], body } = {}) {
 // array first sidesteps that without weakening what's asserted.
 const plainArray = value => [...value];
 
-const NAV_TABS = ['lib', 'modes', 'sch', 'set', 'stats'];
+const NAV_TABS = ['lib', 'modes', 'sch', 'devices', 'set', 'stats'];
 const DISMISSIBLE_MODAL_IDS = ['profiles-modal', 'receipts-modal', 'about-modal', 'notif-drawer', 'streak-celebration-modal', 'lan-warning-modal'];
 const NON_DISMISSIBLE_MODAL_IDS = ['warning-modal', 'override-modal', 'snooze-tax-modal', 'ritual-overlay'];
 
@@ -230,7 +230,7 @@ function buildModalElements() {
   return els;
 }
 
-function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab, remoteControlState = { ready: false } } = {}) {
+function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab, remoteControlState = { ready: false }, extraGlobals = {} } = {}) {
   const navItems = buildNavItems();
 
   const modalEls = buildModalElements();
@@ -242,6 +242,7 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab, remoteC
     panelLib: createElement({ style: { display: activeTab === 'lib' ? '' : 'none' } }),
     panelModes: createElement({ style: { display: activeTab === 'modes' ? '' : 'none' } }),
     panelSch: createElement({ style: { display: activeTab === 'sch' ? '' : 'none' } }),
+    panelDevices: createElement({ style: { display: activeTab === 'devices' ? '' : 'none' } }),
     panelSet: createElement({ style: { display: activeTab === 'set' ? '' : 'none' } }),
     panelStats: createElement({ style: { display: activeTab === 'stats' ? '' : 'none' } })
   };
@@ -270,7 +271,6 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab, remoteC
     exitFullscreenClock: 0,
     cancelTimer: 0,
     discardSettingsPanelChanges: 0,
-    activateTopTab: [],
     getRemoteControl: 0,
     openExternal: []
   };
@@ -282,6 +282,7 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab, remoteC
     panelLib: panels.panelLib,
     panelModes: panels.panelModes,
     panelSch: panels.panelSch,
+    panelDevices: panels.panelDevices,
     panelSet: panels.panelSet,
     panelStats: panels.panelStats,
     modalClose: createElement({ id: 'modal-close' })
@@ -296,7 +297,6 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab, remoteC
     console,
     notify: (...args) => { calls.notify.push(args); },
     render: () => { calls.render++; },
-    activateTopTab: tab => { calls.activateTopTab.push(tab); },
     // openSettingsPanel's own UI-sync side effects -- not part of what's
     // under test here (Settings' own customize/last-light/remote-control
     // sub-panels are untouched by this slice).
@@ -319,7 +319,10 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab, remoteC
       getRemoteControl: async () => { calls.getRemoteControl++; return remoteControlState; },
       openExternal: async url => { calls.openExternal.push(url); }
     },
-    hideRitualOverlay: () => { calls.hideRitualOverlay++; modalEls['ritual-overlay'].classList.remove('active'); }
+    hideRitualOverlay: () => { calls.hideRitualOverlay++; modalEls['ritual-overlay'].classList.remove('active'); },
+    // Optional page renderers a test opts into (Schedule, Proof › Routine);
+    // absent by default, exactly like the typeof guards expect.
+    ...extraGlobals
   };
   const context = vm.createContext(sandbox);
   const source = [
@@ -335,7 +338,9 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab, remoteC
     extractFunction(rendererSource, 'openHelpPanel'),
     extractFunction(rendererSource, 'closeHelpPanel'),
     `let settingsReturnTab = ${JSON.stringify(settingsReturnTab ?? 'lib')};`,
-    'const NS_TAB_DISPLAY_NAME = { lib: "Tonight", modes: "Night Modes", sch: "Schedule", stats: "Stats" };',
+    // The real display-name map (not a copy), so Back-button labels for new
+    // destinations like Devices are exercised as shipped.
+    rendererSource.match(/const NS_TAB_DISPLAY_NAME = \{[^}]*\};/)[0],
     extractFunction(rendererSource, 'openSettingsPanel'),
     extractFunction(rendererSource, 'closeSettingsPanel'),
     extractFunction(rendererSource, 'handleSidebarNavigation'),
@@ -363,6 +368,9 @@ function createNavigationSandbox({ activeTab = 'lib', settingsReturnTab, remoteC
     navItems,
     fakeDocument,
     calls,
+    // The vm context itself, so a test can run another real callback body
+    // (e.g. the footer pill's click handler) against this same router.
+    context,
     ...context.__nav
   };
 }
@@ -568,6 +576,165 @@ test('after navigation, focus lands on the newly-current nav item', async () => 
   assert.equal(modesItem.__focused, true);
 });
 
+// UI-R3 Fire 03: a calm launch. The startup restore and the fullscreen entry
+// pass focusNav: false -- the selection still lands, but nothing is focused,
+// so no keyboard focus ring is painted on the rail before the user acts.
+test('focusNav: false still sets .active and aria-current but focuses nothing', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+  const ok = await sandbox.handleSidebarNavigation('modes', { persist: false, focusNav: false });
+
+  assert.equal(ok, true);
+  const modesItem = sandbox.navItems.find(i => i.dataset.nsTab === 'modes');
+  assert.equal(modesItem.classList.contains('active'), true, 'the selection still lands');
+  assert.equal(modesItem.getAttribute('aria-current'), 'page');
+  assert.ok(sandbox.navItems.every(i => i.__focused !== true), 'no nav item is focused');
+  assert.equal(sandbox.panels.panelModes.style.display, '', 'the page still switches');
+  assert.equal(sandbox.calls.saveAppSettings.length, 0, 'persist: false still skips the save');
+});
+
+test('the default call (every click / keyboard path) still focuses the nav item', async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+  await sandbox.handleSidebarNavigation('devices');
+  assert.equal(sandbox.navItems.find(i => i.dataset.nsTab === 'devices').__focused, true);
+  const again = createNavigationSandbox({ activeTab: 'modes' });
+  await again.handleSidebarNavigation('lib', { persist: false });
+  assert.equal(again.navItems.find(i => i.dataset.nsTab === 'lib').__focused, true, 'focusNav defaults to true');
+});
+
+// UI-R3 Fire 03: the footer truth pill leads back to the session. The real
+// click handler body runs in the navigation sandbox, against the real router.
+function addStatusPill(sandbox, { running = false, paused = false, disabled = false } = {}) {
+  const calls = { openSettingsCategory: [], chkFocus: 0 };
+  sandbox.state.running = running;
+  sandbox.state.paused = paused;
+  sandbox.els.statusPill = createElement({ id: 'status-pill' });
+  sandbox.els.statusPill.disabled = disabled;
+  sandbox.els.chkDryRun = createElement({ id: 'chk-dryrun' });
+  sandbox.els.chkDryRun.focus = () => { calls.chkFocus++; };
+  sandbox.context.openSettingsCategory = async (id) => { calls.openSettingsCategory.push(id); };
+  vm.runInContext(`this.__pillClick = async function () ${extractBlockAfter(rendererSource, "els.statusPill?.addEventListener('click', async () => {")};`, sandbox.context);
+  return { click: () => sandbox.context.__pillClick(), calls };
+}
+
+test('a status pill click while running opens Tonight -- never Settings, never a dryRun write', async () => {
+  for (const [running, paused] of [[true, false], [false, true]]) {
+    const sandbox = createNavigationSandbox({ activeTab: 'devices' });
+    const pill = addStatusPill(sandbox, { running, paused });
+    const dryRunBefore = sandbox.state.dryRun;
+    let dryRunWrites = 0;
+    let dryRun = dryRunBefore;
+    Object.defineProperty(sandbox.state, 'dryRun', { get: () => dryRun, set: v => { dryRunWrites++; dryRun = v; }, configurable: true });
+
+    await pill.click();
+
+    const label = running ? 'running' : 'paused';
+    assert.equal(sandbox.panels.panelLib.style.display, '', `${label}: Tonight is on screen`);
+    assert.equal(sandbox.panels.panelDevices.style.display, 'none', `${label}: Devices is hidden`);
+    assert.equal(sandbox.navItems.find(i => i.dataset.nsTab === 'lib').classList.contains('active'), true);
+    assert.deepEqual(plainArray(pill.calls.openSettingsCategory), [], `${label}: never opens Settings`);
+    assert.equal(pill.calls.chkFocus, 0, `${label}: never focuses the Test Mode switch`);
+    assert.equal(dryRunWrites, 0, `${label}: never writes dryRun`);
+    assert.equal(sandbox.state.dryRun, dryRunBefore);
+  }
+});
+
+test('a status pill click while idle keeps the Power & Safety shortcut; a disabled pill does nothing', async () => {
+  const idle = createNavigationSandbox({ activeTab: 'lib' });
+  const pill = addStatusPill(idle);
+  await pill.click();
+  assert.deepEqual(plainArray(pill.calls.openSettingsCategory), ['power-safety']);
+
+  const off = createNavigationSandbox({ activeTab: 'devices' });
+  const offPill = addStatusPill(off, { running: true, disabled: true });
+  await offPill.click();
+  assert.equal(off.panels.panelDevices.style.display, '', 'a disabled pill never navigates');
+  assert.deepEqual(plainArray(offPill.calls.openSettingsCategory), []);
+});
+
+// UI-R3 Fire 03: a readiness cell opens the place where you fix it.
+function createReadinessSandbox({ running = false, paused = false, navResult = true } = {}) {
+  const calls = { nav: [], settings: [], timers: [], cleared: 0, scroll: [], chkFocus: 0 };
+  const cards = {};
+  for (const id of ['device-card-phone', 'device-card-lights']) {
+    const card = createElement({ id });
+    card.scrollIntoView = opts => calls.scroll.push([id, opts]);
+    card.focus = opts => { card.__focusedWith = opts; };
+    cards[id] = card;
+  }
+  const panelSet = createElement({ style: { display: 'none' } });
+  const sandbox = {
+    state: { running, paused, dryRun: true },
+    els: { panelSet, chkDryRun: { focus: () => { calls.chkFocus++; } } },
+    document: { getElementById: id => cards[id] || null },
+    window: { matchMedia: () => ({ matches: false }) },
+    handleSidebarNavigation: async (tab) => { calls.nav.push(tab); return navResult; },
+    openSettingsCategory: async (id) => { calls.settings.push(id); panelSet.style.display = ''; },
+    setTimeout: (fn, ms) => { calls.timers.push([fn, ms]); return calls.timers.length; },
+    clearTimeout: () => { calls.cleared++; }
+  };
+  vm.createContext(sandbox);
+  vm.runInContext([
+    rendererSource.match(/const RDY_DEVICE_TARGETS = \[[^\]]*\];/)[0],
+    'let rdyFocusTimer = null;',
+    'let rdyFocusCard = null;',
+    extractFunction(rendererSource, 'openReadinessTarget'),
+    'this.go = openReadinessTarget;'
+  ].join('\n'), sandbox);
+  return { go: sandbox.go, calls, cards, state: sandbox.state };
+}
+
+test('a device readiness cell opens Devices, then lands on its card with a brief outline', async () => {
+  const box = createReadinessSandbox();
+  assert.equal(await box.go('device-card-lights'), true);
+  assert.deepEqual(plainArray(box.calls.nav), ['devices']);
+  const card = box.cards['device-card-lights'];
+  assert.equal(card.getAttribute('tabindex'), '-1', 'the card can take focus');
+  assert.equal(card.__focusedWith.preventScroll, true);
+  assert.equal(box.calls.scroll[0][1].block, 'nearest');
+  assert.equal(card.classList.contains('is-focus'), true, 'the outline is on');
+  const [clear, ms] = box.calls.timers.at(-1);
+  assert.equal(ms, 1200);
+  clear();
+  assert.equal(card.classList.contains('is-focus'), false, 'and off again after 1.2 s');
+
+  // A second cell moves the outline; the first one never lingers.
+  await box.go('device-card-phone');
+  await box.go('device-card-lights');
+  assert.equal(box.cards['device-card-phone'].classList.contains('is-focus'), false);
+  assert.equal(box.cards['device-card-lights'].classList.contains('is-focus'), true);
+});
+
+test('a refused navigation (blocking modal) adds no highlight; a session or unknown target does nothing', async () => {
+  const blocked = createReadinessSandbox({ navResult: false });
+  assert.equal(await blocked.go('device-card-phone'), false);
+  assert.equal(blocked.cards['device-card-phone'].classList.contains('is-focus'), false);
+  assert.equal(blocked.calls.scroll.length, 0);
+
+  for (const st of [{ running: true }, { paused: true }]) {
+    const active = createReadinessSandbox(st);
+    assert.equal(await active.go('device-card-phone'), false);
+    assert.equal(await active.go('settings:power-safety'), false);
+    assert.deepEqual(plainArray(active.calls.nav), []);
+    assert.deepEqual(plainArray(active.calls.settings), []);
+  }
+  const odd = createReadinessSandbox();
+  assert.equal(await odd.go('settings:advanced'), false);
+  assert.equal(await odd.go('ns-panel-set'), false);
+  assert.deepEqual(plainArray(odd.calls.nav), []);
+});
+
+test('the Safety cell opens Power & Safety and focuses Test Mode without touching dryRun', async () => {
+  const box = createReadinessSandbox();
+  let writes = 0;
+  let dryRun = true;
+  Object.defineProperty(box.state, 'dryRun', { get: () => dryRun, set: v => { writes++; dryRun = v; } });
+  assert.equal(await box.go('settings:power-safety'), true);
+  assert.deepEqual(plainArray(box.calls.settings), ['power-safety']);
+  assert.equal(box.calls.chkFocus, 1);
+  assert.equal(writes, 0);
+  assert.equal(box.state.dryRun, true);
+});
+
 test('the Back button\'s accessible name reflects the actual return destination', async () => {
   const sandbox = createNavigationSandbox({ activeTab: 'sch' });
   await sandbox.openSettingsPanel();
@@ -730,24 +897,63 @@ test('ordinary dismissible modals (About, profiles, receipts, etc.) still dismis
 // Help-leaves-current, unsaved-state preservation) and by the shell-nav gate
 // in desktop-ux-functional-gate.js.
 
-// --- .tab-btn internal sub-tab audit (read-only finding, narrowly fixed) ---
+// --- Schedule is one page (UI-R3 P10): no sub-tab bar left to mis-point ---
 //
-// These six buttons are sub-tabs entirely inside the Schedule panel
-// (#ns-panel-sch never has applyMainPanelVisibility() called on its
-// behalf by this handler) -- not a competing top-level navigation path.
-// Two of the six previously called setSidebarSelection('lib'/'stats')
-// even though Schedule was the only panel genuinely visible, corrupting
-// both the nav indicator and settingsReturnTab. Fixed to always record
-// 'sch'. This does not touch what content the sub-tabs show, and does not
-// add blocking-modal checks to sub-tab clicks -- they don't change which
-// top-level panel is visible, so the page-level navigation contract does
-// not apply to them by definition (see the comment on the fix itself).
+// The six Schedule sub-tabs (.tab-btn) and their activateTopTab() helper are
+// gone: Schedule is one scrolling page, Focus moved to Settings › Automations
+// and Streaks to Proof › Routine. The sidebar router owns every destination,
+// and its optional page renderers are typeof-guarded so this sandbox (which
+// extracts the router without them) still navigates.
 
-test('the Schedule sub-tab bar always keeps the sidebar pointed at Schedule, never Tonight or Stats', () => {
-  const tabBtnHandler = rendererSource.match(/document\.querySelectorAll\('\.tab-btn'\)\.forEach\(btn => \{[\s\S]*?\n {2}\}\);/);
-  assert.ok(tabBtnHandler, '.tab-btn handler not found');
-  assert.match(tabBtnHandler[0], /setSidebarSelection\('sch'\)/, 'the sub-tab handler must unconditionally record Schedule as current');
-  assert.doesNotMatch(tabBtnHandler[0], /setSidebarSelection\('lib'\)|setSidebarSelection\('stats'\)/, 'no sub-tab click may claim Tonight or Stats as current -- #ns-panel-sch is the only thing ever actually visible here');
+const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+
+test('Schedule has no sub-tab bar: no .tab-btn in the markup and no activateTopTab in the renderer', () => {
+  assert.doesNotMatch(indexHtml, /class="tab-btn/, 'index.html must not contain a .tab-btn');
+  assert.doesNotMatch(indexHtml, /data-tab=/, 'index.html must not contain data-tab sub-tab keys');
+  assert.doesNotMatch(rendererSource, /activateTopTab/, 'renderer.js must not define or call activateTopTab');
+});
+
+test("handleSidebarNavigation('sch') shows Schedule without renderSchedulePage loaded", async () => {
+  const sandbox = createNavigationSandbox({ activeTab: 'lib' });
+  const result = await sandbox.handleSidebarNavigation('sch');
+  assert.equal(result, true);
+  assert.equal(sandbox.panels.panelSch.style.display, '');
+  assert.equal(sandbox.panels.panelLib.style.display, 'none');
+  const current = sandbox.navItems.filter(el => el.classList.contains('active')).map(el => el.dataset.nsTab);
+  assert.deepEqual(plainArray(current), ['sch']);
+});
+
+test("handleSidebarNavigation('sch') renders the Schedule page when it is loaded, and leaving stops its clock", async () => {
+  const seen = { render: 0, start: 0, stop: 0 };
+  const sandbox = createNavigationSandbox({
+    activeTab: 'lib',
+    extraGlobals: {
+      renderSchedulePage: async () => { seen.render++; },
+      startScheduleClock: () => { seen.start++; },
+      stopScheduleClock: () => { seen.stop++; }
+    }
+  });
+  await sandbox.handleSidebarNavigation('sch');
+  assert.equal(seen.render, 1, 'Schedule renders on arrival');
+  assert.equal(seen.start, 1, 'the 60 s clock starts when Schedule shows');
+  const stopsWhileOnSchedule = seen.stop;
+  await sandbox.handleSidebarNavigation('stats');
+  assert.equal(seen.stop, stopsWhileOnSchedule + 1, 'leaving Schedule stops its 60 s clock');
+  assert.equal(sandbox.panels.panelSch.style.display, 'none');
+});
+
+test("handleSidebarNavigation('stats') refreshes Proof › Routine when loaded, and works without it", async () => {
+  const bare = createNavigationSandbox({ activeTab: 'lib' });
+  assert.equal(await bare.handleSidebarNavigation('stats'), true);
+  assert.equal(bare.panels.panelStats.style.display, '');
+
+  const seen = { streaks: 0, debt: 0 };
+  const sandbox = createNavigationSandbox({
+    activeTab: 'lib',
+    extraGlobals: { loadStreaks: () => { seen.streaks++; }, loadSleepDebt: () => { seen.debt++; } }
+  });
+  assert.equal(await sandbox.handleSidebarNavigation('stats'), true);
+  assert.deepEqual({ ...seen }, { streaks: 1, debt: 1 });
 });
 
 // --- Settings Save/Cancel semantics unchanged (structural regression guard) ---
@@ -772,6 +978,7 @@ function createEscapeSandbox({ fullscreenClock = false, running = false, paused 
   const settingsPanel = createElement({ style: { display: 'none' } });
   const btnNotif = createElement({ id: 'btn-notif' });
   const btnLanWarningCancel = createElement({ id: 'btn-lan-warning-cancel' });
+  const btnSnoozeTaxCancel = createElement({ id: 'btn-snooze-tax-cancel' });
 
   const elementsById = {
     'notif-drawer': modalEls['notif-drawer'],
@@ -782,6 +989,7 @@ function createEscapeSandbox({ fullscreenClock = false, running = false, paused 
     'snooze-tax-modal': modalEls['snooze-tax-modal'],
     'lan-warning-modal': modalEls['lan-warning-modal'],
     'btn-lan-warning-cancel': btnLanWarningCancel,
+    'btn-snooze-tax-cancel': btnSnoozeTaxCancel,
     'streak-celebration-modal': modalEls['streak-celebration-modal']
   };
   const fakeDocument = createFakeDocument({ elementsById, navItems: [] });
@@ -811,7 +1019,7 @@ function createEscapeSandbox({ fullscreenClock = false, running = false, paused 
   const branch = extractMainEscapeBranch(rendererSource);
   vm.runInContext(`this.__handleEscape = async function handleEscape(event) {\n${branch}\n};`, context);
 
-  return { state, els, modalEls, settingsPanel, calls, handleEscape: context.__handleEscape };
+  return { state, els, modalEls, settingsPanel, calls, btnSnoozeTaxCancel, handleEscape: context.__handleEscape };
 }
 
 test('Escape handler is unchanged except the single, intentional closeHelpPanel() substitution (structural regression guard)', () => {
@@ -828,6 +1036,20 @@ test('Escape handler is unchanged except the single, intentional closeHelpPanel(
   assert.match(branch, /els\.receiptsModal\.classList\.remove\('active'\)/);
   assert.match(branch, /document\.getElementById\('warning-modal'\)\.classList\.remove\('active'\)/);
   assert.match(branch, /if \(state\.fullscreenClock\) \{\s*exitFullscreenClock\(\);/, 'fullscreen-clock-exit must still be the first, highest-priority branch, unchanged');
+});
+
+test('Escape on the snooze-tax modal clicks its "Go to sleep" cancel, resolving the pending choice, and cancels no timer', async () => {
+  // It used to only remove .active, leaving showSnoozeTaxModal()'s promise
+  // pending with its listeners attached, so the next confirm also resolved
+  // the stale promise and snoozed twice.
+  const sandbox = createEscapeSandbox({ running: true, activeModalIds: ['snooze-tax-modal'] });
+
+  await sandbox.handleEscape({ key: 'Escape', preventDefault: () => {} });
+
+  assert.equal(sandbox.btnSnoozeTaxCancel.__clicked, 1, 'Escape must go through btn-snooze-tax-cancel');
+  assert.equal(sandbox.calls.cancelTimer, 0, 'Escape on the snooze-tax modal must not cancel the running timer');
+  const branch = extractMainEscapeBranch(rendererSource);
+  assert.match(branch, /getElementById\('snooze-tax-modal'\)\?\.classList\.contains\('active'\)\) \{\s*document\.getElementById\('btn-snooze-tax-cancel'\)\?\.click\(\);\s*\}/);
 });
 
 test('Escape closes an ordinary modal (about-modal) when nothing higher-priority is active', async () => {
@@ -887,10 +1109,10 @@ test('Escape\'s Settings-panel priority discards via the existing path, unchange
   assert.equal(sandbox.calls.cancelTimer, 0, 'Settings discard takes priority over the running-timer fallback, same as any other open modal');
 });
 
-test('Settings Save/Cancel/discard wiring is untouched by this slice', () => {
+test('Settings Save closes on success; Cancel and Back use the discard path', () => {
   assert.match(rendererSource, /els\.modalClose\.addEventListener\('click', async \(\) => \{\s*await discardSettingsPanelChanges\(\);\s*closeSettingsPanel\(\);/, 'Back-to-Tonight (X) must still discard via the existing path');
   assert.match(rendererSource, /els\.btnCancelOpt\.addEventListener\('click', async \(\) => \{\s*await discardSettingsPanelChanges\(\);/, 'Cancel must still discard via the existing path');
-  assert.match(rendererSource, /els\.btnSaveOpt\.addEventListener\('click', async \(\) => \{\s*await saveSettingsPanel\(\);\s*closeSettingsPanel\(\);/, 'Save must still persist via the existing path');
+  assert.match(rendererSource, /if \(await saveSettingsPanel\(\)\) closeSettingsPanel\(\);/, 'Save must close only after successful persistence');
   const closeSettingsSource = extractFunction(rendererSource, 'closeSettingsPanel');
   assert.doesNotMatch(closeSettingsSource, /discardSettingsPanelChanges|saveSettingsPanel/, 'closeSettingsPanel() itself must remain a pure panel-visibility switch -- Save/Cancel decisions stay with the callers, not folded into navigation');
 });
@@ -958,7 +1180,7 @@ test('closeSettingsPanel() forces focus nowhere -- never BODY as a last resort -
 test('Back, Cancel, and Save all close Settings via the same closeSettingsPanel(), sharing its focus restoration (structural)', () => {
   assert.match(rendererSource, /els\.modalClose\.addEventListener\('click', async \(\) => \{\s*await discardSettingsPanelChanges\(\);\s*closeSettingsPanel\(\);\s*\}\)/, 'Back must call closeSettingsPanel()');
   assert.match(rendererSource, /els\.btnCancelOpt\.addEventListener\('click', async \(\) => \{\s*await discardSettingsPanelChanges\(\);\s*closeSettingsPanel\(\);\s*\}\)/, 'Cancel must call closeSettingsPanel()');
-  assert.match(rendererSource, /els\.btnSaveOpt\.addEventListener\('click', async \(\) => \{\s*await saveSettingsPanel\(\);\s*closeSettingsPanel\(\);\s*\}\)/, 'Save must call closeSettingsPanel()');
+  assert.match(rendererSource, /if \(await saveSettingsPanel\(\)\) closeSettingsPanel\(\);/, 'Successful Save must call closeSettingsPanel()');
 });
 
 test('closeSettingsPanel() leaves settingsReturnTab itself completely untouched', () => {

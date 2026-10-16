@@ -35,12 +35,8 @@ function getVersionInfo(exePath) {
 }
 
 function lightsOutProcessCount() {
-  try {
-    const out = runPowerShell('(Get-Process "Lights Out" -ErrorAction SilentlyContinue).Count');
-    return Number.parseInt(out.trim(), 10) || 0;
-  } catch {
-    return 0;
-  }
+  const out = runPowerShell(`@(Get-CimInstance Win32_Process -Filter "Name = 'Lights Out.exe'" | Where-Object { $_.ExecutablePath -eq '${executable.replace(/'/g, "''")}' }).Count`);
+  return Number.parseInt(out.trim(), 10) || 0;
 }
 
 function assert(cond, msg) {
@@ -90,8 +86,9 @@ check('native: executable metadata is branded', () => {
 check('native: app launches and exits cleanly via supported test Quit path', () => {
   assert(lightsOutProcessCount() === 0, 'packaged truth smoke requires a clean Lights Out process state');
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-native-truth-'));
+  let child;
   try {
-    const child = spawn(executable, [
+    child = spawn(executable, [
       '--minimized',
       '--no-auto-start',
       '--test-quit-after-start=2000',
@@ -114,7 +111,13 @@ check('native: app launches and exits cleanly via supported test Quit path', () 
     }
     assert(lightsOutProcessCount() === 0, 'packaged application did not exit cleanly');
   } finally {
-    try { spawn('taskkill', ['/F', '/T', '/IM', 'Lights Out.exe'], { windowsHide: true }); } catch {}
+    // Never terminate the owner's other Lights Out instances by image name.
+    if (child?.pid) {
+      const owned = runPowerShell(`$p = Get-CimInstance Win32_Process -Filter "ProcessId = ${Number(child.pid)}"; if ($p -and $p.ExecutablePath -eq '${executable.replace(/'/g, "''")}' -and $p.CommandLine.Contains('--user-data-dir=${userData.replace(/'/g, "''")}')) { 'OWNED' }`);
+      if (owned.trim() === 'OWNED') {
+        execFileSync('taskkill.exe', ['/F', '/T', '/PID', String(child.pid)], { windowsHide: true, stdio: 'ignore' });
+      }
+    }
     fs.rmSync(userData, { recursive: true, force: true });
   }
 });

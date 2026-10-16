@@ -1,5 +1,5 @@
 // Ritual Mode: guided bedtime ritual that chains actions into a single flow.
-// Steps: Breathing → Content Block → Focus wind-down → Timer start → Last Light.
+// Steps: Content Block → Focus wind-down → Timer start → Last Light.
 // Each step transitions automatically or on user acknowledgment.
 // The ritual is fully configurable and skippable.
 
@@ -7,7 +7,6 @@ const settingsStore = require('./settings');
 
 // Default ritual steps (order matters).
 const DEFAULT_STEPS = [
-  { id: 'breathe', label: 'Guided Breathing', durationSeconds: 60, skippable: true, auto: false },
   { id: 'block', label: 'Block Distractions', durationSeconds: 0, skippable: true, auto: true },
   { id: 'dim', label: 'Dim Environment', durationSeconds: 0, skippable: true, auto: true },
   { id: 'timer', label: 'Start Wind-down Timer', durationSeconds: 0, skippable: false, auto: true },
@@ -36,7 +35,8 @@ function getConfig() {
   const ritualConfig = settingsStore.getSection('ritual') || {};
   return {
     enabled: ritualConfig.enabled !== false,
-    steps: ritualConfig.steps || DEFAULT_STEPS,
+    // Old saved routines may still contain the removed breathing step.
+    steps: (Array.isArray(ritualConfig.steps) ? ritualConfig.steps : DEFAULT_STEPS).filter(step => step && step.id !== 'breathe'),
     autoAdvance: ritualConfig.autoAdvance !== false,
     timerDuration: ritualConfig.timerDuration || 28 * 60,
     timerAction: ritualConfig.timerAction || 'shutdown'
@@ -50,7 +50,8 @@ function startRitual(customSteps, meta) {
   // Clear any pending auto-advance timer from a previous run.
   if (stepTimer) { clearTimeout(stepTimer); stepTimer = null; }
 
-  const steps = customSteps || config.steps;
+  const steps = (Array.isArray(customSteps) ? customSteps : config.steps).filter(step => step && step.id !== 'breathe');
+  if (!steps.length) { cancelRitual(); return { active: false, reason: 'no-steps' }; }
   runIdCounter++;
   ritualState = {
     active: true,

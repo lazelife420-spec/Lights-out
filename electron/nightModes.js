@@ -103,7 +103,7 @@ const BUILT_IN_CATALOGUE = Object.freeze([
     subtitle: 'Silence networked devices and settle the house.',
     artworkId: 'quiet-house',
     status: 'coming_soon',
-    availability: { supported: false, reason: 'Multi-device control is not yet supported.' },
+    availability: { supported: false, reason: 'A house-wide mode that settles every device at once is not built yet.' },
     timer: {
       durationSeconds: 1800,
       action: 'sleep',
@@ -119,7 +119,7 @@ const BUILT_IN_CATALOGUE = Object.freeze([
     subtitle: 'Enforce bedtime with scheduled shutdown and content blocking.',
     artworkId: 'school-night',
     status: 'needs_router_setup',
-    availability: { supported: false, reason: 'Requires router-level Wi-Fi control which is not yet supported.' },
+    availability: { supported: false, reason: 'Needs router-level Wi-Fi control, which Lights Out does not have yet.' },
     timer: {
       durationSeconds: 1800,
       action: 'shutdown',
