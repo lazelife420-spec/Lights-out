@@ -127,7 +127,7 @@ jobs:
           name: lights-out-windows
           path: |
             dist-native/Lights-Out-Portable-*.zip
-            dist-native/Lights Out Setup *.exe
+            dist-native/Lights-Out-Setup-v*.exe
             dist-native/SHA256SUMS.txt
             dist-native/BUILD-MANIFEST.json
             dist-native/WINDOWS-VERIFICATION.json
@@ -166,7 +166,7 @@ jobs:
           body_path: docs/RELEASE_NOTES_${{ needs.build.outputs.version }}.md
           files: |
             dist-native/Lights-Out-Portable-*.zip
-            dist-native/Lights Out Setup *.exe
+            dist-native/Lights-Out-Setup-v*.exe
             dist-native/SHA256SUMS.txt
             dist-native/BUILD-MANIFEST.json
             dist-native/WINDOWS-VERIFICATION.json

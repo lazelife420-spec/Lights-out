@@ -20,7 +20,7 @@ and native phone routines/calendar with debug tests and lint/build qualification
 Phone and PC settings remain independent. No new production-signed Android APK
 is included in this Windows release.
 
-Download **Lights Out Setup 11.2.0.exe** for installation, or extract
+Download **Lights-Out-Setup-v11.2.0.exe** for installation, or extract
 **Lights-Out-Portable-v11.2.0-win-x64.zip** and run **Lights Out.exe**.
 **SHA256SUMS.txt** verifies the downloads. **BUILD-MANIFEST.json** records the
 source commit, locked runtime and file hashes; **WINDOWS-VERIFICATION.json**

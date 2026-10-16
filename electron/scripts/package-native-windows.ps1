@@ -138,7 +138,7 @@ if (-not $SkipZip) {
 if (-not $SkipInstaller) {
     if (-not $env:LIGHTS_OUT_NSIS_ROOT) { & (Join-Path $PSScriptRoot 'provision-nsis.ps1') }
     $compiler = Join-Path $env:LIGHTS_OUT_NSIS_ROOT 'Bin\makensis.exe'
-    $setup = Join-Path $OutputRoot "Lights Out Setup $Version.exe"
+    $setup = Join-Path $OutputRoot "Lights-Out-Setup-v$Version.exe"
     & $compiler '/V2' "/DVERSION=$Version" "/DAPP_DIR=$UnpackedDir" "/DAPP_ICON=$(Join-Path $SourceRoot 'assets\icon.ico')" "/DOUTPUT_FILE=$setup" (Join-Path $PSScriptRoot 'windows-installer.nsi')
     if ($LASTEXITCODE -ne 0) { throw "NSIS installer build failed: $LASTEXITCODE" }
     Write-Host "Windows installer: $setup" -ForegroundColor Cyan

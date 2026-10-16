@@ -10,7 +10,7 @@ const { verify } = require('../scripts/release-artifacts');
 function fixture(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-artifact-test-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
-  const artifacts = ['Lights Out Setup 11.2.0.exe', 'Lights-Out-Portable-v11.2.0-win-x64.zip'].map(name => {
+  const artifacts = ['Lights-Out-Setup-v11.2.0.exe', 'Lights-Out-Portable-v11.2.0-win-x64.zip'].map(name => {
     const content = Buffer.from('qualified fixture ' + name);
     fs.writeFileSync(path.join(directory, name), content);
     return { name, bytes: content.length, sha256: crypto.createHash('sha256').update(content).digest('hex') };

@@ -25,7 +25,7 @@ function fileInventory(directory) {
 
 function create(output) {
   const pkg = JSON.parse(fs.readFileSync(path.join(app, 'package.json'), 'utf8'));
-  const files = ['Lights Out Setup ' + pkg.version + '.exe', 'Lights-Out-Portable-v' + pkg.version + '-win-x64.zip']
+  const files = ['Lights-Out-Setup-v' + pkg.version + '.exe', 'Lights-Out-Portable-v' + pkg.version + '-win-x64.zip']
     .filter(name => fs.existsSync(path.join(output, name)));
   if (!files.length) throw new Error('No distribution artifacts found');
   const artifacts = files.map(name => ({ name, bytes: fs.statSync(path.join(output, name)).size, sha256: sha256(path.join(output, name)) }));

@@ -29,7 +29,7 @@ $oldQa = $env:LIGHTS_OUT_INSTALLER_QA
 $oldExe = $env:LIGHTS_OUT_PACKAGED_EXE
 $env:LIGHTS_OUT_INSTALLER_QA = '1'
 try {
-    $setup = Join-Path $OutputRoot "Lights Out Setup $($manifest.version).exe"
+    $setup = Join-Path $OutputRoot "Lights-Out-Setup-v$($manifest.version).exe"
     $installed = Start-Process -FilePath $setup -ArgumentList @('/S',"/D=$installRoot") -WindowStyle Hidden -Wait -PassThru
     if ($installed.ExitCode -ne 0) { throw "Installer failed: $($installed.ExitCode)" }
     foreach ($file in $manifest.runtime) {
