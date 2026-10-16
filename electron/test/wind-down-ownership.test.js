@@ -19,7 +19,7 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 
-const mainSource = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+const mainSource = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8').replace(/\r\n/g, '\n');
 
 function extractFunction(source, name) {
   const headerMatch = source.match(new RegExp(`(?:async\\s+)?function ${name}\\s*\\(`));

@@ -18,7 +18,7 @@ const test = require('node:test');
 const vm = require('node:vm');
 
 const rendererPath = path.join(__dirname, '..', 'renderer.js');
-const rendererSource = fs.readFileSync(rendererPath, 'utf8');
+const rendererSource = fs.readFileSync(rendererPath, 'utf8').replace(/\r\n/g, '\n');
 
 function extractFunction(source, name) {
   const headerMatch = source.match(new RegExp(`(?:async\\s+)?function ${name}\\s*\\(`));
