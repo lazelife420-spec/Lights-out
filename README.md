@@ -7,7 +7,7 @@ Set a time. Press START. Lights Out PC walks you through a calm wind-down, then 
 cinematic Last Light final countdown before your PC shuts off. Emergency cancel
 is always available. No surprise force-quits. No cloud account. No drama.
 
-[![Download v11.1.3](https://img.shields.io/badge/Download-v11.1.3-blue?style=for-the-badge)](https://theprooffoundry.com/lights-out/v11.1.3/)
+[![Release v11.2.0](https://img.shields.io/badge/Release-v11.2.0-blue?style=for-the-badge)](https://github.com/lazelife420-spec/Lights-out/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?style=for-the-badge)](https://theprooffoundry.com/lights-out/)
 
@@ -15,10 +15,10 @@ is always available. No surprise force-quits. No cloud account. No drama.
 
 ## Download
 
-**[→ Lights Out v11.1.3 — installer, portable EXE, SHA256 checksums](https://theprooffoundry.com/lights-out/v11.1.3/)**
+**[→ Lights Out releases — installer, portable ZIP, SHA256 checksums](https://github.com/lazelife420-spec/Lights-out/releases/latest)**
 
-- `Lights.Out.Setup.11.1.3.exe` — NSIS installer, standard Windows install
-- `LightsOut.exe` — portable, runs from any folder, no install needed
+- `Lights Out Setup 11.2.0.exe` — NSIS installer, standard Windows install
+- `Lights-Out-Portable-v11.2.0-win-x64.zip` — extract, then run `Lights Out.exe`; no install needed
 - `SHA256SUMS.txt` — checksums for both artifacts
 
 <img src="docs/assets/lights-out-keyart-hero-ui.png" width="720" alt="Lights Out PC key art showing the glowing lamp, word-mark, tagline, and cockpit dashboard UI">
@@ -56,14 +56,15 @@ off. PC power actions and PC-connected lighting routines require a running PC.
 
 ### Proof-backed releases
 
-Every release ships an installer, a portable build, and SHA256 checksums from a
-verified build. GitHub Actions normally publishes them; v11.1.3 uses the exact
-locally gated artifacts because Actions was disabled at the account level. No
-hand-edited binaries. No mystery downloads.
+Release artifacts include an installer, portable ZIP, SHA256SUMS.txt and a
+BUILD-MANIFEST.json with the source commit and runtime hashes. The v11.2.0
+pipeline requires desktop tests, isolated Android debug qualification, Windows
+runtime checks and installer/portable verification before publication. Source on
+main alone does not establish that a release is published.
 
 - Latest release: https://github.com/lazelife420-spec/Lights-out/releases/latest
-- v11.1.3 release: https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.1.3
-- Smoke suite: 261 passing
+- v11.2.0 release target: https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.2.0
+- Smoke suite: 299 checks
 
 ## Surface
 
@@ -154,7 +155,7 @@ npm start
 
 ```powershell
 cd electron
-npm run build   # portable LightsOut.exe + installer in ../dist
+npm run build   # installer, portable ZIP and checksums in ../dist-native
 ```
 
 ## Develop & verify

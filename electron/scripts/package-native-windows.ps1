@@ -1,24 +1,30 @@
 #!/usr/bin/env pwsh
-# Dependency-minimal native Windows packaging evaluation script.
-# Produces dist-native/win-unpacked (Electron runtime + resources/app) and a portable ZIP.
-# Dry-run only: does not execute real power actions.
+# Builds the native Windows runtime, deterministic portable ZIP, NSIS installer,
+# checksums and source/artifact provenance. Never runs the application.
 param(
     [string]$SourceRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path,
     [string]$OutputRoot = (Join-Path (Join-Path $SourceRoot '..') 'dist-native'),
     [string]$PackageName = 'Lights Out',
     [string]$Version = (Get-Content (Join-Path $SourceRoot 'package.json') | ConvertFrom-Json).version,
     [switch]$DryRun,
-    [switch]$SkipZip
+    [switch]$SkipZip,
+    [switch]$SkipInstaller
 )
 
 $ErrorActionPreference = 'Stop'
-$resolvedOutputRoot = Resolve-Path $OutputRoot -ErrorAction SilentlyContinue
-$OutputRoot = if ($resolvedOutputRoot) { $resolvedOutputRoot.Path } else { $OutputRoot }
+$SourceRoot = [IO.Path]::GetFullPath($SourceRoot)
+$repositoryRoot = Split-Path -Parent $SourceRoot
+$OutputRoot = [IO.Path]::GetFullPath($OutputRoot)
+if (-not $OutputRoot.StartsWith($repositoryRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
+    -not (Split-Path -Leaf $OutputRoot).StartsWith('dist-native', [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'Packaging output must be a dist-native* directory inside the source repository.'
+}
 $UnpackedDir = Join-Path $OutputRoot 'win-unpacked'
 $AppDir = Join-Path (Join-Path $UnpackedDir 'resources') 'app'
 
 function Remove-IfExists($Path) {
-    if (Test-Path $Path) { Remove-Item -Recurse -Force $Path }
+    if ([IO.Path]::GetFullPath($Path) -ne $OutputRoot) { throw 'Refusing to clean an unverified build path.' }
+    if (Test-Path -LiteralPath $Path) { Remove-Item -LiteralPath $Path -Recurse -Force }
 }
 
 function Normalize-ZipTimestamps {
@@ -31,44 +37,26 @@ function Normalize-ZipTimestamps {
     throw "Timestamp normalization root is missing: $Root"
   }
 
-  # ZIP/DOS timestamps support local dates from 1980-01-01 through
-  # 2107-12-31. Electron's clean distribution uses 1980-01-01 UTC,
-  # which appears as 1979-12-31 in negative UTC offsets.
-  $zipMinimum = [datetime]::SpecifyKind(
-    [datetime]"1980-01-01T00:00:00",
-    [System.DateTimeKind]::Local
-  )
+  $epoch = [datetime]::SpecifyKind([datetime]'2000-01-01T12:00:00', [DateTimeKind]::Utc)
+  foreach ($item in Get-ChildItem -LiteralPath $Root -Recurse -Force) { $item.LastWriteTimeUtc = $epoch }
+  Write-Host 'Normalized staged timestamps for reproducible archives.'
+}
 
-  $zipMaximum = [datetime]::SpecifyKind(
-    [datetime]"2107-12-31T23:59:58",
-    [System.DateTimeKind]::Local
-  )
-
-  $invalidItems = @(
-    Get-ChildItem -LiteralPath $Root -Recurse -Force |
-      Where-Object {
-        $_.LastWriteTime -lt $zipMinimum -or
-        $_.LastWriteTime -gt $zipMaximum
-      }
-  )
-
-  foreach ($item in $invalidItems) {
-    $item.LastWriteTime = $zipMinimum
-  }
-
-  $remainingInvalidItems = @(
-    Get-ChildItem -LiteralPath $Root -Recurse -Force |
-      Where-Object {
-        $_.LastWriteTime -lt $zipMinimum -or
-        $_.LastWriteTime -gt $zipMaximum
-      }
-  )
-
-  if ($remainingInvalidItems.Count -ne 0) {
-    throw "Staged output still contains $($remainingInvalidItems.Count) ZIP-incompatible timestamp(s)"
-  }
-
-  Write-Host "Normalized $($invalidItems.Count) staged timestamp(s) for ZIP compatibility."
+function Write-PortableZip($Root, $Destination) {
+  Add-Type -AssemblyName System.IO.Compression
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  $archive = [IO.Compression.ZipFile]::Open($Destination, [IO.Compression.ZipArchiveMode]::Create)
+  try {
+    $names = @(Get-ChildItem -LiteralPath $Root -Recurse -File -Force | ForEach-Object { $_.FullName.Substring($Root.Length + 1).Replace('\','/') })
+    [Array]::Sort($names, [StringComparer]::Ordinal)
+    foreach ($name in $names) {
+      $entry = $archive.CreateEntry($name, [IO.Compression.CompressionLevel]::Optimal)
+      $entry.LastWriteTime = [DateTimeOffset]'2000-01-01T12:00:00+00:00'
+      $inputStream = [IO.File]::OpenRead((Join-Path $Root $name))
+      $outputStream = $entry.Open()
+      try { $inputStream.CopyTo($outputStream) } finally { $inputStream.Dispose(); $outputStream.Dispose() }
+    }
+  } finally { $archive.Dispose() }
 }
 
 # 1. Clean staging
@@ -77,42 +65,26 @@ New-Item -ItemType Directory -Path $AppDir -Force | Out-Null
 
 # 2. Read package metadata
 $package = Get-Content (Join-Path $SourceRoot 'package.json') | ConvertFrom-Json
-$files = $package.build.files
+if ($Version -ne $package.version) { throw 'Build version must match package.json.' }
+$fileList = & node (Join-Path $PSScriptRoot 'app-source-files.js') $SourceRoot
+if ($LASTEXITCODE -ne 0) { throw 'Application source inventory failed.' }
+$files = $fileList | ConvertFrom-Json
 
 # 3. Copy listed application files
-foreach ($pattern in $files) {
-    if ($pattern -like '!*') { continue }
-    if ($pattern -match '^(.*)/\*\*$') {
-        # Directory glob: preserve the directory structure with robocopy
-        $dir = $Matches[1]
-        $srcDir = Join-Path $SourceRoot $dir
-        $dstDir = Join-Path $AppDir $dir
-        if (Test-Path $srcDir -PathType Container) {
-            New-Item -ItemType Directory -Path $dstDir -Force | Out-Null
-            $robocopy = Start-Process -FilePath 'robocopy.exe' -ArgumentList "`"$srcDir`" `"$dstDir`" /MIR /E /NDL /NFL /NP" -Wait -PassThru -NoNewWindow
-            if ($robocopy.ExitCode -ge 8) { throw "robocopy failed with exit code $($robocopy.ExitCode)" }
-        } else {
-            Write-Warning "Skipping unmatched build.files directory pattern: $pattern"
-        }
-    } else {
-        $src = Join-Path $SourceRoot $pattern
-        if (Test-Path $src -PathType Container) {
-            $dst = Join-Path $AppDir (Split-Path $pattern -Leaf)
-            Copy-Item -Path $src -Destination $dst -Recurse -Force
-        } elseif (Test-Path $src -PathType Leaf) {
-            Copy-Item -Path $src -Destination $AppDir -Force
-        } else {
-            Write-Warning "Skipping unmatched build.files pattern: $pattern"
-        }
-    }
+foreach ($relative in $files) {
+    $src = Join-Path $SourceRoot $relative
+    $dst = Join-Path $AppDir $relative
+    New-Item -ItemType Directory -Path (Split-Path -Parent $dst) -Force | Out-Null
+    Copy-Item -LiteralPath $src -Destination $dst -Force
 }
-
 # 4. Copy package manifests and install production dependencies
 Copy-Item (Join-Path $SourceRoot 'package.json') (Join-Path $AppDir 'package.json') -Force
 Copy-Item (Join-Path $SourceRoot 'package-lock.json') (Join-Path $AppDir 'package-lock.json') -Force
 Push-Location $AppDir
 & npm ci --omit=dev --no-audit --no-fund
+$dependencyExit = $LASTEXITCODE
 Pop-Location
+if ($dependencyExit -ne 0) { throw "Production dependency installation failed: $dependencyExit" }
 Remove-Item (Join-Path $AppDir 'package-lock.json') -ErrorAction SilentlyContinue
 
 # 4b. Remove non-runtime package artifacts from production node_modules
@@ -120,7 +92,10 @@ $nodeModulesDir = Join-Path $AppDir 'node_modules'
 if (Test-Path $nodeModulesDir) {
     $cleanupPatterns = @('test', 'tests', '__tests__', 'docs', 'doc', 'examples', 'example', 'demo', '.github', '*.map')
     foreach ($pattern in $cleanupPatterns) {
-        Get-ChildItem -Path $nodeModulesDir -Recurse -Filter $pattern -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        foreach ($candidate in @(Get-ChildItem -LiteralPath $nodeModulesDir -Recurse -Filter $pattern -Force -ErrorAction SilentlyContinue | Sort-Object { $_.FullName.Length } -Descending)) {
+            if (-not $candidate.FullName.StartsWith($nodeModulesDir + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Dependency cleanup escaped staged node_modules.' }
+            if (Test-Path -LiteralPath $candidate.FullName) { Remove-Item -LiteralPath $candidate.FullName -Recurse -Force -ErrorAction SilentlyContinue }
+        }
     }
 }
 
@@ -152,13 +127,23 @@ if (Test-Path $verifyScript) {
     & $verifyScript -ExePath $newExe
 }
 
-# 9. Produce portable ZIP
+# 9. Produce deterministic distribution artifacts.
+Normalize-ZipTimestamps -Root $UnpackedDir
 if (-not $SkipZip) {
-    Normalize-ZipTimestamps -Root $UnpackedDir
     $zipName = "Lights-Out-Portable-v$Version-win-x64.zip"
     $zipPath = Join-Path $OutputRoot $zipName
-    Compress-Archive -Path "$UnpackedDir\*" -DestinationPath $zipPath -Force
+    Write-PortableZip $UnpackedDir $zipPath
     Write-Host "Portable ZIP: $zipPath" -ForegroundColor Cyan
 }
+if (-not $SkipInstaller) {
+    if (-not $env:LIGHTS_OUT_NSIS_ROOT) { & (Join-Path $PSScriptRoot 'provision-nsis.ps1') }
+    $compiler = Join-Path $env:LIGHTS_OUT_NSIS_ROOT 'Bin\makensis.exe'
+    $setup = Join-Path $OutputRoot "Lights Out Setup $Version.exe"
+    & $compiler '/V2' "/DVERSION=$Version" "/DAPP_DIR=$UnpackedDir" "/DAPP_ICON=$(Join-Path $SourceRoot 'assets\icon.ico')" "/DOUTPUT_FILE=$setup" (Join-Path $PSScriptRoot 'windows-installer.nsi')
+    if ($LASTEXITCODE -ne 0) { throw "NSIS installer build failed: $LASTEXITCODE" }
+    Write-Host "Windows installer: $setup" -ForegroundColor Cyan
+}
+& node (Join-Path $PSScriptRoot 'release-artifacts.js') create $OutputRoot
+if ($LASTEXITCODE -ne 0) { throw 'Release artifact manifest/checksum generation failed.' }
 
 Write-Host "Native packaging complete: $UnpackedDir" -ForegroundColor Green

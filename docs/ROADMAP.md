@@ -4,16 +4,18 @@
 
 ## Current Truth
 
-Lights Out PC™ ("Bedtime Mode for Windows") is live at **v11.1.0** — the
-latest tagged/published release. Proof-first software forged for builders.
+The current development/release target is **v11.2.0**. The five original product
+pillars are implemented. This release closes the October desktop/settings/WiZ
+work and reconciles the existing Android source; parked features remain outside
+its scope. Published version and downloadable artifacts are authoritative on
+[GitHub Releases](https://github.com/lazelife420-spec/Lights-out/releases/latest).
 
-v11.1.0 ships the Night Modes Library: four ready, main-resolved bedtime
-presets plus two honestly unavailable future modes. "Use Tonight" arms the
-lobby without auto-starting, receipts preserve canonical mode identity, and a
-real isolated Electron proof covers DOM/preload/IPC/main handoff, ritual modes,
-cancellation, and Dry Run completion with zero real power actions. Full detail
-lives in `CHANGELOG.md`.
-
+Source committed, automated tests passed, packaged runtime qualified, release
+published and physical-device reliability proven are separate claims. The release
+pipeline requires Linux and Windows tests, Android debug tests/lint/build,
+packaged Windows runtime checks, installer/portable verification and checksums.
+Android production APK signing is separate. WiZ remains opt-in/experimental;
+emulator and UDP stand-ins do not establish physical phone/router/bulb reliability.
 Current strongest product promise:
 
 ```text
@@ -47,7 +49,7 @@ everything ever done. Keep it that way:
 
 The timer must always feel trustworthy.
 
-**Status:** verified airtight 2026-07-09 with live runtime proof (forced
+**Historical runtime proof:** verified 2026-07-09 (forced
 dry-run throughout — never a real power action): start/pause/resume/
 snooze/cancel, natural dry-run completion, and crash-recovery-on-relaunch
 (kill the process mid-timer, relaunch, confirm the recovery banner reads
@@ -68,7 +70,7 @@ build, smoke tests.
 
 Lights Out should feel like a nightly cockpit, not a generic timer.
 
-**Status:** fully satisfied. No open items.
+**Feature scope:** implemented. Current release qualification remains required.
 
 Proof gates: create profile, load profile, auto-start profile if enabled,
 export/import profiles, no layout break at normal window size.
@@ -78,7 +80,7 @@ export/import profiles, no layout break at normal window size.
 The streak UI should make the habit visible without pretending to be
 medical sleep tracking.
 
-**Status:** fully satisfied. No open items.
+**Feature scope:** implemented. Current release qualification remains required.
 
 Avoid (timeless guardrail, not a task list):
 
@@ -93,7 +95,7 @@ nights, display average bedtime, verify all tabs switch.
 
 Lights Out should prove what happened.
 
-**Status:** fully satisfied. No open items.
+**Feature scope:** implemented. Current release qualification remains required.
 
 Proof gates: start timer, complete/cancel session, receipt exists, receipt
 can be viewed, proof can be copied, receipt does not overclaim.
@@ -102,7 +104,7 @@ can be viewed, proof can be copied, receipt does not overclaim.
 
 Remote control should be useful only when safe.
 
-**Status:** fully satisfied. No open items.
+**Feature scope:** implemented. Current release qualification remains required.
 
 **Trusted LAN mode, decided and shipped 2026-07-09:** "trusted" means an
 explicit, informed choice at the moment of exposure, not a new

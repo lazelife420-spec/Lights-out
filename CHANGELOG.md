@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## v11.2.0 — 2026-10-16 (release candidate)
+
+### Release qualification
+- Fixed Linux proof-process ownership inspection so cleanup tests stop their own child processes; test fixture cleanup also runs after assertions fail.
+- CI uses the supported Node 22 runtime, bounded test execution, explicit Electron provisioning, and isolated Android debug tests/lint/build.
+- Windows packaging produces a verified NSIS installer and deterministic portable ZIP, with source/runtime provenance and SHA256 checksums. Installer QA preserves production registration and user data.
+- Android source is reconciled with the standalone timer, direct WiZ controls and native calendar/routine work. Android qualification is debug/emulator only; this Windows release does not include a new production-signed APK.
+- Physical bulb/phone/router reliability is not established by UDP fixtures or emulator results. WiZ automation remains opt-in and experimental.
+- Quiet House, School Night, family-member management, focus scoring and screen-time enforcement remain deferred.
+
 ### Changed
 - Polished the desktop Settings layout with a compact search header, consistent
   icon navigation, readable forms, grouped WiZ controls and a persistent save

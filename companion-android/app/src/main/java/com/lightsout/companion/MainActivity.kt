@@ -119,6 +119,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        supportActionBar?.title = "PC controls"
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
         webView = findViewById(R.id.webview)
         connecting = findViewById(R.id.connecting)
@@ -171,7 +173,7 @@ class MainActivity : AppCompatActivity() {
         }
         // Allow inspecting the page from desktop Chrome via chrome://inspect over
         // (wireless) adb. Safe here: this is a single-purpose LAN control app.
-        WebView.setWebContentsDebuggingEnabled(true)
+        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 mainFrameLoadFailed = false
@@ -511,6 +513,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        if (item.itemId == android.R.id.home) { finish(); return true }
         return if (item.itemId == R.id.action_change_pc) {
             showSetup(prefs.getString(KEY_URL, null))
             true

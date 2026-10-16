@@ -1,10 +1,82 @@
-# Lights Out — Android Companion (WebView wrapper)
+# Lights Out — standalone Android app and PC companion
 
-A thin native Android app that loads the Lights Out desktop **companion page** in a
-WebView, so you get a real installed app icon on your phone instead of a browser
-shortcut.
+Open the app to a **phone timer that works offline**, with no PC, account or pairing
+required. Start, pause, resume, add five minutes or cancel. Countdown ring is the
+default; an optional analog clock appears while idle. Timers remain saved when you
+leave the screen, close the app normally or reopen it. They finish with an Android
+notification, rather than a phone power action. The Lighting, Routines and Calendar
+tabs are also native phone features: their saved settings and alarms do not need
+the PC or the PC companion server.
 
-## Why a wrapper (and not a PWA / Play-Store TWA)
+**Pair a PC / Open PC controls** opens a separate screen for controlling a running
+Lights Out desktop app. The phone and PC timers are independent: operating one
+does not change the other. PC routines run on the PC; phone routines run on the
+phone. Set up the phone's lights and schedules separately. This is phone-to-PC
+control, as requested; the PC does not control the phone timer.
+
+## Direct WiZ lighting and phone calendar
+
+1. Open **Lighting**, join the bulbs' Wi-Fi and enable **Local communication** in
+   the WiZ app. Find lights or enter their local IPv4 addresses. Save up to eight
+   lights. **Check** reads status without changing a bulb; On, Off and warm
+   brightness controls require a WiZ acknowledgement before reporting success.
+2. Open **Routines**. Save a name and timer duration, optionally select lights,
+   warm starting brightness (10–100%, 2700K), and lights off at completion.
+   A routine can also be a phone reminder with no lighting action.
+3. Open **Calendar**, choose a saved routine and a local start time. Rules support
+   ISO weekdays, selected months with days 1–31 or **last**, and individual dates.
+   The month planner covers all months and can create a date rule by tapping a day.
+4. Grant **Allow precise alerts** (Android Alarms & reminders). Saved calendar
+   rules remain paused without this access. Android displays scheduled routines
+   as alarms. Notifications are separate permission for visible finish alerts.
+
+Calendar rules use the phone's local time zone, with a fresh alarm after each
+occurrence and on reboot, time/time-zone changes, app updates and permission
+grant. Reboot restoration requires Android to unlock the app's ordinary storage.
+A spring DST gap moves forward; the first fall overlap runs once. Month days that
+do not exist are skipped. A persistent occurrence ledger prevents duplicate
+starts. A routine delivered more than two minutes late is skipped; a running or
+paused phone timer takes priority over another scheduled routine.
+
+An active run captures its selected targets and finish action: editing/deleting
+the saved routine affects future starts. Pause holds the timer, resume and +5 min
+move its finish, and cancel leaves lights as they are and cancels the finish
+action. Warm starting light is a single command, not a gradual fade.
+
+WiZ commands go directly over UDP 38899 from Android, with bounded response
+waits, address/port/method checks, per-target serialization and explicit negative
+acknowledgement handling. WiZ local control has no application authentication;
+use it only on a trusted local network. No cloud or PC relay is used. The phone
+must stay powered on and connected to the bulbs' network for lighting actions.
+Network failure does not stop the reminder timer; failed lighting commands are
+reported and are not automatically replayed later. Android Force stop suspends
+all alarms until Lights Out is reopened. OEM battery restrictions can also affect
+delivery and still need physical-device testing.
+
+Emulator QA uses a debug package and a local UDP stand-in. It does not establish
+broadcast discovery or background Wi-Fi reliability on a physical phone/router.
+
+## Phone timer and Android alerts
+
+- A native foreground service provides the active timer notification and pause,
+  resume and cancel controls. AlarmManager delivers the finish alert with the
+  screen asleep; the timer does not depend on a WebView or network connection.
+- Allow notifications to receive the finish alert. On Android 12+, use **Allow
+  precise alerts** to grant Alarms & reminders access. Without it, Android may
+  delay background delivery; the app displays that limitation and uses an
+  inexact alarm. The visible countdown still measures elapsed time.
+- The saved deadline survives a process restart and is rescheduled after reboot.
+  Changing the wall clock does not change a running countdown within the same
+  boot. After reboot, restoration uses the saved wall-clock deadline.
+- Android **Force stop**, app-data clearing and uninstall are distinct from
+  closing the screen: force stop disables alerts until the app is opened again;
+  clearing data/uninstall removes the saved timer and pairing.
+- The native message bridge exists only on the bundled HTTPS asset origin. The
+  remote PC WebView has no access to that bridge. App backup is disabled so PC
+  pairing credentials are not copied into device backups. WebView debugging is
+  enabled only for debug builds.
+
+## PC connection
 
 The desktop app serves the companion over **plain HTTP on your LAN**
 (`http://PC-IP:58732/?t=TOKEN`). Browsers refuse to install that as a standalone
@@ -14,15 +86,16 @@ native WebView is not subject to that rule: it just loads the URL. The companion
 page persists its pairing token in `localStorage`, which the WebView keeps
 (DOM storage is enabled), so after the first connect you don't need the token again.
 
-This app does **not** transmit anything off your LAN and stores only the companion
-URL locally.
+The app has no cloud relay or account. It stores its phone timer, WiZ targets,
+routines, calendar rules, occurrence ledger and companion URL/token locally.
 
 ## Prerequisites
 
 - **Android Studio** (Koala/2024.1+) — or a standalone JDK 17 + Android SDK with
   `cmdline-tools`.
-- The desktop app running with **Remote Control enabled** (Settings → Remote
-  Control). That's what starts the companion server and mints the pairing token.
+- For PC control only: the desktop app running with the phone companion in **Same Wi-Fi** mode
+  (Settings › Phone Companion › Same Wi-Fi). That's what starts the companion
+  server and mints the pairing token.
 
 ## Build
 
@@ -32,13 +105,13 @@ URL locally.
 2. **Run** (▶) onto your device, or **Build → Build APK(s)**.
 
 ### Option B — command line
-This scaffold ships without the Gradle wrapper JAR (a binary). Generate it once,
-then build:
+The Gradle 8.7 wrapper is included, with a pinned distribution checksum. Build a
+debug APK with:
 
 ```bash
 cd companion-android
-gradle wrapper            # needs a local Gradle install; creates ./gradlew + jar
-./gradlew assembleDebug   # on Windows: gradlew.bat assembleDebug
+./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+# On Windows, use gradlew.bat.
 ```
 
 Point Gradle at your SDK if it isn't auto-detected — create `local.properties`:
@@ -52,6 +125,14 @@ The debug APK lands at:
 ```
 app/build/outputs/apk/debug/app-debug.apk
 ```
+
+Agents use `electron/scripts/android-debug-qa.ps1` from the repository root. It
+copies only source and wrapper files into a new temporary project, supplies
+explicit QA properties, isolates Gradle/Android user homes, and clears signing
+variables. Never build QA in the owner's checkout or load signing properties.
+The v11.2.0 Windows release reconciles this Android source and qualifies its
+debug build; it does not publish a new production-signed Android APK. Physical
+phone/router and broadcast-discovery reliability remain unqualified.
 
 ## Install over wireless ADB
 
@@ -71,11 +152,13 @@ ADB, just hit Run and skip the manual install.)
 ## First run
 
 1. Open **Lights Out** on the phone.
-2. In the desktop app, enable **Remote Control** (it shows a pairing QR).
+2. Use **Start phone timer** independently, or tap **Pair a PC**. For PC control,
+   enable **Same Wi-Fi** in the desktop Phone Companion settings (it shows a QR).
 3. Tap **Scan QR code** and point the camera at it — the app pairs and connects
    automatically. (Or paste/type the `http://PC-IP:58732/?t=TOKEN` link and tap
    **Connect**.)
 4. To repoint at a different PC later: **⋮ menu → Change PC / URL**.
+5. Use the **PC controls** screen's back arrow to return to your phone timer.
 
 QR scanning uses CameraX + on-device ML Kit barcode scanning (no network, no
 Play Services dependency). Camera permission is requested on first scan.
@@ -86,7 +169,7 @@ Play Services dependency). Camera permission is requested on first scan.
 
 ## Debugging
 
-WebView contents debugging is enabled, so with the phone on wireless ADB you can
+WebView contents debugging is enabled in debug builds, so with the phone on wireless ADB you can
 open desktop Chrome → `chrome://inspect` → **inspect** the WebView to see the
 companion page's console, network, and WebSocket frames.
 
@@ -110,12 +193,10 @@ keyAlias=lightsout-companion
 keyPassword=<same as storePassword — PKCS12 keystores require it>
 ```
 
-Without this file, `assembleRelease` falls back to debug signing (harmless
-for local testing, but **installing a debug-signed build over a
-release-signed install — or vice versa — fails with
-`INSTALL_FAILED_UPDATE_INCOMPATIBLE`** and requires uninstalling first, which
-wipes the app's local storage (the saved companion URL/token). Always use the
-real release keystore for anything you intend to keep updating in place.
+Release builds **fail closed** without authorized signing configuration. Debug
+builds use the separate `com.lightsout.companion.debug` package, so emulator QA
+does not replace the production app or erase its pairing. Never uninstall the
+production app to work around a debug signing mismatch.
 
 > **Back up `lightsout-companion-release.jks` and its password.** There is no
 > recovery path if it's lost — a new keystore cannot resign updates for an
@@ -124,8 +205,8 @@ real release keystore for anything you intend to keep updating in place.
 
 ## Notes / limits
 
-- Phone and PC must be on the **same Wi-Fi** (no cloud relay; won't work on
-  cellular).
+- PC control requires phone and PC on the **same Wi-Fi** (no cloud relay).
+  The standalone phone timer works without Wi-Fi or cellular data.
 - Cleartext HTTP is allowed via `res/xml/network_security_config.xml` because the
   companion is LAN-only. If you later put the companion behind HTTPS, tighten that.
 - `applicationId` is `com.lightsout.companion`; bump `versionCode`/`versionName` in

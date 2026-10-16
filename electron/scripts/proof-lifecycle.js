@@ -224,6 +224,15 @@ async function inspectProcess(pid) {
   if (process.platform !== 'win32') {
     try {
       process.kill(pid, 0);
+      if (process.platform === 'linux') {
+        // PID existence alone cannot establish the ownership token. Linux CI
+        // needs the same executable/token checks as the Windows proof runner.
+        return {
+          pid,
+          executablePath: fs.readlinkSync(`/proc/${Number(pid)}/exe`),
+          commandLine: fs.readFileSync(`/proc/${Number(pid)}/cmdline`, 'utf8').replace(/\0/g, ' ')
+        };
+      }
       return { pid };
     } catch {
       return null;

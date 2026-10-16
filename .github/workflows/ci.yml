@@ -8,6 +8,13 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: lights-out-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+
 defaults:
   run:
     working-directory: electron
@@ -16,102 +23,147 @@ jobs:
   verify:
     name: Lint & Smoke
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Setup Node
-        uses: actions/setup-node@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: '20'
-
+          node-version: '22.23.1'
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
-
+      - name: Check supported Node
+        run: npm run check-node
       - name: Lint
         run: npm run lint
-
       - name: Syntax check
-        # Check every shipped JS file so the gate can't drift out of sync with
-        # the module list (scripts/ are dev tooling, excluded).
         run: |
-          for f in *.js; do
-            echo "node --check $f"
-            node --check "$f"
-          done
-
+          for f in *.js scripts/*.js; do node --check "$f"; done
       - name: Unit tests
         run: npm test
-
       - name: Smoke tests
         run: npm run smoke
 
+  android:
+    name: Android debug qualification
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: companion-android
+    env:
+      ANDROID_USER_HOME: ${{ runner.temp }}/lightsout-android
+      GRADLE_USER_HOME: ${{ runner.temp }}/lightsout-gradle
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Verify credential-free debug workspace
+        run: |
+          test ! -f keystore.properties
+          chmod +x gradlew
+      - name: Unit tests, lint and isolated debug APK
+        run: ./gradlew --no-daemon --console=plain :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+      - name: Save Android qualification evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: lights-out-android-debug-qa
+          path: |
+            companion-android/app/build/reports/tests/testDebugUnitTest/
+            companion-android/app/build/reports/lint-results-debug.*
+            companion-android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
   build:
     name: Package (Windows)
-    needs: verify
+    needs: [verify, android]
     runs-on: windows-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Setup Node
-        uses: actions/setup-node@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: '20'
-
+          node-version: '22.23.1'
+      - name: Match build npm version
+        run: npm install --global npm@11.12.1
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
-
-      - name: Regenerate icons
-        run: npm run icons
-
+      - name: Provision and verify locked Electron
+        run: |
+          npm run electron:provision
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run electron:verify
+      - name: Read release version
+        id: version
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid release version' }
+          "version=$version" >> $env:GITHUB_OUTPUT
+      - name: Provision pinned NSIS
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/provision-nsis.ps1
+      - name: Unit tests on Windows
+        run: npm test
       - name: Window geometry runtime test
         run: npm run test:geometry
-
-      - name: Night Modes Electron runtime proof
-        run: npm run test:night-modes-runtime
-
-      - name: Build portable + installer
+      - name: Build installer and portable ZIP
         run: npm run build
-
-      - name: Packaged runtime smoke
-        run: npm run smoke:packaged
-
-      - name: Upload artifacts
+      - name: Unattended packaged and Night Modes qualification
+        run: node scripts/e2e-runner.js --ci
+      - name: Verify installer, portable contents and checksums
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-windows-release.ps1
+      - name: Verify clean release provenance
+        run: node scripts/release-artifacts.js verify ../dist-native --release
+      - name: Upload verified artifacts
         uses: actions/upload-artifact@v7
         with:
           name: lights-out-windows
           path: |
-            dist/LightsOut.exe
-            dist/Lights Out Setup *.exe
+            dist-native/Lights-Out-Portable-*.zip
+            dist-native/Lights Out Setup *.exe
+            dist-native/SHA256SUMS.txt
+            dist-native/BUILD-MANIFEST.json
+            dist-native/WINDOWS-VERIFICATION.json
           if-no-files-found: error
 
   release:
-    name: Publish Release
+    name: Publish verified release
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[release]'))
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v8
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.23.1'
+      - uses: actions/download-artifact@v8
         with:
           name: lights-out-windows
-          path: dist
-
-      - name: Generate SHA256 checksums
-        working-directory: ${{ github.workspace }}/dist
-        run: |
-          sha256sum LightsOut.exe "Lights Out Setup "*.exe > SHA256SUMS.txt
-          cat SHA256SUMS.txt
-
-      - name: Create GitHub Release
+          path: dist-native
+      - name: Independently verify downloaded asset hashes and source pin
+        run: node scripts/release-artifacts.js verify ../dist-native --release-assets
+      - name: Verify published checksum file
+        working-directory: dist-native
+        run: sha256sum --check SHA256SUMS.txt
+      - name: Publish qualified Windows artifacts
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: v${{ needs.build.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: Lights Out v${{ needs.build.outputs.version }}
           make_latest: true
+          overwrite_files: false
+          body_path: docs/RELEASE_NOTES_11.2.0.md
           files: |
-            dist/LightsOut.exe
-            dist/Lights Out Setup *.exe
-            dist/SHA256SUMS.txt
-          generate_release_notes: true
+            dist-native/Lights-Out-Portable-*.zip
+            dist-native/Lights Out Setup *.exe
+            dist-native/SHA256SUMS.txt
+            dist-native/BUILD-MANIFEST.json
+            dist-native/WINDOWS-VERIFICATION.json
+

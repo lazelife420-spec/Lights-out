@@ -20,6 +20,7 @@ const {
   isPortFree,
   sanitizeText,
   selectOwnedProcessTree,
+  terminateOwnedProcess,
   verifyOwnedCleanup
 } = require('../scripts/proof-lifecycle');
 
@@ -190,7 +191,7 @@ async function acquireListener(resources) {
   return resources.blockerPort;
 }
 
-async function acquireChild(resources) {
+async function acquireChild(resources, t) {
   const ownershipToken = `lightsout-proof-owner-${randomUUID()}`;
   const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', ownershipToken], {
     windowsHide: true,
@@ -200,6 +201,9 @@ async function acquireChild(resources) {
     child.once('spawn', resolve);
     child.once('error', reject);
   });
+  // An assertion or ownership refusal must not strand the test fixture.
+  // The retained ChildProcess handle refers only to the child this test made.
+  t?.after(() => { if (child.exitCode === null) child.kill(); });
   resources.originalAppPid = child.pid;
   resources.appProcess = {
     child,
@@ -246,17 +250,17 @@ test('listener-created failure releases a real loopback port for immediate reuse
   assert.equal(await isPortFree(port), true);
 });
 
-test('child-process failure terminates the owned process', async () => {
+test('child-process failure terminates the owned process', async t => {
   const resources = emptyResources();
   let pid;
   await assert.rejects(
-    failWithCleanup(resources, async () => { pid = await acquireChild(resources); }),
+    failWithCleanup(resources, async () => { pid = await acquireChild(resources, t); }),
     error => error.message.startsWith('controlled primary proof error')
   );
   assert.throws(() => process.kill(pid, 0));
 });
 
-test('combined partial initialization cleans profile, listener, and child', async () => {
+test('combined partial initialization cleans profile, listener, and child', async t => {
   const resources = emptyResources();
   let profile;
   let port;
@@ -265,12 +269,24 @@ test('combined partial initialization cleans profile, listener, and child', asyn
     failWithCleanup(resources, async () => {
       profile = acquireProfile(resources);
       port = await acquireListener(resources);
-      pid = await acquireChild(resources);
+      pid = await acquireChild(resources, t);
     }),
     error => error.message.startsWith('controlled primary proof error')
   );
   assert.equal(fs.existsSync(profile), false);
   assert.equal(await isPortFree(port), true);
+  assert.throws(() => process.kill(pid, 0));
+});
+
+test('owned child cleanup refuses a wrong token and accepts the original token', async t => {
+  const resources = emptyResources();
+  const pid = await acquireChild(resources, t);
+  await assert.rejects(
+    terminateOwnedProcess({ ...resources.appProcess, ownershipToken: 'wrong-owner-token' }),
+    /ownership token missing/
+  );
+  assert.doesNotThrow(() => process.kill(pid, 0));
+  await terminateOwnedProcess(resources.appProcess);
   assert.throws(() => process.kill(pid, 0));
 });
 

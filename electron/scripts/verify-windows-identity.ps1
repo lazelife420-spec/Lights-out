@@ -8,12 +8,16 @@ param(
     [string]$ExpectedFileDescription = 'Lights Out',
     [string]$ExpectedInternalName = 'Lights Out',
     [string]$ExpectedOriginalFilename = 'Lights Out.exe',
-    [string]$ExpectedFileVersion = '11.1.3.0',
-    [string]$ExpectedProductVersion = '11.1.3'
+    [string]$ExpectedFileVersion,
+    [string]$ExpectedProductVersion
 )
 
 $ErrorActionPreference = 'Stop'
 if (-not (Test-Path $ExePath)) { throw "Executable not found: $ExePath" }
+if (-not $ExpectedProductVersion) {
+    $ExpectedProductVersion = (Get-Content -LiteralPath (Join-Path (Split-Path -Parent $ExePath) 'resources\app\package.json') | ConvertFrom-Json).version
+}
+if (-not $ExpectedFileVersion) { $ExpectedFileVersion = $ExpectedProductVersion + '.0' }
 
 $vi = (Get-ItemProperty $ExePath).VersionInfo
 $failures = @()

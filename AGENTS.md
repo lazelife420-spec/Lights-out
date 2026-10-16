@@ -34,7 +34,8 @@ UDP tests establish real phone/router background reliability. The separate
 `MainActivity` WebView controls a paired PC via `electron\companion.html`, with its own QR
 pairing scanner (CameraX + on-device ML Kit), documented in
 `companion-android\README.md`. It is not part of the desktop build/release
-train and has no CI coverage; treat changes to it as a separate, manual
+train; CI now qualifies its isolated debug tests/lint/build, while physical-device
+QA and production APK signing remain separate. Treat source changes as a separate
 workflow. Its release keystore
 (`~/.android/lightsout-companion-release.jks`, gitignored
 `companion-android\keystore.properties` alongside it) is the one and only
@@ -58,11 +59,13 @@ The important behavior is:
 - force shutdown is never the default launcher behavior; it must be chosen explicitly
 - "Run at login" means "start minimized and idle" — login startup never silently
   implies a force shutdown or an active countdown
-- the current tagged/published release is `v11.1.3` — Post-Audit Remediation:
+- the current release target is `v11.2.0`; verify GitHub Releases before claiming
+  publication. The previous published release is `v11.1.3` — Post-Audit Remediation:
   updated `tar` transitive resolution, idempotent tray lifecycle for proof runs,
   lint/syntax/unit/smoke qualification green, and the v11.1.0 Night Modes
   behavior preserved
-- Electron build packaging succeeds with `npm run build`
+- `npm run build` produces a native Windows installer, portable ZIP, checksums
+  and source/runtime manifest; installer QA uses isolated paths and registration
 - Electron smoke coverage guards startup wording/flags, tray menu wiring, timer
   control IPC, mini mode wiring, keyboard shortcuts, and browser-preview safe defaults
 - unit tests cover the network trust boundaries: remote-command validation, the
