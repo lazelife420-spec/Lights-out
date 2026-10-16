@@ -82,7 +82,7 @@ jobs:
 
   build:
     name: Package (Windows)
-    needs: [verify, android]
+    needs: verify
     runs-on: windows-2025
     timeout-minutes: 30
     outputs:
@@ -135,7 +135,7 @@ jobs:
 
   release:
     name: Publish verified release
-    needs: build
+    needs: [build, android]
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[release]'))
     runs-on: ubuntu-24.04
     timeout-minutes: 10

@@ -12,7 +12,6 @@ const {
 } = require('../windowGeometry');
 
 const isolatedUserData = fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-window-geometry-'));
-const expectedMiniOuterSize = process.platform === 'win32' ? [262, 321] : [260, 320];
 app.setPath('userData', isolatedUserData);
 app.commandLine.appendSwitch('disable-gpu');
 
@@ -66,7 +65,16 @@ app.whenReady().then(() => {
 
     enterMiniMode(win);
     assertDeepEqual(win.getMinimumSize(), [260, 320], 'Mini Mode minimum');
-    assertDeepEqual(win.getSize(), expectedMiniOuterSize, 'Mini Mode platform-adjusted outer size');
+    const observedMiniOuterSize = win.getSize();
+    // Windows 11 adds a small thick-frame delta; Server 2025 can report the
+    // requested size exactly. Keep a bounded native-frame allowance, rather
+    // than treating one desktop theme's border as the product geometry.
+    const frameAllowance = process.platform === 'win32' ? 2 : 0;
+    [MINI_GEOMETRY.width, MINI_GEOMETRY.height].forEach((requested, index) => {
+      assert(observedMiniOuterSize[index] >= requested && observedMiniOuterSize[index] <= requested + frameAllowance,
+        `Mini Mode dimension ${index}: expected ${requested}..${requested + frameAllowance}, got ${observedMiniOuterSize[index]}`);
+    });
+    assert(!win.isMaximizable(), 'Mini Mode cannot maximize');
 
     exitMiniMode(win, screen);
     assertDeepEqual(
@@ -105,7 +113,8 @@ app.whenReady().then(() => {
 
     console.log(JSON.stringify({
       requestedMiniSize: [MINI_GEOMETRY.width, MINI_GEOMETRY.height],
-      observedMiniOuterSize: expectedMiniOuterSize,
+      observedMiniOuterSize,
+      displayScaleFactor: screen.getPrimaryDisplay().scaleFactor,
       normalMinimum: [NORMAL_MINIMUM.width, NORMAL_MINIMUM.height],
       restoredBounds: savedNormalBounds,
       displayClamping: 'pass',
