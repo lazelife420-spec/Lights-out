@@ -29,19 +29,28 @@ function parseInvitation(link,now=Date.now()){
   check([...u.searchParams.keys()].sort().join(',')==='expires,fingerprint,nonce,platform','Ambiguous enrollment link');
   const id=u.searchParams.get('fingerprint'),platform=u.searchParams.get('platform'),nonce=u.searchParams.get('nonce'),value=u.searchParams.get('expires');
   check(isId(id)&&platforms[platform]&&/^[a-f0-9]{32}$/.test(nonce)&&/^\d{13}$/.test(value),'Invalid enrollment identity');const expires=Number(value);
-  check(expires>now&&expires<=now+TTL,'Expired enrollment link');return {id,platform,nonce,expires};
+  check(expires>now&&expires<=now+TTL+5000,'Expired enrollment link or device clocks differ by more than five seconds');return {id,platform,nonce,expires};
 }
 class TrustBook{
-  constructor(id,platform,clock=Date.now){check(isId(id)&&platforms[platform],'Invalid local identity');this.id=id;this.platform=platform;this.clock=clock;this.peers=new Map();this.used=new Map();}
-  check(proof){check(proofs.has(proof)&&proof.localId===this.id,'Authenticated local channel required');proof.verify();const p=this.peers.get(proof.peerId);check(p&&!p.revoked,'Unknown or revoked peer');return p;}
-  enroll(link,proof,confirmedFingerprint){
+  constructor(id,platform,clock=Date.now,storage=null){check(isId(id)&&platforms[platform],'Invalid local identity');this.id=id;this.platform=platform;this.clock=clock;this.storage=storage;this.peers=new Map();this.used=new Map();this.sessions=new Map();this.reload();}
+  reload(){if(this.storage){const s=this.storage.read();this.peers=new Map(s.peers.map(p=>[p.id,p]));this.used=new Map(s.used.map(r=>[r.key,r.expires]));this.sessions=new Map(s.sessions.map(r=>[r.key,r.expires]));}}
+  listPeers(){this.reload();return [...this.peers.values()].map(p=>({...p}));}
+  persist(){if(this.storage)try{this.storage.write({version:1,localId:this.id,peers:[...this.peers.values()],used:[...this.used].map(([key,expires])=>({key,expires})),sessions:[...this.sessions].map(([key,expires])=>({key,expires}))});}catch(error){this.reload();throw error;}}
+  check(proof){this.reload();check(proofs.has(proof)&&proof.localId===this.id,'Authenticated local channel required');proof.verify();const p=this.peers.get(proof.peerId);check(p&&!p.revoked,'Unknown or revoked peer');return p;}
+  enroll(link,proof,confirmedFingerprint,{label,replaceId=null}={}){
+    this.reload();
     const p=parseInvitation(link,this.clock());check(proofs.has(proof)&&proof.localId===this.id,'Authenticated enrollment channel required');proof.verify();
     check(p.id===proof.peerId&&p.id===confirmedFingerprint,'Owner must confirm the authenticated peer fingerprint');
     for(const [n,e]of this.used)if(e<=this.clock())this.used.delete(n);
     check(!this.used.has(p.id+':'+p.nonce)&&this.used.size<128,'Replayed enrollment or enrollment limit');this.used.set(p.id+':'+p.nonce,p.expires);
-    this.peers.set(p.id,{id:p.id,platform:p.platform,revoked:false});return {...this.peers.get(p.id)};
+    check(this.peers.has(p.id)||this.peers.size<64,'Device registry is full');
+    if(replaceId){const old=this.peers.get(replaceId);check(old&&old.id!==p.id,'Select the previous device identity to replace');old.revoked=true;old.revokedAt=this.clock();}
+    const name=label?.trim() || (p.platform==='windows'?'Windows PC':'Android phone');check(name.length<=60&&!/[\x00-\x1f\x7f]/.test(name),'Use a device name up to 60 characters');
+    this.peers.set(p.id,{id:p.id,platform:p.platform,revoked:false,label:name,enrolledAt:this.clock(),revokedAt:null});this.persist();return {...this.peers.get(p.id)};
   }
-  revoke(id){check(isId(id),'Invalid peer');const p=this.peers.get(id);if(p)p.revoked=true;}
+  revoke(id){this.reload();check(isId(id),'Invalid peer');const p=this.peers.get(id);if(p){p.revoked=true;p.revokedAt=this.clock();this.persist();}}
+  connect(link,proof){const known=this.check(proof),p=parseInvitation(link,this.clock());check(p.id===known.id&&p.platform===known.platform,'Wrong enrolled device identity');for(const [n,e]of this.used)if(e<=this.clock())this.used.delete(n);const key=p.id+':'+p.nonce;check(!this.used.has(key)&&this.used.size<128,'Replayed enrollment or enrollment limit');this.used.set(key,p.expires);this.persist();return {...known};}
+  reserveSession(id,expires){if(!this.storage)return;this.reload();for(const [n,e]of this.sessions)if(e<=this.clock())this.sessions.delete(n);check(!this.sessions.has(id)&&this.sessions.size<128,'Replayed durable session or transfer limit');this.sessions.set(id,expires);this.persist();}
 }
 function encode(m){
   const body=Buffer.from(m.body || []),b=Buffer.alloc(HEADER+body.length);magic.copy(b);b[8]=m.type;b[9]=platforms[m.platform];b.writeUInt16BE(m.version??1,10);b.writeUInt16BE(m.capabilities??CAPABILITY,12);
@@ -61,7 +70,7 @@ class Endpoint{
   constructor(book,{validate,preview,clock=book.clock}={}){check(typeof validate==='function'&&typeof preview==='function','Existing interchange adapters required');this.book=book;this.validate=validate;this.preview=preview;this.clock=clock;this.pending=new Map();this.seen=new Map();}
   prune(){const now=this.clock();for(const [id,s]of this.pending)if(s.offer.expires<=now)this.pending.delete(id);for(const [id,e]of this.seen)if(e<=now)this.seen.delete(id);}
   live(proof,m){const peer=this.book.check(proof),now=this.clock();check(m.sender===peer.id&&m.recipient===this.book.id&&m.platform===peer.platform,'Wrong peer or local recipient');check(m.issued<=now+5000&&m.expires>now&&m.expires-m.issued>=1000&&m.expires-m.issued<=TTL&&m.expires<=now+TTL+5000,'Expired or invalid transfer session');}
-  reserve(id,expires){this.prune();check(!this.seen.has(id)&&this.pending.size<8&&this.seen.size<128,'Replayed session or transfer limit');this.seen.set(id,expires);}
+  reserve(id,expires){this.prune();check(!this.seen.has(id)&&this.pending.size<8&&this.seen.size<128,'Replayed session or transfer limit');this.book.reserveSession(id,expires);this.seen.set(id,expires);}
   request(proof){this.book.check(proof);const now=this.clock(),m={type:0,platform:this.book.platform,id:crypto.randomBytes(16).toString('hex'),sender:this.book.id,recipient:proof.peerId,issued:now,expires:now+TTL,length:1,digest:'0'.repeat(64)};this.reserve(m.id,m.expires);this.pending.set(m.id,{proof,offer:m,outgoing:false,awaiting:true});return encode(m);}
   offer(proof,text,challenge){
     this.book.check(proof);check(typeof text==='string'&&Buffer.byteLength(text)<=MAX_BYTES,'Routine file exceeds limit');this.validate(text);

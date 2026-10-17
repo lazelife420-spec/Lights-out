@@ -117,6 +117,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getProfileHint: (profile) => ipcRenderer.invoke('profiles-get-hint', profile),
   exportProfiles: () => ipcRenderer.invoke('profiles-export'),
   routineFileList: () => ipcRenderer.invoke('routine-file-list'),
+  handoffAction: (action, options = {}) => ipcRenderer.invoke('handoff-action', action, options),
   routineFilePreview: text => ipcRenderer.invoke('routine-file-preview', text),
   routineFileImport: (text, policy) => ipcRenderer.invoke('routine-file-import', text, policy),
   routineFileAdopt: options => ipcRenderer.invoke('routine-file-adopt', options),

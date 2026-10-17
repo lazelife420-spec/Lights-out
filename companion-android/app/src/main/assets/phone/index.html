@@ -3,12 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Lights Out · Phone</title>
   <link rel="stylesheet" href="phone.css">
+  <link rel="stylesheet" href="handoff.css">
   <script src="phone.js" defer></script>
   <script src="routine-model.js" defer></script>
   <script src="routine-transfer-ui.js" defer></script>
+  <script src="handoff-ui.js" defer></script>
   <script src="home.js" defer></script>
 </head>
 <body>
@@ -50,6 +52,7 @@
     <section id="view-routines" class="home-view" hidden aria-label="Phone routines">
       <p class="eyebrow">MAKE IT YOUR RITUAL</p><h1>A routine to switch off.</h1><p class="view-copy">Saved and run on this phone. Add a calendar rule to start automatically.</p>
       <details class="control-card routine-transfer"><summary>Import &amp; export routine files</summary><div id="routine-transfer-body"></div></details>
+      <details class="control-card" id="handoff-pairing"><summary>Secure routine pairing</summary><div id="handoff-body"></div></details>
       <div id="routine-list" class="item-list"></div>
       <form id="routine-form" class="control-card"><h2 id="routine-editor-title">New routine</h2>
         <label for="routine-name">Name</label><input id="routine-name" maxlength="60" required placeholder="Weeknight wind-down">

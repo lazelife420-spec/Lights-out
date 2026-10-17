@@ -104,8 +104,9 @@ validates the same plan at its bridge. Keep the parity test, explicit local
 ownership, claim-before-dispatch and truthful action outcomes. See
 `docs/CALENDAR_ROUTINE_V1.md`. Offline interchange is implemented; secured
 handoff protocol components are isolated-test qualified in
-`docs/SECURED_DEVICE_HANDOFF_FOUNDATION.md`. No production handoff listener,
-transfer UI, persistent trust/key storage or new remote execution is enabled.
+`docs/SECURED_DEVICE_HANDOFF_FOUNDATION.md`. LO-SDH-1 adds pairing/inbox UI and protected persistent identities/trust; see
+`docs/SECURED_DEVICE_PAIRING_V1.md`. No production handoff transport/listener,
+discovery or new remote execution is enabled.
 The invisible Windows Host, unified routine model and phone-owned First Light
 remain separate scoped tranches in `docs/ROADMAP.md`; source stubs or a published
 Windows release do not establish completion of those architectural goals.

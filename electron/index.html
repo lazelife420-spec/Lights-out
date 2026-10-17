@@ -6,6 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
   <title>Lights Out</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="handoff.css">
 </head>
 <body>
   <!-- Onboarding First-Run Wizard -->
@@ -861,6 +862,7 @@
           </button>
         </header>
 
+        <details class="sch-section" id="handoff-pairing"><summary>Secure routine pairing</summary><div id="handoff-body"></div></details>
         <div class="device-grid">
           <article class="device-card" id="device-card-pc" data-state="ok" aria-labelledby="device-pc-title">
             <div class="device-head">
@@ -2618,5 +2620,7 @@
   <script src="renderer-night-modes.js"></script>
   <script src="renderer-signature.js"></script>
   <script src="renderer.js"></script>
+  <script src="handoff-ui.js"></script>
+  <script src="renderer-handoff.js"></script>
 </body>
 </html>

@@ -47,6 +47,12 @@ const routineFiles = require('./routineInterchangeStore').createStore({
   write: calendar => settingsStore.updateSection('calendar', calendar, { requireSave: true }),
   getProfiles: () => profiles.getAll()
 });
+const handoffService = require('./handoffService');
+handoffService.configure(() => require('./handoffController').createController({
+  identity: require('./handoffIdentityWindows').createIdentity({directory:path.join(app.getPath('userData'),'routine-handoff')}),
+  store: routineFiles
+}));
+app.on('before-quit', () => handoffService.close());
 
 // Desktop UX Functional Gate instrumentation: only active when an explicit
 // proof flag is supplied. Never records in normal production runs.
@@ -2420,6 +2426,11 @@ ipcMain.handle('get-calendar-settings', async () => {
   return { ...settingsStore.getSection('calendar'), routineOutcomes };
 });
 ipcMain.handle('routine-file-list', () => routineFiles.list());
+ipcMain.handle('handoff-action', (event, action, options) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) return {ok:false,error:'Pairing controls are available only in the primary local app window.'};
+  if (typeof action !== 'string' || action.length > 32 || !options || typeof options !== 'object' || Array.isArray(options) || JSON.stringify(options).length > 16384) return {ok:false,error:'Invalid pairing request.'};
+  return handoffService.get().handle(action, options);
+});
 ipcMain.handle('routine-file-preview', (event, text) => routineFiles.preview(text));
 ipcMain.handle('routine-file-import', (event, text, policy) => routineFiles.import(text, policy));
 ipcMain.handle('routine-file-adopt', (event, options) => routineFiles.adopt(options));

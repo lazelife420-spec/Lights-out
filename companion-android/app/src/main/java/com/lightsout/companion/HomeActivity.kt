@@ -23,6 +23,17 @@ class HomeActivity : AppCompatActivity() {
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { refresh() }
     private var openRequest: String? = null
     private var saveRequest: Pair<String,String>? = null
+    private var handoffScanRequest:String?=null
+    private val handoffScanner=registerForActivityResult(ActivityResultContracts.StartActivityForResult()){ result ->
+        val id=handoffScanRequest ?: return@registerForActivityResult;handoffScanRequest=null
+        val link=result.data?.getStringExtra(ScannerActivity.EXTRA_URL)
+        if(result.resultCode!=RESULT_OK||link==null)transferReply(id,null,"Scan cancelled. No device was enrolled.")
+        else HandoffController.get(this).handle("open",JSONObject().put("link",link)){ reply -> handler.post { transferReply(id,reply) } }
+    }
+    private val handoffCamera=registerForActivityResult(ActivityResultContracts.RequestPermission()){ granted ->
+        if(granted)handoffScanner.launch(Intent(this,ScannerActivity::class.java).putExtra(ScannerActivity.EXTRA_MODE,"routine-handoff"))
+        else {val id=handoffScanRequest;handoffScanRequest=null;if(id!=null)transferReply(id,null,"Camera permission is needed to scan. You can paste the invitation instead.")}
+    }
     private val openRoutineFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         val id = openRequest ?: return@registerForActivityResult; openRequest = null
         try {
@@ -75,7 +86,7 @@ class HomeActivity : AppCompatActivity() {
             }
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
                 request.url.host != "appassets.androidplatform.net" || request.url.scheme != "https"
-            override fun onPageFinished(view: WebView, url: String) { refresh() }
+            override fun onPageFinished(view: WebView, url: String) { refresh();showHandoffInvitation() }
         }
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             WebViewCompat.addWebMessageListener(web, "phoneNative", setOf("https://appassets.androidplatform.net")) {
@@ -96,6 +107,13 @@ class HomeActivity : AppCompatActivity() {
         web.loadUrl("https://appassets.androidplatform.net/assets/phone/index.html")
     }
     private fun handle(msg: JSONObject) {
+        if(msg.optString("action")=="handoff"){
+            val id=msg.optString("requestId");if(!id.matches(Regex("[a-zA-Z0-9-]{1,64}"))||msg.toString().length>16384)return
+            val operation=msg.optString("operation")
+            if(operation=="scan"){if(handoffScanRequest!=null){transferReply(id,null,"Finish the current scanner first.");return};handoffScanRequest=id;handoffCamera.launch(Manifest.permission.CAMERA)}
+            else HandoffController.get(this).handle(operation,msg.optJSONObject("options") ?: JSONObject()){ reply -> handler.post { transferReply(id,reply) } }
+            return
+        }
         if(msg.optString("action").startsWith("routineFile")) { handleTransfer(msg);return }
         when (val action = msg.optString("action")) {
             "pc" -> startActivity(Intent(this, MainActivity::class.java))
@@ -154,6 +172,12 @@ class HomeActivity : AppCompatActivity() {
     private fun transferReply(id: String, result: JSONObject?, error: String? = null) {
         val reply = JSONObject().put("ok",error == null).put("result",result ?: JSONObject.NULL).put("error",error ?: JSONObject.NULL)
         web.evaluateJavascript("window.phoneTransferReply?.(${JSONObject.quote(id)},$reply)",null)
+    }
+    override fun onNewIntent(intent:Intent){super.onNewIntent(intent);setIntent(intent);showHandoffInvitation()}
+    private fun showHandoffInvitation(){
+        val link=intent?.data?.toString() ?: return
+        try {RoutineHandoff.parseInvitation(link)}catch(_:Exception){return}
+        if(::web.isInitialized)web.evaluateJavascript("window.handoffUI?.prefill(${JSONObject.quote(link)});document.querySelector('[data-tab=routines]')?.click();document.getElementById('handoff-pairing').open=true;",null)
     }
     private fun handleTransfer(msg: JSONObject) {
         val id = msg.optString("requestId")

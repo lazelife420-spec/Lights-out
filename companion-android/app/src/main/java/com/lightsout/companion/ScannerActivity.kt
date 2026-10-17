@@ -30,7 +30,9 @@ class ScannerActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_scanner)
-        title = getString(R.string.scan_title)
+        val routineHandoff=intent.getStringExtra(EXTRA_MODE)=="routine-handoff"
+        title = if(routineHandoff)"Scan routine pairing invitation" else getString(R.string.scan_title)
+        if(routineHandoff)findViewById<android.widget.TextView>(R.id.scan_instruction).text="Scan the other device’s public routine-pairing invitation. This does not grant timer control."
 
         val previewView = findViewById<PreviewView>(R.id.preview)
         val providerFuture = ProcessCameraProvider.getInstance(this)
@@ -51,7 +53,7 @@ class ScannerActivity : AppCompatActivity() {
                     .addOnSuccessListener { codes ->
                         val url = codes.asSequence()
                             .mapNotNull { it.rawValue }
-                            .firstOrNull { it.startsWith("http://") || it.startsWith("https://") }
+                            .firstOrNull { if(routineHandoff)it.startsWith("lightsout-handoff://enroll/v1?") else it.startsWith("http://") || it.startsWith("https://") }
                         if (url != null && !handled) { handled = true; returnUrl(url) }
                     }
                     .addOnCompleteListener { proxy.close() }
@@ -80,5 +82,6 @@ class ScannerActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_URL = "scanned_url"
+        const val EXTRA_MODE = "scan_mode"
     }
 }

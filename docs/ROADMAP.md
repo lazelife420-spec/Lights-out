@@ -57,8 +57,12 @@ is complete; the broader platform roadmap remains open.
   **LO-SDH-0** adds locally tested mutual-TLS protocol components, explicit
   enrollment/recipient consent, replay/expiry/revocation checks and adapters into
   inactive import preview. Isolated endpoints only; no production listener,
-  discovery, transfer UI or persistent key/trust management is enabled. See
+  discovery, transfer UI or persistent key/trust management was enabled in that tranche. See
   [secured handoff foundation](SECURED_DEVICE_HANDOFF_FOUNDATION.md).
+  **LO-SDH-1** adds protected persistent identity, durable trust/revocation/replay
+  records and actual pairing/receiving UI through existing inactive import.
+  Production LAN transport remains disabled; physical-device transfer is still
+  FIELD-UNPROVEN. See [protected pairing v1](SECURED_DEVICE_PAIRING_V1.md).
 - **Windows invisible-host objective:** Electron main owns the timer/listener/
   receipts. The reviewed v11.2.0 qualification reported seven lifecycle checks
   passing: close/reopen, single timer authority, tray controls, hidden completion,

@@ -75,6 +75,13 @@
       "routineInterchangeStore.js",
       "routineHandoff.js",
       "routineHandoffInbox.js",
+      "handoffTrust.js",
+      "handoffIdentityWindows.js",
+      "handoffController.js",
+      "handoffService.js",
+      "handoff-ui.js",
+      "handoff.css",
+      "renderer-handoff.js",
       "routine-transfer-ui.js",
       "wizLights.js",
       "renderer-signature.js",
@@ -109,7 +116,8 @@
       "durableJsonStore.js",
       "renderer-night-modes.js",
       "widget.html",
-      "assets/**"
+      "assets/**",
+      "handoffProtectionWindows.js"
     ],
     "win": {
       "target": [
@@ -140,7 +148,10 @@
     }
   },
   "dependencies": {
+    "@peculiar/x509": "2.2.0",
+    "koffi": "3.3.3",
     "qrcode": "^1.5.4",
+    "reflect-metadata": "0.2.2",
     "sharp": "^0.35.5"
   },
   "devDependencies": {

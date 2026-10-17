@@ -148,5 +148,6 @@
     commitImport:(text,policy)=>transfer('routineFileImport',{text,policy}),adopt:options=>transfer('routineFileAdopt',{options}),
     start:id=>send('startRoutine',{id})
   });
+  window.handoffUI=HandoffUI.mount($('handoff-body'),{platform:'android',invoke:(operation,options)=>transfer('handoff',{operation,options}),scan:()=>transfer('handoff',{operation:'scan',options:{}}),onImported:()=>void window.phoneTransfer.refresh()});
   resetRoutine(); resetRule(); calendar(); tab(view);
 })();

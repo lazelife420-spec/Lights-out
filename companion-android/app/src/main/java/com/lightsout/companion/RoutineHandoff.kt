@@ -40,7 +40,9 @@ object RoutineHandoff {
             fun authenticate(socket: SSLSocket, localId: String, peerId: String): Peer {
                 require(id(localId) && id(peerId) && localId != peerId)
                 socket.soTimeout = 10000
-                socket.startHandshake()
+                // session establishes an initial handshake if needed. A second
+                // startHandshake would request unsupported TLS renegotiation.
+                if (!socket.session.isValid) socket.startHandshake()
                 return Peer(localId, peerId, socket).also { it.verify() }
             }
         }
@@ -59,26 +61,39 @@ object RoutineHandoff {
         val p = entries.associate { it[0] to it[1] }
         val key = p.getValue("fingerprint"); val platform = p.getValue("platform"); val nonce = p.getValue("nonce"); val expiry = p.getValue("expires")
         require(id(key) && platform in platforms && nonce.matches(Regex("[a-f0-9]{32}")) && expiry.matches(Regex("[0-9]{13}")))
-        val expires = expiry.toLong(); require(expires > now && expires <= now+TTL) { "Expired enrollment link." }
+        val expires = expiry.toLong(); require(expires > now && expires <= now+TTL+5000) { "Expired enrollment link or device clocks differ by more than five seconds." }
         return Invite(key, platform, nonce, expires)
     }
-    data class KnownPeer(val id: String, val platform: String, var revoked: Boolean = false)
-    class Book(val id: String, val platform: String, val clock: () -> Long = System::currentTimeMillis) {
+    data class KnownPeer(val id: String, val platform: String, var revoked: Boolean = false,val label:String=if(platform=="windows")"Windows PC" else "Android phone",val enrolledAt:Long=0,var revokedAt:Long?=null)
+    data class Snapshot(val peers:List<KnownPeer>,val used:Map<String,Long>,val sessions:Map<String,Long>)
+    interface Storage { fun read():Snapshot;fun write(snapshot:Snapshot) }
+    class Book(val id: String, val platform: String, val clock: () -> Long = System::currentTimeMillis,private val storage:Storage?=null) {
         init { require(id(id) && platform in platforms) }
         private val peers = mutableMapOf<String, KnownPeer>()
         private val used = mutableMapOf<String, Long>()
+        private val sessions=mutableMapOf<String,Long>()
+        init { reload() }
+        private fun reload(){storage?.read()?.let { s -> peers.clear();s.peers.forEach { peers[it.id]=it.copy() };used.clear();used.putAll(s.used);sessions.clear();sessions.putAll(s.sessions) }}
+        private fun persist(){try{storage?.write(Snapshot(peers.values.map { it.copy() },used.toMap(),sessions.toMap()))}catch(e:Exception){reload();throw e}}
+        fun listPeers():List<KnownPeer>{reload();return peers.values.map { it.copy() }}
         fun check(peer: Peer): KnownPeer {
-            require(peer.localId == id); peer.verify()
+            reload();require(peer.localId == id); peer.verify()
             return peers[peer.peerId]?.also { require(!it.revoked) { "Revoked peer." } } ?: error("Unknown peer.")
         }
-        fun enroll(link: String, peer: Peer, confirmedFingerprint: String): KnownPeer {
+        fun enroll(link: String, peer: Peer, confirmedFingerprint: String,label:String?=null,replaceId:String?=null): KnownPeer {
+            reload()
             val invite = parseInvitation(link, clock()); require(peer.localId == id); peer.verify()
             require(invite.id == peer.peerId && invite.id == confirmedFingerprint) { "Owner must confirm the authenticated fingerprint." }
             used.entries.removeAll { it.value <= clock() }; val key = invite.id+":"+invite.nonce
             require(key !in used && used.size < 128) { "Replayed enrollment or enrollment limit." }; used[key] = invite.expires
-            val known = KnownPeer(invite.id, invite.platform); peers[invite.id] = known; return known.copy()
+            require(invite.id in peers||peers.size<64) { "Device registry is full." }
+            if(replaceId!=null){val old=peers[replaceId];require(old!=null&&old.id!=invite.id) { "Select the previous device identity to replace." };old.revoked=true;old.revokedAt=clock()}
+            val name=label?.trim()?.ifEmpty { null } ?: if(invite.platform=="windows")"Windows PC" else "Android phone";require(name.length<=60&&name.none { it.code<32||it.code==127 })
+            val known = KnownPeer(invite.id, invite.platform,label=name,enrolledAt=clock()); peers[invite.id] = known;persist();return known.copy()
         }
-        fun revoke(id: String) { require(id(id)); peers[id]?.revoked = true }
+        fun revoke(id: String) { reload();require(id(id)); peers[id]?.let { it.revoked=true;it.revokedAt=clock();persist() } }
+        fun connect(link:String,peer:Peer):KnownPeer{val known=check(peer);val invite=parseInvitation(link,clock());require(invite.id==known.id&&invite.platform==known.platform);used.entries.removeAll { it.value<=clock() };val key=invite.id+":"+invite.nonce;require(key !in used&&used.size<128) { "Replayed enrollment or enrollment limit." };used[key]=invite.expires;persist();return known.copy()}
+        fun reserveSession(id:String,expires:Long){if(storage==null)return;reload();sessions.entries.removeAll { it.value<=clock() };require(id !in sessions&&sessions.size<128) { "Replayed durable session or transfer limit." };sessions[id]=expires;persist()}
     }
     data class Frame(val type: Int, val platform: String, val id: String, val sender: String, val recipient: String,
         val issued: Long, val expires: Long, val length: Int, val digest: String, val body: ByteArray = byteArrayOf())
@@ -114,7 +129,8 @@ object RoutineHandoff {
             require(frame.sender == known.id && frame.recipient == book.id && frame.platform == known.platform) { "Wrong peer or recipient." }
             require(frame.issued <= now+5000 && frame.expires > now && frame.expires-frame.issued in 1000..TTL && frame.expires <= now+TTL+5000) { "Expired or invalid transfer session." }
         }
-        private fun reserve(id: String, expires: Long) { prune(); require(id !in seen && pending.size < 8 && seen.size < 128) { "Replayed session or transfer limit." }; seen[id]=expires }
+        fun inspect(peer:Peer,bytes:ByteArray):Frame=decode(bytes).also { live(peer,it) }
+        private fun reserve(id: String, expires: Long) { prune(); require(id !in seen && pending.size < 8 && seen.size < 128) { "Replayed session or transfer limit." };book.reserveSession(id,expires);seen[id]=expires }
         fun request(peer: Peer): ByteArray {
             book.check(peer);val now=book.clock();val f=Frame(0,book.platform,nonce(),book.id,peer.peerId,now,now+TTL,1,"0".repeat(64))
             reserve(f.id,f.expires);pending[f.id]=Pending(peer,f,false,awaiting=true);return encode(f)

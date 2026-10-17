@@ -2,12 +2,19 @@
 
 ## Unreleased
 
+- Added LO-SDH-1 protected device identities, durable pairing/revocation/replay
+  storage, and Windows/Android pairing and receiving screens. Windows uses
+  current-user DPAPI; Android uses non-exportable AndroidKeyStore key handles.
+  Authenticated enrollment, recipient acceptance and inactive import remain
+  separate confirmations. Production LAN transport/discovery remains disabled;
+  see `docs/SECURED_DEVICE_PAIRING_V1.md` for scope and security limits.
+
 - Added LO-SDH-0 secured routine-handoff protocol foundations for Windows and
   Android: explicit fingerprint enrollment, mutual TLS, fresh recipient
   challenges, bounded expiring transfers, revocation and separate confirmation
   before saving inactive LO-RIE-1 intent. Isolated Node/Kotlin loopback and native
   Android storage proofs qualify the foundation. Production listeners, discovery,
-  persistent device trust/key storage and transfer UI remain unimplemented.
+  persistent device trust/key storage and transfer UI were deferred to LO-SDH-1.
 - Routine files now explain that Windows Test Mode skips final PC power actions
   while other explicitly enabled wind-down effects may still run.
 - Added LO-RIE-1 offline routine files on Windows and standalone Android. The
