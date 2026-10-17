@@ -3219,6 +3219,9 @@ function setupRitualCallbacks() {
 }
 
 app.whenReady().then(async () => {
+  // Readiness may already be queued when a secondary instance calls quit.
+  if (!gotTheLock) return;
+
   cleanupStalePortableExtracts();
 
   // Deny all browser permissions by default. Lights Out loads only local

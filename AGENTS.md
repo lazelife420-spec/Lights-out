@@ -1,7 +1,9 @@
 # Lights Out Agent Master Plan
 
 This file is the handoff document for any code agent working in this repo.
-The product is a single Electron app under `electron/`. (A legacy PowerShell /
+The product has a Windows Electron app under `electron/` and a standalone native
+Android app under `companion-android/`, with independent execution and release
+trains. (A legacy PowerShell /
 WinForms "classic" app — `source\SleepTimer-Tonight.ps1`, `modules\*.psm1`, and
 its `SleepTimer.exe` launchers — was removed on 2026-06-29; do not reintroduce
 it. PowerShell is now used only as `child_process` calls from the Electron main
@@ -9,7 +11,9 @@ process for Windows system actions, never as a separate app surface.)
 
 ## Mission
 
-Lights Out is a Windows bedtime shutdown ritual app.
+Lights Out is a local-first night timer and routine product for Windows and
+standalone Android. Each device owns its timer and settings; phone-to-PC control
+is a separate optional feature. The Windows app provides the shutdown ritual.
 The core product idea is:
 
 - open safely by default
@@ -81,7 +85,7 @@ The important behavior is:
 
 ## Source Of Truth
 
-All app work happens in `electron\`:
+Windows app work happens in `electron\`:
 
 - timer state, tray behavior, login-item behavior, and final Windows power actions:
   `electron\main.js`
@@ -90,6 +94,13 @@ All app work happens in `electron\`:
 - markup and styles: `electron\index.html`, `electron\styles.css`
 - feature modules (calendar, profiles, smart lights, companion, family, wifi guard,
   content blocker, etc.): the per-feature files in `electron\`
+
+Native Android home/timer/service/alarms, phone WiZ and calendar work happens in
+`companion-android\app\src\main`. Its optional PC-controls WebView is separate
+from the bundled native bridge. See `docs/ANDROID_FIELD_QA.md` for hardware HOLDs.
+The invisible Windows Host, unified routine model and phone-owned First Light
+remain separate scoped tranches in `docs/ROADMAP.md`; source stubs or a published
+Windows release do not establish completion of those architectural goals.
 
 PowerShell is still invoked for ad-hoc system calls (battery, power plans, shutdown
 commands) via `child_process.spawn` inside the Electron main process. There is no

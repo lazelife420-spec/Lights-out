@@ -55,6 +55,8 @@ delivery and still need physical-device testing.
 
 Emulator QA uses a debug package and a local UDP stand-in. It does not establish
 broadcast discovery or background Wi-Fi reliability on a physical phone/router.
+Use the [field QA checklist](../docs/ANDROID_FIELD_QA.md) for owner-authorized
+hardware testing. The broader platform roadmap is in [docs/ROADMAP.md](../docs/ROADMAP.md).
 
 ## Phone timer and Android alerts
 
@@ -133,6 +135,40 @@ variables. Never build QA in the owner's checkout or load signing properties.
 The v11.2.0 Windows release reconciles this Android source and qualifies its
 debug build; it does not publish a new production-signed Android APK. Physical
 phone/router and broadcast-discovery reliability remain unqualified.
+
+### Reproducible standalone lifecycle QA
+
+`electron/scripts/android-standalone-lifecycle-proof.js` accepts only an emulator
+serial and an exact `LightsOut_QA_*` AVD identity. It checks the APK's actual
+`.debug` package, SHA-256 and every source input against the isolated build
+inventory before installing. It resets QA debug data; preserve the production
+package. Use an owned API 35 AVD, SDK build-tools 34.0.0 and the supported Node
+runtime. Generate the inventory/APK with `android-debug-qa.ps1` first.
+
+```powershell
+$qaRoot = 'C:\path\to\LightsOut-QA'
+$sdkRoot = 'C:\path\to\Android\Sdk'
+node electron/scripts/android-standalone-lifecycle-proof.js `
+  --adb "$sdkRoot\platform-tools\adb.exe" `
+  --serial emulator-5582 --avd LightsOut_QA_API35 `
+  --apk "$qaRoot\Lights-Out-Android-v11.2.0-debug.apk" `
+  --source-inventory "$qaRoot\android-qualification.json" `
+  --proof-root "$qaRoot\lifecycle" --allow-debug-reset
+```
+
+The lifecycle lane covers notification/exact-access denial and grant, offline
+controls, monotonic countdown across a timezone change, stale service commands,
+app-process restart/reopen and screen-off completion with a posted notification.
+It toggles only the owned emulator's virtual network and restores those settings.
+
+For the calendar lane, use a separate proof directory and add
+`--calendar-only --allow-emulator-clock-change`. This explicitly allows reversible
+clock changes on that owned emulator, checks permission restoration, timezone
+rescheduling, early/duplicate/late delivery and monotonic timer ownership, then
+restores its clock/settings. No PC server, physical bulb command or production
+signing is involved. Results are written as `android-lifecycle-report.json`.
+These are emulator observations; human-visible physical alerts and OEM delivery
+reliability remain field QA holds.
 
 ## Install over wireless ADB
 

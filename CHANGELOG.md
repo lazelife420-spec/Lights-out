@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Guarded queued Electron readiness after losing the single-instance lock, so
+  a quitting secondary cannot initialize a window, tray or startup services.
+  Added focused primary-startup, lock-loss and second-instance focus regressions.
+- Corrected Windows update discovery documentation to name Proof Foundry
+  machine-truth release metadata, and normalized roadmap line endings.
+- Clarified Windows + standalone Android positioning, independent execution and
+  release trains. Reorganized the single roadmap around shipped work, source
+  awaiting qualification, active next gates, hardware/permission blockers and
+  deferred scope. Added a physical Android/WiZ QA checklist; field reliability
+  remains unqualified.
+- Added guarded Android emulator lifecycle/calendar QA for permission denial and
+  grant, offline controls, timezone/clock changes, stale commands, process
+  recovery, screen-off notifications and early/duplicate/late alarm delivery.
+
 ## v11.2.0 — 2026-10-16
 
 ### Release qualification
