@@ -72,6 +72,8 @@
       "calendarRecurrence.js",
       "routineModel.js",
       "routineLedger.js",
+      "routineInterchangeStore.js",
+      "routine-transfer-ui.js",
       "wizLights.js",
       "renderer-signature.js",
       "companion.js",

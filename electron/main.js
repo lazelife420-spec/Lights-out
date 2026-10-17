@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, globalShortcut, shell, screen, clipboard, session } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, globalShortcut, shell, screen, clipboard, session, dialog } = require('electron');
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
@@ -42,6 +42,11 @@ const nightModes = require('./nightModes');
 const startDecision = require('./startDecision');
 const routineModel = require('./routineModel');
 const routineLedger = require('./routineLedger').createFileLedger(() => path.join(app.getPath('userData'), 'routine-outcomes.json'));
+const routineFiles = require('./routineInterchangeStore').createStore({
+  read: () => settingsStore.getSection('calendar'),
+  write: calendar => settingsStore.updateSection('calendar', calendar, { requireSave: true }),
+  getProfiles: () => profiles.getAll()
+});
 
 // Desktop UX Functional Gate instrumentation: only active when an explicit
 // proof flag is supplied. Never records in normal production runs.
@@ -2413,6 +2418,28 @@ ipcMain.handle('get-calendar-settings', async () => {
   try { routineOutcomes = routineLedger.list(id => runReceipts.getReceiptById(id), key => runReceipts.getReceiptByOccurrence(key)).slice(0, 12); }
   catch { routineOutcomes = [{ name: 'Routine history', status: 'unavailable', reason: 'History could not be read; new calendar dispatch is blocked until storage is repaired.' }]; }
   return { ...settingsStore.getSection('calendar'), routineOutcomes };
+});
+ipcMain.handle('routine-file-list', () => routineFiles.list());
+ipcMain.handle('routine-file-preview', (event, text) => routineFiles.preview(text));
+ipcMain.handle('routine-file-import', (event, text, policy) => routineFiles.import(text, policy));
+ipcMain.handle('routine-file-adopt', (event, options) => routineFiles.adopt(options));
+ipcMain.handle('routine-file-start', (event, id) => startTimer(routineFiles.timerOptions(id)));
+ipcMain.handle('routine-file-open', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, { title: 'Open routine file', properties: ['openFile'], filters: [{ name: 'Routine JSON', extensions: ['json'] }] });
+  if (result.canceled || result.filePaths.length !== 1) return { cancelled: true };
+  const file = result.filePaths[0], info = fs.statSync(file);
+  if (!info.isFile() || info.size > routineModel.interchange.maxBytes) throw Error('Choose a JSON routine file up to 256 KiB');
+  const bytes = fs.readFileSync(file);
+  if (bytes.length > routineModel.interchange.maxBytes) throw Error('Routine file grew beyond 256 KiB');
+  let text; try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch { throw Error('Routine files must use UTF-8 text'); }
+  routineFiles.preview(text); return { text };
+});
+ipcMain.handle('routine-file-export', async (event, selection) => {
+  const text = JSON.stringify(routineFiles.export(selection), null, 2);
+  const result = await dialog.showSaveDialog(mainWindow, { title: 'Export routine file', defaultPath: 'lights-out-routines.json', filters: [{ name: 'Routine JSON', extensions: ['json'] }] });
+  if (result.canceled || !result.filePath) return { cancelled: true };
+  if (!require('./durableJsonStore').writeTmpVerifyRename(result.filePath, text)) throw Error('Could not save the routine file');
+  return { saved: true };
 });
 ipcMain.handle('get-companion-status', async () => {
   return companion.getStatus();

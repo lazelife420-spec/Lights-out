@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added LO-RIE-1 offline routine files on Windows and standalone Android. The
+  shared versioned JSON contract exports selected timer/action intent and
+  associated rules without endpoints, credentials, ownership grants or history.
+  Native file pickers, previews, explicit conflict copies and checked local
+  writes preserve existing data. Imports remain inactive until reviewed; local
+  adoption saves calendar rules disabled and requires explicit resolution of
+  platform endings and light bindings. No networking or handoff was added.
 - Corrected Android leap-day recurrence beyond the old 741-day cutoff, including
   the non-leap century gap. Selected-month candidates, consumed dates and DST
   policies retain their existing meaning; saved schedules are unchanged.

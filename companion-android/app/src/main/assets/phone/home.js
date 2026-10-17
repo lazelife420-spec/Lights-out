@@ -3,6 +3,7 @@
   const $ = id => document.getElementById(id);
   let config = { lights: [], routines: [], rules: [] }, configKey = '', upcoming = [], nextKey = '';
   let routineId = '', ruleId = '', view = 'timer';
+  let editingActionIds = {};
   let month = new Date(); month = new Date(month.getFullYear(), month.getMonth(), 1);
   const error = text => window.phoneUI.error(text);
   const send = (action, data = {}) => {
@@ -26,6 +27,7 @@
   }
   document.querySelectorAll('[data-tab]').forEach(node => { node.onclick = () => tab(node.dataset.tab); });
   function resetRoutine(p = {}) {
+    editingActionIds = p.actionIds || {};
     routineId = p.id || ''; $('routine-editor-title').textContent = p.id ? 'Edit routine' : 'New routine';
     $('routine-name').value = p.name || ''; $('routine-minutes').value = p.seconds ? p.seconds / 60 : 30;
     $('routine-warm').checked = Boolean(p.brightness); $('routine-off').checked = Boolean(p.offAtEnd); $('routine-brightness').value = p.brightness || 30;
@@ -95,7 +97,7 @@
     event.preventDefault(); const minutes = Number($('routine-minutes').value);
     if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) return error('Choose 1 minute to 24 hours.');
     const warmTargets = checked('routine-light-options'), offTargets = checked('routine-off-light-options');
-    const routine = { id: routineId || crypto.randomUUID(), name: $('routine-name').value.trim(), seconds: minutes * 60, targets: [...new Set([...warmTargets, ...offTargets])].sort(), warmTargets, offTargets, brightness: $('routine-warm').checked ? Number($('routine-brightness').value) : 0, offAtEnd: $('routine-off').checked };
+    const routine = { id: routineId || crypto.randomUUID(), name: $('routine-name').value.trim(), seconds: minutes * 60, targets: [...new Set([...warmTargets, ...offTargets])].sort(), warmTargets, offTargets, actionIds:editingActionIds, brightness: $('routine-warm').checked ? Number($('routine-brightness').value) : 0, offAtEnd: $('routine-off').checked };
     try { routine.plan = window.RoutineModel.fromPhoneRoutine(routine); } catch (e) { return error(e.message); }
     send('saveRoutine', { routine });
   };
@@ -126,6 +128,7 @@
         for (const id of ['routine-light-options', 'routine-off-light-options']) { const previous = checked(id); choices(id, config.lights.map(ip => [ip, ip]), previous); }
         actionFields();
         cards(); calendar();
+        void window.phoneTransfer?.refresh();
       } else if (nk !== nextKey) cards();
       nextKey = nk;
       $('calendar-readiness').textContent = state.exact ? "Ready to run on this phone, even with the PC off. Lights need the same Wi-Fi. Keep the phone powered on." : 'Saved routines are paused. Allow precise alerts below so Android can start them with the screen off.';
@@ -133,5 +136,17 @@
       $('light-result').textContent = state.event || '';
     }
   };
+  const transfers = new Map();
+  function transfer(action,data={}) { return new Promise((resolve,reject)=>{
+    const requestId=crypto.randomUUID(),timer=setTimeout(()=>{transfers.delete(requestId);reject(Error('The file operation timed out. Reopen it when ready.'));},120000);
+    transfers.set(requestId,{resolve,reject,timer});window.phoneNative.postMessage(JSON.stringify({action,requestId,...data}));
+  }); }
+  window.phoneTransferReply = (id,reply)=>{const request=transfers.get(id);if(!request)return;transfers.delete(id);clearTimeout(request.timer);reply.ok?request.resolve(reply.result):request.reject(Error(reply.error || 'File operation failed.'));};
+  window.phoneTransfer = RoutineTransferUI.mount($('routine-transfer-body'),{
+    platform:'android',list:()=>transfer('routineFileList'),exportFile:selection=>transfer('routineFileExport',{selection}),
+    openFile:()=>transfer('routineFileOpen'),preview:text=>transfer('routineFilePreview',{text}),
+    commitImport:(text,policy)=>transfer('routineFileImport',{text,policy}),adopt:options=>transfer('routineFileAdopt',{options}),
+    start:id=>send('startRoutine',{id})
+  });
   resetRoutine(); resetRule(); calendar(); tab(view);
 })();

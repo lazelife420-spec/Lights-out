@@ -652,6 +652,14 @@ function stopScheduleClock() {
 // tick. loadCalendarConfig() already re-renders from the cached events.
 async function renderSchedulePage() {
   await loadCalendarConfig();
+  if (typeof api !== 'undefined' && api.routineFileList && document.getElementById('routine-transfer-body')) {
+    if (!window.routineTransfer) window.routineTransfer = RoutineTransferUI.mount(document.getElementById('routine-transfer-body'), {
+      platform:'windows', list:()=>api.routineFileList(), exportFile:selection=>api.routineFileExport(selection),
+      openFile:()=>api.routineFileOpen(), preview:text=>api.routineFilePreview(text),
+      commitImport:(text,policy)=>api.routineFileImport(text,policy), adopt:async options=>{const r=await api.routineFileAdopt(options);await loadCalendarConfig();return r;},
+      start:async id=>{const r=await api.routineFileStart(id);if(!r?.success)throw Error(r?.error || 'Timer could not start');}
+    }); else await window.routineTransfer.refresh();
+  }
   if (Date.now() - calLastFetchAt > CAL_REFETCH_MS) await fetchAndRenderEvents();
   startScheduleClock();
 }

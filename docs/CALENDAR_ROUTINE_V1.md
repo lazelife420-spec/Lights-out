@@ -134,8 +134,12 @@ The continuation passed 1,077 desktop units, 299 smoke checks, zero lint errors
 and nine Android runtime cases, plus six Android calendar and six lifecycle
 compatibility cases. No production power or lamp action was exercised.
 
-Remaining engineering: independently timed action offsets, portable
-plan interchange, explicitly secured local
+Offline portable interchange is now implemented in LO-RIE-1; see
+`ROUTINE_INTERCHANGE_V1.md` for versioning, validation, inactive import,
+capability review, native adoption and file-only qualification boundaries.
+
+Remaining engineering: independently timed action offsets, future interchange
+format migrations, explicitly secured local
 handoff and availability negotiation. These are not silently represented as
 implemented. Hardware/OEM reliability and Android production distribution
 remain separate HOLDs; no cloud, daemon, router or new Hue adapter was added.

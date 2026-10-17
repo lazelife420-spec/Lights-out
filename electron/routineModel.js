@@ -77,13 +77,13 @@
       owner: { platform: 'windows', deviceId: 'local' },
       schedule: schedule({ kind, time: rule.time || '22:30', weekdays: (rule.days || DAYS).map(d => (DAYS.indexOf(d) || 7)),
         monthDays: rule.monthDays || [], months: rule.months, date: rule.date }, 'windows'),
-      actions: [{ id: 'timer', type: 'timer.start', target: 'local', phase: 'start',
+      actions: [{ id: rule.actionId || 'timer', type: 'timer.start', target: 'local', phase: 'start',
         parameters: { seconds: Math.max(300, Math.round((Number(rule.durationMinutes) || 60) * 60)), endAction: rule.action || 'shutdown', testMode: Boolean(rule.testMode) } }] });
   }
   function fromPhoneRoutine(routine, rule) {
-    const actions = [{ id: 'timer', type: 'timer.start', target: 'local', phase: 'start', parameters: { seconds: routine.seconds, endAction: 'reminder' } }];
-    if (routine.brightness > 0) actions.push({ id: 'warm', type: 'wiz.warm', target: 'local', phase: 'start', parameters: { targets: routine.warmTargets ?? routine.targets, brightness: routine.brightness } });
-    if (routine.offAtEnd) actions.push({ id: 'off', type: 'wiz.off', target: 'local', phase: 'timer-complete', parameters: { targets: routine.offTargets ?? routine.targets } });
+    const actions = [{ id: routine.actionIds?.['timer.start'] || 'timer', type: 'timer.start', target: 'local', phase: 'start', parameters: { seconds: routine.seconds, endAction: 'reminder' } }];
+    if (routine.brightness > 0) actions.push({ id: routine.actionIds?.['wiz.warm'] || 'warm', type: 'wiz.warm', target: 'local', phase: 'start', parameters: { targets: routine.warmTargets ?? routine.targets, brightness: routine.brightness } });
+    if (routine.offAtEnd) actions.push({ id: routine.actionIds?.['wiz.off'] || 'off', type: 'wiz.off', target: 'local', phase: 'timer-complete', parameters: { targets: routine.offTargets ?? routine.targets } });
     return validate({ schemaVersion: 1, id: rule?.id || routine.id, name: routine.name,
       owner: { platform: 'android', deviceId: 'local' }, schedule: rule ? schedule(rule, 'android') : null, actions });
   }
@@ -107,5 +107,131 @@
       ? { available: true, reason: 'Runs on this device while available' }
       : { available: false, reason: 'Owner unavailable; no remote handoff is configured' };
   }
-  return { validate, schedule, fromWindowsRule, fromPhoneRoutine, occurrenceKey, matchesDate, availability };
+  // Offline interchange projects the existing action/schedule model. It never
+  // carries an owner, endpoint, activation flag, receipt or occurrence ledger.
+  const MAX_FILE_BYTES = 262144;
+  const portableId = value => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(value);
+  function fields(value, required, optional = []) {
+    requireValue(value && typeof value === 'object' && !Array.isArray(value), 'Expected an object in the routine file');
+    requireValue(required.every(k => Object.hasOwn(value,k)) && Object.keys(value).every(k => [...required,...optional].includes(k)), 'Missing or unsupported field in the routine file');
+  }
+  function portableSchedule(s) {
+    fields(s, ['kind','time','weekdays','monthDays','months','date','timezone','dstPolicy']);
+    requireValue(['weekdays','monthDays','months'].every(k => Array.isArray(s[k]) && s[k].length <= 31 && new Set(s[k]).size === s[k].length), 'Invalid calendar selectors');
+    const normalized = schedule(s, 'android');
+    requireValue(s.timezone === normalized.timezone && s.dstPolicy === normalized.dstPolicy && (s.kind === 'once' || s.date === null), 'Unsupported calendar clock policy');
+    return s;
+  }
+  function portableActions(actions) {
+    requireValue(Array.isArray(actions) && actions.length >= 1 && actions.length <= 3, 'Choose one timer and up to two WiZ actions');
+    const ids = new Set(), types = new Set();
+    for (const a of actions) {
+      fields(a, ['id','type','phase','parameters']);
+      requireValue(typeof a.id === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(a.id) && !ids.has(a.id) && !types.has(a.type), 'Duplicate or invalid action identity');
+      ids.add(a.id); types.add(a.type);
+      if (a.type === 'timer.start') {
+        fields(a.parameters, ['seconds','endAction']);
+        requireValue(a.phase === 'start' && Number.isInteger(a.parameters.seconds) && a.parameters.seconds >= 60 && a.parameters.seconds <= 86400, 'Invalid timer duration');
+        requireValue(['reminder','shutdown','sleep','hibernate'].includes(a.parameters.endAction), 'Unsupported timer ending');
+      } else {
+        requireValue(['wiz.warm','wiz.off'].includes(a.type), 'This action has no supported interchange adapter');
+        fields(a.parameters, a.type === 'wiz.warm' ? ['bindings','brightness'] : ['bindings']);
+        requireValue(a.phase === (a.type === 'wiz.off' ? 'timer-complete' : 'start'), 'Unsupported action timing');
+        const b = a.parameters.bindings;
+        requireValue(Array.isArray(b) && b.length >= 1 && b.length <= 8 && new Set(b).size === b.length && b.every(v => typeof v === 'string' && /^[a-zA-Z0-9_-]{1,32}$/.test(v)), 'Use abstract light bindings, not addresses');
+        if (a.type === 'wiz.warm') requireValue(Number.isInteger(a.parameters.brightness) && a.parameters.brightness >= 10 && a.parameters.brightness <= 100, 'Invalid brightness');
+      }
+    }
+    requireValue(types.has('timer.start'), 'A portable routine needs a timer');
+    requireValue(new Set(actions.flatMap(a => a.parameters.bindings || [])).size <= 8, 'Keep up to eight light bindings per routine');
+  }
+  function portableValidate(d) {
+    fields(d, ['format','schemaVersion','routines','rules']);
+    requireValue(d.format === 'lights-out.routines' && d.schemaVersion === 1, 'Unsupported routine file format or version');
+    requireValue(Array.isArray(d.routines) && d.routines.length >= 1 && d.routines.length <= 32 && Array.isArray(d.rules) && d.rules.length <= 64, 'Keep up to 32 routines and 64 rules per file');
+    const routines = new Set(), rules = new Set();
+    const name = n => typeof n === 'string' && n.trim().length > 0 && n.trim() === n && n.length <= 60 && !/[\u0000-\u001f\u007f]/.test(n);
+    for (const r of d.routines) {
+      fields(r, ['id','name','actions']); requireValue(portableId(r.id) && !routines.has(r.id), 'Duplicate or invalid routine identity');
+      requireValue(name(r.name), 'Name routines with 1–60 printable characters'); routines.add(r.id); portableActions(r.actions);
+    }
+    for (const r of d.rules) {
+      fields(r, ['id','routineId','name','schedule']); requireValue(portableId(r.id) && !rules.has(r.id), 'Duplicate or invalid rule identity');
+      requireValue(routines.has(r.routineId) && name(r.name), 'Calendar rule references a missing routine or name'); rules.add(r.id); portableSchedule(r.schedule);
+    }
+    return d;
+  }
+  function portableParse(text) {
+    requireValue(typeof text === 'string' && new TextEncoder().encode(text).length <= MAX_FILE_BYTES, 'Routine files must be UTF-8 JSON up to 256 KiB');
+    const json=text.replace(/^\uFEFF/,'');
+    let d; try { d = JSON.parse(json); } catch { throw Error('The routine file is not valid JSON'); }
+    // JSON.parse accepts duplicate keys. Reject ambiguity (and excessive
+    // nesting) before either platform can interpret a different version.
+    let at=0;
+    const whitespace=()=>{while(/\s/.test(json[at] || '') && at<json.length)at++;};
+    function quoted(){const start=at++;while(at<json.length){if(json[at]==='\\'){at+=2;continue;}if(json[at++]==='"')return JSON.parse(json.slice(start,at));}throw Error('Invalid JSON string');}
+    function scan(depth){requireValue(depth<=16,'Routine JSON nesting is too deep');whitespace();const token=json[at];
+      if(token==='{'){at++;whitespace();const keys=new Set();if(json[at]==='}'){at++;return;}while(true){whitespace();const key=quoted();requireValue(!keys.has(key),'Duplicate JSON field');keys.add(key);whitespace();at++;scan(depth+1);whitespace();if(json[at++]==='}')break;}}
+      else if(token==='['){at++;whitespace();if(json[at]===']'){at++;return;}while(true){scan(depth+1);whitespace();if(json[at++]===']')break;}}
+      else if(token==='"')quoted();else while(at<json.length&&!/[\s,}\]]/.test(json[at]))at++;
+    }
+    scan(0);
+    return portableValidate(d);
+  }
+  function portablePrepare(document, existing, policy = 'reject', newId) {
+    const d = JSON.parse(JSON.stringify(portableValidate(document)));
+    requireValue(['reject','copy'].includes(policy), 'Choose reject conflicts or import as copies');
+    const usedRoutines = new Set(existing.routines || []), usedRules = new Set(existing.rules || []), map = new Map();
+    function identity(id, used) {
+      if (!used.has(id)) { used.add(id); return id; }
+      requireValue(policy === 'copy', 'Identity conflict: existing records were not changed. Choose Import as copies.');
+      for (let n = 0; n < 32; n++) { const next = newId(); if (portableId(next) && !used.has(next)) { used.add(next); return next; } }
+      throw Error('Could not allocate a unique copy identity');
+    }
+    for (const r of d.routines) { const old = r.id; r.id = identity(old, usedRoutines); map.set(old,r.id); }
+    for (const r of d.rules) { r.id = identity(r.id,usedRules); r.routineId = map.get(r.routineId); }
+    return d;
+  }
+  function portableInspect(d, platform, existing = { routines: [], rules: [] }) {
+    portableValidate(d); requireValue(['windows','android'].includes(platform), 'Unknown local platform');
+    return { document: d, routines: d.routines.map(r => {
+      const timer = r.actions.find(a => a.type === 'timer.start'), issues = [];
+      if (platform === 'android' && timer.parameters.endAction !== 'reminder') issues.push('Choose the phone reminder instead of the Windows power ending.');
+      if (platform === 'windows' && timer.parameters.endAction === 'reminder') issues.push('Choose a Windows timer ending; phone reminders are unavailable on this PC.');
+      if (r.actions.some(a => a.type.startsWith('wiz.'))) issues.push(platform === 'windows' ? 'WiZ actions are unavailable in the PC routine adapter. Explicitly omit them to adopt.' : 'Bind light slots to saved phone lights, or explicitly omit lighting.');
+      if (platform === 'windows' && timer.parameters.seconds < 300 && d.rules.some(rule => rule.routineId === r.id)) issues.push('Windows scheduled timers require at least 5 minutes. Review the duration.');
+      return { ...r, issues, conflict: (existing.routines || []).includes(r.id) };
+    }), conflicts: { routines: d.routines.filter(r => (existing.routines || []).includes(r.id)).map(r => r.id), rules: d.rules.filter(r => (existing.rules || []).includes(r.id)).map(r => r.id) },
+    note: 'Times use this device’s local timezone. Import saves inactive drafts; adoption saves calendar rules disabled.' };
+  }
+  function portableFromPlan(plan, configuredBindings = {}) {
+    validate(plan);
+    const addresses = [...new Set(plan.actions.flatMap(a => a.parameters.targets || []))].sort();
+    const slots = new Map(), used = new Set();
+    for (const [slot,ip] of Object.entries(configuredBindings)) if(addresses.includes(ip) && /^[a-zA-Z0-9_-]{1,32}$/.test(slot) && !slots.has(ip)){slots.set(ip,slot);used.add(slot);}
+    for (const ip of addresses) if(!slots.has(ip)){let n=1;while(used.has('light-'+n))n++;const slot='light-'+n;slots.set(ip,slot);used.add(slot);}
+    return { id: plan.id, name: plan.name, actions: plan.actions.map(a => ({ id:a.id, type:a.type, phase:a.phase,
+      parameters: a.type === 'timer.start' ? { seconds:a.parameters.seconds, endAction:a.parameters.endAction } : {
+        bindings: a.parameters.targets.map(ip => slots.get(ip)), ...(a.type === 'wiz.warm' ? {brightness:a.parameters.brightness} : {}) } })) };
+  }
+  function portableRule(rule, routineId, name) {
+    const s = schedule(rule, 'android'); delete s.lateSeconds;
+    return { id:rule.id, routineId, name, schedule:s };
+  }
+  function phoneExport(config, ids) {
+    requireValue(Array.isArray(ids) && ids.length > 0 && new Set(ids).size === ids.length, 'Select routines to export');
+    const routines = [], rules = [];
+    for (const id of ids) {
+      const native = (config.routines || []).find(r => r.id === id), draft = (config.portable?.routines || []).find(r => r.intent.id === id);
+      requireValue(native || draft, 'A selected routine is no longer available');
+      if (native) {
+        routines.push(portableFromPlan(fromPhoneRoutine(native),native.lightBindings));
+        for (const rule of config.rules || []) if (rule.routineId === id) rules.push(portableRule(rule,id,rule.name || native.name));
+      } else { routines.push(draft.intent); rules.push(...(config.portable.rules || []).filter(r => r.routineId === id)); }
+    }
+    return portableValidate({format:'lights-out.routines',schemaVersion:1,routines,rules});
+  }
+  const interchange = { maxBytes:MAX_FILE_BYTES, validate:portableValidate, parse:portableParse, prepare:portablePrepare, inspect:portableInspect,
+    fromPlan:portableFromPlan, rule:portableRule, phoneExport };
+  return { validate, schedule, fromWindowsRule, fromPhoneRoutine, occurrenceKey, matchesDate, availability, interchange };
 });

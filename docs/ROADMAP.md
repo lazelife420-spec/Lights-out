@@ -50,6 +50,10 @@ is complete; the broader platform roadmap remains open.
   The local continuation corrects leap-day alarm lookup, adds explicit action
   editing with separate phone lighting targets, and correlates delayed Windows
   rituals through timer receipts. These changes remain local and unreleased.
+  **LO-RIE-1** adds versioned offline files, native file pickers, previews, safe
+  conflict copies and explicit local adoption. Windows/phone execution stays
+  independent; file intent never grants remote authority. See
+  [routine interchange v1](ROUTINE_INTERCHANGE_V1.md).
 - **Windows invisible-host objective:** Electron main owns the timer/listener/
   receipts. The reviewed v11.2.0 qualification reported seven lifecycle checks
   passing: close/reopen, single timer authority, tray controls, hidden completion,
@@ -79,10 +83,12 @@ is complete; the broader platform roadmap remains open.
    and idle login remain safe defaults. No daemon migration is justified.
 3. **Calendar Routine Builder continuation:** the first local vertical slice is
    implemented, including bounded local action editing and delayed Windows
-   receipt correlation. Next, specify versioned portable import/export with
-   migration, validation and explicit local adoption. Optional secured local
-   handoff remains separate work, requiring capability negotiation and explicit
-   target approval. No hidden
+   receipt correlation. Offline v1 import/export is implemented with validation,
+   inactive drafts, conflict handling and explicit local adoption. Next, qualify
+   future format migrations and prepare a separate secured-handoff design with
+   explicit trust/enrollment, approved transfer, authentication, replay protection,
+   revocation, capability negotiation and deterministic ownership. No handoff
+   implementation is included. No hidden
    synchronization, arbitrary remote execution or unsupported adapter claims.
 4. **First Light extension:** specify a separately qualified phone-owned morning
    path and compatible lighting actions after routine ownership is explicit.
@@ -101,8 +107,9 @@ scheduling or new adapters are already built or released.
 - Real router control, new Hue/webhook support, physical sunrise and PC wake
   behavior: require a real supported integration and specific hardware authority.
   An absent adapter is blocked or planned; never simulate it as supported.
-- Local commits/pushes/merges, release tags, `[release]` triggers and public
-  deployment for the platform-alignment candidate require owner authorization.
+- Scoped, non-destructive local development and commits have standing owner
+  authorization. Remote pushes/merges, release tags, `[release]` triggers,
+  production signing and public deployment require separate authorization.
 
 Hardware HOLDs do not reopen the qualified Windows v11.2.0 release. They constrain
 what can be claimed for those surfaces and future independent release trains.

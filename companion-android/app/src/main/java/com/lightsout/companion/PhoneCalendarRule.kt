@@ -10,7 +10,7 @@ data class PhoneCalendarRule(
     val enabled: Boolean = true, val createdAt: Long = 0
 ) {
     init {
-        require(id.matches(Regex("[a-zA-Z0-9-]{1,64}")) && routineId.matches(Regex("[a-zA-Z0-9-]{1,64}")))
+        require(id.matches(Regex("[a-zA-Z0-9_-]{1,80}")) && routineId.matches(Regex("[a-zA-Z0-9_-]{1,80}")))
         require(kind in setOf("weekly", "monthly", "once")) { "Choose a weekly, monthly, or date rule." }
         require(time.second == 0 && time.nano == 0) { "Use hours and minutes." }
         require(weekdays.all { it in 1..7 } && monthDays.all { it in 1..31 || it == -1 })

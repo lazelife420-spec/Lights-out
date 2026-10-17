@@ -48,9 +48,9 @@ data class RoutinePlan(val id: String, val name: String, val actions: List<Routi
     }
     companion object {
         fun from(p: PhoneRoutine, rule: PhoneCalendarRule? = null): RoutinePlan {
-            val actions = mutableListOf(RoutineAction("timer", "timer.start", "start", seconds = p.seconds))
-            if (p.brightness > 0) actions.add(RoutineAction("warm", "wiz.warm", "start", targets = p.warmTargets, brightness = p.brightness))
-            if (p.offAtEnd) actions.add(RoutineAction("off", "wiz.off", "timer-complete", targets = p.offTargets))
+            val actions = mutableListOf(RoutineAction(p.actionIds["timer.start"] ?: "timer", "timer.start", "start", seconds = p.seconds))
+            if (p.brightness > 0) actions.add(RoutineAction(p.actionIds["wiz.warm"] ?: "warm", "wiz.warm", "start", targets = p.warmTargets, brightness = p.brightness))
+            if (p.offAtEnd) actions.add(RoutineAction(p.actionIds["wiz.off"] ?: "off", "wiz.off", "timer-complete", targets = p.offTargets))
             return RoutinePlan(rule?.id ?: p.id, p.name, actions)
         }
         fun validateJson(j: JSONObject) {
