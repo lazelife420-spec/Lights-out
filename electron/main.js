@@ -40,6 +40,8 @@ const smartSuggestions = require('./smartSuggestions');
 const windowGeometry = require('./windowGeometry');
 const nightModes = require('./nightModes');
 const startDecision = require('./startDecision');
+const routineModel = require('./routineModel');
+const routineLedger = require('./routineLedger').createFileLedger(() => path.join(app.getPath('userData'), 'routine-outcomes.json'));
 
 // Desktop UX Functional Gate instrumentation: only active when an explicit
 // proof flag is supplied. Never records in normal production runs.
@@ -1435,7 +1437,6 @@ const calendarStartedOccurrences = new Set();
 async function checkCalendarAutoStart() {
   const calSettings = settingsStore.getSection('calendar') || {};
   if (!calSettings.enabled || !calSettings.autoStartFromEvents) return;
-  if (isRunActive()) return; // one run at a time: never replace an active run
   if (calendarAutoStartBusy) return;
   calendarAutoStartBusy = true;
 
@@ -1465,12 +1466,32 @@ async function checkCalendarAutoStart() {
         // Test Mode is read from the app section at fire time, like autopilot.
         const appSettings = settingsStore.getSection('app') || {};
         const profile = event.profileId ? profiles.getById(event.profileId) : null;
+        // Claim the local day before dispatch. A failed write blocks execution;
+        // a claimed-but-interrupted dispatch is never silently retried.
+        let claimed = null;
+        if (event.routinePlan) {
+          const available = routineModel.availability(event.routinePlan, 'windows');
+          if (!available.available) continue;
+          const day = `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}-${String(start.getDate()).padStart(2,'0')}`;
+          claimed = routineLedger.claim(event.routinePlan, day, start.toISOString());
+          if (!claimed) continue;
+          if (isRunActive() || (event.profileId && !profile)) {
+            routineLedger.update(claimed.occurrenceKey, { status: 'skipped', reason: isRunActive() ? 'timer-active' : 'routine-unavailable',
+              actions: claimed.actions.map(a => ({ ...a, status: 'skipped' })) });
+            break;
+          }
+        } else if (isRunActive()) return;
         // A removed saved routine must not silently fall back to another one.
         if (event.profileId && !profile) continue;
         const result = startTimer({ durationSeconds: duration, action,
           profileId: profile?.id || null, dryRun: Boolean(appSettings.dryRun || profile?.dryRun),
           forceShutdown: false, muteSystem: Boolean(profile?.muteSystem),
           gracePeriod: profile?.gracePeriod, startOrigin: 'calendar', origin: 'calendar' });
+        if (claimed) routineLedger.update(claimed.occurrenceKey, {
+          status: result?.success ? 'accepted' : 'failed', reason: result?.success ? null : (result?.code || 'start-failed'),
+          timerReceiptId: result?.success && timerState.running ? activeReceiptId : null,
+          actions: claimed.actions.map(a => ({ ...a, status: result?.success ? 'accepted' : 'failed' }))
+        });
         if (result && result.success) {
           calendarStartedOccurrences.add(occurrence);
           if (calendarStartedOccurrences.size > 128) calendarStartedOccurrences.delete(calendarStartedOccurrences.values().next().value);
@@ -2372,11 +2393,18 @@ ipcMain.handle('fetch-calendar-events', async (event, withinDays) => {
 // at }); the reason is a fixed category, never error text, a URL or a token.
 ipcMain.handle('get-calendar-fetch-status', () => calProviders.getLastFetchStatus());
 ipcMain.handle('save-calendar-settings', async (event, calSettings) => {
-  settingsStore.updateSection('calendar', calSettings);
+  const patch = { ...calSettings };
+  if (Array.isArray(calSettings?.builtin?.rules)) {
+    patch.builtin = { ...calSettings.builtin, rules: calSettings.builtin.rules.map(rule => ({ ...rule, plan: routineModel.fromWindowsRule(rule) })) };
+  }
+  settingsStore.updateSection('calendar', patch, { requireSave: true });
   return { success: true };
 });
 ipcMain.handle('get-calendar-settings', async () => {
-  return settingsStore.getSection('calendar');
+  let routineOutcomes = [];
+  try { routineOutcomes = routineLedger.list(id => runReceipts.getReceiptById(id)).slice(0, 12); }
+  catch { routineOutcomes = [{ name: 'Routine history', status: 'unavailable', reason: 'History could not be read; new calendar dispatch is blocked until storage is repaired.' }]; }
+  return { ...settingsStore.getSection('calendar'), routineOutcomes };
 });
 ipcMain.handle('get-companion-status', async () => {
   return companion.getStatus();

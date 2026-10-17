@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added a common v1 local routine/action contract for Windows and standalone
+  Android, with explicit local ownership, weekly/monthly/date schedules and
+  stable local-day occurrence identity. Existing saved rules and timer engines
+  remain compatible; cross-device execution and cloud synchronization are absent.
+- Calendar dispatch now records durable claims before execution and exposes
+  recent outcomes. Phone WiZ results distinguish acknowledgement, failure and
+  cancelled finish actions. Corrupt history does not disable manual phone timers.
+- Corrected Android weekly rules to respect selected months, matching the shared
+  model and planner. Checked desktop calendar saves roll back after disk failure.
 - Guarded queued Electron readiness after losing the single-instance lock, so
   a quitting secondary cannot initialize a window, tray or startup services.
   Added focused primary-startup, lock-loss and second-instance focus regressions.

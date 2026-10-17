@@ -7,6 +7,7 @@
   <title>Lights Out · Phone</title>
   <link rel="stylesheet" href="phone.css">
   <script src="phone.js" defer></script>
+  <script src="routine-model.js" defer></script>
   <script src="home.js" defer></script>
 </head>
 <body>
@@ -63,6 +64,7 @@
       <p class="eyebrow">YOUR NIGHTS, PLANNED</p><h1>Make room for rest.</h1><p class="view-copy" id="calendar-readiness">Calendar routines run on this phone, with the PC off.</p>
       <div class="control-card"><div class="month-header"><button id="month-prev" aria-label="Previous month">‹</button><h2 id="calendar-month"></h2><button id="month-next" aria-label="Next month">›</button></div><div class="weekday-head" aria-hidden="true"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div><div id="month-grid" class="month-grid"></div><small>Tap a date to create a rule. A star marks a scheduled routine.</small></div>
       <div id="rule-list" class="item-list"></div>
+      <details class="control-card"><summary>Recent routine outcomes</summary><div id="routine-outcomes" role="status">No calendar routine has run yet.</div></details>
       <form id="rule-form" class="control-card"><h2 id="rule-editor-title">New calendar rule</h2>
         <label for="rule-routine">Routine</label><select id="rule-routine" required></select>
         <label for="rule-kind">Repeat</label><select id="rule-kind"><option value="weekly">Weekly</option><option value="monthly">Monthly · selected months</option><option value="once">Individual date</option></select>

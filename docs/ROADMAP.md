@@ -40,6 +40,13 @@ is complete; the broader platform roadmap remains open.
 - **Optional Android PC controls:** separate QR/pairing WebView. Desktop protocol
   qualification and historical phone pairing do not substitute for current
   signed-APK and physical-device regression evidence.
+- **Local Calendar Routine Builder v1:** a common versioned plan now covers
+  explicit Windows/Android local ownership, validated timer actions, existing
+  phone WiZ adapters, weekly/monthly/date recurrence, durable occurrence claims
+  and visible outcomes. UI-to-executor candidates are TEST-PROVEN with isolated
+  Windows Test Mode and Android loopback fixtures; no new public release is
+  implied. Existing data and independent engines are preserved. See
+  [the contract and migration boundary](CALENDAR_ROUTINE_V1.md).
 - **Windows invisible-host objective:** Electron main owns the timer/listener/
   receipts. The reviewed v11.2.0 qualification reported seven lifecycle checks
   passing: close/reopen, single timer authority, tray controls, hidden completion,
@@ -67,13 +74,12 @@ is complete; the broader platform roadmap remains open.
    instrumented runs close the reviewed lifecycle/startup gate. The corrected
    candidate awaits owner commit review and is not published. Listener opt-in
    and idle login remain safe defaults. No daemon migration is justified.
-3. **Unified local Calendar Routine Builder, separate design/tranche:** audit both
-   current formats; define versioned routine identity, device execution ownership,
-   timezone/DST policy, validated actions, permissions, occurrence idempotency,
-   late/offline behavior, cancellation and honest outcomes/receipts. Specify
-   migrations before coding. Deliver one single-device vertical slice first;
-   optional secured handoff comes later. No hidden synchronization or arbitrary
-   remote execution.
+3. **Calendar Routine Builder continuation:** the first local vertical slice is
+   implemented. Next, extend the builder's explicit action editing and receipt
+   correlation without replacing the independent engines. Versioned portable
+   import/export and optional secured local handoff remain separate work; they
+   require capability negotiation and explicit target approval. No hidden
+   synchronization, arbitrary remote execution or unsupported adapter claims.
 4. **First Light extension:** specify a separately qualified phone-owned morning
    path and compatible lighting actions after routine ownership is explicit.
    Never promise PC-off execution from a Windows-only adapter.

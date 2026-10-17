@@ -5,6 +5,7 @@ const https = require('https');
 const http = require('http');
 const icsParser = require('./calendar');
 const recurrence = require('./calendarRecurrence');
+const routineModel = require('./routineModel');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Provider registry
@@ -60,6 +61,8 @@ function getDefaultCalendarEvents(schedule, from, withinDays) {
   cutoff.setDate(cutoff.getDate() + Math.max(0, Math.min(366, Number(withinDays) || 0)));
 
   for (const rule of rules) {
+    let routinePlan;
+    try { routinePlan = routineModel.fromWindowsRule(rule); } catch { continue; }
     const [h, m] = String(rule.time || '22:30').split(':').map(Number);
     if (!Number.isInteger(h) || h < 0 || h > 23 || !Number.isInteger(m) || m < 0 || m > 59) continue;
     const durationMs = Math.max(1, Number(rule.durationMinutes) || 60) * 60000;
@@ -81,6 +84,7 @@ function getDefaultCalendarEvents(schedule, from, withinDays) {
         source: 'builtin',
         repeat: rule.repeat || 'weekly',
         profileId: typeof rule.profileId === 'string' ? rule.profileId : null,
+        routinePlan,
         action
       });
     }

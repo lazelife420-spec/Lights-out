@@ -60,6 +60,23 @@ const tmpFile = () => path.join(tmpDir, 'settings.json.tmp');
 
 // --- ORDINARY SAVE/LOAD ---
 
+test('checked calendar save rolls back live state and reports a failed durable write', () => {
+  freshSetup();
+  const rename = fs.renameSync;
+  try {
+    settingsModule.updateSection('calendar', { builtin: { rules: [{ id: 'saved' }] } });
+    const before = settingsModule.getSection('calendar');
+    fs.renameSync = function(from, to) {
+      if (to === settingsFile()) throw new Error('isolated simulated disk failure');
+      return rename.apply(this, arguments);
+    };
+    assert.throws(() => settingsModule.updateSection('calendar', { builtin: { rules: [{ id: 'unsaved' }] } }, { requireSave: true }), /Could not save/);
+    assert.deepEqual(settingsModule.getSection('calendar'), before);
+    fs.renameSync = rename; reloadSettings();
+    assert.deepEqual(settingsModule.getSection('calendar'), before);
+  } finally { fs.renameSync = rename; teardown(); }
+});
+
 test('ordinary save creates settings.json and backup', () => {
   freshSetup();
   try {

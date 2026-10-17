@@ -60,7 +60,7 @@
   function matches(r, d) {
     if (r.enabled === false) return false;
     if (r.kind === 'once') return r.date === dateKey(d);
-    if (r.kind === 'weekly') return (r.weekdays || []).includes(d.getDay() || 7);
+    if (r.kind === 'weekly') return (!r.months || r.months.includes(d.getMonth() + 1)) && (r.weekdays || []).includes(d.getDay() || 7);
     return (r.months || []).includes(d.getMonth() + 1) && ((r.monthDays || []).includes(d.getDate()) || ((r.monthDays || []).includes(-1) && new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() === d.getDate()));
   }
   function calendar() {
@@ -83,7 +83,9 @@
     event.preventDefault(); const minutes = Number($('routine-minutes').value);
     if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) return error('Choose 1 minute to 24 hours.');
     const useLights = $('routine-warm').checked || $('routine-off').checked;
-    send('saveRoutine', { routine: { id: routineId, name: $('routine-name').value.trim(), seconds: minutes * 60, targets: useLights ? checked('routine-light-options') : [], brightness: $('routine-warm').checked ? Number($('routine-brightness').value) : 0, offAtEnd: $('routine-off').checked } });
+    const routine = { id: routineId || crypto.randomUUID(), name: $('routine-name').value.trim(), seconds: minutes * 60, targets: useLights ? checked('routine-light-options') : [], brightness: $('routine-warm').checked ? Number($('routine-brightness').value) : 0, offAtEnd: $('routine-off').checked };
+    try { routine.plan = window.RoutineModel.fromPhoneRoutine(routine); } catch (e) { return error(e.message); }
+    send('saveRoutine', { routine });
   };
   $('rule-form').onsubmit = event => {
     event.preventDefault(); const tokens = $('rule-days').value.split(',').map(s => s.trim().toLowerCase());
@@ -93,6 +95,17 @@
   window.phoneHome = {
     saved(action) { if (action === 'saveRoutine' || action === 'deleteRoutine') resetRoutine(); if (action === 'saveRule' || action === 'deleteRule') resetRule(); },
     update(state) {
+      const outcomes = $('routine-outcomes');
+      const outcomeLabel = { claimed: 'Claimed; start not confirmed', running: 'Timer running', completed: 'Completed',
+        cancelled: 'Cancelled', skipped: 'Skipped', failed: 'Failed', unavailable: 'History unavailable', 'partial-failure': 'Some actions failed', 'waiting-for-actions': 'Timer finished; waiting for lights' };
+      const actionLabel = { 'timer.start': 'Phone reminder', 'wiz.warm': 'Warm lights', 'wiz.off': 'Lights off' };
+      outcomes.replaceChildren(...(state.routineOutcomes || []).slice(-12).reverse().map(entry => {
+        const row = el('p', `${entry.name} · ${outcomeLabel[entry.status] || 'Outcome unknown'}${entry.reason === 'timer-active' ? ' · Another phone timer was active' : ''}`);
+        const statusLabel = { pending: 'Waiting', started: 'Started', paused: 'Paused', completed: 'Completed', acknowledged: 'Acknowledged', cancelled: 'Cancelled', skipped: 'Skipped', failed: 'Failed' };
+        for (const action of entry.actions || []) row.append(el('small', ` · ${actionLabel[action.type] || 'Action'}: ${statusLabel[action.status] || 'Unknown'}`));
+        return row;
+      }));
+      if (!outcomes.children.length) outcomes.textContent = 'No calendar routine has run yet.';
       const key = JSON.stringify(state.home || {}), nk = JSON.stringify(state.upcoming || []);
       upcoming = state.upcoming || [];
       if (key !== configKey) {

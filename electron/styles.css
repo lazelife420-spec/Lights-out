@@ -7585,6 +7585,12 @@ body.mini-mode:has(.modal.active, .last-light-overlay.active.active, .context-me
   color: var(--text-muted);
 }
 .sch-section-note { font-size: 11.5px; color: var(--text-muted); }
+.routine-owner { margin: 12px 0; font: 400 12px/1.6 var(--font-ui); color: var(--text-muted); }
+.routine-history { margin-top: 12px; border-top: 1px solid var(--border-color); padding-top: 12px; }
+.routine-history summary { cursor: pointer; font: 600 12px/1.6 var(--font-ui); color: var(--text-primary); }
+.routine-history summary:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 4px; border-radius: 3px; }
+#routine-outcomes { margin-top: 10px; font: 400 12px/1.7 var(--font-ui); color: var(--text-muted); }
+#routine-outcomes p { margin: 5px 0; overflow-wrap: anywhere; }
 .sch-page .btn-quiet:active .chip-glyph { transform: none; }
 
 /* -- Next lights-out hero -- */

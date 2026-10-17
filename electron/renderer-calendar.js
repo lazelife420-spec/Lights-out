@@ -337,6 +337,7 @@ async function loadCalendarConfig() {
   try {
     const cal = await api.getCalendarSettings();
     if (!cal) return;
+    renderRoutineOutcomes(cal.routineOutcomes || []);
     // Exactly main's test (checkCalendarAutoStart: `!calSettings.enabled`).
     calConfigEnabled = Boolean(cal.enabled);
     calAutoStartArmed = Boolean(cal.autoStartFromEvents);
@@ -354,6 +355,20 @@ async function loadCalendarConfig() {
     renderScheduleState();
   } catch (e) {
     console.error('Failed to load calendar config:', e);
+  }
+}
+
+function renderRoutineOutcomes(entries) {
+  const container = document.getElementById('routine-outcomes');
+  if (!container) return;
+  const labels = { claimed: 'Claimed; dispatch not confirmed', accepted: 'Timer accepted', simulated: 'Completed in Test Mode',
+    completed: 'Completed', cancelled: 'Cancelled', interrupted: 'Interrupted', skipped: 'Skipped', failed: 'Failed', unavailable: 'Unavailable' };
+  container.replaceChildren();
+  if (!entries.length) { container.textContent = 'No calendar routine has run yet.'; return; }
+  for (const entry of entries) {
+    const row = document.createElement('p');
+    row.textContent = `${entry.name || 'Routine'} · ${labels[entry.status] || 'Outcome unknown'}${entry.reason ? ' · ' + entry.reason : ''}`;
+    container.append(row);
   }
 }
 

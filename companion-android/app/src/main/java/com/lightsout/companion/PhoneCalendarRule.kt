@@ -21,7 +21,7 @@ data class PhoneCalendarRule(
         require(date == null || date.year in 2000..2199) { "Choose a date from 2000 to 2199." }
     }
     fun matches(day: LocalDate): Boolean = when (kind) {
-        "weekly" -> day.dayOfWeek.value in weekdays
+        "weekly" -> day.monthValue in months && day.dayOfWeek.value in weekdays
         "monthly" -> day.monthValue in months && (day.dayOfMonth in monthDays ||
             (-1 in monthDays && day.dayOfMonth == day.lengthOfMonth()))
         else -> day == date

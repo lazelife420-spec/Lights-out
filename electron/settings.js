@@ -382,14 +382,18 @@ function getSection(section) {
   return clone(ensureLoaded()[section]);
 }
 
-function updateSection(section, patch) {
+function updateSection(section, patch, options = {}) {
   ensureLoaded();
+  const previous = clone(cache[section]);
   if (!cache[section] || typeof cache[section] !== 'object' || Array.isArray(cache[section])) {
     cache[section] = clone(patch);
   } else {
     cache[section] = deepMerge(cache[section], patch || {});
   }
-  save();
+  if (!save() && options.requireSave) {
+    cache[section] = previous;
+    throw new Error('Could not save settings. Previous settings are still active.');
+  }
   return clone(cache[section]);
 }
 

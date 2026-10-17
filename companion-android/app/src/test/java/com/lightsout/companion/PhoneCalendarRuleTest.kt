@@ -12,6 +12,7 @@ class PhoneCalendarRuleTest {
         LocalTime.parse(time), days, monthDays, months, date?.let { LocalDate.parse(it) }, enabled, created)
     private fun after(local: String) = LocalDateTime.parse(local).atZone(zone).toInstant()
     @Test fun weeklyUsesIsoWeekdays() { assertEquals("2026-10-19T22:00", rule().nextAfter(after("2026-10-16T22:01"), zone)!!.toLocalDateTime().toString()) }
+    @Test fun weeklySelectedMonthsExcludeOtherMonths() { assertFalse(rule(months = setOf(12)).matches(LocalDate.parse("2026-10-19"))) }
     @Test fun noEarlyStart() { assertEquals(22, rule().nextAfter(after("2026-10-15T21:59"), zone)!!.hour) }
     @Test fun exactBoundaryIsExclusive() { assertEquals(16, rule().nextAfter(after("2026-10-15T22:00"), zone)!!.dayOfMonth) }
     @Test fun shortMonthsSkipMissingDay() { assertEquals("2026-03-31", rule("monthly", monthDays = setOf(31)).nextAfter(after("2026-02-01T00:00"), zone)!!.toLocalDate().toString()) }

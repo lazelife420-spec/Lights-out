@@ -47,7 +47,7 @@ function localInput(date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-const CAL_HELPERS = ['calendarArmed', 'isAutoStartEligible', 'eventEnd', 'schClockParts', 'schClock', 'addMinutes', 'ruleEventMinutes', 'ruleCountdownMinutes', 'schClockFromHHMM', 'schDayLabel', 'schDuration', 'setCalText', 'scheduleSpanAction', 'renderScheduleNext', 'renderArmState', 'rulesActionPhrase', 'ruleTruthLine', 'ruleClock', 'ruleDeleteClick', 'calStatusLine', 'calEmptyCopy', 'initialProviderPanel', 'showProviderPanel', 'loadCalendarConfig', 'renderSchedulePage'];
+const CAL_HELPERS = ['renderRoutineOutcomes', 'calendarArmed', 'isAutoStartEligible', 'eventEnd', 'schClockParts', 'schClock', 'addMinutes', 'ruleEventMinutes', 'ruleCountdownMinutes', 'schClockFromHHMM', 'schDayLabel', 'schDuration', 'setCalText', 'scheduleSpanAction', 'renderScheduleNext', 'renderArmState', 'rulesActionPhrase', 'ruleTruthLine', 'ruleClock', 'ruleDeleteClick', 'calStatusLine', 'calEmptyCopy', 'initialProviderPanel', 'showProviderPanel', 'loadCalendarConfig', 'renderSchedulePage'];
 
 function calendarSandbox({ events = [], armed = false, dryRun = true, running = false, paused = false, settingsLoaded = true } = {}) {
   const ids = ['sch-next', 'sch-next-eyebrow', 'sch-next-when', 'sch-next-ampm', 'sch-next-day', 'sch-next-span', 'sch-next-detail', 'sch-next-consequence', 'sch-next-in', 'sch-next-arc', 'sch-arm-hint', 'sch-arm-mode',

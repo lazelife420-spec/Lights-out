@@ -70,6 +70,8 @@
       "updaterPolicy.js",
       "calendarProviders.js",
       "calendarRecurrence.js",
+      "routineModel.js",
+      "routineLedger.js",
       "wizLights.js",
       "renderer-signature.js",
       "companion.js",

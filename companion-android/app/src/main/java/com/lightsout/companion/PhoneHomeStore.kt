@@ -8,7 +8,7 @@ import java.time.LocalTime
 import java.util.UUID
 
 data class PhoneRoutine(val id: String, val name: String, val seconds: Long,
-    val targets: List<String>, val brightness: Int, val offAtEnd: Boolean) {
+    val targets: List<String>, val brightness: Int, val offAtEnd: Boolean, val occurrenceKey: String? = null) {
     init {
         require(id.matches(Regex("[a-zA-Z0-9-]{1,64}")))
         require(name.isNotBlank() && name.length <= 60) { "Name the routine (up to 60 characters)." }
@@ -19,6 +19,7 @@ data class PhoneRoutine(val id: String, val name: String, val seconds: Long,
     }
     fun json() = JSONObject().put("id", id).put("name", name).put("seconds", seconds)
         .put("targets", JSONArray(targets)).put("brightness", brightness).put("offAtEnd", offAtEnd)
+        .put("plan", RoutinePlan.from(this).json())
 }
 
 /** Main-thread writes. Network workers post results back to the main thread. */
@@ -38,13 +39,19 @@ object PhoneHomeStore {
         val a = j.optJSONArray(key) ?: JSONArray()
         return (0 until a.length()).map { a.getInt(it) }.toSet()
     }
-    fun routine(j: JSONObject) = PhoneRoutine(j.getString("id"), j.getString("name").trim(), j.getLong("seconds"),
-        WizAddress.targets(strings(j.optJSONArray("targets"))), j.optInt("brightness"), j.optBoolean("offAtEnd"))
-    fun rule(j: JSONObject) = PhoneCalendarRule(j.getString("id"), j.getString("routineId"), j.getString("kind"),
+    fun routine(j: JSONObject): PhoneRoutine {
+        j.optJSONObject("plan")?.let { RoutinePlan.validateJson(it) }
+        return PhoneRoutine(j.getString("id"), j.getString("name").trim(), j.getLong("seconds"),
+            WizAddress.targets(strings(j.optJSONArray("targets"))), j.optInt("brightness"), j.optBoolean("offAtEnd"))
+    }
+    fun rule(j: JSONObject): PhoneCalendarRule {
+        j.optJSONObject("plan")?.let { RoutinePlan.validateJson(it) }
+        return PhoneCalendarRule(j.getString("id"), j.getString("routineId"), j.getString("kind"),
         LocalTime.parse(j.getString("time")), ints(j, "weekdays"), ints(j, "monthDays"),
         if (j.has("months")) ints(j, "months") else (1..12).toSet(),
         j.optString("date").takeIf { it.isNotBlank() }?.let { LocalDate.parse(it) },
         j.optBoolean("enabled", true), j.optLong("createdAt"))
+    }
     fun routines(c: Context): List<PhoneRoutine> {
         val a = config(c).optJSONArray("routines") ?: JSONArray()
         return (0 until a.length()).map { routine(a.getJSONObject(it)) }
@@ -83,7 +90,9 @@ object PhoneHomeStore {
                 val existing = (0 until old.length()).map { old.getJSONObject(it) }.find { it.optString("id") == value.getString("id") }
                 value.put("createdAt", existing?.optLong("createdAt") ?: System.currentTimeMillis())
                 val rule = rule(value)
-                require(routines(c).any { it.id == rule.routineId }) { "Choose a saved routine." }
+                val profile = routines(c).find { it.id == rule.routineId }
+                require(profile != null) { "Choose a saved routine." }
+                value.put("plan", RoutinePlan.from(profile, rule).json(rule))
                 require(old.length() < 64 || existing != null) { "Keep up to 64 calendar rules." }
                 val remaining = (0 until old.length()).map { old.getJSONObject(it) }.filter { it.optString("id") != rule.id }
                 j.put("rules", JSONArray(remaining + value))

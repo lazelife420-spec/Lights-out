@@ -130,6 +130,7 @@ class HomeActivity : AppCompatActivity() {
             .put("alerts", NotificationManagerCompat.from(this).areNotificationsEnabled())
             .put("label", t.label).put("home", PhoneHomeStore.config(this))
             .put("event", PhoneHomeStore.event(this)).put("upcoming", PhoneCalendar.upcoming(this))
+            .put("routineOutcomes", PhoneRoutineOutcomes.display(this))
             .put("paired", !getSharedPreferences("lightsout", MODE_PRIVATE).getString("companion_token", null).isNullOrBlank())
         web.evaluateJavascript("window.phoneUI?.update($j)", null)
     }

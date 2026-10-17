@@ -58,13 +58,14 @@ object PhoneLights {
         Thread({
             val pool = Executors.newFixedThreadPool(targets.size)
             var summary = "WiZ check failed."
+            var results = targets.map { PhoneLightResult(it, "failed", "WiZ check failed.") }
             try {
-                val futures = targets.map { ip -> pool.submit<String> { targetLocks.getOrPut(ip) { ReentrantLock(true) }.withLock {
+                val futures = targets.map { ip -> pool.submit<PhoneLightResult> { targetLocks.getOrPut(ip) { ReentrantLock(true) }.withLock {
                     // Completion must not switch off a newer timer's lights.
                     if (runId != null) {
                         val current = PhoneTimerStore.read(app)
                         val expectedPhase = if (action == "off") current.phase == "finished" else current.phase in setOf("running", "paused")
-                        if (current.runId != runId || !expectedPhase) return@withLock "$ip: superseded"
+                        if (current.runId != runId || !expectedPhase) return@withLock PhoneLightResult(ip, "skipped", "$ip: superseded")
                     }
                     try {
                         val params = when (action) {
@@ -74,17 +75,20 @@ object PhoneLights {
                             else -> null
                         }
                         val result = request(ip, params)
-                        if (action == "status") "$ip: ${if (result.getBoolean("state")) "on" else "off"}"
-                        else "$ip: acknowledged"
-                    } catch (_: Exception) { "$ip: no acknowledgement — check Wi-Fi and WiZ Local communication" }
+                        if (action == "status") PhoneLightResult(ip, "observed", "$ip: ${if (result.getBoolean("state")) "on" else "off"}")
+                        else PhoneLightResult(ip, "acknowledged", "$ip: acknowledged")
+                    } catch (_: Exception) { PhoneLightResult(ip, "failed", "$ip: no acknowledgement — check Wi-Fi and WiZ Local communication") }
                 } } }
-                summary = futures.joinToString("\n") { it.get(3, TimeUnit.SECONDS) }
+                results = futures.map { it.get(3, TimeUnit.SECONDS) }
+                summary = results.joinToString("\n") { it.message }
             } catch (_: Exception) { summary = "WiZ check timed out. Check the phone's Wi-Fi and WiZ Local communication." }
             finally {
                 pool.shutdownNow()
                 val resultText = summary
+                val resultRows = results
                 main.post {
                     if (runId == null || PhoneTimerStore.read(app).runId == runId) PhoneHomeStore.event(app, resultText)
+                    if (runId != null && action in setOf("warm", "off")) PhoneRoutineOutcomes.lights(app, runId, "wiz.$action", resultRows)
                     done?.invoke()
                 }
                 if (wake.isHeld) wake.release()
