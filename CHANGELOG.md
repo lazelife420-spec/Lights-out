@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Introduced the Studio interface on Windows and standalone Android: a labelled
+  desktop sidebar, dedicated timer card and setup panel, calmer branding,
+  redesigned mode library, consistent page surfaces and mobile bottom navigation.
+  Existing local timers, device ownership, safety controls and light modes keep
+  their established behavior. Mini mode and the full-screen clock remain separate.
+
 - Redesigned Windows Lighting settings and the standalone Android light builder
   with visual mode cards, compact previews, clearer light selection, separate
   alert sections and a persistent phone save bar. Connection help is collapsible;

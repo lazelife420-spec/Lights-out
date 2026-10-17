@@ -1291,8 +1291,10 @@ check('ui-r2: brand lockup uses the real wordmark and logo-derived motifs', () =
   // UI-R3 P07: the real wordmark is inlined (two stacked copies of its art
   // box) so the lamp and the broken O can live. The asset stays: About and
   // the tray use it.
-  const wmAt = htmlSrc.indexOf('<span class="brand-wordmark" id="brand-wordmark" role="img" aria-label="Lights Out">');
-  assert(wmAt > 0, 'header must use the inline living wordmark (span.brand-wordmark role=img aria-label="Lights Out")');
+  assertMatch(htmlSrc, /<span class="studio-wordmark">[\s\S]*?<\/svg>Lights Out<\/span>/, 'Studio header has an accessible text wordmark');
+  assertMatch(htmlSrc, /<link rel="stylesheet" href="studio.css">/, 'Studio design system is loaded');
+  const wmAt = htmlSrc.indexOf('<span class="brand-wordmark" id="brand-wordmark" aria-hidden="true">');
+  assert(wmAt > 0, 'legacy wordmark remains available to its renderer with decorative semantics');
   const wm = htmlSrc.slice(wmAt, htmlSrc.indexOf('</span>', wmAt));
   assertMatch(wm, /<svg class="wm-static" viewBox="44 88 556 116" aria-hidden="true" focusable="false">/, 'svg.wm-static missing');
   assertMatch(wm, /<svg class="wm-live" viewBox="44 88 556 116" aria-hidden="true" focusable="false">/, 'svg.wm-live missing');

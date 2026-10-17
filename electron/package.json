@@ -120,7 +120,8 @@
       "handoffProtectionWindows.js",
       "lightExperience.js",
       "light-experience.css",
-      "renderer-light-experience.js"
+      "renderer-light-experience.js",
+      "studio.css"
     ],
     "win": {
       "target": [

@@ -149,22 +149,56 @@ async function main() {
         await evaluate(`document.activeElement?.blur();true`);
         await wait(500);
         const layout = await evaluate(`(() => { const section=document.getElementById('${tab === 'help' ? 'about-modal' : 'ns-panel-' + tab}'), nav=[...document.querySelectorAll('.ns-nav-label')]; return {visible:section.getClientRects().length>0, overflow:section.scrollWidth-section.clientWidth, navClipped:nav.some(n=>n.scrollWidth>n.clientWidth+1), pageOverflow:document.documentElement.scrollWidth-innerWidth}; })()`);
-        assert.ok(layout.visible && layout.overflow<=1 && layout.pageOverflow<=1 && !layout.navClipped, `${theme} ${width} ${tab}: ${JSON.stringify(layout)}`);
-        if (tab === 'lib') assert.ok(await evaluate(`document.getElementById('ns-play-btn').getBoundingClientRect().bottom<=innerHeight-40`), 'Start action must fit on Tonight');
         if (width === 1440 || tab === 'lib') {
           const shot=await send('Page.captureScreenshot',{format:'png'});
           fs.writeFileSync(path.join(proofDir,`${theme}-${width}-shell-${tab}.png`),Buffer.from(shot.data,'base64'));
         }
+        assert.ok(layout.visible && layout.overflow<=1 && layout.pageOverflow<=1 && !layout.navClipped, `${theme} ${width} ${tab}: ${JSON.stringify(layout)}`);
+        if (tab === 'lib') assert.ok(await evaluate(`document.getElementById('ns-play-btn').getBoundingClientRect().bottom<=innerHeight-40`), 'Start action must fit on Tonight');
         shellLayouts.push({theme,width,height,tab,...layout});
         if (tab === 'help') await evaluate(`document.getElementById('about-modal-close').click();true`);
       }
     }
   }
-  fs.writeFileSync(path.join(proofDir, 'report.json'), JSON.stringify({ source, executable: artifact.executable, layouts: results, shellLayouts, lighting: ['mode-card selection','staged save','passive preview leaves no unsaved changes','provider isolation','mode-specific timing'], keyboard: ['Ctrl K','WiZ search + Enter','Escape from search results keeps Settings open','End selects last category'], runtimeErrors: errors }, null, 2));
+  await evaluate(`state.customization.theme='midnight';applyCustomization(state.customization);handleSidebarNavigation('lib',{persist:false,focusNav:false}).then(()=>true)`);
+  await send('Emulation.setDeviceMetricsOverride', { width:1440,height:900,deviceScaleFactor:1,mobile:false });
+  assert.equal(await evaluate(`state.smartLights.enabled`), false, 'UI proof must leave real lighting disabled');
+  const started=await evaluate(`window.electronAPI.startTimer({durationSeconds:600,action:'sleep',dryRun:true,forceShutdown:false,muteSystem:false,gracePeriod:0,profileId:null,nightModeId:'',origin:'this-pc'})`);
+  assert.equal(started.success,true);
+  await until(()=>evaluate(`state.running===true`),'Dry-run timer did not start');
+  const timerStates=[];
+  for(const phase of ['running','paused']) {
+    if(phase==='paused') { await evaluate('window.electronAPI.pauseTimer()');await until(()=>evaluate('state.paused===true'),'Timer did not pause'); }
+    const layout=await evaluate(`(()=>{const r=document.getElementById('btn-stop').getBoundingClientRect(),time=document.getElementById('timer-main');return {cancelVisible:r.top>=0&&r.bottom<=innerHeight-40,readoutVisible:time.getClientRects().length>0,overflow:document.documentElement.scrollWidth-innerWidth}})()`);
+    assert.ok(layout.cancelVisible&&layout.readoutVisible&&layout.overflow<=1,`${phase}: ${JSON.stringify(layout)}`);
+    timerStates.push({phase,...layout});
+    const shot=await send('Page.captureScreenshot',{format:'png'});fs.writeFileSync(path.join(proofDir,`timer-${phase}.png`),Buffer.from(shot.data,'base64'));
+  }
+  await evaluate('window.electronAPI.toggleMiniMode();true');await until(()=>evaluate('document.body.classList.contains("mini-mode")'),'Mini mode did not open');
+  await send('Emulation.setDeviceMetricsOverride',{width:260,height:320,deviceScaleFactor:1,mobile:false});
+  const mini=await evaluate(`(()=>{const r=document.getElementById('btn-stop').getBoundingClientRect();return {cancelVisible:r.top>=0&&r.bottom<=innerHeight,headingHidden:!document.querySelector('.studio-tonight-head').getClientRects().length,overflow:document.documentElement.scrollWidth-innerWidth}})()`);
+  const miniShot=await send('Page.captureScreenshot',{format:'png'});fs.writeFileSync(path.join(proofDir,'timer-mini.png'),Buffer.from(miniShot.data,'base64'));
+  if (mini.overflow>1) console.log('Mini overflow elements: '+JSON.stringify(await evaluate(`Array.from(document.querySelectorAll('body *')).filter(e=>e.getClientRects().length&&e.getBoundingClientRect().right>innerWidth+1).slice(0,12).map(e=>({tag:e.tagName,id:e.id,class:e.className,right:e.getBoundingClientRect().right,width:e.getBoundingClientRect().width}))`)));
+  assert.ok(mini.cancelVisible&&mini.headingHidden&&mini.overflow<=1,JSON.stringify(mini));timerStates.push({phase:'mini-paused',...mini});
+  await evaluate('window.electronAPI.toggleMiniMode();true');await until(()=>evaluate('!document.body.classList.contains("mini-mode")'),'Mini mode did not close');
+  await send('Emulation.setDeviceMetricsOverride',{width:1440,height:900,deviceScaleFactor:1,mobile:false});
+  await evaluate('window.electronAPI.resumeTimer()');await until(()=>evaluate('state.running&&!state.paused'),'Timer did not resume');
+  await evaluate('window.electronAPI.cancelTimer()');await until(()=>evaluate('!state.running&&!state.paused'),'Timer did not cancel');
+  // The full-screen clock deliberately remains idle-only so timer controls
+  // can never be hidden by it during a live session.
+  await evaluate('window.electronAPI.setFullScreenClock(true)');
+  await until(()=>evaluate('document.body.classList.contains("fullscreen-clock-mode")'),'Full-screen clock did not open');
+  const clock=await evaluate(`(()=>{const r=document.getElementById('btn-fullscreen-clock-exit').getBoundingClientRect();return {exitVisible:r.width>0&&r.top>=0&&r.bottom<=innerHeight,headingHidden:!document.querySelector('.studio-tonight-head').getClientRects().length,sidebarHidden:!document.querySelector('.ns-sidebar').getClientRects().length}})()`);
+  assert.ok(clock.exitVisible&&clock.headingHidden&&clock.sidebarHidden,JSON.stringify(clock));timerStates.push({phase:'native-fullscreen-clock',...clock});
+  const clockShot=await send('Page.captureScreenshot',{format:'png'});fs.writeFileSync(path.join(proofDir,'timer-fullscreen.png'),Buffer.from(clockShot.data,'base64'));
+  await evaluate('document.getElementById("btn-fullscreen-clock-exit").click();true');await until(()=>evaluate('!document.body.classList.contains("fullscreen-clock-mode")'),'Full-screen clock did not close');
+  assert.deepEqual(errors,[]);
+  fs.writeFileSync(path.join(proofDir, 'report.json'), JSON.stringify({ source, executable: artifact.executable, layouts: results, shellLayouts, timerStates, lighting: ['mode-card selection','staged save','passive preview leaves no unsaved changes','provider isolation','mode-specific timing'], keyboard: ['Ctrl K','WiZ search + Enter','Escape from search results keeps Settings open','End selects last category'], runtimeErrors: errors }, null, 2));
   console.log(`PASS ${results.length} category/theme/viewport layouts, footer visibility, no horizontal overflow and minimum-height navigation`);
   console.log('PASS search, keyboard navigation, focus and runtime error checks');
   console.log('PASS mode cards, staged save, passive preview, mode timing and provider isolation');
   console.log(`PASS ${shellLayouts.length} app page/theme/viewport layouts and unclipped navigation`);
+  console.log('PASS actual dry-run timer start/pause/resume/cancel, mini controls and native full-screen clock');
   console.log(`Report: ${path.join(proofDir, 'report.json')}`);
 }
 

@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="phone.css">
   <link rel="stylesheet" href="handoff.css">
   <link rel="stylesheet" href="light-experience.css">
+  <link rel="stylesheet" href="studio.css">
   <script src="phone.js" defer></script>
   <script src="routine-model.js" defer></script>
   <script src="routine-transfer-ui.js" defer></script>
@@ -20,9 +21,9 @@
   <main>
     <header><button class="brand" id="brand" aria-label="Lights Out">Lights Out<span class="brand-star" aria-hidden="true">✦</span></button><span class="pill">ON THIS PHONE</span></header>
     <nav class="targets" aria-label="Timer device"><span aria-current="page">This phone</span><button id="pc-top">PC controls <span aria-hidden="true">↗</span></button></nav>
-    <nav class="home-tabs" aria-label="Phone controls"><button data-tab="timer" aria-current="page">Timer</button><button data-tab="lighting">Lighting</button><button data-tab="routines">Routines</button><button data-tab="calendar">Calendar</button></nav>
+    <nav class="home-tabs" aria-label="Phone controls"><button data-tab="timer" aria-current="page"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 5.5V10l3 2"/></svg><span>Timer</span></button><button data-tab="lighting"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 13c-5-4-2-11 3-11s8 7 3 11l-1 3H8ZM8 19h4"/></svg><span>Lighting</span></button><button data-tab="routines"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 4 4 8-9M4 18h12"/></svg><span>Routines</span></button><button data-tab="calendar"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="14" rx="2"/><path d="M3 8h14M7 2v4M13 2v4M7 12h.01M13 12h.01"/></svg><span>Calendar</span></button></nav>
     <div id="view-timer">
-    <div class="intro"><p class="eyebrow">YOUR TIME TO SWITCH OFF</p><h1>A little less screen.<br>A little more night.</h1></div>
+    <div class="intro"><p class="eyebrow">TONIGHT, ON YOUR TERMS</p><h1>Make room for rest.</h1></div>
     <section class="timer-panel" aria-label="Phone timer">
       <div class="dial" id="dial">
         <svg viewBox="0 0 300 300" aria-hidden="true"><circle class="ring-track" cx="150" cy="150" r="132"/><circle id="arc" cx="150" cy="150" r="132" pathLength="100"/></svg>
