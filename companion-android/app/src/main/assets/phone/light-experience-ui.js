@@ -1,0 +1,35 @@
+/* global document, LightExperience */
+(function(root){'use strict';
+ function mount(container,invoke){
+  const el=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
+  const button=(text,fn)=>{const b=el('button',text);b.type='button';b.className='secondary';b.onclick=()=>void task(fn);return b;};
+  const choice=(text,id,checked=false)=>{const label=el('label'),input=el('input');label.className='check';input.type='checkbox';input.checked=checked;input.dataset.lightExperience=id;label.append(input,document.createTextNode(text));return {label,input};};
+  let dirty=false,busy=false,current,mode='off',brightness=35,timer=0,started=performance.now();
+  const status=el('p','Light modes are off until you choose them.');status.className='view-copy';status.setAttribute('role','status');
+  const body=el('div');container.append(status,body);
+  async function task(fn){if(busy)return;busy=true;container.setAttribute('aria-busy','true');try{await fn();}catch(e){status.textContent=e.message||'Could not apply light settings.';}finally{busy=false;container.removeAttribute('aria-busy');}}
+  function draw(data){current=data;dirty=false;body.replaceChildren();const s=data.settings||{};mode=s.timerMode||'off';brightness=s.brightness||35;
+   const preview=el('div');preview.className='light-experience-preview';preview.setAttribute('aria-label','Screen preview only; no real lights are changed');const orbs=Array.from({length:4},()=>{const o=el('i');preview.append(o);return o;});
+   const caption=el('p','Screen preview · no bulb commands');caption.className='view-copy';body.append(preview,caption);
+   const label=el('label','Timer lighting'),select=el('select');select.dataset.lightExperience='mode';for(const [value,name]of [['off','Off'],['hourglass','Room Hourglass'],['orbit','Orbit countdown'],['ember','Ember trail']]){const option=el('option',name);option.value=value;select.append(option);}select.value=mode;label.append(select);body.append(label);
+   const detail=el('p');detail.className='view-copy';const describe=()=>{detail.textContent={off:'Your timer leaves the lights alone.',hourglass:'Each selected light drains to amber in turn, like sand moving through the room.',orbit:'A slow cool accent travels around your selected lights and lands in amber.',ember:'A warm breathing glow eases down as your timer runs.'}[mode];};describe();body.append(detail);
+   const level=el('label','Effect brightness · '),output=el('output',brightness+'%'),range=el('input');range.type='range';range.min=10;range.max=60;range.value=brightness;range.dataset.lightExperience='brightness';level.append(output,range);body.append(level);
+   const positions=el('input');positions.type='range';positions.min=0;positions.max=100;positions.value=45;positions.setAttribute('aria-label','Screen preview timer progress');const positionLabel=el('label','Preview timer position');positionLabel.append(positions);body.append(positionLabel);
+   const changes=()=>{dirty=true;};select.onchange=()=>{mode=select.value;describe();changes();};range.oninput=()=>{brightness=Number(range.value);output.textContent=brightness+'%';changes();};
+   function lights(title,key){const field=el('fieldset');field.append(el('legend',title));const picked=new Set(s[key]||[]);for(const ip of data.lights){const row=choice(ip,key+':'+ip,picked.has(ip));row.input.value=ip;row.input.onchange=changes;field.append(row.label);}if(!data.lights.length)field.append(el('p','Save your WiZ lights above first.'));body.append(field);return ()=>[...field.querySelectorAll('input:checked')].map(n=>n.value);}
+   const timerTargets=lights('Lights for timer mode','timerTargets');
+   body.append(el('h3','Light beacons'));
+   const ta=choice('Flash for phone timer completion / reminders','timerAlerts',s.timerAlerts===true),aa=choice('Flash for selected phone apps','appAlerts',s.appAlerts===true);ta.input.onchange=aa.input.onchange=changes;body.append(ta.label,aa.label);
+   const alertTargets=lights('Lights for alert beacons','alertTargets');
+   const permission=el('p',data.notificationAccess?'Android notification access is enabled. Only selected apps can trigger an app beacon.':'Selected-app beacons need Android notification access. Timer beacons work independently.');permission.className='view-copy';body.append(permission,button('Android notification access',async()=>{await invoke('access');status.textContent='Choose Lights Out in Android settings, then return here. No access is granted automatically.';}));
+   const apps=el('fieldset');apps.append(el('legend','Apps allowed to flash'));const search=el('input');search.type='search';search.placeholder='Find an app';search.setAttribute('aria-label','Find notification app');apps.append(search);const appList=el('div');appList.className='light-app-list';const selected=new Set(s.apps||[]);for(const app of data.apps){const row=choice(app.name,'app:'+app.id,selected.has(app.id));row.input.value=app.id;row.label.dataset.appSearch=(app.name+' '+app.id).toLowerCase();row.input.onchange=changes;appList.append(row.label);}if(!data.apps.length)appList.append(el('p','No eligible apps are visible on this phone.'));search.oninput=()=>{for(const row of appList.children)row.hidden=!!row.dataset.appSearch&&!row.dataset.appSearch.includes(search.value.toLowerCase());};apps.append(appList);body.append(apps);
+   body.append(el('p','Beacons last six seconds, have a 30-second app-alert cooldown, and use only lights already on. Manual changes release the lights. A routine that turns lights off at the end keeps that behavior. No notification text is read, saved or sent.'));
+   const save=button('Save light modes on this phone',async()=>{const value={timerMode:mode,brightness,timerTargets:timerTargets(),alertTargets:alertTargets(),timerAlerts:ta.input.checked,appAlerts:aa.input.checked,apps:[...appList.querySelectorAll('input:checked')].map(n=>n.value)};draw(await invoke('save',{settings:value}));status.textContent='Saved on this phone. Timer and selected-app beacons have separate controls.';});save.className='primary';save.dataset.lightExperience='save';body.append(save);
+   clearInterval(timer);timer=setInterval(()=>{if(document.hidden||!container.getClientRects().length)return;const reduced=root.matchMedia?.('(prefers-reduced-motion: reduce)').matches;const t=reduced?0:(performance.now()-started)/1000;orbs.forEach((orb,index)=>{const f=LightExperience.frame(mode,{progress:Number(positions.value)/100,elapsedSeconds:t,index,count:4,brightness});orb.style.background=f?`rgb(${f.r},${f.g},${f.b})`:'#333843';orb.style.color=orb.style.background;orb.style.opacity=f?String(.25+f.dimming/80):'.4';});},250);
+  }
+  async function refresh(){if(dirty)return;draw(await invoke('status'));}
+  container.addEventListener('change',()=>{dirty=true;});document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!dirty)void task(refresh);});
+  void task(refresh);return {refresh:()=>task(refresh),state:()=>current};
+ }
+ root.PhoneLightUI={mount};
+})(globalThis);

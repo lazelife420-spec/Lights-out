@@ -15,9 +15,11 @@ class PhoneTimerService : Service() {
         override fun run() {
             PhoneTimerStore.finishIfDue(this@PhoneTimerService)
             val state = PhoneTimerStore.read(this@PhoneTimerService)
+            PhoneLightExperience.tick(this@PhoneTimerService)
             if (state.phase in listOf("running", "paused")) {
                 handler.postDelayed(this, if (state.phase == "paused") 60000 else 1000)
             } else {
+                PhoneLightExperience.stopTimer(this@PhoneTimerService)
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }

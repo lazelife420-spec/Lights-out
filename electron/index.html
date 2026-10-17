@@ -7,6 +7,7 @@
   <title>Lights Out</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="handoff.css">
+  <link rel="stylesheet" href="light-experience.css">
 </head>
 <body>
   <!-- Onboarding First-Run Wizard -->
@@ -1387,6 +1388,9 @@
                 <option value="gradual_dim">Gradual Dim</option>
                 <option value="warm_dim">Warm Shift + Dim</option>
                 <option value="off_at_end">Off at End Only</option>
+                <option value="hourglass">WiZ · Room Hourglass</option>
+                <option value="orbit">WiZ · Orbit countdown</option>
+                <option value="ember">WiZ · Ember trail</option>
               </select>
             </div>
 
@@ -1397,6 +1401,7 @@
             </div>
 
             <div id="wiz-config" style="display:none">
+              <div class="wiz-setup-block"><h4>Make time visible</h4><p>Room Hourglass drains your selected lights in order. Orbit moves a cool accent around the room and lands in amber. Ember gently breathes as the room fades. These modes follow the full timer, pause with it, and leave manually switched-off lights alone.</p><div id="wiz-mode-preview" hidden><div class="light-experience-preview" aria-label="Screen preview only"><i></i><i></i><i></i><i></i></div><label for="wiz-mode-preview-progress">Screen preview · timer progress</label><input id="wiz-mode-preview-progress" type="range" min="0" max="100" value="45"><small>No real lights change in this preview.</small></div><div class="option-group"><label class="checkbox-label" for="chk-wiz-timer-beacon"><span class="set-row-text"><span class="set-row-title">Soft blue finish beacon</span><span class="set-row-desc">A gentle pulse in the final six seconds.</span></span><input type="checkbox" id="chk-wiz-timer-beacon"></label></div><p>Off by default. Uses only selected lights that are still on. Selected phone-app notification beacons are configured independently on Android.</p></div>
               <div class="wiz-setup-block">
               <div class="option-group wiz-selection-heading"><label>Choose lights or a room</label><button type="button" class="btn-secondary" id="btn-discover-wiz">Find WiZ lights</button><span id="wiz-discovery-result" role="status" aria-live="polite"></span></div>
               <div class="wiz-selection-tools"><button type="button" class="btn-small" id="wiz-select-all">Select all</button><button type="button" class="btn-small" id="wiz-select-none">Clear selection</button><span id="wiz-selection-count" role="status" aria-live="polite">0 selected</span></div>
@@ -2622,5 +2627,7 @@
   <script src="renderer.js"></script>
   <script src="handoff-ui.js"></script>
   <script src="renderer-handoff.js"></script>
+  <script src="lightExperience.js"></script>
+  <script src="renderer-light-experience.js"></script>
 </body>
 </html>

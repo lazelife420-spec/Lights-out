@@ -262,3 +262,14 @@ production app to work around a debug signing mismatch.
   the main path. Don't spend time re-debugging `startUdpDiscovery()` or
   `family.js`'s beacon unless you have concrete evidence the specific network
   in question actually permits Wi-Fi client-to-client broadcast.
+
+
+## Local light experiences
+
+Lighting now includes Room Hourglass, Orbit and Ember timer animations, a
+screen-only preview, and separate timer/selected-app notification beacons.
+Choose saved WiZ lights separately for timer modes and alerts. All effects start
+off; app beacons also need Android notification access and selected apps. The
+listener does not read notification text. Manual off releases a light; no
+animation or restoration powers it on. See
+[light experiences v1](../docs/LIGHT_EXPERIENCES_V1.md) for qualification limits.

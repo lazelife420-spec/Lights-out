@@ -159,6 +159,7 @@ const DEFAULTS = {
     wizAddresses: [],
     wizDevices: [],
     wizLook: { mode: 'current', brightness: 50, temperature: 2700, color: '#ff9f43', sceneId: 14 },
+    timerBeacon: false,
     mode: 'gradual_dim',
     dimMinutes: 10,
     hueBridgeIp: '',

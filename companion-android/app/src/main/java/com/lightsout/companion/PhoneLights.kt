@@ -18,6 +18,9 @@ object PhoneLights {
     private const val PORT = 38899
     private val active = AtomicInteger()
     private val targetLocks = ConcurrentHashMap<String, ReentrantLock>()
+    private val manualEpochs=ConcurrentHashMap<String,AtomicInteger>()
+    internal fun manualEpoch(ip:String)=manualEpochs.getOrPut(ip){AtomicInteger()}.get()
+    internal fun <T> withTargetLock(ip:String,work:()->T):T=targetLocks.getOrPut(ip){ReentrantLock(true)}.withLock(work)
     private val main = Handler(Looper.getMainLooper())
     fun request(ip: String, params: JSONObject? = null): JSONObject {
         require(WizAddress.valid(ip)) { "Use a local WiZ IPv4 address." }
@@ -49,6 +52,7 @@ object PhoneLights {
         WizAddress.targets(targets)
         require(action in setOf("status", "on", "off", "warm"))
         require(brightness in 10..100)
+        if(runId==null&&action!="status")targets.forEach { manualEpochs.getOrPut(it){AtomicInteger()}.incrementAndGet() }
         if (targets.isEmpty()) { done?.invoke(); return }
         if (runId == null && active.get() >= 2) throw IllegalArgumentException("Wait for the current light check.")
         active.incrementAndGet()

@@ -1687,6 +1687,7 @@ async function saveSettingsPanel() {
     provider: els.selLightProvider?.value || 'none',
     ...collectWizSettings(),
     mode: els.selLightMode?.value || 'gradual_dim',
+    timerBeacon: document.getElementById('chk-wiz-timer-beacon')?.checked === true,
     dimMinutes: clamp(Number(els.lightDimMinutes?.value) || 10, 1, 60),
     hueBridgeIp: els.hueBridgeIp?.value || '',
     // Blank means "keep the stored credential" — the renderer never sees the
@@ -5654,6 +5655,7 @@ document.getElementById('receipts-confirm')?.addEventListener('keydown', (event)
     provider: els.selLightProvider.value,
     ...collectWizSettings(),
     mode: els.selLightMode.value,
+    timerBeacon: document.getElementById('chk-wiz-timer-beacon')?.checked === true,
     dimMinutes: Number(els.lightDimMinutes.value) || 10,
     hueBridgeIp: els.hueBridgeIp.value,
     hueUsername: els.hueUsername.value,
@@ -5887,6 +5889,8 @@ function updateLightsUI() {
   // UI-R3 P13: the staged provider lives in the (hidden) select, not in
   // state.smartLights, which stays the config main last returned.
   const provider = els.selLightProvider?.value || state.smartLights.provider || 'none';
+  els.selLightMode?.querySelectorAll('option').forEach(option=>{if(['hourglass','orbit','ember'].includes(option.value))option.disabled=provider!=='wiz';});
+  if(provider!=='wiz'&&['hourglass','orbit','ember'].includes(els.selLightMode?.value))els.selLightMode.value='gradual_dim';
   if (els.lightsConfig) {
     els.lightsConfig.style.display = 'block';
   }
@@ -6115,6 +6119,7 @@ function updateLightsUIFromState() {
   if (els.wizAddresses) els.wizAddresses.value = (state.smartLights.wizAddresses || []).join(', ');
   applyWizSettings(state.smartLights);
   if (els.selLightMode) els.selLightMode.value = state.smartLights.mode;
+  const beacon=document.getElementById('chk-wiz-timer-beacon');if(beacon)beacon.checked=state.smartLights.timerBeacon===true;
   if (els.lightDimMinutes) els.lightDimMinutes.value = state.smartLights.dimMinutes;
   if (els.hueBridgeIp) els.hueBridgeIp.value = state.smartLights.hueBridgeIp;
   if (els.hueUsername) {

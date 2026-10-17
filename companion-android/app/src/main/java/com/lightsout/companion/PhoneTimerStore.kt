@@ -89,6 +89,7 @@ object PhoneTimerStore {
             .setContentTitle("Lights out. Stars up.").setContentText("Your phone timer has finished.")
             .setContentIntent(open(c)).setAutoCancel(true).build()
         try { NotificationManagerCompat.from(c).notify(COMPLETE, notification) } catch (_: SecurityException) {}
+        PhoneLightExperience.finished(c,allowBeacon=!t.offAtEnd)
         if (t.offAtEnd && t.lightTargets.isNotEmpty()) {
             PhoneHomeStore.event(c, "Timer finished. Waiting for WiZ acknowledgement…")
             PhoneLights.perform(c, t.lightTargets, "off", runId = t.runId, done = done)

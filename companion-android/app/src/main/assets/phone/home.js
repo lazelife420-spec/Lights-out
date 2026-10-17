@@ -129,6 +129,7 @@
         actionFields();
         cards(); calendar();
         void window.phoneTransfer?.refresh();
+        void window.phoneLightUI?.refresh();
       } else if (nk !== nextKey) cards();
       nextKey = nk;
       $('calendar-readiness').textContent = state.exact ? "Ready to run on this phone, even with the PC off. Lights need the same Wi-Fi. Keep the phone powered on." : 'Saved routines are paused. Allow precise alerts below so Android can start them with the screen off.';
@@ -149,5 +150,6 @@
     start:id=>send('startRoutine',{id})
   });
   window.handoffUI=HandoffUI.mount($('handoff-body'),{platform:'android',invoke:(operation,options)=>transfer('handoff',{operation,options}),scan:()=>transfer('handoff',{operation:'scan',options:{}}),onImported:()=>void window.phoneTransfer.refresh()});
+  window.phoneLightUI=PhoneLightUI.mount($('light-experience-body'),(operation,data={})=>transfer('lightExperience',{operation,...data}));
   resetRoutine(); resetRule(); calendar(); tab(view);
 })();

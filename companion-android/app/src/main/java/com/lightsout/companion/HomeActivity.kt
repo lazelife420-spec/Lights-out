@@ -115,6 +115,15 @@ class HomeActivity : AppCompatActivity() {
             return
         }
         if(msg.optString("action").startsWith("routineFile")) { handleTransfer(msg);return }
+        if(msg.optString("action")=="lightExperience"){
+            val id=msg.optString("requestId");if(!id.matches(Regex("[a-zA-Z0-9-]{36}")))return
+            try{val result=when(msg.optString("operation")){
+                "status"->PhoneLightExperience.publicConfig(this)
+                "save"->PhoneLightExperience.save(this,msg.getJSONObject("settings"))
+                "access"->{startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));PhoneLightExperience.publicConfig(this)}
+                else->throw IllegalArgumentException("Unknown light mode operation.")
+            };transferReply(id,result)}catch(e:Exception){transferReply(id,null,if(e is IllegalArgumentException||e is IllegalStateException)e.message else "Could not apply light settings.")};return
+        }
         when (val action = msg.optString("action")) {
             "pc" -> startActivity(Intent(this, MainActivity::class.java))
             "alerts" -> {

@@ -7,10 +7,13 @@
   <title>Lights Out · Phone</title>
   <link rel="stylesheet" href="phone.css">
   <link rel="stylesheet" href="handoff.css">
+  <link rel="stylesheet" href="light-experience.css">
   <script src="phone.js" defer></script>
   <script src="routine-model.js" defer></script>
   <script src="routine-transfer-ui.js" defer></script>
   <script src="handoff-ui.js" defer></script>
+  <script src="light-experience.js" defer></script>
+  <script src="light-experience-ui.js" defer></script>
   <script src="home.js" defer></script>
 </head>
 <body>
@@ -48,6 +51,7 @@
       <div class="control-card"><h2>Room controls</h2><p class="view-copy" id="light-count">No saved lights yet.</p><p class="view-copy" id="light-result" role="status"></p><div class="button-row"><button class="secondary" id="light-status">Check</button><button class="secondary" id="light-on">On</button><button class="secondary" id="light-off">Off</button></div>
         <label for="light-brightness">Warm light brightness <output id="brightness-value">30%</output></label><input id="light-brightness" type="range" min="10" max="100" value="30"><button class="secondary" id="light-warm">Set warm light · 2700K</button>
       </div>
+      <div class="control-card"><p class="eyebrow">MAKE TIME VISIBLE</p><h2>Room Hourglass. Orbit. Ember.</h2><div id="light-experience-body"></div></div>
     </section>
     <section id="view-routines" class="home-view" hidden aria-label="Phone routines">
       <p class="eyebrow">MAKE IT YOUR RITUAL</p><h1>A routine to switch off.</h1><p class="view-copy">Saved and run on this phone. Add a calendar rule to start automatically.</p>

@@ -61,6 +61,10 @@ is complete; the broader platform roadmap remains open.
   [secured handoff foundation](SECURED_DEVICE_HANDOFF_FOUNDATION.md).
   **LO-SDH-1** adds protected persistent identity, durable trust/revocation/replay
   records and actual pairing/receiving UI through existing inactive import.
+  Local opt-in WiZ timer experiences and phone notification beacons are now
+  SOURCE-PRESENT, with loopback/emulator runtime evidence; see
+  [light experiences v1](LIGHT_EXPERIENCES_V1.md). Physical light/phone
+  reliability remains FIELD-UNPROVEN. The native cross-device TLS gate is open.
   Production LAN transport remains disabled; physical-device transfer is still
   FIELD-UNPROVEN. See [protected pairing v1](SECURED_DEVICE_PAIRING_V1.md).
 - **Windows invisible-host objective:** Electron main owns the timer/listener/

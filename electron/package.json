@@ -117,7 +117,10 @@
       "renderer-night-modes.js",
       "widget.html",
       "assets/**",
-      "handoffProtectionWindows.js"
+      "handoffProtectionWindows.js",
+      "lightExperience.js",
+      "light-experience.css",
+      "renderer-light-experience.js"
     ],
     "win": {
       "target": [

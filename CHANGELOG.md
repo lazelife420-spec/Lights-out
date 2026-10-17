@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added opt-in WiZ Room Hourglass, Orbit and Ember timer modes with screen-only
+  previews. Windows offers a separate final-six-second beacon; Android has
+  independent timer/reminder and selected-app beacon switches, separate light
+  targets, explicit OS notification access and an app allowlist. Manual off
+  releases lights; beacons restore only still-owned, on lights. No notification
+  message text is read or stored. Physical-device reliability remains unproven.
+
 - Added LO-SDH-1 protected device identities, durable pairing/revocation/replay
   storage, and Windows/Android pairing and receiving screens. Windows uses
   current-user DPAPI; Android uses non-exportable AndroidKeyStore key handles.
