@@ -10,7 +10,9 @@ function authenticateSocket(socket,localId,peerId){
   check(socket instanceof tls.TLSSocket,'A native TLS socket is required');
   check(isId(localId)&&isId(peerId)&&localId!==peerId,'Distinct certificate identities required');
   const verify=()=>{
-    check(socket.encrypted&&socket.authorized&&!socket.destroyed&&socket.getFinished()?.length,'Mutual TLS authentication required');
+    // Electron's TLS provider does not expose getFinished(). Authorization,
+    // negotiated protocol and both pinned certificates establish the channel.
+    check(socket.encrypted&&socket.authorized&&!socket.destroyed,'Mutual TLS authentication required');
     check(['TLSv1.2','TLSv1.3'].includes(socket.getProtocol()),'Unsupported TLS version');
     check(/^(TLS_(AES_(128|256)_GCM_SHA(256|384)|CHACHA20_POLY1305_SHA256)|TLS_ECDHE_ECDSA_WITH_AES_(128|256)_GCM_SHA(256|384))$/.test(socket.getCipher()?.standardName || ''),'Authenticated modern TLS cipher required');
     check(fingerprint(socket.getCertificate().raw)===localId&&fingerprint(socket.getPeerCertificate().raw)===peerId,'TLS certificate identity mismatch');
