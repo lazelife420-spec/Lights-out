@@ -41,6 +41,7 @@ function startup(acquired) {
     smartLights: { loadConfig: record('lightsConfig') },
     getRecoverableTimer: () => null,
     runReceipts: { reconcileOrphanedRunningReceipts: record('receiptReconcile') },
+    routineLedger: { interruptPending: record('routineReconcile') },
     lastLight: {}, profiles: { initialize: () => { calls.push('profiles'); return 0; } },
     launchOptions: {}, updater: { startPeriodicCheck: record('updater') },
     companion: { onMessage: record('listener:companionMessage'),
@@ -73,6 +74,7 @@ test('primary startup creates one window/tray, registers services and remains id
   assert.ok(primary.handlers.has('activate'));
   assert.ok(primary.calls.includes('listener:companionMessage'));
   assert.ok(primary.calls.includes('receiptReconcile'));
+  assert.ok(primary.calls.includes('routineReconcile'));
   assert.ok(!primary.calls.includes('timerStart'));
   assert.ok(!primary.calls.includes('quit'));
 });

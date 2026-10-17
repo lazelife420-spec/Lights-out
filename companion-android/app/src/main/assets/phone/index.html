@@ -51,11 +51,16 @@
       <div id="routine-list" class="item-list"></div>
       <form id="routine-form" class="control-card"><h2 id="routine-editor-title">New routine</h2>
         <label for="routine-name">Name</label><input id="routine-name" maxlength="60" required placeholder="Weeknight wind-down">
-        <label for="routine-minutes">Timer duration · minutes</label><input id="routine-minutes" type="number" min="1" max="1440" value="30" required>
-        <fieldset id="routine-targets"><legend>WiZ lights</legend><div id="routine-light-options"></div></fieldset>
-        <label class="check"><input type="checkbox" id="routine-warm"> Set warm lighting when the routine starts</label>
-        <label for="routine-brightness">Starting brightness · percent</label><input id="routine-brightness" type="number" min="10" max="100" value="30">
-        <label class="check"><input type="checkbox" id="routine-off"> Switch selected lights off when the timer finishes</label>
+        <fieldset><legend>1 · Phone reminder</legend><label for="routine-minutes">Timer duration · minutes</label><input id="routine-minutes" type="number" min="1" max="1440" value="30" required><small>Runs on this phone. Finishes with a reminder.</small></fieldset>
+        <fieldset id="routine-targets"><legend>2 · At the start</legend>
+          <label class="check"><input type="checkbox" id="routine-warm"> Set warm WiZ lighting</label>
+          <div id="routine-warm-fields" hidden><label for="routine-brightness">Brightness · percent</label><input id="routine-brightness" type="number" min="10" max="100" value="30"><p class="view-copy">Lights for this action</p><div id="routine-light-options"></div></div>
+        </fieldset>
+        <fieldset><legend>3 · When the timer finishes</legend>
+          <label class="check"><input type="checkbox" id="routine-off"> Switch WiZ lights off</label>
+          <div id="routine-off-fields" hidden><p class="view-copy">Lights for this action</p><div id="routine-off-light-options"></div></div>
+        </fieldset>
+        <p id="routine-action-preview" class="view-copy" role="status"></p>
         <small>Pause holds the timer. Cancel leaves lights as they are and cancels the finish action. Edits apply to the next run.</small>
         <div class="button-row"><button class="primary" type="submit">Save routine</button><button class="secondary" type="button" id="new-routine">New</button></div>
       </form>
@@ -70,7 +75,8 @@
         <label for="rule-kind">Repeat</label><select id="rule-kind"><option value="weekly">Weekly</option><option value="monthly">Monthly · selected months</option><option value="once">Individual date</option></select>
         <label for="rule-time">Start time · phone's local time</label><input id="rule-time" type="time" value="22:00" required>
         <fieldset id="week-field"><legend>Weekdays</legend><div id="weekday-options" class="chip-options"></div></fieldset>
-        <div id="month-field" hidden><label for="rule-days">Days of the month</label><input id="rule-days" value="1" placeholder="1, 15, last"><small>Use 1–31 or “last”, separated by commas. Shorter months skip days that don't exist.</small><fieldset><legend>Months</legend><div id="month-options" class="chip-options"></div></fieldset></div>
+        <div id="month-field" hidden><label for="rule-days">Days of the month</label><input id="rule-days" value="1" placeholder="1, 15, last"><small>Use 1–31 or “last”, separated by commas. Shorter months skip days that don't exist.</small></div>
+        <fieldset id="months-field"><legend>Active months</legend><div id="month-options" class="chip-options"></div></fieldset>
         <div id="date-field" hidden><label for="rule-date">Date</label><input id="rule-date" type="date" min="2000-01-01" max="2199-12-31"></div>
         <label class="check"><input type="checkbox" id="rule-enabled" checked> Enabled</label>
         <small>Android shows scheduled routines as alarms. If another phone timer is active, the routine is skipped. After a force-stop, reopen Lights Out to restore alarms.</small>

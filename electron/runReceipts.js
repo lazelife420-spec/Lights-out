@@ -70,6 +70,7 @@ function createRunReceipt(timerState) {
     durationSeconds: timerState.totalSeconds || 0,
     // Display only: where the run started (older receipts simply lack it).
     origin: typeof timerState.origin === 'string' ? timerState.origin : null,
+    routineOccurrenceKey: timerState.routineOccurrenceKey || null,
     remainingSeconds: null,
     dryRun: !!timerState.dryRun,
     forceShutdown: !!timerState.forceShutdown,
@@ -137,6 +138,11 @@ function getReceiptById(id) {
   if (!id) return null;
   const data = load();
   return data.receipts.find(r => r.id === id) || null;
+}
+
+function getReceiptByOccurrence(key) {
+  if (!key) return null;
+  return load().receipts.find(r => r.routineOccurrenceKey === key) || null;
 }
 
 // Fallback correlation for a persisted activeTimer snapshot saved by a
@@ -251,6 +257,7 @@ module.exports = {
   receiptSnoozed,
   receiptWarning,
   getReceiptById,
+  getReceiptByOccurrence,
   getMostRecentRunningReceiptId,
   reconcileOrphanedRunningReceipts,
   getLatestReceipt,

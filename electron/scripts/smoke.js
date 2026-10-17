@@ -1162,7 +1162,7 @@ check('production truth: companion publishes pairing data only after readiness',
   assert(htmlSrc.includes('id="remote-port"'), 'configurable companion port input missing');
   assertMatch(mainSrc, /await companionNetwork\.getDefaultRouteLanIp\(\)/, 'same-wifi host selection must read the OS route table, not an Internet hint');
   assertMatch(mainSrc, /code: 'RUN_ACTIVE'[\s\S]*A Lights Out run is already active/, 'family start must reject while a run is active');
-  assertMatch(mainSrc, /dryRun: Boolean\(appSettings\.dryRun \|\| profile\?\.dryRun\)[\s\S]*?}[\s\S]*?case 'pause'/, 'family start must inherit the desktop Dry Run policy');
+  assertMatch(mainSrc.match(/function familyCommandHandler\([^]*?\n\}/)[0], /dryRun: Boolean\(appSettings\.dryRun\)[\s\S]*?case 'pause'/, 'family start must inherit the desktop Dry Run policy');
   assertMatch(mainSrc, /bindHost: lanIp/, 'family command server must bind the selected LAN interface');
   const familySrc = fs.readFileSync(path.join(root, 'family.js'), 'utf8');
   assertMatch(familySrc, /outcome && outcome\.success === false/, 'family command server must report real outcomes, not unconditional success');
@@ -1671,7 +1671,7 @@ check('P01 truth: start paths, single run, and truthful live surfaces', () => {
   assertMatch(mainSrc, /ipcMain\.handle\('ritual-start'[\s\S]{0,400}if \(timerState\.running \|\| timerState\.paused\) return \{ active: false, reason: 'run-active' \};/, 'ritual-start must refuse while a countdown is active');
   const cal = fnBody(mainSrc, 'checkCalendarAutoStart');
   assertMatch(cal, /if \(isRunActive\(\)\) return;/, 'calendar auto-start must use isRunActive()');
-  assertMatch(cal, /startTimer\(\{[^}]*dryRun: Boolean\(appSettings\.dryRun \|\| profile\?\.dryRun\)/, 'calendar auto-start must preserve app or routine Test Mode');
+  assertMatch(cal, /startTimer\(\{[^}]*dryRun: Boolean\(appSettings\.dryRun \|\| profile\?\.dryRun \|\| event\.testMode\)/, 'calendar auto-start must preserve app, routine or per-rule Test Mode');
 
   // Truthful OS surfaces.
   assertMatch(mainSrc, /setTaskbarProgress\(percent, !timerState\.dryRun && percent <= 10 \? 'error' : 'normal'\);/, 'red taskbar must be gated on a REAL run');
@@ -1689,7 +1689,7 @@ check('P01 truth: start paths, single run, and truthful live surfaces', () => {
   const calStartCount = (calSrc.match(/api\.startTimer\(/g) || []).length;
   const insideCount = (schedStart.match(/api\.startTimer\(/g) || []).length;
   assert(insideCount === 1 && calStartCount === insideCount, 'api.startTimer( may appear only inside startFromScheduleEvent');
-  assertMatch(schedStart, /const dryRun = Boolean\(state\.dryRun \|\| profile\?\.dryRun\);/, 'Schedule start preserves app or assigned routine Test Mode');
+  assertMatch(schedStart, /const dryRun = Boolean\(state\.dryRun \|\| profile\?\.dryRun \|\| evt\.testMode\);/, 'Schedule start preserves app, assigned routine or per-rule Test Mode');
   assertMatch(schedStart, /api\.startTimer\(\{[^}]*dryRun,/, 'Schedule start passes the resolved Test Mode value');
   assert(/forceShutdown: false/.test(schedStart) && !/forceShutdown: (?!false)/.test(schedStart), 'Schedule start never enables forced shutdown');
 
@@ -5212,7 +5212,7 @@ check('Fire 08 night modes', () => {
   assert(/transform:\s*none/.test((rule('#profiles-modal .btn-quiet:active .chip-glyph') || {}).body || '') && fire.indexOf('#profiles-modal .btn-quiet:active .chip-glyph') < fire.indexOf('#profiles-modal .profile-item-btn.move-btn[data-action="up"] .profile-move-glyph'), 'manager glyphs (the pin flag included) never take the quiet press spin; the chevron rules still win');
 
   // Main: a disabled ritual is an honest failure, and the phone hears it.
-  assertMatch(mainSrc, /const ritual = ritualMode\.startRitual\(null, \{ profileRitualToken: runToken, remoteOrigin: options\.source === 'remote' \|\| options\.origin === 'calendar' \}\);\s*\/\/[\s\S]*?const ritualStarted = Boolean\(ritual && ritual\.active === true\)\s*\|\| Boolean\(timerState\.running \|\| timerState\.paused\);\s*if \(!ritualStarted\) \{\s*profileRitualContext\.clear\(\);\s*if \(!ritual \|\| ritual\.reason === 'disabled'\) \{\s*return \{\s*success: false,\s*code: 'RITUAL_DISABLED'/, 'the gateway judges a ritual start from evidence (active, or a live countdown after a remote fast-forward)');
+  assertMatch(mainSrc, /const ritual = ritualMode\.startRitual\(null, \{ profileRitualToken: runToken,[\s\S]*?remoteOrigin: options\.source === 'remote' \|\| options\.origin === 'calendar' \}\);\s*\/\/[\s\S]*?const ritualStarted = Boolean\(ritual && ritual\.active === true\)\s*\|\| Boolean\(timerState\.running \|\| timerState\.paused\);\s*if \(!ritualStarted\) \{\s*profileRitualContext\.clear\(\);\s*if \(!ritual \|\| ritual\.reason === 'disabled'\) \{\s*return \{\s*success: false,\s*code: 'RITUAL_DISABLED'/, 'the gateway judges a ritual start from evidence (active, or a live countdown after a remote fast-forward)');
 });
 
 // UI-R3 Fire 09: Schedule as one instrument page. The hero carries the one
@@ -5301,7 +5301,7 @@ check('Fire 09 schedule', () => {
   const form = sch.slice(sch.indexOf('id="schedule-rule-form"'), sch.indexOf('id="sch-once"'));
   for (const id of ['rule-label', 'rule-time', 'rule-duration', 'rule-action']) assert(form.includes(`<label for="${id}">`) && form.includes(`id="${id}"`), `#${id} has a label[for]`);
   assertMatch(form, /<div class="day-toggle-grid" id="rule-days" role="group" aria-label="Active days">/, 'the days group is a named group');
-  assert(/>Save rule<\/button>/.test(form) && /Minutes before the action/.test(form), 'sentence-case Save, honest minutes label');
+  assert(/>Save rule<\/button>/.test(form) && /Start a timer · minutes/.test(form), 'sentence-case Save, explicit timer action label');
   const grid = rule('#sch-rules #schedule-rule-form');
   assert(grid && /display:\s*grid/.test(grid.body) && /grid-template-columns:\s*minmax\(0, 1\.4fr\) minmax\(0, 1fr\)/.test(grid.body), 'the editor is a two-column grid');
   assertMatch(p03FnBody(calSrc, 'openRuleForm'), /form\.style\.display = '';/, "openRuleForm clears the inline none (the CSS grid applies)");

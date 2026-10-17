@@ -85,6 +85,7 @@ function getDefaultCalendarEvents(schedule, from, withinDays) {
         repeat: rule.repeat || 'weekly',
         profileId: typeof rule.profileId === 'string' ? rule.profileId : null,
         routinePlan,
+        testMode: Boolean(rule.testMode),
         action
       });
     }

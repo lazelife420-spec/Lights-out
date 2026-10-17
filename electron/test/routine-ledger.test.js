@@ -31,3 +31,52 @@ test('unreadable/corrupt ledgers fail closed instead of replaying actions', () =
   const ledger = createLedger({ read: () => { throw Error('corrupt'); }, write: () => true });
   assert.throws(() => ledger.claim(plan, '2026-10-19', '2026-10-19T22:00:00Z'), /corrupt/);
 });
+
+test('delayed timer correlation advances acceptance and cannot be cancelled by a stale ritual callback', () => {
+  let disk;
+  const ledger = createLedger({ read: () => disk, write: value => { disk = value; return true; } });
+  const key = ledger.claim(plan, '2026-10-19', '2026-10-19T22:00:00Z').occurrenceKey;
+  ledger.dispatchResult(key, { success: true });
+  assert.equal(ledger.list()[0].status, 'accepted');
+  ledger.timerStarted(key, 'delayed-run');
+  ledger.dispatchResult(key, { success: true }); // synchronous gateway returns after timer callback
+  ledger.finishPending(key, 'cancelled', 'old-ritual');
+  assert.equal(ledger.list()[0].status, 'running');
+  assert.equal(ledger.list()[0].timerReceiptId, 'delayed-run');
+  for (const [result, status] of [['running', 'running'], ['dry_run_completed', 'simulated'], ['power_executed', 'completed'], ['cancelled', 'cancelled'], ['error', 'failed']]) {
+    assert.equal(ledger.list(() => ({ result }))[0].status, status);
+  }
+});
+
+test('a ritual cancelled or failed before its timer remains terminal without a fabricated timer receipt', () => {
+  for (const status of ['cancelled', 'failed']) {
+    let disk;
+    const ledger = createLedger({ read: () => disk, write: value => { disk = value; return true; } });
+    const key = ledger.claim(plan, '2026-10-19', '2026-10-19T22:00:00Z').occurrenceKey;
+    ledger.finishPending(key, status, 'ritual-ended');
+    ledger.dispatchResult(key, { success: true });
+    assert.equal(ledger.list()[0].status, status);
+    assert.equal(ledger.list()[0].timerReceiptId, undefined);
+  }
+});
+
+test('receipt occurrence identity repairs display correlation when linking storage failed', () => {
+  let disk;
+  const ledger = createLedger({ read: () => disk, write: value => { disk = value; return true; } });
+  const key = ledger.claim(plan, '2026-10-19', '2026-10-19T22:00:00Z').occurrenceKey;
+  ledger.dispatchResult(key, { success: true }); ledger.interruptPending();
+  assert.equal(ledger.list()[0].status, 'interrupted');
+  const actualReceipt = { id: 'surviving-receipt', routineOccurrenceKey: key, result: 'dry_run_completed' };
+  const outcome = ledger.list(() => null, occurrence => occurrence === key ? actualReceipt : null)[0];
+  assert.equal(outcome.timerReceiptId, actualReceipt.id); assert.equal(outcome.status, 'simulated');
+});
+
+test('startup interrupts pending rituals while retaining linked timer authority', () => {
+  let disk;
+  const ledger = createLedger({ read: () => disk, write: value => { disk = value; return true; } });
+  const pending = ledger.claim(plan, '2026-10-19', '2026-10-19T22:00:00Z');
+  const running = ledger.claim(plan, '2026-10-20', '2026-10-20T22:00:00Z');
+  ledger.timerStarted(running.occurrenceKey, 'run'); ledger.interruptPending();
+  assert.equal(ledger.list().find(e => e.occurrenceKey === pending.occurrenceKey).status, 'interrupted');
+  assert.equal(ledger.list().find(e => e.occurrenceKey === running.occurrenceKey).status, 'running');
+});

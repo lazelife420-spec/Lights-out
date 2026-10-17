@@ -717,18 +717,24 @@
               <label for="rule-time">Countdown starts</label>
               <input type="time" id="rule-time" value="22:30">
             </div>
+            <fieldset id="rule-actions" class="routine-action-editor">
+              <legend>Actions on this PC</legend>
             <div class="option-group">
-              <label for="rule-duration">Minutes before the action</label>
+              <label for="rule-duration">Start a timer · minutes</label>
               <input type="number" id="rule-duration" value="60" min="1" max="1440">
             </div>
             <div class="option-group">
-              <label for="rule-action">Action</label>
+              <label for="rule-action">When the timer finishes</label>
               <select id="rule-action">
                 <option value="shutdown">Shutdown</option>
                 <option value="sleep">Sleep</option>
                 <option value="hibernate">Hibernate</option>
               </select>
             </div>
+              <label class="routine-test-choice"><input id="rule-test-mode" type="checkbox"> Always use Test Mode for this rule</label>
+              <p id="rule-action-preview" class="help-text" role="status"></p>
+              <small class="help-text">Your app and routine Test Mode settings still apply. Edits affect future runs.</small>
+            </fieldset>
             <div class="option-group sch-rule-days-field">
               <span class="sch-field-label" aria-hidden="true">Active days</span>
               <div class="day-toggle-grid" id="rule-days" role="group" aria-label="Active days">

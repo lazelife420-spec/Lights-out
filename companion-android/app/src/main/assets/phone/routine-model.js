@@ -58,6 +58,7 @@
         timers++;
         requireValue(action.phase === 'start' && Number.isInteger(p.seconds) && p.seconds >= 60 && p.seconds <= 86400, 'Invalid timer duration');
         requireValue((platform === 'android' ? ['reminder'] : ['shutdown', 'sleep', 'hibernate']).includes(p.endAction), 'Unsupported timer end action');
+        requireValue(p.testMode === undefined || (platform === 'windows' && typeof p.testMode === 'boolean'), 'Invalid Test Mode preference');
       } else {
         requireValue(platform === 'android' && ['wiz.warm', 'wiz.off'].includes(action.type), 'Adapter unavailable on this owner');
         requireValue(action.phase === (action.type === 'wiz.off' ? 'timer-complete' : 'start'), 'Unsupported action phase');
@@ -71,17 +72,18 @@
   function fromWindowsRule(rule) {
     if (rule.plan) { validate(rule.plan); requireValue(rule.plan.owner.platform === 'windows', 'Rule belongs to another device'); }
     const kind = rule.repeat || 'weekly';
+    requireValue(rule.testMode === undefined || typeof rule.testMode === 'boolean', 'Invalid Test Mode preference');
     return validate({ schemaVersion: 1, id: rule.id || 'legacy', name: String(rule.label || 'Bedtime').slice(0, 120),
       owner: { platform: 'windows', deviceId: 'local' },
       schedule: schedule({ kind, time: rule.time || '22:30', weekdays: (rule.days || DAYS).map(d => (DAYS.indexOf(d) || 7)),
         monthDays: rule.monthDays || [], months: rule.months, date: rule.date }, 'windows'),
       actions: [{ id: 'timer', type: 'timer.start', target: 'local', phase: 'start',
-        parameters: { seconds: Math.max(300, Math.round((Number(rule.durationMinutes) || 60) * 60)), endAction: rule.action || 'shutdown' } }] });
+        parameters: { seconds: Math.max(300, Math.round((Number(rule.durationMinutes) || 60) * 60)), endAction: rule.action || 'shutdown', testMode: Boolean(rule.testMode) } }] });
   }
   function fromPhoneRoutine(routine, rule) {
     const actions = [{ id: 'timer', type: 'timer.start', target: 'local', phase: 'start', parameters: { seconds: routine.seconds, endAction: 'reminder' } }];
-    if (routine.brightness > 0) actions.push({ id: 'warm', type: 'wiz.warm', target: 'local', phase: 'start', parameters: { targets: routine.targets, brightness: routine.brightness } });
-    if (routine.offAtEnd) actions.push({ id: 'off', type: 'wiz.off', target: 'local', phase: 'timer-complete', parameters: { targets: routine.targets } });
+    if (routine.brightness > 0) actions.push({ id: 'warm', type: 'wiz.warm', target: 'local', phase: 'start', parameters: { targets: routine.warmTargets ?? routine.targets, brightness: routine.brightness } });
+    if (routine.offAtEnd) actions.push({ id: 'off', type: 'wiz.off', target: 'local', phase: 'timer-complete', parameters: { targets: routine.offTargets ?? routine.targets } });
     return validate({ schemaVersion: 1, id: rule?.id || routine.id, name: routine.name,
       owner: { platform: 'android', deviceId: 'local' }, schedule: rule ? schedule(rule, 'android') : null, actions });
   }

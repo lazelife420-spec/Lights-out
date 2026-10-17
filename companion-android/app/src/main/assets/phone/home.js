@@ -29,9 +29,21 @@
     routineId = p.id || ''; $('routine-editor-title').textContent = p.id ? 'Edit routine' : 'New routine';
     $('routine-name').value = p.name || ''; $('routine-minutes').value = p.seconds ? p.seconds / 60 : 30;
     $('routine-warm').checked = Boolean(p.brightness); $('routine-off').checked = Boolean(p.offAtEnd); $('routine-brightness').value = p.brightness || 30;
-    choices('routine-light-options', config.lights.map(ip => [ip, ip]), p.targets || []);
+    choices('routine-light-options', config.lights.map(ip => [ip, ip]), p.warmTargets ?? p.targets ?? []);
+    choices('routine-off-light-options', config.lights.map(ip => [ip, ip]), p.offTargets ?? p.targets ?? []);
+    actionFields();
   }
-  function fields() { const kind = $('rule-kind').value; $('week-field').hidden = kind !== 'weekly'; $('month-field').hidden = kind !== 'monthly'; $('date-field').hidden = kind !== 'once'; $('rule-date').required = kind === 'once'; }
+  function actionFields() {
+    $('routine-warm-fields').hidden = !$('routine-warm').checked;
+    $('routine-off-fields').hidden = !$('routine-off').checked;
+    $('routine-brightness').disabled = !$('routine-warm').checked;
+    const actions = [`${$('routine-minutes').value || 30} min phone reminder`];
+    if ($('routine-warm').checked) actions.push(`warm ${checked('routine-light-options').length} light(s) to ${$('routine-brightness').value}% at the start`);
+    if ($('routine-off').checked) actions.push(`switch ${checked('routine-off-light-options').length} light(s) off at the finish`);
+    $('routine-action-preview').textContent = 'On this phone: ' + actions.join(' · ') + '. ' + (config.lights.length ? '' : 'Save lights in Lighting to add WiZ actions.');
+  }
+  $('routine-form').addEventListener('input', actionFields);
+  function fields() { const kind = $('rule-kind').value; $('week-field').hidden = kind !== 'weekly'; $('month-field').hidden = kind !== 'monthly'; $('months-field').hidden = kind === 'once'; $('date-field').hidden = kind !== 'once'; $('rule-date').required = kind === 'once'; }
   function resetRule(p = {}) {
     ruleId = p.id || ''; $('rule-editor-title').textContent = p.id ? 'Edit calendar rule' : 'New calendar rule';
     $('rule-routine').value = p.routineId || config.routines[0]?.id || ''; $('rule-kind').value = p.kind || 'weekly'; $('rule-time').value = p.time || '22:00';
@@ -82,8 +94,8 @@
   $('routine-form').onsubmit = event => {
     event.preventDefault(); const minutes = Number($('routine-minutes').value);
     if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) return error('Choose 1 minute to 24 hours.');
-    const useLights = $('routine-warm').checked || $('routine-off').checked;
-    const routine = { id: routineId || crypto.randomUUID(), name: $('routine-name').value.trim(), seconds: minutes * 60, targets: useLights ? checked('routine-light-options') : [], brightness: $('routine-warm').checked ? Number($('routine-brightness').value) : 0, offAtEnd: $('routine-off').checked };
+    const warmTargets = checked('routine-light-options'), offTargets = checked('routine-off-light-options');
+    const routine = { id: routineId || crypto.randomUUID(), name: $('routine-name').value.trim(), seconds: minutes * 60, targets: [...new Set([...warmTargets, ...offTargets])].sort(), warmTargets, offTargets, brightness: $('routine-warm').checked ? Number($('routine-brightness').value) : 0, offAtEnd: $('routine-off').checked };
     try { routine.plan = window.RoutineModel.fromPhoneRoutine(routine); } catch (e) { return error(e.message); }
     send('saveRoutine', { routine });
   };
@@ -111,7 +123,8 @@
       if (key !== configKey) {
         configKey = key; config = { lights: [], routines: [], rules: [], ...state.home };
         $('light-ips').value = config.lights.join('\n'); $('light-count').textContent = config.lights.length ? `${config.lights.length} saved light(s) · commands apply to all` : 'No saved lights yet.';
-        const previous = checked('routine-light-options'); choices('routine-light-options', config.lights.map(ip => [ip, ip]), previous);
+        for (const id of ['routine-light-options', 'routine-off-light-options']) { const previous = checked(id); choices(id, config.lights.map(ip => [ip, ip]), previous); }
+        actionFields();
         cards(); calendar();
       } else if (nk !== nextKey) cards();
       nextKey = nk;

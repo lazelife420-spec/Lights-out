@@ -48,3 +48,22 @@ test('bundled Android JS is the exact common model, with no network/runtime depe
   assert.deepEqual(fs.readFileSync(path.join(__dirname, '../routineModel.js')),
     fs.readFileSync(path.join(__dirname, '../../companion-android/app/src/main/assets/phone/routine-model.js')));
 });
+
+test('action edits preserve identities and keep independent Android target sets', () => {
+  const p = { id: 'phone', name: 'Edited', seconds: 600, targets: ['127.0.0.1', '127.0.0.2'],
+    warmTargets: ['127.0.0.1'], offTargets: ['127.0.0.2'], brightness: 40, offAtEnd: true };
+  const first = model.fromPhoneRoutine(p), edited = model.fromPhoneRoutine({ ...p, seconds: 900, brightness: 60 });
+  assert.deepEqual(edited.actions.map(a => a.id), first.actions.map(a => a.id));
+  assert.deepEqual(edited.actions[1].parameters.targets, ['127.0.0.1']);
+  assert.deepEqual(edited.actions[2].parameters.targets, ['127.0.0.2']);
+  assert.deepEqual(model.fromPhoneRoutine({ ...p, brightness: 0 }).actions.map(a => a.id), ['timer', 'off']);
+  assert.throws(() => model.fromPhoneRoutine({ ...p, warmTargets: [] }));
+});
+
+test('a Windows rule can require Test Mode without changing ownership or its timer action identity', () => {
+  const first = model.fromWindowsRule(weekly), edited = model.fromWindowsRule({ ...weekly, plan: first, testMode: true, action: 'hibernate' });
+  assert.equal(edited.actions[0].id, first.actions[0].id);
+  assert.equal(edited.actions[0].parameters.testMode, true);
+  assert.equal(edited.actions[0].parameters.endAction, 'hibernate');
+  assert.throws(() => model.fromWindowsRule({ ...weekly, testMode: 'false' }));
+});

@@ -25,10 +25,40 @@ function createLedger({ read, write }) {
       if (!entry) return null;
       Object.assign(entry, patch); persist(data); return structuredClone(entry);
     },
-    list(receiptById = () => null) {
+    dispatchResult(key, result, receiptId = null) {
+      const data = load(), entry = data.entries.find(e => e.occurrenceKey === key);
+      if (!entry || !['claimed', 'accepted'].includes(entry.status)) return;
+      entry.status = result?.success ? (receiptId ? 'running' : 'accepted') : 'failed';
+      entry.reason = result?.success ? null : (result?.code || 'start-failed');
+      if (receiptId) entry.timerReceiptId = receiptId;
+      entry.actions.forEach(a => { a.status = entry.status; }); persist(data);
+    },
+    timerStarted(key, receiptId) {
+      const data = load(), entry = data.entries.find(e => e.occurrenceKey === key);
+      if (!entry || !['claimed', 'accepted'].includes(entry.status)) return;
+      entry.status = 'running'; entry.timerReceiptId = receiptId; entry.reason = null;
+      entry.actions.forEach(a => { if (a.type === 'timer.start') a.status = 'running'; }); persist(data);
+    },
+    finishPending(key, status, reason) {
+      const data = load(), entry = data.entries.find(e => e.occurrenceKey === key);
+      if (!entry || entry.timerReceiptId || !['claimed', 'accepted'].includes(entry.status)) return;
+      entry.status = status; entry.reason = reason;
+      entry.actions.forEach(a => { a.status = status; }); persist(data);
+    },
+    interruptPending() {
+      const data = load(); let changed = false;
+      for (const entry of data.entries) if (!entry.timerReceiptId && ['claimed', 'accepted'].includes(entry.status)) {
+        entry.status = 'interrupted'; entry.reason = 'app-restarted-before-timer';
+        entry.actions.forEach(a => { a.status = 'interrupted'; }); changed = true;
+      }
+      if (changed) persist(data);
+    },
+    list(receiptById = () => null, receiptByOccurrence = () => null) {
       return load().entries.slice().reverse().map(entry => {
-        const result = entry.timerReceiptId ? receiptById(entry.timerReceiptId)?.result : null;
-        const status = { dry_run_completed: 'simulated', power_executed: 'completed', cancelled: 'cancelled',
+        const receipt = (entry.timerReceiptId ? receiptById(entry.timerReceiptId) : null) || receiptByOccurrence(entry.occurrenceKey);
+        if (receipt) entry.timerReceiptId = receipt.id || entry.timerReceiptId;
+        const result = receipt?.result;
+        const status = { running: 'running', dry_run_completed: 'simulated', power_executed: 'completed', cancelled: 'cancelled',
           interrupted: 'interrupted', blocked: 'failed', error: 'failed' }[result];
         if (status) { entry.status = status; entry.actions = entry.actions.map(a => a.type === 'timer.start' ? { ...a, status } : a); }
         return entry;

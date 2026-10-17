@@ -95,7 +95,7 @@ test('run origin defaults to this-pc and an unknown origin falls back to it', ()
 test('calendar auto-start passes Test Mode read from the app settings', () => {
   const body = extractFunction(mainSource, 'checkCalendarAutoStart');
   assert.match(body, /const appSettings = settingsStore\.getSection\('app'\) \|\| \{\};/);
-  assert.match(body, /startTimer\(\{[^}]*dryRun: Boolean\(appSettings\.dryRun \|\| profile\?\.dryRun\)[^}]*\}\)/);
+  assert.match(body, /startTimer\(\{[^}]*dryRun: Boolean\(appSettings\.dryRun \|\| profile\?\.dryRun \|\| event\.testMode\)[^}]*\}, undefined, claimed\?\.occurrenceKey \|\| null\)/);
   assert.match(body, /if \(isRunActive\(\)\) return;/);
 });
 

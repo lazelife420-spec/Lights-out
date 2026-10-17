@@ -598,6 +598,7 @@ function persistActiveTimer() {
     paused: timerState.paused,
     endsAt: timerState.endsAt,
     origin: timerState.origin,
+    routineOccurrenceKey: timerState.routineOccurrenceKey || null,
     savedAt: new Date().toISOString(),
     // Correlates this recovery snapshot to its run receipt so startup
     // reconciliation can tell a still-recoverable run apart from a truly
@@ -707,8 +708,11 @@ function isRunActive() {
 
 const UNATTENDED_RUN_ORIGINS = ['calendar', 'autopilot', 'shortcut', 'tray', 'launch'];
 
-function startTimer(input, legacyAction) {
+function startTimer(input, legacyAction, routineOccurrenceKey = null) {
   const options = normalizeTimerOptions(input, legacyAction);
+  // Internal dispatcher argument only; renderer/remote input cannot attach
+  // an arbitrary run to a claimed calendar occurrence.
+  options.routineOccurrenceKey = routineOccurrenceKey;
   if (['calendar','schedule'].includes(options.origin) && options.profileId && !profiles.getById(options.profileId)) {
     return { success: false, code: 'PROFILE_UNAVAILABLE', error: 'The scheduled routine is no longer available. Choose another routine.' };
   }
@@ -744,7 +748,8 @@ function startTimer(input, legacyAction) {
       nightModeId: nmIdentity.nightModeId,
       nightModeTitle: nmIdentity.nightModeTitle,
       nightModeVersion: nmIdentity.nightModeVersion,
-      origin: options.origin
+      origin: options.origin,
+      routineOccurrenceKey: options.routineOccurrenceKey
     });
     // Start the standard ritual with run metadata binding the token to this
     // exact run. The ritual's onStep/onComplete callbacks receive the meta.
@@ -752,7 +757,8 @@ function startTimer(input, legacyAction) {
     // through the guided overlay (every step, including "auto" ones, normally
     // requires a click) -- ritualMode fast-forwards those instead of getting
     // stuck on the first step forever.
-    const ritual = ritualMode.startRitual(null, { profileRitualToken: runToken, remoteOrigin: options.source === 'remote' || options.origin === 'calendar' });
+    const ritual = ritualMode.startRitual(null, { profileRitualToken: runToken, routineOccurrenceKey, waitForTimedSteps: options.origin === 'calendar',
+      remoteOrigin: options.source === 'remote' || options.origin === 'calendar' });
     // UI-R3 Fire 08: a ritual that did not start is an honest failure, never
     // a phantom countdown: the pending context is dropped and the caller
     // hears why. Nothing else in this path (the single-run policy, the direct
@@ -851,6 +857,7 @@ function beginValidatedCountdown(options, identity, nmIdentity) {
   timerState.gracePeriod = Number.isFinite(graceOption) ? Math.max(0, graceOption)
     : Number.isFinite(graceSetting) ? Math.max(0, graceSetting) : 2;
   timerState.origin = typeof options.origin === 'string' ? options.origin : 'this-pc';
+  timerState.routineOccurrenceKey = options.routineOccurrenceKey || null;
   timerState.profileId = identity.profileId;
   timerState.profileName = identity.profileName;
   const nm = nmIdentity || { nightModeId: null, nightModeTitle: null, nightModeVersion: null };
@@ -881,6 +888,10 @@ function beginValidatedCountdown(options, identity, nmIdentity) {
   } else {
     const receipt = runReceipts.createRunReceipt(timerState);
     activeReceiptId = receipt.id;
+  }
+  if (timerState.routineOccurrenceKey) {
+    try { routineLedger.timerStarted(timerState.routineOccurrenceKey, activeReceiptId); }
+    catch (error) { console.error('[routine-timer-correlation]', error); }
   }
   // Send screen time reality check to renderer.
   screenTime.getScreenTimeToday().then(st => {
@@ -1484,14 +1495,11 @@ async function checkCalendarAutoStart() {
         // A removed saved routine must not silently fall back to another one.
         if (event.profileId && !profile) continue;
         const result = startTimer({ durationSeconds: duration, action,
-          profileId: profile?.id || null, dryRun: Boolean(appSettings.dryRun || profile?.dryRun),
+          profileId: profile?.id || null, dryRun: Boolean(appSettings.dryRun || profile?.dryRun || event.testMode),
           forceShutdown: false, muteSystem: Boolean(profile?.muteSystem),
-          gracePeriod: profile?.gracePeriod, startOrigin: 'calendar', origin: 'calendar' });
-        if (claimed) routineLedger.update(claimed.occurrenceKey, {
-          status: result?.success ? 'accepted' : 'failed', reason: result?.success ? null : (result?.code || 'start-failed'),
-          timerReceiptId: result?.success && timerState.running ? activeReceiptId : null,
-          actions: claimed.actions.map(a => ({ ...a, status: result?.success ? 'accepted' : 'failed' }))
-        });
+          gracePeriod: profile?.gracePeriod, startOrigin: 'calendar', origin: 'calendar' }, undefined, claimed?.occurrenceKey || null);
+        if (claimed) routineLedger.dispatchResult(claimed.occurrenceKey, result,
+          result?.success && timerState.running ? activeReceiptId : null);
         if (result && result.success) {
           calendarStartedOccurrences.add(occurrence);
           if (calendarStartedOccurrences.size > 128) calendarStartedOccurrences.delete(calendarStartedOccurrences.values().next().value);
@@ -2402,7 +2410,7 @@ ipcMain.handle('save-calendar-settings', async (event, calSettings) => {
 });
 ipcMain.handle('get-calendar-settings', async () => {
   let routineOutcomes = [];
-  try { routineOutcomes = routineLedger.list(id => runReceipts.getReceiptById(id)).slice(0, 12); }
+  try { routineOutcomes = routineLedger.list(id => runReceipts.getReceiptById(id), key => runReceipts.getReceiptByOccurrence(key)).slice(0, 12); }
   catch { routineOutcomes = [{ name: 'Routine history', status: 'unavailable', reason: 'History could not be read; new calendar dispatch is blocked until storage is repaired.' }]; }
   return { ...settingsStore.getSection('calendar'), routineOutcomes };
 });
@@ -2751,7 +2759,7 @@ ipcMain.handle('resume-recoverable-timer', async () => {
     gracePeriod: snapshot.gracePeriod,
     origin: 'resume',
     resumeReceiptId
-  });
+  }, undefined, snapshot.routineOccurrenceKey || runReceipts.getReceiptById(resumeReceiptId)?.routineOccurrenceKey || null);
   return result;
 });
 
@@ -3206,11 +3214,12 @@ function setupRitualCallbacks() {
         if (appSettings.nightLightOnDim) applyDimPhase(0, 0);
       } else if (step.id === 'timer') {
         const ctx = profileRitualContext.consume(runToken);
+        if (runToken && !ctx) throw Error('Ritual timer context is unavailable');
         if (ctx) {
           beginValidatedCountdown(
             { durationSeconds: ctx.durationSeconds, action: ctx.action, dryRun: ctx.dryRun,
               forceShutdown: ctx.forceShutdown, muteSystem: ctx.muteSystem, gracePeriod: ctx.gracePeriod,
-              source: 'ritual', origin: ctx.origin || 'ritual' },
+              source: 'ritual', origin: ctx.origin || 'ritual', routineOccurrenceKey: ctx.routineOccurrenceKey },
             { profileId: ctx.profileId, profileName: ctx.profileName },
             { nightModeId: ctx.nightModeId || null, nightModeTitle: ctx.nightModeTitle || null, nightModeVersion: ctx.nightModeVersion || null }
           );
@@ -3232,16 +3241,28 @@ function setupRitualCallbacks() {
         }
       }
     } catch (err) {
+      if (runMeta?.routineOccurrenceKey) {
+        try { routineLedger.finishPending(runMeta.routineOccurrenceKey, 'failed', 'ritual-step-failed'); } catch { /* history unavailable */ }
+      }
       if (runToken) profileRitualContext.clearIfOwned(runToken);
       ritualMode.cancelIfCurrent(runId);
       console.error('[ritual-step-error]', err);
     }
   });
   ritualMode.onComplete((state, runMeta) => {
+    if (runMeta?.routineOccurrenceKey) {
+      try { routineLedger.finishPending(runMeta.routineOccurrenceKey, 'failed', 'ritual-ended-without-timer'); } catch { /* history unavailable */ }
+    }
     const runToken = runMeta && runMeta.profileRitualToken ? runMeta.profileRitualToken : null;
     if (runToken) profileRitualContext.clearIfOwned(runToken);
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('ritual-complete', state);
+    }
+  });
+  ritualMode.onCancel?.((state, runMeta) => {
+    if (runMeta?.profileRitualToken) profileRitualContext.clearIfOwned(runMeta.profileRitualToken);
+    if (runMeta?.routineOccurrenceKey) {
+      try { routineLedger.finishPending(runMeta.routineOccurrenceKey, 'cancelled', 'ritual-cancelled'); } catch { /* history unavailable */ }
     }
   });
 }
@@ -3274,6 +3295,7 @@ app.whenReady().then(async () => {
       ? (recoverable.receiptId || runReceipts.getMostRecentRunningReceiptId())
       : null;
     runReceipts.reconcileOrphanedRunningReceipts(protectedReceiptId);
+    try { routineLedger.interruptPending(); } catch (error) { console.error('[routine-history-recovery]', error); }
   }
 
   // Load custom Last Light sequences from settings.

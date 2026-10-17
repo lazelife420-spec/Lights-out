@@ -50,12 +50,12 @@ class PhoneTimerService : Service() {
             try {
                 state = state.command(action, profile?.seconds ?: intent?.getLongExtra("seconds", 0) ?: 0, SystemClock.elapsedRealtime(),
                     System.currentTimeMillis(), PhoneTimerStore.boot(this), UUID.randomUUID().toString())
-                if (profile != null) state = state.copy(label = profile.name, lightTargets = profile.targets, offAtEnd = profile.offAtEnd)
+                if (profile != null) state = state.copy(label = profile.name, lightTargets = profile.offTargets, offAtEnd = profile.offAtEnd)
                 PhoneTimerStore.write(this, state)
                 if (profile != null) {
                     PhoneRoutineOutcomes.started(this, profile.occurrenceKey, state.runId)
                     PhoneHomeStore.event(this, "Started ${profile.name} on this phone.")
-                    if (profile.brightness > 0) PhoneLights.perform(this, profile.targets, "warm", profile.brightness, state.runId)
+                    if (profile.brightness > 0) PhoneLights.perform(this, profile.warmTargets, "warm", profile.brightness, state.runId)
                 }
             } catch (_: IllegalArgumentException) { /* Repeated/stale actions must not overwrite an active timer. */ }
         }

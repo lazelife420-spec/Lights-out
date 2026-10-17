@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Corrected Android leap-day recurrence beyond the old 741-day cutoff, including
+  the non-leap century gap. Selected-month candidates, consumed dates and DST
+  policies retain their existing meaning; saved schedules are unchanged.
+- Made local routine actions explicit in both editors. Windows rules can require
+  Test Mode; Android warm-start and finish actions can select different saved
+  WiZ lights. Edits preserve identities and refresh saved calendar plans without
+  rewriting a running timer or its receipts.
+- Correlated delayed Windows calendar rituals with their eventual timer receipts.
+  Accepted, running, cancelled, simulated completion and failure stay distinct;
+  a ritual ending without a timer never reports completion. Calendar preparation
+  respects timed steps; phone ritual starts retain immediate fast-forward.
 - Added a common v1 local routine/action contract for Windows and standalone
   Android, with explicit local ownership, weekly/monthly/date schedules and
   stable local-day occurrence identity. Existing saved rules and timer engines

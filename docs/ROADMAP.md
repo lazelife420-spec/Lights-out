@@ -47,6 +47,9 @@ is complete; the broader platform roadmap remains open.
   Windows Test Mode and Android loopback fixtures; no new public release is
   implied. Existing data and independent engines are preserved. See
   [the contract and migration boundary](CALENDAR_ROUTINE_V1.md).
+  The local continuation corrects leap-day alarm lookup, adds explicit action
+  editing with separate phone lighting targets, and correlates delayed Windows
+  rituals through timer receipts. These changes remain local and unreleased.
 - **Windows invisible-host objective:** Electron main owns the timer/listener/
   receipts. The reviewed v11.2.0 qualification reported seven lifecycle checks
   passing: close/reopen, single timer authority, tray controls, hidden completion,
@@ -72,13 +75,14 @@ is complete; the broader platform roadmap remains open.
    command receipts are in [the execution ledger](PLATFORM_ALIGNMENT_EXECUTION_2026-10-16.md).
 2. **Windows Host qualification: bounded local gate PASS.** Fresh ordinary and
    instrumented runs close the reviewed lifecycle/startup gate. The corrected
-   candidate awaits owner commit review and is not published. Listener opt-in
+   candidate is committed locally and is not published. Listener opt-in
    and idle login remain safe defaults. No daemon migration is justified.
 3. **Calendar Routine Builder continuation:** the first local vertical slice is
-   implemented. Next, extend the builder's explicit action editing and receipt
-   correlation without replacing the independent engines. Versioned portable
-   import/export and optional secured local handoff remain separate work; they
-   require capability negotiation and explicit target approval. No hidden
+   implemented, including bounded local action editing and delayed Windows
+   receipt correlation. Next, specify versioned portable import/export with
+   migration, validation and explicit local adoption. Optional secured local
+   handoff remains separate work, requiring capability negotiation and explicit
+   target approval. No hidden
    synchronization, arbitrary remote execution or unsupported adapter claims.
 4. **First Light extension:** specify a separately qualified phone-owned morning
    path and compatible lighting actions after routine ownership is explicit.
