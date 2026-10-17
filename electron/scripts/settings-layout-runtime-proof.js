@@ -161,6 +161,7 @@ async function main() {
     }
   }
   await evaluate(`state.customization.theme='midnight';applyCustomization(state.customization);handleSidebarNavigation('lib',{persist:false,focusNav:false}).then(()=>true)`);
+  await until(()=>evaluate(`document.querySelector('.ns-nav-item.active')?.dataset.nsTab==='lib'`),'Tonight navigation did not settle');
   await send('Emulation.setDeviceMetricsOverride', { width:1440,height:900,deviceScaleFactor:1,mobile:false });
   assert.equal(await evaluate(`state.smartLights.enabled`), false, 'UI proof must leave real lighting disabled');
   const started=await evaluate(`window.electronAPI.startTimer({durationSeconds:600,action:'sleep',dryRun:true,forceShutdown:false,muteSystem:false,gracePeriod:0,profileId:null,nightModeId:'',origin:'this-pc'})`);
@@ -169,6 +170,7 @@ async function main() {
   const timerStates=[];
   for(const phase of ['running','paused']) {
     if(phase==='paused') { await evaluate('window.electronAPI.pauseTimer()');await until(()=>evaluate('state.paused===true'),'Timer did not pause'); }
+    await wait(800);
     const layout=await evaluate(`(()=>{const r=document.getElementById('btn-stop').getBoundingClientRect(),time=document.getElementById('timer-main');return {cancelVisible:r.top>=0&&r.bottom<=innerHeight-40,readoutVisible:time.getClientRects().length>0,overflow:document.documentElement.scrollWidth-innerWidth}})()`);
     assert.ok(layout.cancelVisible&&layout.readoutVisible&&layout.overflow<=1,`${phase}: ${JSON.stringify(layout)}`);
     timerStates.push({phase,...layout});

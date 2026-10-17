@@ -66,7 +66,11 @@ body.studio:not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib > #readine
 body.studio #readiness-strip .rdy-row { min-height: 60px; padding: 12px 16px; }
 body.studio #readiness-strip .rdy-label { font: 500 10px/1.4 var(--font-ui); text-transform: none; letter-spacing: 0; }
 body.studio #readiness-strip .rdy-value { font: 550 12px/1.4 var(--font-ui); }
-body.studio:not(.mini-mode):not(.fullscreen-clock-mode) #action-bar-running { background: var(--studio-surface); border-radius: 18px; border: 1px solid var(--studio-line); }
+body.studio:not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib > #action-bar-running { align-self: stretch; width: 100%; max-width: none; padding: 26px; gap: 20px; justify-content: center; background: var(--studio-surface); border-radius: 18px; border: 1px solid var(--studio-line); }
+body.studio:not(.mini-mode):not(.fullscreen-clock-mode) #action-bar-running .session-head { width: 100%; padding-bottom: 20px; border-bottom: 1px solid var(--studio-line); }
+body.studio:not(.mini-mode):not(.fullscreen-clock-mode) #action-bar-running :is(#btn-pause, #btn-stop) { width: 100%; border-radius: 10px; justify-content: center; }
+body.studio:not(.mini-mode):not(.fullscreen-clock-mode) #action-bar-running #btn-pause { min-height: 48px; }
+body.studio:not(.mini-mode):not(.fullscreen-clock-mode) #action-bar-running .snooze-group { width: 100%; }
 
 /* Shared page rhythm: generous headings, quieter cards, clear actions. */
 body.studio :is(.device-card, .sch-section, .status-card, .proof-empty) { background: var(--studio-surface); border: 1px solid var(--studio-line); border-radius: 16px; }
