@@ -92,7 +92,8 @@ Windows app work happens in `electron\`:
 - view state, browser-preview fallback behavior, and UI interactions: `electron\renderer.js`
 - the IPC bridge: `electron\preload.js`
 - markup and styles: `electron\index.html`, `electron\styles.css`; the current
-  Studio shell/page design is in `electron\studio.css` (loaded last). Its mini
+  Studio shell/page design is in `electron\studio.css` (loaded last); Tonight
+  uses an open horizon scene and a compact setup with expandable Quick start. Its mini
   and full-screen exclusions preserve the established compact clock layouts.
 - feature modules (calendar, profiles, smart lights, companion, family, wifi guard,
   content blocker, etc.): the per-feature files in `electron\`

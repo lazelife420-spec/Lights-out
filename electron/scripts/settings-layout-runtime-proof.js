@@ -154,7 +154,12 @@ async function main() {
           fs.writeFileSync(path.join(proofDir,`${theme}-${width}-shell-${tab}.png`),Buffer.from(shot.data,'base64'));
         }
         assert.ok(layout.visible && layout.overflow<=1 && layout.pageOverflow<=1 && !layout.navClipped, `${theme} ${width} ${tab}: ${JSON.stringify(layout)}`);
-        if (tab === 'lib') assert.ok(await evaluate(`document.getElementById('ns-play-btn').getBoundingClientRect().bottom<=innerHeight-40`), 'Start action must fit on Tonight');
+        if (tab === 'lib') {
+          assert.ok(await evaluate(`['ns-play-btn','readiness-strip','testmode-pill'].every(id=>{const r=document.getElementById(id).getBoundingClientRect();return r.width>0&&r.top>=48&&r.bottom<=innerHeight-40})`), 'Start, readiness and mode status must fit on Tonight');
+          const contrast=await evaluate(`(()=>{const c=getComputedStyle(document.getElementById('ns-play-btn'));const luminance=value=>{const rgb=value.match(/[\\d.]+/g).slice(0,3).map(v=>{v=Number(v)/255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4});return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722};const a=luminance(c.color),b=luminance(c.backgroundColor);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05)})()`);
+          assert.ok(contrast>=4.5, `Start text contrast ${contrast} on ${theme}`);
+          layout.startContrast=contrast;
+        }
         shellLayouts.push({theme,width,height,tab,...layout});
         if (tab === 'help') await evaluate(`document.getElementById('about-modal-close').click();true`);
       }
@@ -162,6 +167,23 @@ async function main() {
   }
   await evaluate(`state.customization.theme='midnight';applyCustomization(state.customization);handleSidebarNavigation('lib',{persist:false,focusNav:false}).then(()=>true)`);
   await until(()=>evaluate(`document.querySelector('.ns-nav-item.active')?.dataset.nsTab==='lib'`),'Tonight navigation did not settle');
+  // Exercise the actual visible controls. Expanding presets must not start a
+  // timer, and choosing a preset must keep its existing immediate-start meaning.
+  await send('Emulation.setDeviceMetricsOverride', { width:900,height:640,deviceScaleFactor:1,mobile:false });
+  await evaluate(`document.querySelector('.studio-quick-start summary').click();true`);
+  assert.equal(await evaluate(`document.querySelector('.studio-quick-start').open && !state.running && !state.paused`),true);
+  assert.equal(await evaluate(`document.querySelectorAll('.studio-quick-start .chip').length`),6);
+  assert.ok(await evaluate(`(()=>{const d=document.querySelector('.studio-quick-start');return d.scrollWidth<=d.clientWidth+1})()`),'Expanded presets must not overflow');
+  const quickShot=await send('Page.captureScreenshot',{format:'png'});fs.writeFileSync(path.join(proofDir,'quick-start-expanded-900.png'),Buffer.from(quickShot.data,'base64'));
+  await evaluate(`document.querySelector('[data-action="sleep"]').click();document.querySelector('.studio-quick-start [data-min="15"]').click();true`);
+  await until(()=>evaluate(`state.running && state.totalSeconds===900`),'Quick-start preset did not start 15 minutes');
+  assert.equal(await evaluate(`state.dryRun && !state.smartLights.enabled`),true);
+  await evaluate(`document.getElementById('btn-stop').click();true`);
+  await until(()=>evaluate(`!state.running&&!state.paused`),'Cancel button did not stop quick-start timer');
+  await evaluate(`document.querySelector('.studio-quick-start').open=false;const input=document.getElementById('timer-input');input.value='2';input.dispatchEvent(new Event('input',{bubbles:true}));document.getElementById('ns-play-btn').click();true`);
+  await until(()=>evaluate(`state.running && state.totalSeconds===120`),'Start button did not use the entered duration');
+  await evaluate(`document.getElementById('btn-stop').click();true`);
+  await until(()=>evaluate(`!state.running&&!state.paused`),'Cancel button did not stop entered timer');
   await send('Emulation.setDeviceMetricsOverride', { width:1440,height:900,deviceScaleFactor:1,mobile:false });
   assert.equal(await evaluate(`state.smartLights.enabled`), false, 'UI proof must leave real lighting disabled');
   const started=await evaluate(`window.electronAPI.startTimer({durationSeconds:600,action:'sleep',dryRun:true,forceShutdown:false,muteSystem:false,gracePeriod:0,profileId:null,nightModeId:'',origin:'this-pc'})`);
@@ -171,9 +193,14 @@ async function main() {
   for(const phase of ['running','paused']) {
     if(phase==='paused') { await evaluate('window.electronAPI.pauseTimer()');await until(()=>evaluate('state.paused===true'),'Timer did not pause'); }
     await wait(800);
+    await send('Emulation.setDeviceMetricsOverride',{width:900,height:640,deviceScaleFactor:1,mobile:false});
+    const compact=await evaluate(`(()=>{const r=document.getElementById('btn-stop').getBoundingClientRect(),status=document.getElementById('readiness-strip').getBoundingClientRect();return {cancelVisible:r.top>=0&&r.bottom<=innerHeight-40,readinessVisible:status.bottom<=innerHeight-40,overflow:document.documentElement.scrollWidth-innerWidth}})()`);
+    assert.ok(compact.cancelVisible&&compact.readinessVisible&&compact.overflow<=1,`Compact ${phase}: ${JSON.stringify(compact)}`);
+    const compactShot=await send('Page.captureScreenshot',{format:'png'});fs.writeFileSync(path.join(proofDir,`timer-${phase}-900.png`),Buffer.from(compactShot.data,'base64'));
+    await send('Emulation.setDeviceMetricsOverride',{width:1440,height:900,deviceScaleFactor:1,mobile:false});
     const layout=await evaluate(`(()=>{const r=document.getElementById('btn-stop').getBoundingClientRect(),time=document.getElementById('timer-main');return {cancelVisible:r.top>=0&&r.bottom<=innerHeight-40,readoutVisible:time.getClientRects().length>0,overflow:document.documentElement.scrollWidth-innerWidth}})()`);
     assert.ok(layout.cancelVisible&&layout.readoutVisible&&layout.overflow<=1,`${phase}: ${JSON.stringify(layout)}`);
-    timerStates.push({phase,...layout});
+    timerStates.push({phase,...layout,compact});
     const shot=await send('Page.captureScreenshot',{format:'png'});fs.writeFileSync(path.join(proofDir,`timer-${phase}.png`),Buffer.from(shot.data,'base64'));
   }
   await evaluate('window.electronAPI.toggleMiniMode();true');await until(()=>evaluate('document.body.classList.contains("mini-mode")'),'Mini mode did not open');
@@ -195,7 +222,7 @@ async function main() {
   const clockShot=await send('Page.captureScreenshot',{format:'png'});fs.writeFileSync(path.join(proofDir,'timer-fullscreen.png'),Buffer.from(clockShot.data,'base64'));
   await evaluate('document.getElementById("btn-fullscreen-clock-exit").click();true');await until(()=>evaluate('!document.body.classList.contains("fullscreen-clock-mode")'),'Full-screen clock did not close');
   assert.deepEqual(errors,[]);
-  fs.writeFileSync(path.join(proofDir, 'report.json'), JSON.stringify({ source, executable: artifact.executable, layouts: results, shellLayouts, timerStates, lighting: ['mode-card selection','staged save','passive preview leaves no unsaved changes','provider isolation','mode-specific timing'], keyboard: ['Ctrl K','WiZ search + Enter','Escape from search results keeps Settings open','End selects last category'], runtimeErrors: errors }, null, 2));
+  fs.writeFileSync(path.join(proofDir, 'report.json'), JSON.stringify({ source, executable: artifact.executable, layouts: results, shellLayouts, timerStates, tonightControls: ['disclosure does not start timer','six immediate-start presets','15-minute preset via UI','entered duration via Start','Cancel via UI','mode and readiness visible','Start text contrast'], lighting: ['mode-card selection','staged save','passive preview leaves no unsaved changes','provider isolation','mode-specific timing'], keyboard: ['Ctrl K','WiZ search + Enter','Escape from search results keeps Settings open','End selects last category'], runtimeErrors: errors }, null, 2));
   console.log(`PASS ${results.length} category/theme/viewport layouts, footer visibility, no horizontal overflow and minimum-height navigation`);
   console.log('PASS search, keyboard navigation, focus and runtime error checks');
   console.log('PASS mode cards, staged save, passive preview, mode timing and provider isolation');

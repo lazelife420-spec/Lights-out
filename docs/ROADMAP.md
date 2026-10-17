@@ -32,6 +32,12 @@ is complete; the broader platform roadmap remains open.
 
 ## In-source awaiting qualification
 
+- **Desktop UI continuation:** Tonight now uses an open ambient scene with a
+  compact setup, expandable immediate-start presets and the same local timer
+  authority. Source runtime checks cover both themes, 900×640 and 1440×900,
+  visible safety/readiness, button-driven starts/cancellation, paused/running
+  controls, mini and full-screen clocks. This is local unreleased UI work;
+  the separate Android build and deferred product features are unchanged.
 - **Standalone Android:** native offline timer, foreground notification controls,
   screen-off alarms, phone-local WiZ, saved routines and recurring/date calendar
   rules are SOURCE-PRESENT and debug/emulator TEST-PROVEN. Current source is not

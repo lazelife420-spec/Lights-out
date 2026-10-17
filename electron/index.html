@@ -367,7 +367,7 @@
 
       <!-- LIB: Tonight / main lobby panel (default screen) -->
       <div class="ns-main-panel" id="ns-panel-lib">
-      <header class="studio-tonight-head"><div><div class="page-eyebrow">TONIGHT</div><h1 id="studio-tonight-title">Make room for the night.</h1><p id="studio-tonight-copy">Set your timer. Choose how the night ends.</p></div><span class="studio-device-tag"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3" width="15" height="10" rx="2"/><path d="M7 17h6M10 13v4"/></svg>This PC</span></header>
+      <header class="studio-tonight-head"><div><div class="page-eyebrow">TONIGHT <span class="studio-device-tag"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3" width="15" height="10" rx="2"/><path d="M7 17h6M10 13v4"/></svg>This PC</span></div><h1 id="studio-tonight-title">Leave the day behind.</h1><p id="studio-tonight-copy">A little more time. Then a softer landing.</p></div></header>
 
       <!-- Armed Night Mode banner (shown when Use Tonight loads a mode into the lobby) -->
       <div class="armed-mode-banner" id="armed-mode-banner" style="display:none" role="status" aria-live="polite">
@@ -421,8 +421,8 @@
             <p class="tonight-target-note" id="tonight-target-note" hidden><svg class="chip-glyph" viewBox="0 0 18 18" aria-hidden="true" focusable="false"><circle cx="9" cy="9" r="6.5"/><path d="M9 5.5V9l2.5 1.6"/></svg><span>Ends at <strong id="tonight-target-when"></strong> (set on Schedule)</span><button type="button" class="link-btn tonight-target-clear" id="btn-tonight-target-clear">Clear</button></p>
           </div>
           <!-- Quick start: each chip starts that many minutes at once (one tap). -->
-          <div class="plan-field">
-            <span class="plan-field-label" id="plan-quick-label">Quick start</span>
+          <details class="plan-field studio-quick-start">
+            <summary class="plan-field-label" id="plan-quick-label">Quick start <span>Starts immediately</span></summary>
             <div class="chips-row" role="group" aria-labelledby="plan-quick-label">
               <button class="chip" data-min="5" aria-label="5 minutes">5m</button>
               <button class="chip" data-min="15" aria-label="15 minutes">15m</button>
@@ -431,7 +431,7 @@
               <button class="chip" data-min="60" aria-label="1 hour">1h</button>
               <button class="chip" data-min="120" aria-label="2 hours">2h</button>
             </div>
-          </div>
+          </details>
           <div class="plan-field">
             <span class="plan-field-label">Ending</span>
             <!-- v11.2 Tonight's Plan: explicit manual action selection. Writes
@@ -480,6 +480,7 @@
 
       <!-- Timer Ring Section: the instrument -->
       <section class="timer-section">
+        <div class="studio-horizon" aria-hidden="true"><svg viewBox="0 0 800 300" fill="none" preserveAspectRatio="none"><defs><linearGradient id="horizon-line"><stop stop-color="#e6ab7b" stop-opacity="0"/><stop offset=".48" stop-color="#e6ab7b" stop-opacity=".6"/><stop offset="1" stop-color="#aba1e9" stop-opacity="0"/></linearGradient></defs><path d="M-60 195Q340 70 860 195" stroke="url(#horizon-line)"/><path d="M-60 223Q340 98 860 223" stroke="url(#horizon-line)" opacity=".28"/><path d="M-60 259Q340 134 860 259" stroke="url(#horizon-line)" opacity=".12"/></svg></div>
         <div class="ring-container">
           <!-- UI-R3 Fire 04: the instrument. Decorative (#timer-main carries
                role=timer). The mask holds three 7-unit cuts at the centres of

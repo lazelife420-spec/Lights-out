@@ -2,8 +2,15 @@
 
 ## Unreleased
 
+- Reworked Windows Tonight around an open horizon scene, larger typography,
+  compact navigation and directly editable duration. Quick start now expands
+  separately and explicitly labels its immediate-start presets; the final
+  action, device scope, Test/Real status and Start stay visible at 900×640.
+  Running and paused controls share the new layout. Mini and full-screen clocks
+  keep their existing behavior. This follow-up changes Windows only.
+
 - Introduced the Studio interface on Windows and standalone Android: a labelled
-  desktop sidebar, dedicated timer card and setup panel, calmer branding,
+  desktop sidebar, clearer timer setup, calmer branding,
   redesigned mode library, consistent page surfaces and mobile bottom navigation.
   Existing local timers, device ownership, safety controls and light modes keep
   their established behavior. Mini mode and the full-screen clock remain separate.

@@ -3066,8 +3066,8 @@ function render() {
   els.body.classList.toggle('is-running', state.running);
   els.body.classList.toggle('is-paused', state.paused);
   els.body.classList.toggle('mini-mode', state.miniMode);
-  setTextIfChanged(document.getElementById('studio-tonight-title'), state.paused ? 'Take your time.' : state.running ? 'Your time to switch off.' : 'Make room for the night.');
-  setTextIfChanged(document.getElementById('studio-tonight-copy'), state.paused ? 'Your timer is paused. Resume whenever you’re ready.' : state.running ? 'Your timer is running on this PC.' : 'Set your timer. Choose how the night ends.');
+  setTextIfChanged(document.getElementById('studio-tonight-title'), state.paused ? 'Stay a little longer.' : state.running ? 'Let the day fade.' : 'Leave the day behind.');
+  setTextIfChanged(document.getElementById('studio-tonight-copy'), state.paused ? 'Paused on this PC. Pick up when you’re ready.' : state.running ? 'Your countdown is running on this PC.' : 'A little more time. Then a softer landing.');
   els.timerDisplay?.classList.toggle('clock-idle', idleClockVisible);
   // Full screen only makes sense over the idle clock face -- once a timer's
   // running the ring switches to a countdown, and setup-controls/action-bar
