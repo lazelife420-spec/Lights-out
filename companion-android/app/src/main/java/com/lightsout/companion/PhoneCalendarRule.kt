@@ -34,15 +34,31 @@ data class PhoneCalendarRule(
             val candidate = day.atTime(time).atZone(zone)
             return candidate.takeIf { key(day) !in consumed && it.toInstant().isAfter(after) && it.toInstant().toEpochMilli() >= createdAt }
         }
-        val first = after.atZone(zone).toLocalDate()
-        // A selected month plus a 31st day can be more than a year away.
-        for (offset in 0..740) {
-            val day = first.plusDays(offset.toLong())
-            if (!matches(day) || key(day) in consumed) continue
-            // atZone moves a spring gap forward and picks the first fall overlap.
-            // One local-date key makes a fall-back hour fire at most once.
-            val candidate = day.atTime(time).atZone(zone)
-            if (candidate.toInstant().isAfter(after) && candidate.toInstant().toEpochMilli() >= createdAt) return candidate
+        // February's maximum length is 29. Reject impossible selectors without
+        // walking years (e.g. February 31), while retaining leap-day rules.
+        if (kind == "monthly" && months.none { month ->
+            monthDays.any { it == -1 || it <= YearMonth.of(2000, month).lengthOfMonth() }
+        }) return null
+        val first = maxOf(after.atZone(zone).toLocalDate(), Instant.ofEpochMilli(createdAt).atZone(zone).toLocalDate())
+        val firstMonth = YearMonth.from(first)
+        // The Gregorian calendar repeats every 400 years, including weekdays
+        // and the non-leap centuries. N consumed dates can exclude at most N
+        // otherwise valid candidates; N+1 cycles therefore suffice. Enumerate
+        // selected months/days, rather than every day in that bound.
+        val bound = minOf(4800L * (consumed.size.toLong() + 1), (999999999L - first.year) * 12 + 12 - first.monthValue)
+        for (offset in 0L..bound) {
+            val month = firstMonth.plusMonths(offset)
+            if (month.monthValue !in months) continue
+            val days = if (kind == "monthly") monthDays.map { if (it == -1) month.lengthOfMonth() else it }
+                .filter { it <= month.lengthOfMonth() }.distinct().sorted() else (1..month.lengthOfMonth()).toList()
+            for (number in days) {
+                val day = month.atDay(number)
+                if (day < first || !matches(day) || key(day) in consumed) continue
+                // Shift gaps forward; choose the first overlap. One local-date
+                // identity prevents replay during the repeated fall hour.
+                val candidate = day.atTime(time).atZone(zone)
+                if (candidate.toInstant().isAfter(after) && candidate.toInstant().toEpochMilli() >= createdAt) return candidate
+            }
         }
         return null
     }

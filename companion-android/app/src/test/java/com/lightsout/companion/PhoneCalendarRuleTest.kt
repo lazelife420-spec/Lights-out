@@ -17,6 +17,13 @@ class PhoneCalendarRuleTest {
     @Test fun exactBoundaryIsExclusive() { assertEquals(16, rule().nextAfter(after("2026-10-15T22:00"), zone)!!.dayOfMonth) }
     @Test fun shortMonthsSkipMissingDay() { assertEquals("2026-03-31", rule("monthly", monthDays = setOf(31)).nextAfter(after("2026-02-01T00:00"), zone)!!.toLocalDate().toString()) }
     @Test fun lastDayIncludesLeapFebruary() { assertEquals("2028-02-29", rule("monthly", monthDays = setOf(-1), months = setOf(2)).nextAfter(after("2028-02-01T00:00"), zone)!!.toLocalDate().toString()) }
+    @Test fun leapDayRepeatsAfterFourYears() { assertEquals("2032-02-29", rule("monthly", monthDays = setOf(29), months = setOf(2)).nextAfter(after("2028-02-29T22:00"), zone)!!.toLocalDate().toString()) }
+    @Test fun leapDaySkipsNonLeapCentury() { assertEquals("2104-02-29", rule("monthly", monthDays = setOf(29), months = setOf(2)).nextAfter(after("2096-02-29T22:00"), zone)!!.toLocalDate().toString()) }
+    @Test fun consumedLeapDayFindsFollowingLeapYear() { assertEquals("2036-02-29", rule("monthly", monthDays = setOf(29), months = setOf(2)).nextAfter(after("2028-02-29T22:00"), zone, setOf("rule-1:2032-02-29"))!!.toLocalDate().toString()) }
+    @Test fun selectedMonthsSkipImpossibleDatesAndConsumedCandidates() { assertEquals("2027-01-31", rule("monthly", monthDays = setOf(31), months = setOf(1, 2, 4)).nextAfter(after("2026-01-01T00:00"), zone, setOf("rule-1:2026-01-31"))!!.toLocalDate().toString()) }
+    @Test fun futureCreationIsIncludedWithoutCatchup() { assertEquals("2196-02-29", rule("monthly", monthDays = setOf(29), months = setOf(2), created = after("2196-02-29T22:00").toEpochMilli()).nextAfter(after("2026-01-01T00:00"), zone)!!.toLocalDate().toString()) }
+    @Test fun recurringSpringGapMovesForward() { assertEquals("2025-03-09T03:30", rule(time = "02:30", days = setOf(7), months = setOf(3)).nextAfter(after("2025-03-09T00:00"), zone)!!.toLocalDateTime().toString()) }
+    @Test fun recurringOverlapIsNotRepeatedAfterFirstInstant() { assertEquals("2025-11-09", rule(time = "01:30", days = setOf(7), months = setOf(11)).nextAfter(Instant.parse("2025-11-02T09:00:00Z"), zone)!!.toLocalDate().toString()) }
     @Test fun selectedMonthsExcludeOthers() { assertEquals(12, rule("monthly", months = setOf(12)).nextAfter(after("2026-10-01T00:00"), zone)!!.monthValue) }
     @Test fun impossibleMonthDayReturnsNone() { assertNull(rule("monthly", monthDays = setOf(31), months = setOf(2)).nextAfter(after("2026-01-01T00:00"), zone)) }
     @Test fun individualDateCanBeFarFuture() { assertEquals(2199, rule("once", date = "2199-12-31").nextAfter(after("2026-01-01T00:00"), zone)!!.year) }
