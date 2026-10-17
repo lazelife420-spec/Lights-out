@@ -52,6 +52,16 @@ permission consent stay local; routine-file import cannot enable these settings.
 
 ## Evidence and limits
 
+The October 17 layout pass adds visual mode cards and a compact preview on both
+platforms. Windows presents light/room selection before timer behavior, hides
+the dim window for modes that follow the entire timer, and removes inapplicable
+color/scene fields for those modes. Its brightness control still uses the saved
+WiZ brightness; animated frames remain capped at 60%. Screen preview changes
+do not create unsaved settings. Android separates countdown and beacon sections,
+keeps Save visible while scrolling, and preserves drafts during failed saves or
+delayed refreshes. Renderer layout evidence is in `review/LO-UI-20261017/`;
+Chromium phone fixtures establish UI behavior, not Android hardware reliability.
+
 Local qualification records live in `review/LO-LIGHT-1-20261016/`. Desktop unit,
 smoke, lint and packaged UI checks cover the actual main/preload/renderer and
 WiZ UDP adapter. Android debug QA uses source-only isolated projects and an

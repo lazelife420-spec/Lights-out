@@ -172,7 +172,7 @@ test('toggling #chk-clock-mode applies at once and persists only clockMode', asy
 
 test('the honest-save footer never marks #chk-clock-mode or #cz-clock-format as unsaved', () => {
   // The delegated dirty listener skips anything inside [data-live].
-  assert.match(rendererJs, /const isStagedSettingsEdit = target => Boolean\(target\?\.closest\)\s*&& !target\.closest\('\[data-live\], \[data-action-scoped\]'\);/);
+  assert.match(rendererJs, /const isStagedSettingsEdit = target => Boolean\(target\?\.closest\)\s*&& !target\.closest\('\[data-live\], \[data-action-scoped\], \[data-preview-only\]'\);/);
   for (const id of ['chk-clock-mode', 'cz-clock-format']) {
     const tag = (html.match(new RegExp(`<[a-z]+ [^>]*id="${id}"[^>]*>`)) || [''])[0];
     assert.match(tag, /data-live="1"/, `#${id} is data-live`);

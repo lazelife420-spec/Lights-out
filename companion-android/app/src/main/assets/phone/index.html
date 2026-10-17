@@ -44,14 +44,14 @@
     <section id="view-lighting" class="home-view" hidden aria-label="WiZ lighting">
       <p class="eyebrow">DIRECT FROM YOUR PHONE</p><h1>Set the night.</h1>
       <p class="view-copy">Control WiZ lights on the same Wi-Fi, even with your PC off. Enable Local communication in the WiZ app.</p>
-      <div class="control-card"><h2>Your WiZ lights</h2><button class="secondary" id="discover-lights">Find lights on Wi-Fi</button>
+      <details class="control-card phone-light-connection" open><summary><span>Your WiZ lights</span><small>Connection &amp; addresses</small></summary><button class="secondary" id="discover-lights">Find lights on Wi-Fi</button>
         <label for="light-ips">Light IP addresses</label><textarea id="light-ips" rows="3" placeholder="192.168.0.18" spellcheck="false" autocapitalize="off"></textarea><small>Up to 8 local IPv4 addresses, separated by commas or new lines. Manual entry also works when discovery is blocked.</small>
         <button class="primary" id="save-lights">Save lights on this phone</button>
-      </div>
-      <div class="control-card"><h2>Room controls</h2><p class="view-copy" id="light-count">No saved lights yet.</p><p class="view-copy" id="light-result" role="status"></p><div class="button-row"><button class="secondary" id="light-status">Check</button><button class="secondary" id="light-on">On</button><button class="secondary" id="light-off">Off</button></div>
+      </details>
+      <details class="control-card phone-room-controls"><summary><span>Room controls</span><small>On, off &amp; brightness</small></summary><p class="view-copy" id="light-count">No saved lights yet.</p><p class="view-copy" id="light-result" role="status"></p><div class="button-row"><button class="secondary" id="light-status">Check</button><button class="secondary" id="light-on">On</button><button class="secondary" id="light-off">Off</button></div>
         <label for="light-brightness">Warm light brightness <output id="brightness-value">30%</output></label><input id="light-brightness" type="range" min="10" max="100" value="30"><button class="secondary" id="light-warm">Set warm light · 2700K</button>
-      </div>
-      <div class="control-card"><p class="eyebrow">MAKE TIME VISIBLE</p><h2>Room Hourglass. Orbit. Ember.</h2><div id="light-experience-body"></div></div>
+      </details>
+      <div class="phone-light-builder"><div class="phone-light-heading"><p class="eyebrow">MAKE TIME VISIBLE</p><h2>A different kind of countdown.</h2><p class="view-copy">Choose the mood. Pick the lights. Make it yours.</p></div><div id="light-experience-body"></div></div>
     </section>
     <section id="view-routines" class="home-view" hidden aria-label="Phone routines">
       <p class="eyebrow">MAKE IT YOUR RITUAL</p><h1>A routine to switch off.</h1><p class="view-copy">Saved and run on this phone. Add a calendar rule to start automatically.</p>

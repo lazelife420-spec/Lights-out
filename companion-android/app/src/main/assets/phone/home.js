@@ -125,6 +125,8 @@
       if (key !== configKey) {
         configKey = key; config = { lights: [], routines: [], rules: [], ...state.home };
         $('light-ips').value = config.lights.join('\n'); $('light-count').textContent = config.lights.length ? `${config.lights.length} saved light(s) · commands apply to all` : 'No saved lights yet.';
+        const connection = document.querySelector('.phone-light-connection');
+        if (connection) connection.open = config.lights.length === 0;
         for (const id of ['routine-light-options', 'routine-off-light-options']) { const previous = checked(id); choices(id, config.lights.map(ip => [ip, ip]), previous); }
         actionFields();
         cards(); calendar();

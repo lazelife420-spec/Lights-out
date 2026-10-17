@@ -1,3 +1,54 @@
-.light-experience-preview{display:flex;justify-content:space-around;gap:12px;padding:25px 10px;background:#10141d;border:1px solid #303644;border-radius:20px;margin:16px 0}.light-experience-preview i{display:block;width:42px;height:42px;border-radius:50%;box-shadow:0 0 26px currentColor;transition:background .5s,opacity .5s}.light-app-list{max-height:240px;overflow:auto;padding:6px 0}.light-app-list [hidden]{display:none!important}#light-experience-body fieldset{margin:20px 0}#light-experience-body .check{padding:10px 0;line-height:1.5}#light-experience-body select{margin-top:10px}#light-experience-body p{font-size:.92rem;line-height:1.65;color:#aab1c3}
-
-#light-experience-body>label:not(.check){display:block;margin:20px 0;line-height:1.6}#light-experience-body>label:not(.check)>input,#light-experience-body>label:not(.check)>select{display:block;width:100%;box-sizing:border-box;margin-top:12px}#light-experience-body output{margin-left:8px;color:#c9bcff}
+/* Visual controls shared in spirit with the independent phone builder. */
+.light-mode-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 16px 0; }
+.light-mode-card { position: relative; display: flex; flex-direction: column; align-items: flex-start; min-width: 0; padding: 15px; text-align: left; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; transition: border-color .18s, background .18s; }
+.light-mode-card:hover { border-color: var(--accent-cyan); }
+.light-mode-card[aria-pressed="true"] { border-color: var(--accent-cyan); background: rgba(var(--accent-rgb), .09); box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), .12); }
+.light-mode-card[aria-pressed="true"]::after { content: '✓'; position: absolute; top: 10px; right: 12px; font-size: 12px; color: var(--accent-cyan); }
+.light-mode-card strong { font: 600 13px/1.4 var(--font-ui); letter-spacing: -.01em; }
+.light-mode-card small { margin-top: 4px; font: 400 11px/1.5 var(--font-ui); color: var(--text-secondary); }
+.light-mode-art { display: flex; align-items: flex-end; gap: 5px; height: 35px; margin: 3px 0 15px; }
+.light-mode-art i { display: block; width: 10px; height: 29px; border-radius: 4px; background: #e9af67; }
+.art-hourglass i:nth-child(1) { height: 9px; opacity: .35; }
+.art-hourglass i:nth-child(2) { height: 16px; opacity: .55; }
+.art-hourglass i:nth-child(3) { height: 23px; opacity: .8; }
+.art-orbit { align-items: center; }
+.art-orbit i { height: 12px; width: 12px; border-radius: 50%; background: #a7b4ef; opacity: .25; }
+.art-orbit i:nth-child(3) { width: 22px; height: 22px; opacity: 1; box-shadow: 0 0 18px #a7b4ef35; }
+.art-ember i { background: #ef9974; height: 14px; opacity: .45; }
+.art-ember i:nth-child(2), .art-ember i:nth-child(3) { height: 28px; opacity: .85; }
+.light-preview-card { padding: 20px; border: 1px solid var(--border-color); border-radius: 14px; background: var(--bg-secondary); margin: 16px 0 24px; }
+.light-preview-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.lighting-eyebrow { font: 600 9px/1.5 var(--font-ui); letter-spacing: .12em; color: var(--text-secondary); }
+.light-preview-heading h4 { margin: 5px 0 0; font: 600 17px/1.3 var(--font-ui); letter-spacing: -.025em; }
+.light-preview-badge { padding: 5px 8px; border: 1px solid var(--border-color); border-radius: 20px; font: 500 10px/1.3 var(--font-ui); color: var(--text-secondary); white-space: nowrap; }
+.light-experience-preview { position: relative; display: flex; justify-content: space-around; align-items: center; gap: 12px; min-height: 108px; padding: 22px 18px; margin: 16px 0 18px; border-radius: 10px; background: #10121c; overflow: hidden; }
+.light-experience-preview::after { content: ''; position: absolute; bottom: 16px; left: 10%; right: 10%; height: 1px; background: #ffffff0a; }
+.light-experience-preview i { display: block; width: 32px; height: 32px; border: 1px solid #ffffff12; border-radius: 50%; box-shadow: 0 0 30px 4px currentColor; transition: background .5s, opacity .5s; }
+.light-preview-range-head, .light-preview-endpoints { display: flex; align-items: center; justify-content: space-between; gap: 12px; font: 400 11px/1.5 var(--font-ui); color: var(--text-secondary); }
+.light-preview-range-head output { font-variant-numeric: tabular-nums; color: var(--text-primary); }
+#wiz-mode-preview-progress { display: block; width: 100%; margin: 12px 0 7px; accent-color: var(--accent-cyan); }
+.light-preview-endpoints { font-size: 10px; color: var(--text-muted); }
+#ns-panel-set .lighting-step-title { display: flex; gap: 10px; align-items: center; }
+#ns-panel-set .lighting-step-title h4, #ns-panel-set .lighting-look-heading h4 { margin: 0; font: 600 14px/1.4 var(--font-ui); letter-spacing: -.015em; }
+.lighting-step-number { display: flex; align-items: center; justify-content: center; width: 25px; height: 25px; flex: 0 0 25px; border-radius: 8px; border: 1px solid var(--border-color); font: 500 10px var(--font-mono); color: var(--text-secondary); }
+#ns-panel-set #wiz-targets { border: 1px solid var(--border-color); background: var(--bg-secondary); border-radius: 12px; padding: 16px; margin: 20px 0 26px; }
+#ns-panel-set .lighting-behavior-heading { margin: 4px 0 17px; }
+#ns-panel-set .wiz-manual-details { margin: 14px 0 0; }
+#ns-panel-set .wiz-manual-details .option-group { margin-top: 16px; }
+#ns-panel-set #wiz-config .lighting-look-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 24px; }
+#ns-panel-set #wiz-config .wiz-look-grid { padding-top: 14px; border: 0; margin: 0 0 14px; }
+#ns-panel-set #wiz-config .wiz-look-grid.is-timer-experience { grid-template-columns: minmax(0, 1fr); }
+#ns-panel-set #wiz-config .wiz-look-grid.is-timer-experience > .option-group:not(:has(#wiz-brightness)) { display: none !important; }
+#ns-panel-set .lighting-beacon-card { padding: 16px 18px; margin: 24px 0 16px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-secondary); }
+#ns-panel-set .lighting-beacon-card .option-group { margin: 4px 0 0; }
+#ns-panel-set .lighting-beacon-card p { margin: 0; }
+#ns-panel-set .lighting-timing-note { margin: -6px 0 14px; }
+@media (max-width: 1050px) {
+  .light-mode-card { padding: 12px; }
+  .light-mode-card small { font-size: 10px; }
+  #ns-panel-set #wiz-targets { padding: 12px; }
+  .light-preview-card { padding: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .light-mode-card, .light-experience-preview i { transition: none; }
+}

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Redesigned Windows Lighting settings and the standalone Android light builder
+  with visual mode cards, compact previews, clearer light selection, separate
+  alert sections and a persistent phone save bar. Connection help is collapsible;
+  controls follow the chosen mode/provider. Preview scrubbing no longer marks
+  settings as edited, and delayed phone refreshes preserve unsaved changes.
+  Desktop navigation, page typography and timer controls now share a clearer
+  visual hierarchy. Saved phone connections and manual room controls fold away
+  to keep timer modes in reach.
+
 - Added opt-in WiZ Room Hourglass, Orbit and Ember timer modes with screen-only
   previews. Windows offers a separate final-six-second beacon; Android has
   independent timer/reminder and selected-app beacon switches, separate light

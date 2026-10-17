@@ -5234,14 +5234,15 @@ document.getElementById('receipts-confirm')?.addEventListener('keydown', (event)
 
   // UI-R3 P13: one delegated listener tracks real unsaved edits. Edits inside
   // [data-live] (persisted at once) or [data-action-scoped] (applied by their
-  // own buttons) never make the panel dirty; everything else waits for Save.
+  // own buttons), or screen-only previews never make the panel dirty;
+  // everything else waits for Save.
   const markSettingsDirty = () => {
     if (!els.panelSet || els.panelSet.style.display === 'none') return;
     els.panelSet.classList.add('is-dirty');
     if (els.setDirtyNote) els.setDirtyNote.textContent = 'Unsaved changes';
   };
   const isStagedSettingsEdit = target => Boolean(target?.closest)
-    && !target.closest('[data-live], [data-action-scoped]');
+    && !target.closest('[data-live], [data-action-scoped], [data-preview-only]');
   ['input', 'change'].forEach(type => {
     els.settingsCategories?.addEventListener(type, event => {
       if (isStagedSettingsEdit(event.target)) markSettingsDirty();
@@ -5895,6 +5896,8 @@ function updateLightsUI() {
     els.lightsConfig.style.display = 'block';
   }
   if (els.wizConfig) els.wizConfig.style.display = provider === 'wiz' ? 'block' : 'none';
+  const wizTargets = document.getElementById('wiz-targets');
+  if (wizTargets) wizTargets.hidden = provider !== 'wiz';
   if (els.hueConfig) {
     els.hueConfig.style.display = provider === 'hue' ? 'block' : 'none';
   }

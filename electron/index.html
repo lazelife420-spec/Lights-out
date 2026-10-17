@@ -187,15 +187,15 @@
       <nav class="ns-sidebar-nav">
         <button class="ns-nav-item active" id="nav-lib" data-ns-tab="lib" title="Tonight" aria-label="Open tonight">
           <span class="ns-nav-icon" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M14.5 10.8A6.3 6.3 0 0 1 7.2 3.5a6.3 6.3 0 1 0 7.3 7.3z"/></svg></span>
-          <span class="ns-nav-label">TONIGHT</span>
+          <span class="ns-nav-label">Tonight</span>
         </button>
         <button class="ns-nav-item" id="nav-modes" data-ns-tab="modes" title="Night Modes" aria-label="Open night modes">
           <span class="ns-nav-icon" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3.2 2.6 5.4v7.4L9 15l6.4-2.2V5.4L9 3.2z"/><path d="M9 3.2V15"/></svg></span>
-          <span class="ns-nav-label">NIGHT MODES</span>
+          <span class="ns-nav-label">Night Modes</span>
         </button>
         <button class="ns-nav-item" id="nav-sch" data-ns-tab="sch" title="Open schedule" aria-label="Open schedule">
           <span class="ns-nav-icon" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2.5" y="3.5" width="13" height="12" rx="1.5"/><path d="M2.5 7h13M6 2v3M12 2v3"/><circle cx="9" cy="11" r="1" fill="currentColor" stroke="none"/></svg></span>
-          <span class="ns-nav-label">SCHEDULE</span>
+          <span class="ns-nav-label">Schedule</span>
         </button>
         <!-- Devices: the operational center for everything Lights Out can
              reach tonight (this PC, phone companion, family LAN PCs, smart
@@ -203,21 +203,21 @@
              deep-links into the Settings section that owns its config. -->
         <button class="ns-nav-item" id="nav-devices" data-ns-tab="devices" title="Open devices" aria-label="Open devices">
           <span class="ns-nav-icon" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.8" y="3" width="9.4" height="7" rx="1.2"/><path d="M4.6 13.4h3.8M6.5 10v3.4"/><rect x="12.4" y="6" width="3.8" height="8.6" rx="1"/><path d="M14.3 12.8h.01"/></svg></span>
-          <span class="ns-nav-label">DEVICES</span>
+          <span class="ns-nav-label">Devices</span>
         </button>
         <button class="ns-nav-item" id="nav-stats" data-ns-tab="stats" title="Open proof" aria-label="Open proof">
           <span class="ns-nav-icon" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2.5h12v13l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4-2 1.4v-13z"/><path d="M6 6.5h6M6 9.5h6M6 12.5h3"/></svg></span>
-          <span class="ns-nav-label">PROOF</span>
+          <span class="ns-nav-label">Proof</span>
         </button>
       </nav>
       <div class="ns-sidebar-footer">
         <button class="ns-nav-item" id="nav-set" data-ns-tab="set" title="Open settings" aria-label="Open settings">
           <span class="ns-nav-icon" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="2.4"/><path d="M9 1.8v2M9 14.2v2M1.8 9h2M14.2 9h2M4 4l1.4 1.4M12.6 12.6 14 14M14 4l-1.4 1.4M5.4 12.6 4 14"/></svg></span>
-          <span class="ns-nav-label">SETTINGS</span>
+          <span class="ns-nav-label">Settings</span>
         </button>
         <button class="ns-nav-item" id="nav-help" data-ns-tab="help" title="Open help and about" aria-label="Open help and about">
           <span class="ns-nav-icon" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="9" cy="9" r="6.5"/><path d="M9 12.8h.01M7 7.2c0-1.2.9-2 2-2s2 .8 2 2c0 1.2-1 1.7-2 2.3v1.3"/></svg></span>
-          <span class="ns-nav-label">ABOUT</span>
+          <span class="ns-nav-label">About</span>
         </button>
       </div>
     </aside>
@@ -948,7 +948,7 @@
             </div>
             <div class="device-note warn" id="device-lights-legacy" style="display:none">Legacy HTTP bridge allowed: this connection is not encrypted.</div>
             <p class="device-scope-note" id="device-lights-scope" hidden>Runs in Test Mode too. Test Mode only holds back PC power actions.</p>
-            <p class="device-off-hint">Dim or switch off Philips Hue or webhook lights as your run ends.</p>
+            <p class="device-off-hint">Use WiZ timer lighting, dim Philips Hue lights, or trigger a lighting webhook.</p>
             <p class="device-check-result" id="device-lights-check-result" role="status" aria-live="polite"></p>
             <div class="device-actions">
               <button type="button" class="peer-act" id="btn-device-lights-check" hidden>Check connection</button>
@@ -1352,7 +1352,7 @@
             <h3>Smart lights</h3>
             <span class="set-state-pill is-muted" id="lights-state-pill">Checking…</span>
           </div>
-          <p class="help-text">Connect your WiZ lights over Wi-Fi, use a Philips Hue bridge, or add a webhook. Verify your setup before enabling automatic lighting.</p>
+          <p class="help-text">Choose your lights, set the mood, and verify the connection before automatic lighting.</p>
 
           <div class="option-group">
             <label class="checkbox-label">
@@ -1382,8 +1382,20 @@
               </select>
             </div>
 
+              <div id="wiz-targets" class="lighting-step wiz-setup-block" hidden>
+              <div class="option-group wiz-selection-heading"><div class="lighting-step-title"><span class="lighting-step-number">01</span><h4>Your lights &amp; rooms</h4></div><button type="button" class="btn-secondary" id="btn-discover-wiz">Find WiZ lights</button><span id="wiz-discovery-result" role="status" aria-live="polite"></span></div>
+              <div class="wiz-selection-tools"><button type="button" class="btn-small" id="wiz-select-all">Select all</button><button type="button" class="btn-small" id="wiz-select-none">Clear selection</button><span id="wiz-selection-count" role="status" aria-live="polite">0 selected</span></div>
+              <div id="wiz-room-options" class="wiz-selection-tools" aria-label="Select a room"></div>
+              <div class="wiz-device-column-head" aria-hidden="true"><span>Selected light</span><span>Name</span><span>Room</span></div>
+              <div id="wiz-device-list" class="wiz-device-list" role="group" aria-label="WiZ lights">Find lights or enter an IP address to begin.</div>
+              <p class="help-text">Name your lights and rooms here. Room groups are saved in Lights Out on this PC. Finding lights keeps your current selection.</p>
+              <details class="settings-help-details wiz-manual-details"><summary>Manual addresses &amp; connection help</summary><div class="option-group wiz-manual"><label for="wiz-addresses">Selected IP addresses · or enter manually</label><textarea id="wiz-addresses" rows="2" placeholder="192.168.0.40, 192.168.0.41" aria-describedby="wiz-setup-hint"></textarea></div>
+              <p class="help-text" id="wiz-setup-hint">Keep this PC and your lights on the same Wi-Fi. In the WiZ app, enable My home → Security → Allow local communication. Discovery and Verify only read light status.</p></details>
+              </div>
+
+            <div class="lighting-step-title lighting-behavior-heading"><span class="lighting-step-number">02</span><h4>Timer lighting</h4></div>
             <div class="option-group">
-              <label for="sel-light-mode">Mode</label>
+              <label for="sel-light-mode">Timer behavior</label>
               <select id="sel-light-mode">
                 <option value="gradual_dim">Gradual Dim</option>
                 <option value="warm_dim">Warm Shift + Dim</option>
@@ -1394,24 +1406,28 @@
               </select>
             </div>
 
-            <div class="option-group">
+            <div class="option-group" id="light-dim-timing">
               <label for="light-dim-minutes">Dim Duration</label>
               <input type="number" id="light-dim-minutes" class="set-num" value="10" min="1" max="60">
               <span>minutes before end</span>
             </div>
 
+            <p id="light-full-timer-note" class="help-text lighting-timing-note" hidden>Follows the full countdown. Pauses when your timer pauses.</p>
             <div id="wiz-config" style="display:none">
-              <div class="wiz-setup-block"><h4>Make time visible</h4><p>Room Hourglass drains your selected lights in order. Orbit moves a cool accent around the room and lands in amber. Ember gently breathes as the room fades. These modes follow the full timer, pause with it, and leave manually switched-off lights alone.</p><div id="wiz-mode-preview" hidden><div class="light-experience-preview" aria-label="Screen preview only"><i></i><i></i><i></i><i></i></div><label for="wiz-mode-preview-progress">Screen preview · timer progress</label><input id="wiz-mode-preview-progress" type="range" min="0" max="100" value="45"><small>No real lights change in this preview.</small></div><div class="option-group"><label class="checkbox-label" for="chk-wiz-timer-beacon"><span class="set-row-text"><span class="set-row-title">Soft blue finish beacon</span><span class="set-row-desc">A gentle pulse in the final six seconds.</span></span><input type="checkbox" id="chk-wiz-timer-beacon"></label></div><p>Off by default. Uses only selected lights that are still on. Selected phone-app notification beacons are configured independently on Android.</p></div>
-              <div class="wiz-setup-block">
-              <div class="option-group wiz-selection-heading"><label>Choose lights or a room</label><button type="button" class="btn-secondary" id="btn-discover-wiz">Find WiZ lights</button><span id="wiz-discovery-result" role="status" aria-live="polite"></span></div>
-              <div class="wiz-selection-tools"><button type="button" class="btn-small" id="wiz-select-all">Select all</button><button type="button" class="btn-small" id="wiz-select-none">Clear selection</button><span id="wiz-selection-count" role="status" aria-live="polite">0 selected</span></div>
-              <div id="wiz-room-options" class="wiz-selection-tools" aria-label="Select a room"></div>
-              <div class="wiz-device-column-head" aria-hidden="true"><span>Selected light</span><span>Name</span><span>Room</span></div>
-              <div id="wiz-device-list" class="wiz-device-list" role="group" aria-label="WiZ lights">Find lights or enter an IP address to begin.</div>
-              <p class="help-text">Name your lights and rooms here. Room groups are saved in Lights Out on this PC. Finding lights keeps your current selection.</p>
-              <div class="option-group wiz-manual"><label for="wiz-addresses">Selected IP addresses · or enter manually</label><textarea id="wiz-addresses" rows="2" placeholder="192.168.0.40, 192.168.0.41" aria-describedby="wiz-setup-hint"></textarea></div>
-              <p class="help-text" id="wiz-setup-hint">Keep this PC and your lights on the same Wi-Fi. In the WiZ app, enable My home → Security → Allow local communication. Discovery and Verify only read light status.</p>
+              <div class="light-mode-grid" role="group" aria-label="WiZ timer experiences">
+                <button type="button" class="light-mode-card" data-light-mode="hourglass" aria-pressed="false"><span class="light-mode-art art-hourglass" aria-hidden="true"><i></i><i></i><i></i><i></i></span><strong>Room Hourglass</strong><small>Let the room count down.</small></button>
+                <button type="button" class="light-mode-card" data-light-mode="orbit" aria-pressed="false"><span class="light-mode-art art-orbit" aria-hidden="true"><i></i><i></i><i></i><i></i></span><strong>Orbit</strong><small>A slow lap around the room.</small></button>
+                <button type="button" class="light-mode-card" data-light-mode="ember" aria-pressed="false"><span class="light-mode-art art-ember" aria-hidden="true"><i></i><i></i><i></i><i></i></span><strong>Ember</strong><small>Ease into a warmer night.</small></button>
               </div>
+              <div id="wiz-mode-preview" class="light-preview-card" data-preview-only hidden>
+                <div class="light-preview-heading"><div><span class="lighting-eyebrow">SCREEN PREVIEW</span><h4 id="wiz-preview-title">Room Hourglass</h4></div><span class="light-preview-badge">No lights change</span></div>
+                <p id="wiz-preview-description" class="help-text"></p>
+                <div class="light-experience-preview" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+                <div class="light-preview-range-head"><label for="wiz-mode-preview-progress">Move through your timer</label><output id="wiz-preview-progress-value" for="wiz-mode-preview-progress">45%</output></div>
+                <input id="wiz-mode-preview-progress" type="range" min="0" max="100" value="45">
+                <div class="light-preview-endpoints" aria-hidden="true"><span>Start</span><span>Lights out</span></div>
+              </div>
+              <div class="lighting-look-heading"><h4>Starting look</h4><span class="help-text">For gradual and warm dimming</span></div>
               <div class="wiz-setup-block wiz-look-grid">
               <div class="option-group"><label for="wiz-look-mode">Light look</label><select id="wiz-look-mode"><option value="current">Keep current color or scene</option><option value="white">White temperature</option><option value="color">Custom color</option><option value="scene">WiZ preset</option></select></div>
               <div class="option-group"><label for="wiz-brightness">Brightness</label><input type="range" id="wiz-brightness" min="10" max="100" value="50"><output id="wiz-brightness-value" for="wiz-brightness">50%</output></div>
@@ -1419,6 +1435,7 @@
               <div id="wiz-color-field" class="option-group" hidden><label for="wiz-color">Color</label><div class="wiz-color-control"><input type="color" id="wiz-color" value="#ff9f43"><output id="wiz-color-value" for="wiz-color">#FF9F43</output></div></div>
               <div id="wiz-scene-field" class="option-group" hidden><label for="wiz-scene">WiZ preset</label><select id="wiz-scene"><option value="14">Night light</option><option value="16">Relax</option><option value="10">Bedtime</option><option value="6">Cozy</option><option value="3">Sunset</option><option value="5">Fireplace</option><option value="1">Ocean</option><option value="2">Romance</option><option value="8">Pastel colors</option><option value="11">Warm white</option><option value="12">Daylight</option><option value="13">Cool white</option><option value="15">Focus</option><option value="18">TV time</option></select></div>
               </div>
+              <div class="lighting-beacon-card"><div class="lighting-step-title"><span class="lighting-step-number">03</span><h4>A gentle heads-up</h4></div><div class="option-group"><label class="checkbox-label" for="chk-wiz-timer-beacon"><span class="set-row-text"><span class="set-row-title">Soft blue finish beacon</span><span class="set-row-desc">A gentle pulse in the final six seconds. Uses selected lights that are already on.</span></span><input type="checkbox" id="chk-wiz-timer-beacon"></label></div><p class="help-text">Phone-app beacons have their own controls in the Android app.</p></div>
               <p class="help-text">During dimming, a chosen look starts at your brightness on lights that are already on. “Keep current” dims from their existing brightness. Warm Shift uses warm white; Off at End leaves the look unchanged. Presets and color support depend on your light.</p>
               <p class="help-text">Switch a light off in WiZ at any time to leave it off. Lights Out stops dimming that light for the rest of the run and leaves it alone if you cancel.</p>
             </div>

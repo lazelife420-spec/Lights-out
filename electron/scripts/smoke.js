@@ -4195,7 +4195,7 @@ check('P13 settings: safety hero, honest saves, smart lights truth, dark fields,
     assertMatch(htmlSrc, new RegExp(`id="${id}"[^>]*data-action-scoped="1"`), `#${id} must be data-action-scoped`);
   }
   assertMatch(htmlSrc, /<span class="set-footer-note" id="set-dirty-note" role="status" aria-live="polite">No unsaved changes<\/span>\s*<button class="btn-secondary" id="btn-cancel-opt">/, '#set-dirty-note (role=status) sits before Cancel/Save');
-  assertMatch(rendererJs, /target\.closest\('\[data-live\], \[data-action-scoped\]'\)/, 'the delegated listener ignores [data-live] and [data-action-scoped]');
+  assertMatch(rendererJs, /target\.closest\('\[data-live\], \[data-action-scoped\], \[data-preview-only\]'\)/, 'the delegated listener ignores live settings, action controls and screen previews');
   assertMatch(rendererJs, /\['input', 'change'\]\.forEach\(type => \{\s*els\.settingsCategories\?\.addEventListener\(type,/, 'one delegated input/change listener on .settings-categories');
   for (const fn of ['openSettingsPanel', 'saveSettingsPanel', 'discardSettingsPanelChanges']) {
     assert(/els\.panelSet\?\.classList\?\.remove\('is-dirty'\)/.test(p03FnBody(rendererJs, fn)), `${fn} clears the dirty state`);
@@ -4221,7 +4221,8 @@ check('P13 settings: safety hero, honest saves, smart lights truth, dark fields,
   assertMatch(htmlSrc, /<span class="set-state-pill[^"]*" id="lights-state-pill">/, '#lights-state-pill missing');
   const lightsAt = htmlSrc.indexOf('<div class="option-section lights-section"');
   const lights = htmlSrc.slice(lightsAt, htmlSrc.indexOf('<!-- Focus Sessions', lightsAt));
-  assert(!/<details/.test(lights), 'Smart lights has no <details> wrapper');
+  const manualHelp = lights.match(/<details class="settings-help-details wiz-manual-details">[\s\S]*?<\/details>/g) || [];
+  assert(manualHelp.length === 1 && manualHelp[0].includes('id="wiz-addresses"') && !/<details/.test(lights.replace(manualHelp[0], '')), 'only manual addressing/help is collapsed; primary lighting controls remain exposed');
   assert(!/btn-mode/.test(lights), 'no .btn-mode inside .lights-section (renderRemoteControl owns .btn-mode)');
   const testBlock = lights.slice(lights.indexOf('<div class="set-test-action"'));
   assert(testBlock.includes('id="btn-test-action"') && /physically changes/.test(testBlock), '#btn-test-action sits in .set-test-action with "physically changes"');
@@ -4787,7 +4788,7 @@ check('Fire 03 shell', () => {
 
   // One-line rail labels, one item height.
   const label = all.filter(r => r.selector === '.ns-nav-label').pop();
-  assert(label && /'Bahnschrift SemiCondensed'/.test(label.body) && /white-space:\s*nowrap/.test(label.body) && /font-size:\s*10px/.test(label.body) && /overflow:\s*hidden/.test(label.body), 'rail labels: one line of Bahnschrift SemiCondensed 10px, clipped never wrapped');
+  assert(label && /font-family:\s*var\(--font-ui\)/.test(label.body) && /white-space:\s*nowrap/.test(label.body) && /font-size:\s*11px/.test(label.body) && /overflow:\s*hidden/.test(label.body), 'rail labels: readable 11px UI face on one line, without overflow');
   const item = all.filter(r => r.selector === '.ns-nav-item' && /height:/.test(r.body)).pop();
   assert(item && /height:\s*54px/.test(item.body) && Number((item.body.match(/width:\s*(\d+)px/) || [])[1]) <= 76, 'one 54px item height, at most 76px wide inside the 80px rail');
 
