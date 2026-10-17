@@ -73,6 +73,8 @@
       "routineModel.js",
       "routineLedger.js",
       "routineInterchangeStore.js",
+      "routineHandoff.js",
+      "routineHandoffInbox.js",
       "routine-transfer-ui.js",
       "wizLights.js",
       "renderer-signature.js",

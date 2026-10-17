@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added LO-SDH-0 secured routine-handoff protocol foundations for Windows and
+  Android: explicit fingerprint enrollment, mutual TLS, fresh recipient
+  challenges, bounded expiring transfers, revocation and separate confirmation
+  before saving inactive LO-RIE-1 intent. Isolated Node/Kotlin loopback and native
+  Android storage proofs qualify the foundation. Production listeners, discovery,
+  persistent device trust/key storage and transfer UI remain unimplemented.
+- Routine files now explain that Windows Test Mode skips final PC power actions
+  while other explicitly enabled wind-down effects may still run.
 - Added LO-RIE-1 offline routine files on Windows and standalone Android. The
   shared versioned JSON contract exports selected timer/action intent and
   associated rules without endpoints, credentials, ownership grants or history.

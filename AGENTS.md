@@ -102,7 +102,10 @@ The local v1 routine contract is in `electron/routineModel.js`, bundled with
 identical bytes as Android's `assets/phone/routine-model.js`. Native Android
 validates the same plan at its bridge. Keep the parity test, explicit local
 ownership, claim-before-dispatch and truthful action outcomes. See
-`docs/CALENDAR_ROUTINE_V1.md`; cross-device handoff remains unimplemented.
+`docs/CALENDAR_ROUTINE_V1.md`. Offline interchange is implemented; secured
+handoff protocol components are isolated-test qualified in
+`docs/SECURED_DEVICE_HANDOFF_FOUNDATION.md`. No production handoff listener,
+transfer UI, persistent trust/key storage or new remote execution is enabled.
 The invisible Windows Host, unified routine model and phone-owned First Light
 remain separate scoped tranches in `docs/ROADMAP.md`; source stubs or a published
 Windows release do not establish completion of those architectural goals.

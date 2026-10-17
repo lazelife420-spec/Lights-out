@@ -54,6 +54,11 @@ is complete; the broader platform roadmap remains open.
   conflict copies and explicit local adoption. Windows/phone execution stays
   independent; file intent never grants remote authority. See
   [routine interchange v1](ROUTINE_INTERCHANGE_V1.md).
+  **LO-SDH-0** adds locally tested mutual-TLS protocol components, explicit
+  enrollment/recipient consent, replay/expiry/revocation checks and adapters into
+  inactive import preview. Isolated endpoints only; no production listener,
+  discovery, transfer UI or persistent key/trust management is enabled. See
+  [secured handoff foundation](SECURED_DEVICE_HANDOFF_FOUNDATION.md).
 - **Windows invisible-host objective:** Electron main owns the timer/listener/
   receipts. The reviewed v11.2.0 qualification reported seven lifecycle checks
   passing: close/reopen, single timer authority, tray controls, hidden completion,
@@ -85,10 +90,10 @@ is complete; the broader platform roadmap remains open.
    implemented, including bounded local action editing and delayed Windows
    receipt correlation. Offline v1 import/export is implemented with validation,
    inactive drafts, conflict handling and explicit local adoption. Next, qualify
-   future format migrations and prepare a separate secured-handoff design with
-   explicit trust/enrollment, approved transfer, authentication, replay protection,
-   revocation, capability negotiation and deterministic ownership. No handoff
-   implementation is included. No hidden
+   future format migrations. The secured-handoff protocol foundation is locally
+   implemented and isolated-test qualified. Next specify protected identity/key
+   storage, durable trust/revocation, visible pairing/transfer consent and bounded
+   connection policy before enabling a separately authorized LAN surface. No hidden
    synchronization, arbitrary remote execution or unsupported adapter claims.
 4. **First Light extension:** specify a separately qualified phone-owned morning
    path and compatible lighting actions after routine ownership is explicit.

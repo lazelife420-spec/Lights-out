@@ -17,6 +17,7 @@
     });exportButton.dataset.transfer='export';
     const open=button('Open routine file',async()=>{pendingText=null;preview.replaceChildren();const result=await adapter.openFile();if(result.cancelled)return;await showPreview(result.text);});open.dataset.transfer='open';
     container.append(node('h3','Routine files'),node('p','Move routines between devices with an offline JSON file. Import saves drafts. Review actions before adopting; calendar rules stay off.','transfer-note'),choices,exportButton,open,status,preview,drafts);
+    if(adapter.platform==='windows')container.insertBefore(node('p','Test Mode skips the final PC power action. Other wind-down effects you enabled may still run.','transfer-note'),choices);
     async function showPreview(text) {
       pendingText=null;preview.replaceChildren();
       const result=await adapter.preview(text);pendingText=text;
