@@ -1,8 +1,19 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, globalShortcut, shell, screen, clipboard, session } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, globalShortcut, shell, screen, clipboard, session, dialog } = require('electron');
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
+// Bind portable storage before importing any settings, receipts or features.
+// The installed edition has no portable marker and keeps its existing profile.
+try {
+  require('./portableStartup').configurePortableProfile({ app, packageInfo: require('./package.json'), appDirectory: __dirname });
+} catch {
+  dialog.showErrorBox('Lights Out portable startup blocked', 'The portable profile could not be opened safely. Extract the complete folder to a writable location and use Start Lights Out.cmd. This portable cannot open another application profile.');
+  process.exit(1);
+}
 const { spawn } = require('child_process');
+const dispatchPowerAction = require('./powerActionDispatcher').createDispatcher({ spawn,
+  suspend: require('./windowsSuspend').createSuspendDispatcher({ spawn,
+    helperPath: path.join(__dirname, 'native', 'WindowsSuspend.exe') }) });
 const smartLights = require('./smartLights');
 const profiles = require('./profiles');
 const profileIdentity = require('./profileIdentity');
@@ -22,6 +33,17 @@ const unsavedGuard = require('./unsavedGuard');
 const family = require('./family');
 const remoteControl = require('./remoteControl');
 const wifiGuard = require('./wifiGuard');
+const wifiLifecycle = require('./wifiGuardLifecycle').createLifecycle({
+  // Release boundary: keep new router/adapter changes off until durable
+  // cross-process recovery is qualified. Settings cannot override this policy.
+  blockingAllowed: false,
+  block: config => wifiGuard.blockInternet(config),
+  unblock: config => wifiGuard.unblockInternet(config),
+  onStatus: status => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('wifi-guard-status', status);
+    if (status.recoveryRequired) showNativeNotification('Lights Out', status.error);
+  }
+});
 const contentBlocker = require('./contentBlocker');
 const accountability = require('./accountability');
 const focusSessions = require('./focusSessions');
@@ -40,6 +62,19 @@ const smartSuggestions = require('./smartSuggestions');
 const windowGeometry = require('./windowGeometry');
 const nightModes = require('./nightModes');
 const startDecision = require('./startDecision');
+const routineModel = require('./routineModel');
+const routineLedger = require('./routineLedger').createFileLedger(() => path.join(app.getPath('userData'), 'routine-outcomes.json'));
+const routineFiles = require('./routineInterchangeStore').createStore({
+  read: () => settingsStore.getSection('calendar'),
+  write: calendar => settingsStore.updateSection('calendar', calendar, { requireSave: true }),
+  getProfiles: () => profiles.getAll()
+});
+const handoffService = require('./handoffService');
+handoffService.configure(() => require('./handoffController').createController({
+  identity: require('./handoffIdentityWindows').createIdentity({directory:path.join(app.getPath('userData'),'routine-handoff')}),
+  store: routineFiles
+}));
+app.on('before-quit', () => handoffService.close());
 
 // Desktop UX Functional Gate instrumentation: only active when an explicit
 // proof flag is supplied. Never records in normal production runs.
@@ -65,6 +100,27 @@ function writeStartupLog(message, extra) {
     fs.appendFileSync(logPath, line, 'utf8');
   } catch {
     // Best effort only; startup diagnostics should never block launch.
+  }
+}
+
+// Keep enough local lifecycle evidence to explain an interrupted unattended run.
+// Only timer metadata is written: no settings, window titles or device details.
+function writeTimerLifecycle(message) {
+  try {
+    writeStartupLog(message, {
+      pid: process.pid,
+      running: timerState.running,
+      paused: timerState.paused,
+      remainingSeconds: timerState.remainingSeconds,
+      endsAt: timerState.endsAt,
+      action: timerState.action,
+      dryRun: timerState.running || timerState.paused || activeReceiptId ? timerState.dryRun : null,
+      qaPowerLock: QA_POWER_LOCK,
+      receiptId: activeReceiptId,
+      windowVisible: Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible())
+    });
+  } catch {
+    // Diagnostics must never interrupt a timer or initialize another instance.
   }
 }
 
@@ -174,7 +230,9 @@ let tray = null;
 let miniMode = false;
 let widgetMode = false;
 let timerInterval = null;
+let lastLifecycleCheckpointAt = 0;
 let activeReceiptId = null;
+let completionGuardController = null;
 let companionFailureDetails = null;
 let companionFailureLookupKey = '';
 let companionNetworkFailure = null;
@@ -185,6 +243,23 @@ let remoteControlOperation = Promise.resolve();
 let companionFirewallState = { configured: false, error: '', guidance: '' };
 
 const launchOptions = parseLaunchOptions(process.argv);
+let firstLightRunning = false;
+const firstLightDelivery = require('./firstLightDelivery').createDelivery({
+  ready: () => Boolean(mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isLoadingMainFrame()),
+  busy: () => firstLightRunning,
+  claim: id => {
+    const claimed = settingsStore.getSection('app')?.firstLightRequests || [];
+    if (claimed.includes(id)) return false;
+    settingsStore.updateSection('app', { firstLightRequests: [...claimed, id].slice(-64) }, { requireSave: true });
+    writeStartupLog('First Light request claimed', { requestId: id });
+    return true;
+  },
+  start: id => playFirstLight(id),
+  onError: error => {
+    writeStartupLog('First Light request blocked', { code: error.code || 'UNKNOWN' });
+    showNativeNotification('Lights Out', 'First Light could not start safely. Check or reschedule the alarm.');
+  }
+});
 
 const timerState = {
   running: false,
@@ -363,6 +438,7 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => applyLaunchPresentation('ready-to-show'));
   mainWindow.webContents.once('did-finish-load', () => {
     writeStartupLog('Renderer finished load');
+    firstLightDelivery.flush();
     setTimeout(() => applyLaunchPresentation('did-finish-load-fallback'), 150);
   });
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
@@ -384,6 +460,7 @@ function createWindow() {
     if (app.isQuitting) return;
     event.preventDefault();
     mainWindow.hide();
+    writeTimerLifecycle('Window hidden to tray');
     refreshTrayMenu();
   });
 
@@ -527,6 +604,14 @@ function setTaskbarProgress(percent, mode = 'normal') {
 }
 
 function emitTimerUpdate(type, data = {}) {
+  if (type !== 'tick') {
+    writeTimerLifecycle(`Timer ${type}`);
+    if (type === 'started') lastLifecycleCheckpointAt = Date.now();
+  } else if (Date.now() - lastLifecycleCheckpointAt >= 30000) {
+    // Reuse the existing timer tick; no background polling or extra interval.
+    writeTimerLifecycle('Timer progress checkpoint');
+    lastLifecycleCheckpointAt = Date.now();
+  }
   const payload = {
     type,
     running: timerState.running,
@@ -596,6 +681,7 @@ function persistActiveTimer() {
     paused: timerState.paused,
     endsAt: timerState.endsAt,
     origin: timerState.origin,
+    routineOccurrenceKey: timerState.routineOccurrenceKey || null,
     savedAt: new Date().toISOString(),
     // Correlates this recovery snapshot to its run receipt so startup
     // reconciliation can tell a still-recoverable run apart from a truly
@@ -705,8 +791,11 @@ function isRunActive() {
 
 const UNATTENDED_RUN_ORIGINS = ['calendar', 'autopilot', 'shortcut', 'tray', 'launch'];
 
-function startTimer(input, legacyAction) {
+function startTimer(input, legacyAction, routineOccurrenceKey = null) {
   const options = normalizeTimerOptions(input, legacyAction);
+  // Internal dispatcher argument only; renderer/remote input cannot attach
+  // an arbitrary run to a claimed calendar occurrence.
+  options.routineOccurrenceKey = routineOccurrenceKey;
   if (['calendar','schedule'].includes(options.origin) && options.profileId && !profiles.getById(options.profileId)) {
     return { success: false, code: 'PROFILE_UNAVAILABLE', error: 'The scheduled routine is no longer available. Choose another routine.' };
   }
@@ -742,7 +831,8 @@ function startTimer(input, legacyAction) {
       nightModeId: nmIdentity.nightModeId,
       nightModeTitle: nmIdentity.nightModeTitle,
       nightModeVersion: nmIdentity.nightModeVersion,
-      origin: options.origin
+      origin: options.origin,
+      routineOccurrenceKey: options.routineOccurrenceKey
     });
     // Start the standard ritual with run metadata binding the token to this
     // exact run. The ritual's onStep/onComplete callbacks receive the meta.
@@ -750,7 +840,8 @@ function startTimer(input, legacyAction) {
     // through the guided overlay (every step, including "auto" ones, normally
     // requires a click) -- ritualMode fast-forwards those instead of getting
     // stuck on the first step forever.
-    const ritual = ritualMode.startRitual(null, { profileRitualToken: runToken, remoteOrigin: options.source === 'remote' || options.origin === 'calendar' });
+    const ritual = ritualMode.startRitual(null, { profileRitualToken: runToken, dryRun: options.dryRun, routineOccurrenceKey, waitForTimedSteps: options.origin === 'calendar',
+      remoteOrigin: options.source === 'remote' || options.origin === 'calendar' });
     // UI-R3 Fire 08: a ritual that did not start is an honest failure, never
     // a phantom countdown: the pending context is dropped and the caller
     // hears why. Nothing else in this path (the single-run policy, the direct
@@ -819,13 +910,15 @@ function startQuickTimer({ minutes, action = 'shutdown', origin }) {
 // re-entering profile ritual gating or supersession logic).
 // nmIdentity: main-resolved { nightModeId, nightModeTitle, nightModeVersion }.
 function beginValidatedCountdown(options, identity, nmIdentity) {
+  completionGuardController?.abort();
   clearTimerInterval();
 
-  // Override Tax: reset session snooze count for this new run.
-  overrideTax.resetSession();
+  // Rehearsals do not consume or create debt belonging to real sessions.
+  const rehearsal = typeof options.dryRun === 'boolean' ? options.dryRun : Boolean((settingsStore.getSection('app') || {}).dryRun);
+  if (!rehearsal) overrideTax.resetSession();
 
   // Override Tax: apply yesterday's debt (timer tightening from past snooze abuse).
-  const debtSeconds = overrideTax.consumeDebt() * 60;
+  const debtSeconds = rehearsal ? 0 : overrideTax.consumeDebt() * 60;
   if (debtSeconds > 0 && options.durationSeconds > debtSeconds + 300) {
     // Only apply if it leaves at least 5 min — never make the timer useless.
     options.durationSeconds -= debtSeconds;
@@ -844,11 +937,15 @@ function beginValidatedCountdown(options, identity, nmIdentity) {
   timerState.dryRun = typeof options.dryRun === 'boolean' ? options.dryRun : Boolean(appSettings.dryRun);
   timerState.forceShutdown = Boolean(options.forceShutdown);
   timerState.muteSystem = Boolean(options.muteSystem);
+  if (!windDownChanges.wifiSession || windDownChanges.wifiSession.closed || windDownChanges.wifiSession.dryRun !== timerState.dryRun) {
+    windDownChanges.wifiSession = wifiLifecycle.begin({ dryRun: timerState.dryRun });
+  }
   const graceOption = options.gracePeriod === undefined || options.gracePeriod === null ? NaN : Number(options.gracePeriod);
   const graceSetting = appSettings.graceMinutes === undefined || appSettings.graceMinutes === null ? NaN : Number(appSettings.graceMinutes);
   timerState.gracePeriod = Number.isFinite(graceOption) ? Math.max(0, graceOption)
     : Number.isFinite(graceSetting) ? Math.max(0, graceSetting) : 2;
   timerState.origin = typeof options.origin === 'string' ? options.origin : 'this-pc';
+  timerState.routineOccurrenceKey = options.routineOccurrenceKey || null;
   timerState.profileId = identity.profileId;
   timerState.profileName = identity.profileName;
   const nm = nmIdentity || { nightModeId: null, nightModeTitle: null, nightModeVersion: null };
@@ -869,7 +966,7 @@ function beginValidatedCountdown(options, identity, nmIdentity) {
   // closed honestly rather than left orphaned.
   if (activeReceiptId && (!resumedReceipt || resumedReceipt.id !== activeReceiptId)) {
     const previous = runReceipts.getReceiptById(activeReceiptId);
-    if (previous && previous.result === 'running') {
+    if (previous && (previous.result === 'running' || previous.result === 'timer_elapsed')) {
       runReceipts.updateRunReceipt(activeReceiptId, { result: 'cancelled', cancelReason: 'superseded', endedAt: new Date().toISOString() });
     }
     activeReceiptId = null;
@@ -879,6 +976,10 @@ function beginValidatedCountdown(options, identity, nmIdentity) {
   } else {
     const receipt = runReceipts.createRunReceipt(timerState);
     activeReceiptId = receipt.id;
+  }
+  if (timerState.routineOccurrenceKey) {
+    try { routineLedger.timerStarted(timerState.routineOccurrenceKey, activeReceiptId); }
+    catch (error) { console.error('[routine-timer-correlation]', error); }
   }
   // Send screen time reality check to renderer.
   screenTime.getScreenTimeToday().then(st => {
@@ -919,10 +1020,10 @@ function beginValidatedCountdown(options, identity, nmIdentity) {
     }
 
     // Smart Lights integration
-    if (smartLights.shouldStartDim(timerState.remainingSeconds)) {
+    if (!timerState.dryRun && smartLights.shouldStartDim(timerState.remainingSeconds)) {
       smartLights.startSmartLightDim(timerState.remainingSeconds);
     }
-    if (smartLights.getConfig().enabled) {
+    if (!timerState.dryRun && smartLights.getConfig().enabled) {
       smartLights.updateSmartLightTick(timerState.remainingSeconds);
     }
 
@@ -985,11 +1086,12 @@ function snoozeTimer(seconds = 300, reason) {
   const addSeconds = Math.max(1, Math.round(Number(seconds) || 300));
 
   // Override Tax: record snooze and apply escalating costs.
-  const taxResult = overrideTax.recordSnooze(reason);
+  const taxResult = timerState.dryRun ? { allowed: true, cost: 'free', level: 0, consequences: [] } : overrideTax.recordSnooze(reason);
 
   timerState.totalSeconds += addSeconds;
   timerState.remainingSeconds += addSeconds;
   timerState.endsAt = new Date(Date.now() + timerState.remainingSeconds * 1000).toISOString();
+  persistActiveTimer();
   emitTimerUpdate('snoozed', { addedSeconds: addSeconds, tax: taxResult });
   if (activeReceiptId) runReceipts.receiptSnoozed(activeReceiptId);
 
@@ -1004,6 +1106,7 @@ function snoozeTimer(seconds = 300, reason) {
 }
 
 function cancelTimer() {
+  completionGuardController?.abort();
   clearTimerInterval();
   timerState.running = false;
   timerState.paused = false;
@@ -1011,14 +1114,14 @@ function cancelTimer() {
   timerState.endsAt = null;
   timerState.phase = 'idle';
   setTaskbarProgress(0, 'none');
-  if (smartLights.getConfig().enabled && smartLights.getConfig().provider === 'wiz') {
+  if (!timerState.dryRun && smartLights.getConfig().enabled && smartLights.getConfig().provider === 'wiz') {
     smartLights.restoreWizOriginalState().then(res => {
       if (!res.success) console.warn('Some WiZ lights could not be restored after cancel.');
     }).catch(() => console.warn('WiZ restore after cancel failed.'));
   }
   // Cancellation restores the Hue state captured at dim start (desktop or
   // phone cancel alike — they converge here). Failure is surfaced, not fatal.
-  if (smartLights.getConfig().enabled && smartLights.getConfig().provider === 'hue') {
+  if (!timerState.dryRun && smartLights.getConfig().enabled && smartLights.getConfig().provider === 'hue') {
     smartLights.restoreHueOriginalState().then(res => {
       if (!res.success) console.warn(`Smart light restore after cancel: ${res.message}`);
     }).catch(err => console.warn('Smart light restore after cancel failed:', err.message));
@@ -1041,6 +1144,9 @@ function cancelTimer() {
 }
 
 async function completeTimer() {
+  const completionOptions = { ...timerState };
+  const completingReceiptId = activeReceiptId;
+  const elapsedAt = new Date().toISOString();
   clearTimerInterval();
   timerState.running = false;
   timerState.paused = false;
@@ -1049,27 +1155,47 @@ async function completeTimer() {
   timerState.phase = 'idle';
   setTaskbarProgress(0, 'none');
   persistActiveTimer();
-  restoreAfterTimer();
-  
-  // Turn off smart lights at timer completion
-  if (smartLights.getConfig().enabled) {
+  const restoration = restoreAfterTimer({ reason: 'complete' });
+
+  if (completingReceiptId) {
+    runReceipts.recordActionEvent(completingReceiptId, { state: 'timer_elapsed', at: elapsedAt });
+  }
+
+  // Await the matching Wi-Fi restore, including a block still in flight.
+  const wifiResult = await restoration;
+  if (completingReceiptId && activeReceiptId !== completingReceiptId) return;
+  if (!completionOptions.dryRun && wifiResult?.success === false) {
+    const receipt = completingReceiptId ? runReceipts.recordActionEvent(completingReceiptId, {
+      state: 'blocked', at: new Date().toISOString(), reason: 'wifi-restoration-unconfirmed'
+    }) : null;
+    if (activeReceiptId === completingReceiptId) activeReceiptId = null;
+    const message = 'Power action blocked: Wi-Fi Guard restoration is unconfirmed. Use Restore internet before trying again.';
+    emitTimerUpdate('action-status', { receiptId: completingReceiptId, actionStatus: 'blocked', proofSaved: receipt?.persistence?.saved === true, message });
+    showNativeNotification('Lights Out', message);
+    return;
+  }
+
+  // Test Mode rehearses only the in-app scene.
+  if (!completionOptions.dryRun && smartLights.getConfig().enabled) {
     await smartLights.invokeSmartLightOff();
     smartLights.resetSmartLightState();
   }
-  
+
+  // A cancel or replacement during an awaited completion step owns the result.
+  if (completingReceiptId && activeReceiptId !== completingReceiptId) return;
   emitTimerUpdate('complete', { message: 'Timer complete' });
-  showNativeNotification('Lights Out', timerState.dryRun
-    ? `Test Mode complete: ${formatAction(timerState.action)} skipped.`
-    : `Timer complete: ${formatAction(timerState.action)} now.`);
+  showNativeNotification('Lights Out', completionOptions.dryRun
+    ? `Test Mode complete: ${formatAction(completionOptions.action)} skipped.`
+    : `Timer finished. Preparing ${formatAction(completionOptions.action)} request; Windows outcome is unverified.`);
 
   let rec = null;
   try { rec = activeReceiptId ? runReceipts.getReceiptById(activeReceiptId) : null; } catch { /* best-effort */ }
   // Record a streak event for the completed ritual.
-  // Only REAL completions feed the routine record (streak, completed runs,
-  // achievements, bedtime-deficit estimate). Test Mode runs stay in Proof via
-  // their dry_run_completed receipt below and never count as a kept night.
-  if (!timerState.dryRun) {
-    try { streaks.recordEvent(null, timerState.action, Boolean(rec && rec.snoozeCount > 0)); } catch (e) {
+  // Preserve the existing non-Test ritual calculation (timer endings here,
+  // emergency overrides in emergencyOverride.js, plus historical entries).
+  // These events do not verify a Windows power action or measure sleep.
+  if (!completionOptions.dryRun) {
+    try { streaks.recordEvent(null, completionOptions.action, Boolean(rec && rec.snoozeCount > 0)); } catch (e) {
       console.error('Failed to record streak event:', e);
     }
     // Record an app-timer estimate only; this is not measured sleep.
@@ -1087,16 +1213,20 @@ async function completeTimer() {
     runReceipts.updateRunReceipt(activeReceiptId, {
       endedAt: new Date().toISOString(),
       remainingSeconds: 0,
-      result: timerState.dryRun ? 'dry_run_completed' : 'completing',
+      timerElapsedAt: elapsedAt,
+      result: completionOptions.dryRun ? 'dry_run_completed' : 'timer_elapsed',
       lastLightSequence: settingsStore.getSection('lastLight')?.sequence || null
     });
   }
   sendAccountability('TIMER_COMPLETE');
 
   // Unsaved work guardian: check for unsaved work before power action.
-  if (!timerState.dryRun) {
+  if (!completionOptions.dryRun) {
+    const guardController = new globalThis.AbortController();
+    completionGuardController = guardController;
     try {
-      const unsaved = await unsavedGuard.scanUnsavedWork();
+      const unsaved = await unsavedGuard.scanUnsavedWork({ signal: guardController.signal });
+      if (completingReceiptId && activeReceiptId !== completingReceiptId) return;
       if (unsaved.length > 0) {
         const titles = unsaved.map(w => `"${w.title}" (${w.process})`).join(', ');
         showNativeNotification('Lights Out', `Unsaved work detected: ${titles}. Save before shutdown!`);
@@ -1106,11 +1236,26 @@ async function completeTimer() {
         // Delay the power action by 10 seconds to give the user time to save.
         await new Promise(resolve => setTimeout(resolve, 10000));
       }
-    } catch { /* best-effort */ }
+    } catch (error) {
+      if (guardController.signal.aborted || (completingReceiptId && activeReceiptId !== completingReceiptId)) return;
+      const message = `Power action blocked: unsaved-work scan unavailable (${error.code || 'UNKNOWN'}). No Windows action was requested.`;
+      const receipt = completingReceiptId ? runReceipts.recordActionEvent(completingReceiptId, {
+        state: 'blocked', at: new Date().toISOString(), reason: 'unsaved-scan-unavailable', errorCode: error.code || 'UNKNOWN'
+      }) : null;
+      if (activeReceiptId === completingReceiptId) activeReceiptId = null;
+      writeStartupLog('Power action blocked by unsaved-work guard', { receiptId: completingReceiptId, errorCode: error.code || 'UNKNOWN' });
+      emitTimerUpdate('action-status', { receiptId: completingReceiptId, actionStatus: 'blocked', proofSaved: receipt?.persistence?.saved === true, message });
+      showNativeNotification('Lights Out', message);
+      return;
+    } finally {
+      if (completionGuardController === guardController) completionGuardController = null;
+    }
   }
 
-  await playLastLightRitual(timerState.dryRun);
-  await executePowerAction({ ...timerState });
+  if (completingReceiptId && activeReceiptId !== completingReceiptId) return;
+  await playLastLightRitual(completionOptions.dryRun);
+  if (completingReceiptId && activeReceiptId !== completingReceiptId) return;
+  await executePowerAction({ ...completionOptions, receiptId: completingReceiptId });
 }
 
 // Plays the Last Light finale in the renderer before the power action fires.
@@ -1141,12 +1286,16 @@ function playLastLightRitual(dryRun) {
 // it paused whatever the user was playing. Removing the Night Light value when
 // this app never set it could likewise switch off the user's own Night Light.
 // mediaPause holds this run's pause attempt (resolves to { count }).
-const windDownChanges = { mediaPause: null, nightLightSet: false };
+const windDownChanges = { mediaPause: null, nightLightSet: false, wifiSession: null };
 
 // Applies the dim-phase visual wind-down.
 // Enables Windows Night Light (blue-light filter) via registry if the
 // customization setting is on, and tells the renderer to warm the UI.
-function applyDimPhase(remainingSeconds, totalSeconds) {
+function applyDimPhase(remainingSeconds, totalSeconds, { dryRun = timerState.dryRun } = {}) {
+  if (dryRun) {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('dim-phase-started', { remainingSeconds, totalSeconds });
+    return;
+  }
   const appSettings = settingsStore.getSection('app') || {};
   if (appSettings.nightLightOnDim === true) {
     windDownChanges.nightLightSet = true;
@@ -1169,11 +1318,10 @@ function applyDimPhase(remainingSeconds, totalSeconds) {
   // WiFi Guard: block internet for kids during dim phase.
   const wifiConfig = settingsStore.getSection('wifiGuard');
   if (wifiConfig && wifiConfig.enabled && wifiConfig.blockOnDim !== false) {
-    wifiGuard.blockInternet(wifiConfig).then(result => {
-      if (result.success && mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('wifi-guard-status', { blocked: true, provider: result.provider });
-      }
-    }).catch(() => {});
+    if (!windDownChanges.wifiSession || windDownChanges.wifiSession.closed) {
+      windDownChanges.wifiSession = wifiLifecycle.begin({ dryRun });
+    }
+    wifiLifecycle.block(windDownChanges.wifiSession, wifiConfig).catch(() => {});
   }
   // Content Blocker: block distracting websites during dim phase.
   const cbConfig = settingsStore.getSection('contentBlocker');
@@ -1216,7 +1364,7 @@ function applyFocusMode(enable) {
   // On disable, we don't restart the apps (the user will reopen what they need).
 }
 
-function restoreAfterTimer() {
+function restoreAfterTimer({ reason = 'cancel' } = {}) {
   // Restore window opacity.
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setOpacity(1);
   // Tell renderer to end dim phase.
@@ -1235,19 +1383,12 @@ function restoreAfterTimer() {
   if (mediaPause) {
     mediaPause.then(result => (result && result.count > 0 ? media.resumeAllMedia() : null)).catch(() => {});
   }
-  // Restore WiFi access if WiFi Guard was active.
-  const wifiConfig = settingsStore.getSection('wifiGuard');
-  if (wifiConfig && wifiConfig.enabled && wifiConfig.unblockOnCancel !== false) {
-    wifiGuard.unblockInternet(wifiConfig).then(result => {
-      if (result.success && mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('wifi-guard-status', { blocked: false, provider: result.provider });
-      }
-    }).catch(() => {});
-  }
+  // Use the captured provider/config and wait behind its in-flight block.
+  const wifiRestore = wifiLifecycle.finish(windDownChanges.wifiSession, { reason });
   // Unblock distracting websites -- but not if a recurring schedule
   // (independent of this timer) still wants them blocked right now.
   const cbConfig = settingsStore.getSection('contentBlocker');
-  if (cbConfig && cbConfig.enabled && cbConfig.unblockOnComplete !== false) {
+  if (!timerState.dryRun && cbConfig && cbConfig.enabled && cbConfig.unblockOnComplete !== false) {
     if (!contentBlocker.isAnyScheduleActive(cbConfig.schedules, new Date())) {
       contentBlocker.unblockSites().catch(() => {});
     }
@@ -1259,6 +1400,7 @@ function restoreAfterTimer() {
     mainWindow.setAlwaysOnTop(false);
     mainWindow.setMenuBarVisibility(true);
   }
+  return wifiRestore;
 }
 
 // First Light: the morning bookend to Last Light.
@@ -1267,8 +1409,9 @@ function restoreAfterTimer() {
 // --first-light scheduled task.
 const FIRST_LIGHT_DURATION = 60; // 60 seconds of gradual brightening
 
-function playFirstLight() {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
+function playFirstLight(requestId) {
+  if (firstLightRunning || !mainWindow || mainWindow.isDestroyed()) return;
+  firstLightRunning = true;
   mainWindow.show();
   mainWindow.setOpacity(0);
   mainWindow.webContents.send('first-light-started');
@@ -1324,12 +1467,14 @@ function playFirstLight() {
     }
     if (elapsed >= FIRST_LIGHT_DURATION) {
       clearInterval(interval);
+      firstLightRunning = false;
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.setOpacity(1);
         mainWindow.webContents.send('first-light-ended');
       }
       // Clean up the scheduled task after it fires.
-      alarm.removeWakeAlarm().catch(() => {});
+      alarm.removeWakeAlarm(requestId).catch(() => {});
+      firstLightDelivery.flush();
     }
   }, 1000);
 }
@@ -1351,6 +1496,7 @@ function formatAction(action) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function sendAccountability(eventType, extra = {}) {
+  if (timerState.dryRun) return;
   const accConfig = settingsStore.getSection('accountability');
   if (!accConfig || !accConfig.enabled) return;
   // Only send for events the user has enabled.
@@ -1435,7 +1581,6 @@ const calendarStartedOccurrences = new Set();
 async function checkCalendarAutoStart() {
   const calSettings = settingsStore.getSection('calendar') || {};
   if (!calSettings.enabled || !calSettings.autoStartFromEvents) return;
-  if (isRunActive()) return; // one run at a time: never replace an active run
   if (calendarAutoStartBusy) return;
   calendarAutoStartBusy = true;
 
@@ -1465,12 +1610,29 @@ async function checkCalendarAutoStart() {
         // Test Mode is read from the app section at fire time, like autopilot.
         const appSettings = settingsStore.getSection('app') || {};
         const profile = event.profileId ? profiles.getById(event.profileId) : null;
+        // Claim the local day before dispatch. A failed write blocks execution;
+        // a claimed-but-interrupted dispatch is never silently retried.
+        let claimed = null;
+        if (event.routinePlan) {
+          const available = routineModel.availability(event.routinePlan, 'windows');
+          if (!available.available) continue;
+          const day = `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}-${String(start.getDate()).padStart(2,'0')}`;
+          claimed = routineLedger.claim(event.routinePlan, day, start.toISOString());
+          if (!claimed) continue;
+          if (isRunActive() || (event.profileId && !profile)) {
+            routineLedger.update(claimed.occurrenceKey, { status: 'skipped', reason: isRunActive() ? 'timer-active' : 'routine-unavailable',
+              actions: claimed.actions.map(a => ({ ...a, status: 'skipped' })) });
+            break;
+          }
+        } else if (isRunActive()) return;
         // A removed saved routine must not silently fall back to another one.
         if (event.profileId && !profile) continue;
         const result = startTimer({ durationSeconds: duration, action,
-          profileId: profile?.id || null, dryRun: Boolean(appSettings.dryRun || profile?.dryRun),
+          profileId: profile?.id || null, dryRun: Boolean(appSettings.dryRun || profile?.dryRun || event.testMode),
           forceShutdown: false, muteSystem: Boolean(profile?.muteSystem),
-          gracePeriod: profile?.gracePeriod, startOrigin: 'calendar', origin: 'calendar' });
+          gracePeriod: profile?.gracePeriod, startOrigin: 'calendar', origin: 'calendar' }, undefined, claimed?.occurrenceKey || null);
+        if (claimed) routineLedger.dispatchResult(claimed.occurrenceKey, result,
+          result?.success && timerState.running ? activeReceiptId : null);
         if (result && result.success) {
           calendarStartedOccurrences.add(occurrence);
           if (calendarStartedOccurrences.size > 128) calendarStartedOccurrences.delete(calendarStartedOccurrences.values().next().value);
@@ -2021,6 +2183,7 @@ async function executePowerAction(options = {}) {
   const dryRun = Boolean(options.dryRun);
   const forceShutdown = Boolean(options.forceShutdown);
   const muteSystem = Boolean(options.muteSystem);
+  const receiptId = options.receiptId || activeReceiptId;
 
   if (dryRun) {
     emitTimerUpdate('dryrun', { action, message: `Test Mode: ${formatAction(action)} skipped` });
@@ -2058,55 +2221,39 @@ async function executePowerAction(options = {}) {
     return { success: false, blocked: true, error: 'QA power lock' };
   }
 
-  try {
-    // Volume/mute manipulation is intentionally disabled; the app no longer
-    // touches the system volume during power actions.
-
-    switch (action) {
-      case 'shutdown':
-        spawn('shutdown.exe', forceShutdown ? ['/s', '/f', '/t', '0'] : ['/s', '/t', '0'], { detached: true, stdio: 'ignore' }).unref();
-        break;
-      case 'restart':
-        spawn('shutdown.exe', forceShutdown ? ['/r', '/f', '/t', '0'] : ['/r', '/t', '0'], { detached: true, stdio: 'ignore' }).unref();
-        break;
-      case 'sleep':
-        spawn('rundll32.exe', ['powrprof.dll,SetSuspendState', '0,1,0'], { detached: true, stdio: 'ignore' }).unref();
-        break;
-      case 'hibernate':
-        spawn('rundll32.exe', ['powrprof.dll,SetSuspendState', '1,1,0'], { detached: true, stdio: 'ignore' }).unref();
-        break;
-      case 'lock':
-        spawn('rundll32.exe', ['user32.dll,LockWorkStation'], { detached: true, stdio: 'ignore' }).unref();
-        break;
-      case 'logout':
-        spawn('shutdown.exe', ['/l'], { detached: true, stdio: 'ignore' }).unref();
-        break;
-      default:
-        return { success: false, error: `Unknown action: ${action}` };
+  // Capture ownership before the asynchronous child events: a subsequent run
+  // must never receive this run's command evidence.
+  const powerController = action === 'sleep' || action === 'hibernate' ? new globalThis.AbortController() : null;
+  if (powerController) completionGuardController = powerController;
+  if (activeReceiptId === receiptId) activeReceiptId = null;
+  try { return await dispatchPowerAction({ action, forceShutdown, signal: options.signal || powerController?.signal,
+    onDiagnostic: detail => writeStartupLog('Power proof unavailable', detail),
+    onEvidence: event => {
+      const receipt = receiptId ? runReceipts.recordActionEvent(receiptId, event) : null;
+      writeStartupLog('Power command evidence', { receiptId, ...event, proofSaved: receipt?.persistence?.saved === true });
+      const messages = {
+        action_requested: `${formatAction(action)} requested; Windows outcome unverified.`,
+        command_spawned: `${formatAction(action)} command started; Windows outcome unverified.`,
+        command_returned_success: event.api === 'SetSuspendState'
+          ? `Windows accepted the ${formatAction(action)} API request; physical power state unverified.`
+          : `${formatAction(action)} command returned code 0; Windows outcome unverified.`,
+        command_returned_failure: event.api === 'SetSuspendState'
+          ? `${formatAction(action)} API request failed (Windows error ${event.errorCode}); power state unverified.`
+          : `${formatAction(action)} command returned code ${event.exitCode}; Windows outcome unverified.`,
+        spawn_failed: `${formatAction(action)} command could not start (${event.errorCode}).`,
+        outcome_unverified: `${formatAction(action)} outcome unknown; inspect the receipt for the last observed event.`,
+        cancelled: 'Power request cancelled before dispatch.',
+        blocked: `${formatAction(action)} blocked (${event.reason || 'unavailable'}${event.errorCode ? `; Windows error ${event.errorCode}` : ''}); no native power request was made.`
+      };
+      const proofSaved = receipt?.persistence?.saved === true;
+      emitTimerUpdate('action-status', { receiptId, actionStatus: event.state, proofSaved,
+        message: (messages[event.state] || 'Windows outcome unverified.') + (proofSaved ? '' : ' Receipt save unavailable.') });
+      if (event.state === 'blocked' || event.state === 'spawn_failed' || event.state === 'command_returned_failure') {
+        showNativeNotification('Lights Out', messages[event.state]);
+      }
     }
-
-    // Update receipt: power executed.
-    if (activeReceiptId) {
-      runReceipts.updateRunReceipt(activeReceiptId, {
-        result: 'power_executed',
-        powerCommand: action + (forceShutdown ? ' /f' : ''),
-        endedAt: new Date().toISOString()
-      });
-      activeReceiptId = null;
-    }
-    return { success: true };
-  } catch (error) {
-    emitTimerUpdate('error', { message: error.message });
-    // Update receipt: blocked/error.
-    if (activeReceiptId) {
-      runReceipts.updateRunReceipt(activeReceiptId, {
-        result: 'error',
-        notes: error.message,
-        endedAt: new Date().toISOString()
-      });
-      activeReceiptId = null;
-    }
-    return { success: false, error: error.message };
+  }); } finally {
+    if (powerController && completionGuardController === powerController) completionGuardController = null;
   }
 }
 
@@ -2203,7 +2350,7 @@ ipcMain.handle('save-app-settings', async (event, settings = {}) => {
     customization: settingsStore.getSection('customization'),
     lastLight: settingsStore.getSection('lastLight'),
     calendar: settingsStore.getSection('calendar'),
-    wifiGuard: settingsStore.getSection('wifiGuard'),
+    wifiGuard: { ...settingsStore.getSection('wifiGuard'), blockingAvailable: wifiLifecycle.blockingAvailable },
     contentBlocker: settingsStore.getSection('contentBlocker'),
     accountability: settingsStore.getSection('accountability')
   };
@@ -2274,7 +2421,7 @@ ipcMain.handle('get-open-browsers', async () => {
 // Wake-up alarm IPC
 ipcMain.handle('schedule-wake-alarm', async (event, alarmTime) => {
   const appExePath = process.execPath;
-  return alarm.scheduleWakeAlarm(alarmTime, appExePath);
+  return alarm.scheduleWakeAlarm(alarmTime, appExePath, app.getPath('userData'));
 });
 ipcMain.handle('remove-wake-alarm', async () => {
   return alarm.removeWakeAlarm();
@@ -2372,11 +2519,45 @@ ipcMain.handle('fetch-calendar-events', async (event, withinDays) => {
 // at }); the reason is a fixed category, never error text, a URL or a token.
 ipcMain.handle('get-calendar-fetch-status', () => calProviders.getLastFetchStatus());
 ipcMain.handle('save-calendar-settings', async (event, calSettings) => {
-  settingsStore.updateSection('calendar', calSettings);
+  const patch = { ...calSettings };
+  if (Array.isArray(calSettings?.builtin?.rules)) {
+    patch.builtin = { ...calSettings.builtin, rules: calSettings.builtin.rules.map(rule => ({ ...rule, plan: routineModel.fromWindowsRule(rule) })) };
+  }
+  settingsStore.updateSection('calendar', patch, { requireSave: true });
   return { success: true };
 });
 ipcMain.handle('get-calendar-settings', async () => {
-  return settingsStore.getSection('calendar');
+  let routineOutcomes = [];
+  try { routineOutcomes = routineLedger.list(id => runReceipts.getReceiptById(id), key => runReceipts.getReceiptByOccurrence(key)).slice(0, 12); }
+  catch { routineOutcomes = [{ name: 'Routine history', status: 'unavailable', reason: 'History could not be read; new calendar dispatch is blocked until storage is repaired.' }]; }
+  return { ...settingsStore.getSection('calendar'), routineOutcomes };
+});
+ipcMain.handle('routine-file-list', () => routineFiles.list());
+ipcMain.handle('handoff-action', (event, action, options) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) return {ok:false,error:'Pairing controls are available only in the primary local app window.'};
+  if (typeof action !== 'string' || action.length > 32 || !options || typeof options !== 'object' || Array.isArray(options) || JSON.stringify(options).length > 16384) return {ok:false,error:'Invalid pairing request.'};
+  return handoffService.get().handle(action, options);
+});
+ipcMain.handle('routine-file-preview', (event, text) => routineFiles.preview(text));
+ipcMain.handle('routine-file-import', (event, text, policy) => routineFiles.import(text, policy));
+ipcMain.handle('routine-file-adopt', (event, options) => routineFiles.adopt(options));
+ipcMain.handle('routine-file-start', (event, id) => startTimer(routineFiles.timerOptions(id)));
+ipcMain.handle('routine-file-open', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, { title: 'Open routine file', properties: ['openFile'], filters: [{ name: 'Routine JSON', extensions: ['json'] }] });
+  if (result.canceled || result.filePaths.length !== 1) return { cancelled: true };
+  const file = result.filePaths[0], info = fs.statSync(file);
+  if (!info.isFile() || info.size > routineModel.interchange.maxBytes) throw Error('Choose a JSON routine file up to 256 KiB');
+  const bytes = fs.readFileSync(file);
+  if (bytes.length > routineModel.interchange.maxBytes) throw Error('Routine file grew beyond 256 KiB');
+  let text; try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch { throw Error('Routine files must use UTF-8 text'); }
+  routineFiles.preview(text); return { text };
+});
+ipcMain.handle('routine-file-export', async (event, selection) => {
+  const text = JSON.stringify(routineFiles.export(selection), null, 2);
+  const result = await dialog.showSaveDialog(mainWindow, { title: 'Export routine file', defaultPath: 'lights-out-routines.json', filters: [{ name: 'Routine JSON', extensions: ['json'] }] });
+  if (result.canceled || !result.filePath) return { cancelled: true };
+  if (!require('./durableJsonStore').writeTmpVerifyRename(result.filePath, text)) throw Error('Could not save the routine file');
+  return { saved: true };
 });
 ipcMain.handle('get-companion-status', async () => {
   return companion.getStatus();
@@ -2478,20 +2659,23 @@ ipcMain.handle('wifi-guard-scan', async () => {
 ipcMain.handle('wifi-guard-block', async () => {
   const config = settingsStore.getSection('wifiGuard');
   if (!config || !config.enabled) return { success: false, error: 'WiFi Guard not enabled' };
-  return wifiGuard.blockInternet(config);
+  if (!timerState.running && activeReceiptId) return { success: false, error: 'A power action is being prepared. Restore internet or cancel that action first.' };
+  windDownChanges.wifiSession = wifiLifecycle.begin({ dryRun: false });
+  return wifiLifecycle.block(windDownChanges.wifiSession, config);
 });
 ipcMain.handle('wifi-guard-unblock', async () => {
   const config = settingsStore.getSection('wifiGuard');
   if (!config) return { success: false };
+  if (wifiLifecycle.hasPending()) return wifiLifecycle.restorePending();
   return wifiGuard.unblockInternet(config);
 });
 ipcMain.handle('save-wifi-guard-settings', async (e, wifiSettings) => {
   const sanitized = capabilityTruth.sanitizeWifiGuard(wifiSettings);
   settingsStore.updateSection('wifiGuard', sanitized);
-  return { saved: true, settings: sanitized };
+  return { saved: true, settings: { ...sanitized, blockingAvailable: wifiLifecycle.blockingAvailable } };
 });
 ipcMain.handle('get-wifi-guard-settings', async () => {
-  return settingsStore.getSection('wifiGuard');
+  return { ...settingsStore.getSection('wifiGuard'), blockingAvailable: wifiLifecycle.blockingAvailable };
 });
 ipcMain.handle('content-block', async (e, blocklist) => {
   return contentBlocker.blockSites(blocklist);
@@ -2573,7 +2757,7 @@ ipcMain.handle('execute-override', async (e, reason) => {
   // to also call cancel. A snapshot of the pre-cancel state is returned so the UI
   // can still show what was overridden.
   const overridden = { ...timerState };
-  if (timerState.running || timerState.paused) cancelTimer();
+  if (timerState.running || timerState.paused || activeReceiptId) cancelTimer();
   return { ...result, timerState: overridden };
 });
 
@@ -2623,7 +2807,7 @@ ipcMain.handle('use-night-mode-tonight', async (e, nightModeId) => {
 
 // Override Tax IPC.
 ipcMain.handle('assess-snooze-cost', async () => {
-  return overrideTax.assessSnoozeCost();
+  return timerState.dryRun ? { allowed: true, cost: 'free', level: 0, consequences: [] } : overrideTax.assessSnoozeCost();
 });
 ipcMain.handle('get-override-tax-stats', async () => {
   return overrideTax.getStats();
@@ -2657,7 +2841,7 @@ ipcMain.handle('ritual-start', async (e, customSteps) => {
   profileRitualContext.clear();
   // One run at a time: Begin Ritual never replaces an active countdown.
   if (timerState.running || timerState.paused) return { active: false, reason: 'run-active' };
-  return ritualMode.startRitual(customSteps);
+  return ritualMode.startRitual(customSteps, { dryRun: Boolean((settingsStore.getSection('app') || {}).dryRun) });
 });
 ipcMain.handle('ritual-advance', async () => {
   return ritualMode.advanceStep(false);
@@ -2723,7 +2907,7 @@ ipcMain.handle('resume-recoverable-timer', async () => {
     gracePeriod: snapshot.gracePeriod,
     origin: 'resume',
     resumeReceiptId
-  });
+  }, undefined, snapshot.routineOccurrenceKey || runReceipts.getReceiptById(resumeReceiptId)?.routineOccurrenceKey || null);
   return result;
 });
 
@@ -2975,6 +3159,7 @@ ipcMain.on('set-progress', (event, percent, mode) => {
 
 ipcMain.on('close-window', () => {
   if (mainWindow) mainWindow.hide();
+  writeTimerLifecycle('Window hidden to tray');
   refreshTrayMenu();
 });
 
@@ -3143,7 +3328,9 @@ const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (event, argv = []) => {
+    firstLightDelivery.request(argv);
+    if (!app.isReady()) return;
     if (!mainWindow || mainWindow.isDestroyed()) {
       writeStartupLog('Second instance requested window recreation');
       createWindow();
@@ -3166,23 +3353,25 @@ function setupRitualCallbacks() {
       mainWindow.webContents.send('ritual-step', { step, state });
     }
     const runToken = runMeta && runMeta.profileRitualToken ? runMeta.profileRitualToken : null;
+    const rehearsal = typeof runMeta?.dryRun === 'boolean' ? runMeta.dryRun : Boolean((settingsStore.getSection('app') || {}).dryRun);
     try {
       if (step.id === 'block') {
         const cbConfig = settingsStore.getSection('contentBlocker');
-        if (cbConfig && cbConfig.enabled) {
+        if (!rehearsal && cbConfig && cbConfig.enabled) {
           const sites = contentBlocker.DEFAULT_BLOCKLIST;
           contentBlocker.blockSites(sites).catch(() => {});
         }
       } else if (step.id === 'dim') {
         const appSettings = settingsStore.getSection('app') || {};
-        if (appSettings.nightLightOnDim) applyDimPhase(0, 0);
+        if (appSettings.nightLightOnDim) applyDimPhase(0, 0, { dryRun: rehearsal });
       } else if (step.id === 'timer') {
         const ctx = profileRitualContext.consume(runToken);
+        if (runToken && !ctx) throw Error('Ritual timer context is unavailable');
         if (ctx) {
           beginValidatedCountdown(
             { durationSeconds: ctx.durationSeconds, action: ctx.action, dryRun: ctx.dryRun,
               forceShutdown: ctx.forceShutdown, muteSystem: ctx.muteSystem, gracePeriod: ctx.gracePeriod,
-              source: 'ritual', origin: ctx.origin || 'ritual' },
+              source: 'ritual', origin: ctx.origin || 'ritual', routineOccurrenceKey: ctx.routineOccurrenceKey },
             { profileId: ctx.profileId, profileName: ctx.profileName },
             { nightModeId: ctx.nightModeId || null, nightModeTitle: ctx.nightModeTitle || null, nightModeVersion: ctx.nightModeVersion || null }
           );
@@ -3199,26 +3388,42 @@ function setupRitualCallbacks() {
         }
       } else if (step.id === 'lights') {
         const lightsConfig = settingsStore.getSection('smartLights');
-        if (lightsConfig && lightsConfig.enabled) {
+        if (!rehearsal && lightsConfig && lightsConfig.enabled) {
           smartLights.applyScene('night').catch(() => {});
         }
       }
     } catch (err) {
+      if (runMeta?.routineOccurrenceKey) {
+        try { routineLedger.finishPending(runMeta.routineOccurrenceKey, 'failed', 'ritual-step-failed'); } catch { /* history unavailable */ }
+      }
       if (runToken) profileRitualContext.clearIfOwned(runToken);
       ritualMode.cancelIfCurrent(runId);
       console.error('[ritual-step-error]', err);
     }
   });
   ritualMode.onComplete((state, runMeta) => {
+    if (runMeta?.routineOccurrenceKey) {
+      try { routineLedger.finishPending(runMeta.routineOccurrenceKey, 'failed', 'ritual-ended-without-timer'); } catch { /* history unavailable */ }
+    }
     const runToken = runMeta && runMeta.profileRitualToken ? runMeta.profileRitualToken : null;
     if (runToken) profileRitualContext.clearIfOwned(runToken);
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('ritual-complete', state);
     }
   });
+  ritualMode.onCancel?.((state, runMeta) => {
+    if (!timerState.running) restoreAfterTimer();
+    if (runMeta?.profileRitualToken) profileRitualContext.clearIfOwned(runMeta.profileRitualToken);
+    if (runMeta?.routineOccurrenceKey) {
+      try { routineLedger.finishPending(runMeta.routineOccurrenceKey, 'cancelled', 'ritual-cancelled'); } catch { /* history unavailable */ }
+    }
+  });
 }
 
 app.whenReady().then(async () => {
+  // Readiness may already be queued when a secondary instance calls quit.
+  if (!gotTheLock) return;
+
   cleanupStalePortableExtracts();
 
   // Deny all browser permissions by default. Lights Out loads only local
@@ -3229,6 +3434,7 @@ app.whenReady().then(async () => {
   // Load persisted settings and rehydrate the smart-lights module.
   settingsStore.load();
   smartLights.loadConfig(settingsStore.getSection('smartLights'));
+  writeTimerLifecycle('Runtime ready');
 
   // Finalize any run receipt left at result:'running' by a process that
   // ended (crash, force-kill, power loss) before it reached a terminal
@@ -3243,6 +3449,7 @@ app.whenReady().then(async () => {
       ? (recoverable.receiptId || runReceipts.getMostRecentRunningReceiptId())
       : null;
     runReceipts.reconcileOrphanedRunningReceipts(protectedReceiptId);
+    try { routineLedger.interruptPending(); } catch (error) { console.error('[routine-history-recovery]', error); }
   }
 
   // Load custom Last Light sequences from settings.
@@ -3272,9 +3479,7 @@ app.whenReady().then(async () => {
   }
 
   // If launched via --first-light, run the First Light sunrise sequence.
-  if (launchOptions.firstLight) {
-    playFirstLight();
-  }
+  if (launchOptions.firstLight) firstLightDelivery.request(process.argv);
 
   // Start periodic update checker.
   updater.startPeriodicCheck((result) => {
@@ -3398,6 +3603,8 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  completionGuardController?.abort();
+  writeTimerLifecycle('App quitting');
   app.isQuitting = true;
   if (tray && !tray.isDestroyed()) tray.destroy();
   tray = null;

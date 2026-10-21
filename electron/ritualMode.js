@@ -29,6 +29,7 @@ let ritualState = {
 
 let onStepCallback = null;
 let onCompleteCallback = null;
+let onCancelCallback = null;
 let stepTimer = null;
 
 function getConfig() {
@@ -52,6 +53,7 @@ function startRitual(customSteps, meta) {
 
   const steps = (Array.isArray(customSteps) ? customSteps : config.steps).filter(step => step && step.id !== 'breathe');
   if (!steps.length) { cancelRitual(); return { active: false, reason: 'no-steps' }; }
+  if (ritualState.active) cancelRitual();
   runIdCounter++;
   ritualState = {
     active: true,
@@ -98,7 +100,9 @@ function skipStep() {
 
 function cancelRitual() {
   if (stepTimer) { clearTimeout(stepTimer); stepTimer = null; }
+  const wasActive = ritualState.active;
   ritualState.active = false;
+  if (wasActive && onCancelCallback) onCancelCallback(getState(), ritualState.runMeta, ritualState.runId);
   return getState();
 }
 
@@ -150,7 +154,10 @@ function emitStep() {
   // through the whole sequence instead of getting stuck on the first step
   // forever; each step's real side effect (block/dim/timer/lights) still
   // runs via the onStepCallback above.
-  if (ritualState.runMeta && ritualState.runMeta.remoteOrigin) {
+  // Calendar preparation honors its explicit duration. Phone starts retain
+  // their established immediate fast-forward behavior.
+  if (ritualState.runMeta && ritualState.runMeta.remoteOrigin &&
+    !(ritualState.runMeta.waitForTimedSteps && current.auto && current.durationSeconds > 0)) {
     advanceStep(false);
     return;
   }
@@ -168,6 +175,7 @@ function emitStep() {
 
 function onStep(cb) { onStepCallback = cb; }
 function onComplete(cb) { onCompleteCallback = cb; }
+function onCancel(cb) { onCancelCallback = cb; }
 
 function updateConfig(updates) {
   const current = settingsStore.getSection('ritual') || {};
@@ -188,5 +196,6 @@ module.exports = {
   getRunId,
   onStep,
   onComplete,
+  onCancel,
   updateConfig
 };

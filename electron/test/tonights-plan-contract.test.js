@@ -18,6 +18,7 @@ const rendererPath = path.join(__dirname, '..', 'renderer.js');
 const rendererSource = fs.readFileSync(rendererPath, 'utf8');
 const indexHtmlSource = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const utilsSource = fs.readFileSync(path.join(__dirname, '..', 'renderer-utils.js'), 'utf8');
+const nightModesSource = fs.readFileSync(path.join(__dirname, '..', 'renderer-night-modes.js'), 'utf8');
 
 // The canonical action vocabulary, per profiles.js's validActions / nightModes.js
 // -- not every action main.js's executePowerAction currently implements (lock
@@ -97,6 +98,7 @@ function createTonightsPlanSandbox({ state, elsOverrides = {}, actionButtons = [
     'ns-hero-title': createElement(),
     'ns-preview-time': createElement(),
     'ns-play-label': createElement(),
+    'ns-play-btn': createElement(),
     'ns-hero-source': createElement({ display: 'none' }),
     'ns-hero-source-name': createElement(),
     'ns-meta-ending': createElement(),
@@ -137,6 +139,7 @@ function createTonightsPlanSandbox({ state, elsOverrides = {}, actionButtons = [
     // One name per session (UI-R3 Fire 02): the vocabulary lives in renderer-utils.js.
     (utilsSource.match(/const DEFAULT_TIMER_NAME = [^\n]*/) || [''])[0],
     extractFunction(utilsSource, 'sessionDisplayName'),
+    extractFunction(nightModesSource, 'formatDuration'),
     extractFunction(rendererSource, 'formatTime'),
     extractFunction(rendererSource, 'inputValue'),
     extractFunction(rendererSource, 'inputSeconds'),
@@ -193,10 +196,29 @@ test('Tonight\'s Plan summary reflects a manual timer\'s duration and action', (
   renderTonightHero();
 
   assert.equal(elements['ns-hero-title'].textContent, 'Countdown · 45 min');
-  assert.equal(elements['ns-preview-time'].textContent, '45:00');
+  assert.equal(elements['ns-preview-time'].textContent, '45 min');
   assert.equal(elements['ns-play-label'].textContent, 'Start countdown');
   assert.equal(elements['ns-hero-source'].style.display, 'none');
 });
+
+for (const [seconds, label] of [
+  [20, '20 sec', '0:20'], [59, '59 sec', '0:59'], [60, '1 min', '1:00'],
+  [61, '1 min 1 sec', '1:01'], [90, '1 min 30 sec', '1:30'],
+  [1680, '28 min', '28:00'], [5400, '1 h 30 min', '1:30:00'],
+  [5405, '1 h 30 min 5 sec', '1:30:05'], [28800, '8 h', '8:00:00']
+]) {
+  test(`Tonight duration is exact in heading, details and Start accessibility: ${seconds}s`, () => {
+    const state = baseState({ unit: 'sec', action: 'sleep' });
+    const { elements, els, renderTonightHero } = createTonightsPlanSandbox({ state });
+    els.timerInput.value = String(seconds);
+    const before = JSON.stringify(state);
+    renderTonightHero();
+    assert.equal(elements['ns-hero-title'].textContent, `Countdown · ${label}`);
+    assert.equal(elements['ns-preview-time'].textContent, label);
+    assert.equal(elements['ns-play-btn'].getAttribute('aria-label'), `Start countdown, ${label}`);
+    assert.equal(JSON.stringify(state), before, 'Presentation must not mutate timer or plan state');
+  });
+}
 
 test('one name per session: a typed ring name names the plan; the stored default or nothing reads Countdown (Fire 02)', () => {
   const typed = createTonightsPlanSandbox({ state: baseState({ action: 'sleep', timerName: 'Reading' }) });
@@ -212,7 +234,7 @@ test('one name per session: a typed ring name names the plan; the stored default
   // An armed Night Mode or a loaded My Mode still wins over a typed name.
   const armed = createTonightsPlanSandbox({ state: baseState({ action: 'shutdown', timerName: 'Reading', armedNightMode: { nightModeId: 'wind', nightModeTitle: 'Wind Down', durationSeconds: 5400, action: 'shutdown' } }) });
   armed.renderTonightHero();
-  assert.equal(armed.elements['ns-hero-title'].textContent, 'Wind Down · 90 min');
+  assert.equal(armed.elements['ns-hero-title'].textContent, 'Wind Down · 1 h 30 min');
   assert.equal(armed.elements['ns-play-label'].textContent, 'Start Wind Down');
   const profile = { id: 'p1', name: 'Hard Stop', action: 'shutdown', mode: 'duration', seconds: 900 };
   const mode = createTonightsPlanSandbox({ state: baseState({ action: 'shutdown', timerName: 'Reading', currentProfileId: 'p1', profiles: [profile] }) });
@@ -311,8 +333,8 @@ test('Night Modes continue showing their own correct plan, unaffected by profile
 
   renderTonightHero();
 
-  assert.equal(elements['ns-hero-title'].textContent, 'Movie Wind-Down · 90 min');
-  assert.equal(elements['ns-preview-time'].textContent, '1:30:00');
+  assert.equal(elements['ns-hero-title'].textContent, 'Movie Wind-Down · 1 h 30 min');
+  assert.equal(elements['ns-preview-time'].textContent, '1 h 30 min');
   assert.equal(elements['ns-play-label'].textContent, 'Start Movie Wind-Down');
   // Night Modes are credited by the existing armed-mode banner, not the
   // profile-source line -- showing both would be two competing labels.
@@ -392,7 +414,7 @@ test('renderTonightHero stays null-safe for the P06 plan ids it does not own', (
   const { elements, renderTonightHero } = createTonightsPlanSandbox({ state, elsOverrides: { elements: extra } });
   renderTonightHero();
   assert.equal(elements['ns-hero-title'].textContent, 'Countdown · 28 min');
-  assert.equal(elements['ns-preview-time'].textContent, '28:00');
+  assert.equal(elements['ns-preview-time'].textContent, '28 min');
   assert.equal(elements['ns-play-label'].textContent, 'Start countdown');
   for (const id of Object.keys(extra)) assert.equal(elements[id].textContent, 'untouched', id);
   // ...and with none of them present (getElementById returns null) it still renders.

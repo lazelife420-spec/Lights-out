@@ -8,23 +8,37 @@ import java.time.LocalTime
 import java.util.UUID
 
 data class PhoneRoutine(val id: String, val name: String, val seconds: Long,
-    val targets: List<String>, val brightness: Int, val offAtEnd: Boolean) {
+    val targets: List<String>, val brightness: Int, val offAtEnd: Boolean, val occurrenceKey: String? = null,
+    val warmTargets: List<String> = targets, val offTargets: List<String> = targets,
+    val actionIds: Map<String,String> = emptyMap(), val lightBindings: Map<String,String> = emptyMap()) {
     init {
-        require(id.matches(Regex("[a-zA-Z0-9-]{1,64}")))
+        require(id.matches(Regex("[a-zA-Z0-9_-]{1,80}")))
+        require(actionIds.keys.all { it in setOf("timer.start", "wiz.warm", "wiz.off") } && actionIds.values.all { it.matches(Regex("[a-zA-Z0-9_-]{1,64}")) } && actionIds.values.distinct().size == actionIds.size)
+        require(lightBindings.size <= 8 && lightBindings.keys.all { it.matches(Regex("[a-zA-Z0-9_-]{1,32}")) } && lightBindings.values.all { WizAddress.valid(it) } && lightBindings.values.distinct().size == lightBindings.size)
         require(name.isNotBlank() && name.length <= 60) { "Name the routine (up to 60 characters)." }
         require(seconds in 60..86400) { "Choose 1 minute to 24 hours." }
         WizAddress.targets(targets)
+        WizAddress.targets(warmTargets); WizAddress.targets(offTargets)
         require(brightness == 0 || brightness in 10..100) { "Brightness must be 10–100%." }
-        require(targets.isNotEmpty() || (brightness == 0 && !offAtEnd)) { "Save a light before adding lighting actions." }
+        require(brightness == 0 || warmTargets.isNotEmpty()) { "Choose lights for the warm-start action." }
+        require(!offAtEnd || offTargets.isNotEmpty()) { "Choose lights for the finish action." }
     }
     fun json() = JSONObject().put("id", id).put("name", name).put("seconds", seconds)
         .put("targets", JSONArray(targets)).put("brightness", brightness).put("offAtEnd", offAtEnd)
+        .put("warmTargets", JSONArray(warmTargets)).put("offTargets", JSONArray(offTargets))
+        .put("actionIds", JSONObject(actionIds))
+        .put("lightBindings", JSONObject(lightBindings))
+        .put("plan", RoutinePlan.from(this).json())
 }
 
 /** Main-thread writes. Network workers post results back to the main thread. */
 object PhoneHomeStore {
     private fun prefs(c: Context) = c.getSharedPreferences("phone_home", Context.MODE_PRIVATE)
     fun config(c: Context): JSONObject = JSONObject(prefs(c).getString("config", "{}") ?: "{}")
+    fun saveDraft(c: Context, j: JSONObject) {
+        val store = prefs(c)
+        PhoneImportCommit.write(store.getString("config", "{}") ?: "{}", j.toString()) { value -> store.edit().putString("config", value).commit() }
+    }
     fun save(c: Context, j: JSONObject) {
         check(prefs(c).edit().putString("config", j.toString()).commit()) { "Could not save phone settings." }
         PhoneCalendar.schedule(c)
@@ -38,13 +52,24 @@ object PhoneHomeStore {
         val a = j.optJSONArray(key) ?: JSONArray()
         return (0 until a.length()).map { a.getInt(it) }.toSet()
     }
-    fun routine(j: JSONObject) = PhoneRoutine(j.getString("id"), j.getString("name").trim(), j.getLong("seconds"),
-        WizAddress.targets(strings(j.optJSONArray("targets"))), j.optInt("brightness"), j.optBoolean("offAtEnd"))
-    fun rule(j: JSONObject) = PhoneCalendarRule(j.getString("id"), j.getString("routineId"), j.getString("kind"),
+    fun routine(j: JSONObject): PhoneRoutine {
+        j.optJSONObject("plan")?.let { RoutinePlan.validateJson(it) }
+        val legacy = WizAddress.targets(strings(j.optJSONArray("targets")))
+        return PhoneRoutine(j.getString("id"), j.getString("name").trim(), j.getLong("seconds"),
+            legacy, j.optInt("brightness"), j.optBoolean("offAtEnd"),
+            warmTargets = if (j.has("warmTargets")) WizAddress.targets(strings(j.getJSONArray("warmTargets"))) else legacy,
+            offTargets = if (j.has("offTargets")) WizAddress.targets(strings(j.getJSONArray("offTargets"))) else legacy,
+            actionIds = j.optJSONObject("actionIds")?.let { ids -> ids.keys().asSequence().associateWith { ids.getString(it) } } ?: emptyMap(),
+            lightBindings = j.optJSONObject("lightBindings")?.let { ids -> ids.keys().asSequence().associateWith { ids.getString(it) } } ?: emptyMap())
+    }
+    fun rule(j: JSONObject): PhoneCalendarRule {
+        j.optJSONObject("plan")?.let { RoutinePlan.validateJson(it) }
+        return PhoneCalendarRule(j.getString("id"), j.getString("routineId"), j.getString("kind"),
         LocalTime.parse(j.getString("time")), ints(j, "weekdays"), ints(j, "monthDays"),
         if (j.has("months")) ints(j, "months") else (1..12).toSet(),
         j.optString("date").takeIf { it.isNotBlank() }?.let { LocalDate.parse(it) },
         j.optBoolean("enabled", true), j.optLong("createdAt"))
+    }
     fun routines(c: Context): List<PhoneRoutine> {
         val a = config(c).optJSONArray("routines") ?: JSONArray()
         return (0 until a.length()).map { routine(a.getJSONObject(it)) }
@@ -65,10 +90,23 @@ object PhoneHomeStore {
                 val value = msg.getJSONObject("routine")
                 if (value.optString("id").isBlank()) value.put("id", UUID.randomUUID().toString())
                 val p = routine(value)
-                require(p.targets.all { it in lights(c) }) { "Choose saved lights." }
+                val prior = routines(c).find { it.id == p.id }
+                val saved = if(prior != null) p.copy(actionIds = prior.actionIds, lightBindings = prior.lightBindings.filterValues { it in p.warmTargets || it in p.offTargets }) else p
+                require((p.targets + p.warmTargets + p.offTargets).all { it in lights(c) }) { "Choose saved lights." }
                 val old = routines(c)
                 require(old.size < 32 || old.any { it.id == p.id }) { "Keep up to 32 routines." }
-                j.put("routines", JSONArray(old.filter { it.id != p.id }.map { it.json() } + p.json()))
+                j.put("routines", JSONArray(old.filter { it.id != p.id }.map { it.json() } + saved.json()))
+                // Keep saved rule projections truthful after editing a routine.
+                // Calendar identity/creation time/consumption remain untouched;
+                // an already-running timer keeps its own action snapshot.
+                val rules = j.optJSONArray("rules") ?: JSONArray()
+                for (i in 0 until rules.length()) {
+                    val valueRule = rules.getJSONObject(i)
+                    if (valueRule.optString("routineId") == p.id) {
+                        val rule = rule(valueRule)
+                        valueRule.put("plan", RoutinePlan.from(saved, rule).json(rule))
+                    }
+                }
             }
             "deleteRoutine" -> {
                 val id = msg.getString("id")
@@ -83,7 +121,10 @@ object PhoneHomeStore {
                 val existing = (0 until old.length()).map { old.getJSONObject(it) }.find { it.optString("id") == value.getString("id") }
                 value.put("createdAt", existing?.optLong("createdAt") ?: System.currentTimeMillis())
                 val rule = rule(value)
-                require(routines(c).any { it.id == rule.routineId }) { "Choose a saved routine." }
+                val profile = routines(c).find { it.id == rule.routineId }
+                require(profile != null) { "Choose a saved routine." }
+                if(existing?.has("name") == true) value.put("name",existing.getString("name"))
+                value.put("plan", RoutinePlan.from(profile, rule).json(rule))
                 require(old.length() < 64 || existing != null) { "Keep up to 64 calendar rules." }
                 val remaining = (0 until old.length()).map { old.getJSONObject(it) }.filter { it.optString("id") != rule.id }
                 j.put("rules", JSONArray(remaining + value))

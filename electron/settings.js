@@ -14,7 +14,11 @@ const SETTINGS_FILE = 'settings.json';
 // (DPAPI on Windows) via Electron's safeStorage when available, and transparently
 // decrypted back into memory on load. Legacy plaintext values still load fine.
 const SECRET_PATHS = [
+  ['wifiGuard', 'routerUser'],
   ['wifiGuard', 'routerPass'],
+  ['wifiGuard', 'webhookUrl'],
+  ['wifiGuard', 'webhookHeaders'],
+  ['calendar', 'ical', 'url'],
   ['calendar', 'google', 'apiKey'],
   ['calendar', 'outlook', 'accessToken'],
   ['calendar', 'calendly', 'personalToken'],
@@ -22,9 +26,24 @@ const SECRET_PATHS = [
   // Credential-bearing header map (e.g. Authorization) for the HTTP webhook
   // provider. Stored encrypted as a serialized JSON object.
   ['smartLights', 'httpHeaders'],
+  ['smartLights', 'httpUrl'],
+  ['smartLights', 'httpBodyTemplate'],
+  ['accountability', 'partners', '*', 'url'],
+  ['accountability', 'partners', '*', 'webhookUrl'],
+  ['accountability', 'partners', '*', 'webhookId'],
+  ['accountability', 'partners', '*', 'webhookToken'],
+  ['accountability', 'partners', '*', 'headers'],
   ['remoteControl', 'token']
 ];
 const ENC_PREFIX = 'enc:v1:';
+// Ciphertext that cannot currently be decrypted stays recoverable on disk.
+// It is never returned as a usable credential to a caller.
+const unavailableSecrets = new Map();
+let lastSaveErrorCode = null;
+
+function storageUnavailable() {
+  return Object.assign(new Error('Credential encryption is unavailable. Settings were not saved.'), { code: 'CREDENTIAL_STORAGE_UNAVAILABLE' });
+}
 
 function encryptionAvailable() {
   try {
@@ -34,22 +53,27 @@ function encryptionAvailable() {
   }
 }
 
-function encryptSecret(value) {
+function encryptSecret(value, segments = []) {
+  const key = JSON.stringify(segments);
+  if (value === '' && unavailableSecrets.has(key)) return unavailableSecrets.get(key);
   const isObject = value !== null && typeof value === 'object';
   const str = isObject ? JSON.stringify(value) : value;
-  if (typeof str !== 'string' || str === '' || str === '{}' || str.startsWith(ENC_PREFIX)) return value;
-  if (!encryptionAvailable()) return value; // fall back to plaintext rather than lose data
+  // Public built-in defaults (admin / the standard HTTP body template) are
+  // not secrets. Custom values at those paths receive the same protection.
+  const defaultValue = segments.reduce((node, segment) => node?.[segment], DEFAULTS);
+  if (typeof str !== 'string' || str === '' || str === '{}' || str === '[]' || value === defaultValue) return value;
+  if (!encryptionAvailable()) throw storageUnavailable();
   try {
     return ENC_PREFIX + electron.safeStorage.encryptString(str).toString('base64');
   } catch {
-    return value;
+    throw storageUnavailable();
   }
 }
 
-function decryptSecret(value) {
+function decryptSecret(value, segments = []) {
   if (typeof value !== 'string' || !value.startsWith(ENC_PREFIX)) return value;
-  if (!encryptionAvailable()) return ''; // cannot recover; surface as empty so the user re-enters
   try {
+    if (!encryptionAvailable()) throw storageUnavailable();
     const plain = electron.safeStorage.decryptString(Buffer.from(value.slice(ENC_PREFIX.length), 'base64'));
     // Object-valued secrets were serialized before encryption; restore shape.
     if (plain.startsWith('{') || plain.startsWith('[')) {
@@ -57,6 +81,7 @@ function decryptSecret(value) {
     }
     return plain;
   } catch {
+    unavailableSecrets.set(JSON.stringify(segments), value);
     return '';
   }
 }
@@ -66,16 +91,17 @@ function decryptSecret(value) {
 // encryption and parsed back on decrypt.
 function transformSecrets(tree, fn) {
   if (!tree || typeof tree !== 'object') return tree;
-  for (const segments of SECRET_PATHS) {
-    let node = tree;
-    for (let i = 0; i < segments.length - 1; i++) {
-      node = node && node[segments[i]];
-    }
-    const leaf = segments[segments.length - 1];
-    if (node && typeof node === 'object' && node[leaf] !== undefined && node[leaf] !== null) {
-      node[leaf] = fn(node[leaf]);
+  function visit(node, remaining, segments) {
+    if (!node || typeof node !== 'object') return;
+    const [part, ...rest] = remaining;
+    for (const leaf of part === '*' ? Object.keys(node) : [part]) {
+      if (node[leaf] === undefined || node[leaf] === null) continue;
+      const resolved = [...segments, leaf];
+      if (rest.length) visit(node[leaf], rest, resolved);
+      else node[leaf] = fn(node[leaf], resolved);
     }
   }
+  for (const segments of SECRET_PATHS) visit(tree, segments, []);
   return tree;
 }
 
@@ -159,6 +185,7 @@ const DEFAULTS = {
     wizAddresses: [],
     wizDevices: [],
     wizLook: { mode: 'current', brightness: 50, temperature: 2700, color: '#ff9f43', sceneId: 14 },
+    timerBeacon: false,
     mode: 'gradual_dim',
     dimMinutes: 10,
     hueBridgeIp: '',
@@ -269,6 +296,7 @@ function tryParseSettingsFile(filePath) {
 }
 
 function load() {
+  unavailableSecrets.clear();
   let file;
   try {
     file = getConfigPath();
@@ -337,6 +365,7 @@ function ensureLoaded() {
 }
 
 function save() {
+  lastSaveErrorCode = null;
   try {
     const file = getConfigPath();
     const tmpFile = file + '.tmp';
@@ -354,22 +383,31 @@ function save() {
     const verification = fs.readFileSync(tmpFile, 'utf8');
     JSON.parse(verification);
 
-    // 3. Backup the current file (if it exists and is non-empty).
-    try {
-      if (fs.existsSync(file) && fs.statSync(file).size > 0) {
-        fs.copyFileSync(file, bakFile);
-      }
-    } catch (bakErr) {
-      console.warn('Settings: failed to create backup:', bakErr.message);
+    // Migrate the previous valid state into an encrypted backup too. Copying
+    // the old JSON verbatim would leave newly covered legacy secrets exposed.
+    let backupTree = null;
+    try { backupTree = tryParseSettingsFile(file); } catch { /* retain valid backup below */ }
+    if (!backupTree) {
+      try { backupTree = tryParseSettingsFile(bakFile); } catch { /* no recoverable backup */ }
+    }
+    if (backupTree) {
+      pruneSmartLightsSection(backupTree);
+      transformSecrets(backupTree, (value, segments) => typeof value === 'string' && value.startsWith(ENC_PREFIX)
+        ? value : encryptSecret(value, segments));
+      fs.writeFileSync(bakFile + '.tmp', JSON.stringify(backupTree, null, 2), 'utf8');
+      JSON.parse(fs.readFileSync(bakFile + '.tmp', 'utf8'));
+      fs.renameSync(bakFile + '.tmp', bakFile);
     }
 
     // 4. Replace primary with verified temp.
     fs.renameSync(tmpFile, file);
     return true;
   } catch (error) {
+    lastSaveErrorCode = error.code || null;
     console.error('Failed to save settings:', error.message);
     // Clean up failed temp file.
     try { fs.unlinkSync(getConfigPath() + '.tmp'); } catch { /* best effort */ }
+    try { fs.unlinkSync(getConfigPath() + '.bak.tmp'); } catch { /* best effort */ }
     return false;
   }
 }
@@ -382,14 +420,30 @@ function getSection(section) {
   return clone(ensureLoaded()[section]);
 }
 
-function updateSection(section, patch) {
+function updateSection(section, patch, options = {}) {
   ensureLoaded();
+  const previous = clone(cache[section]);
+  const previousUnavailable = new Map(unavailableSecrets);
+  let secretEdited = false;
+  // An explicit edit (including clearing a field) supersedes its locked
+  // ciphertext. An unrelated edit must preserve that ciphertext unchanged.
+  transformSecrets({ [section]: clone(patch) }, (value, segments) => {
+    secretEdited = true;
+    unavailableSecrets.delete(JSON.stringify(segments));
+    return value;
+  });
   if (!cache[section] || typeof cache[section] !== 'object' || Array.isArray(cache[section])) {
     cache[section] = clone(patch);
   } else {
     cache[section] = deepMerge(cache[section], patch || {});
   }
-  save();
+  if (!save() && (options.requireSave || secretEdited || lastSaveErrorCode === 'CREDENTIAL_STORAGE_UNAVAILABLE')) {
+    cache[section] = previous;
+    unavailableSecrets.clear();
+    for (const [key, value] of previousUnavailable) unavailableSecrets.set(key, value);
+    if (lastSaveErrorCode === 'CREDENTIAL_STORAGE_UNAVAILABLE') throw storageUnavailable();
+    throw new Error('Could not save settings. Previous settings are still active.');
+  }
   return clone(cache[section]);
 }
 

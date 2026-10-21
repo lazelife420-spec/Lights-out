@@ -6,6 +6,8 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
   <title>Lights Out</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="handoff.css">
+  <link rel="stylesheet" href="light-experience.css">
 </head>
 <body>
   <!-- Onboarding First-Run Wizard -->
@@ -185,15 +187,15 @@
       <nav class="ns-sidebar-nav">
         <button class="ns-nav-item active" id="nav-lib" data-ns-tab="lib" title="Tonight" aria-label="Open tonight">
           <span class="ns-nav-icon" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M14.5 10.8A6.3 6.3 0 0 1 7.2 3.5a6.3 6.3 0 1 0 7.3 7.3z"/></svg></span>
-          <span class="ns-nav-label">TONIGHT</span>
+          <span class="ns-nav-label">Tonight</span>
         </button>
         <button class="ns-nav-item" id="nav-modes" data-ns-tab="modes" title="Night Modes" aria-label="Open night modes">
           <span class="ns-nav-icon" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3.2 2.6 5.4v7.4L9 15l6.4-2.2V5.4L9 3.2z"/><path d="M9 3.2V15"/></svg></span>
-          <span class="ns-nav-label">NIGHT MODES</span>
+          <span class="ns-nav-label">Night Modes</span>
         </button>
         <button class="ns-nav-item" id="nav-sch" data-ns-tab="sch" title="Open schedule" aria-label="Open schedule">
           <span class="ns-nav-icon" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2.5" y="3.5" width="13" height="12" rx="1.5"/><path d="M2.5 7h13M6 2v3M12 2v3"/><circle cx="9" cy="11" r="1" fill="currentColor" stroke="none"/></svg></span>
-          <span class="ns-nav-label">SCHEDULE</span>
+          <span class="ns-nav-label">Schedule</span>
         </button>
         <!-- Devices: the operational center for everything Lights Out can
              reach tonight (this PC, phone companion, family LAN PCs, smart
@@ -201,21 +203,21 @@
              deep-links into the Settings section that owns its config. -->
         <button class="ns-nav-item" id="nav-devices" data-ns-tab="devices" title="Open devices" aria-label="Open devices">
           <span class="ns-nav-icon" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.8" y="3" width="9.4" height="7" rx="1.2"/><path d="M4.6 13.4h3.8M6.5 10v3.4"/><rect x="12.4" y="6" width="3.8" height="8.6" rx="1"/><path d="M14.3 12.8h.01"/></svg></span>
-          <span class="ns-nav-label">DEVICES</span>
+          <span class="ns-nav-label">Devices</span>
         </button>
         <button class="ns-nav-item" id="nav-stats" data-ns-tab="stats" title="Open proof" aria-label="Open proof">
           <span class="ns-nav-icon" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2.5h12v13l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4-2 1.4v-13z"/><path d="M6 6.5h6M6 9.5h6M6 12.5h3"/></svg></span>
-          <span class="ns-nav-label">PROOF</span>
+          <span class="ns-nav-label">Proof</span>
         </button>
       </nav>
       <div class="ns-sidebar-footer">
         <button class="ns-nav-item" id="nav-set" data-ns-tab="set" title="Open settings" aria-label="Open settings">
           <span class="ns-nav-icon" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="2.4"/><path d="M9 1.8v2M9 14.2v2M1.8 9h2M14.2 9h2M4 4l1.4 1.4M12.6 12.6 14 14M14 4l-1.4 1.4M5.4 12.6 4 14"/></svg></span>
-          <span class="ns-nav-label">SETTINGS</span>
+          <span class="ns-nav-label">Settings</span>
         </button>
         <button class="ns-nav-item" id="nav-help" data-ns-tab="help" title="Open help and about" aria-label="Open help and about">
           <span class="ns-nav-icon" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="9" cy="9" r="6.5"/><path d="M9 12.8h.01M7 7.2c0-1.2.9-2 2-2s2 .8 2 2c0 1.2-1 1.7-2 2.3v1.3"/></svg></span>
-          <span class="ns-nav-label">ABOUT</span>
+          <span class="ns-nav-label">About</span>
         </button>
       </div>
     </aside>
@@ -392,8 +394,8 @@
              last 16 h; never for Test Mode or a failed run. -->
         <p class="morning-note" id="morning-note" hidden><button type="button" class="device-link morning-note-link" id="morning-note-link"><svg class="chip-glyph" viewBox="0 0 18 18" aria-hidden="true" focusable="false"><path d="M3.5 15.5h7M7 15.5l-1.5-5 4.5-4"/><path d="M9.2 3.6l5 2.1-1.5 3.4-5-2.1z"/><path d="M13 10.2l1.2 1.6"/></svg><em class="morning-note-text" id="morning-note-text"></em><span aria-hidden="true">&rsaquo;</span></button></p>
         <dl class="plan-facts">
-          <div class="plan-fact"><dt>Runs</dt><dd id="ns-preview-time">28:00</dd></div>
-          <div class="plan-fact"><dt id="plan-out-at-label" title="if started now">Ends at</dt><dd id="plan-out-at">--:--</dd></div>
+          <div class="plan-fact"><dt>Duration</dt><dd id="ns-preview-time">28 min</dd></div>
+          <div class="plan-fact"><dt id="plan-out-at-label">If started now</dt><dd id="plan-out-at">--:--</dd></div>
           <div class="plan-fact plan-fact-ending"><dt>Ends with</dt><dd id="ns-meta-ending"></dd></div>
         </dl>
         <p class="plan-reach">Controls: <span id="ns-meta-reach">This PC</span></p>
@@ -416,7 +418,7 @@
             <p class="tonight-target-note" id="tonight-target-note" hidden><svg class="chip-glyph" viewBox="0 0 18 18" aria-hidden="true" focusable="false"><circle cx="9" cy="9" r="6.5"/><path d="M9 5.5V9l2.5 1.6"/></svg><span>Ends at <strong id="tonight-target-when"></strong> (set on Schedule)</span><button type="button" class="link-btn tonight-target-clear" id="btn-tonight-target-clear">Clear</button></p>
           </div>
           <!-- Quick start: each chip starts that many minutes at once (one tap). -->
-          <div class="plan-field">
+          <div class="plan-field" id="plan-quick-start">
             <span class="plan-field-label" id="plan-quick-label">Quick start</span>
             <div class="chips-row" role="group" aria-labelledby="plan-quick-label">
               <button class="chip" data-min="5" aria-label="5 minutes">5m</button>
@@ -502,7 +504,7 @@
           </svg>
           <div class="timer-display">
             <div class="timer-name" id="timer-name" contenteditable="true" spellcheck="false" data-placeholder="Name this session" title="Name this session">Last Call</div>
-            <div class="timer-readout-label" id="timer-readout-label">Clock</div>
+            <div class="timer-readout-label" id="timer-readout-label">Ready · not started</div>
             <svg class="analog-clock" id="analog-clock" viewBox="0 0 100 100" style="display:none" aria-hidden="true">
               <circle class="analog-rim" cx="50" cy="50" r="46.5"/>
               <g class="analog-ticks" id="analog-ticks"></g>
@@ -515,8 +517,9 @@
               <text class="analog-digital" id="analog-digital" x="50" y="68" text-anchor="middle"></text>
               <text class="analog-date" id="analog-date" x="50" y="78" text-anchor="middle"></text>
             </svg>
-            <div class="time-main" id="timer-main" role="timer" aria-atomic="true">28:20</div>
-            <div class="time-label" id="timer-label">until shutdown</div>
+            <div class="time-main" id="timer-main" role="timer" aria-atomic="true">--:--</div>
+            <div class="timer-wall-clock" id="timer-wall-clock" hidden></div>
+            <div class="time-label" id="timer-label">Local time</div>
             <div class="time-sub" id="timer-sub"></div>
           </div>
           <button class="fullscreen-clock-btn" id="btn-fullscreen-clock" title="Full screen clock" aria-label="Full screen clock" style="display:none"><svg class="chip-glyph" viewBox="0 0 18 18" aria-hidden="true" focusable="false"><path d="M3 7V3h4M11 3h4v4M15 11v4h-4M7 15H3v-4"/></svg><span>Full screen</span></button>
@@ -692,6 +695,7 @@
           <p class="planner-hint">Planning does not start a timer. Auto-start above must be on for scheduled runs.</p>
         </section>
 
+        <details class="sch-section routine-transfer" id="routine-transfer"><summary>Import &amp; export routine files</summary><div id="routine-transfer-body"></div></details>
         <!-- Bedtime rules (armed by the hero's Auto-start switch). -->
         <section class="sch-section" id="sch-rules" aria-labelledby="sch-rules-title">
           <div class="sch-section-head">
@@ -703,6 +707,8 @@
           <div class="schedule-rules-list" id="schedule-rules-list">
             <!-- rendered dynamically by renderScheduleRules() -->
           </div>
+          <p class="routine-owner">Runs on this PC while Lights Out is open. Phone routines run independently on the phone.</p>
+          <details class="routine-history"><summary>Recent routine outcomes</summary><div id="routine-outcomes" role="status">No calendar routine has run yet.</div></details>
           <div class="schedule-rule-form" id="schedule-rule-form" style="display:none">
             <div class="option-group">
               <label for="rule-label">Label</label>
@@ -715,18 +721,24 @@
               <label for="rule-time">Countdown starts</label>
               <input type="time" id="rule-time" value="22:30">
             </div>
+            <fieldset id="rule-actions" class="routine-action-editor">
+              <legend>Actions on this PC</legend>
             <div class="option-group">
-              <label for="rule-duration">Minutes before the action</label>
+              <label for="rule-duration">Start a timer · minutes</label>
               <input type="number" id="rule-duration" value="60" min="1" max="1440">
             </div>
             <div class="option-group">
-              <label for="rule-action">Action</label>
+              <label for="rule-action">When the timer finishes</label>
               <select id="rule-action">
                 <option value="shutdown">Shutdown</option>
                 <option value="sleep">Sleep</option>
                 <option value="hibernate">Hibernate</option>
               </select>
             </div>
+              <label class="routine-test-choice"><input id="rule-test-mode" type="checkbox"> Always use Test Mode for this rule</label>
+              <p id="rule-action-preview" class="help-text" role="status"></p>
+              <small class="help-text">Your app and routine Test Mode settings still apply. Edits affect future runs.</small>
+            </fieldset>
             <div class="option-group sch-rule-days-field">
               <span class="sch-field-label" aria-hidden="true">Active days</span>
               <div class="day-toggle-grid" id="rule-days" role="group" aria-label="Active days">
@@ -852,6 +864,7 @@
           </button>
         </header>
 
+        <details class="sch-section" id="handoff-pairing"><summary>Secure routine pairing</summary><div id="handoff-body"></div></details>
         <div class="device-grid">
           <article class="device-card" id="device-card-pc" data-state="ok" aria-labelledby="device-pc-title">
             <div class="device-head">
@@ -936,7 +949,7 @@
             </div>
             <div class="device-note warn" id="device-lights-legacy" style="display:none">Legacy HTTP bridge allowed: this connection is not encrypted.</div>
             <p class="device-scope-note" id="device-lights-scope" hidden>Runs in Test Mode too. Test Mode only holds back PC power actions.</p>
-            <p class="device-off-hint">Dim or switch off Philips Hue or webhook lights as your run ends.</p>
+            <p class="device-off-hint">Use WiZ timer lighting, dim Philips Hue lights, or trigger a lighting webhook.</p>
             <p class="device-check-result" id="device-lights-check-result" role="status" aria-live="polite"></p>
             <div class="device-actions">
               <button type="button" class="peer-act" id="btn-device-lights-check" hidden>Check connection</button>
@@ -1085,7 +1098,7 @@
           <ol class="night-strip" id="night-strip" aria-label="Last 14 nights, oldest first"></ol>
           <p class="night-strip-empty" id="night-strip-empty" hidden>No runs recorded on this PC yet</p>
           <ul class="routine-legend">
-            <li><i class="lg" data-outcome="real" aria-hidden="true"></i>Real action sent</li>
+            <li><i class="lg" data-outcome="real" aria-hidden="true"></i>Outcome unverified</li>
             <li><i class="lg" data-outcome="test" aria-hidden="true"></i>Test Mode (not counted)</li>
             <li><i class="lg" data-outcome="cancel" aria-hidden="true"></i>Cancelled or interrupted</li>
             <li data-legend="bad" hidden><i class="lg" data-outcome="bad" aria-hidden="true"></i>Blocked or failed</li>
@@ -1093,7 +1106,7 @@
             <li><i class="lg" data-outcome="none" aria-hidden="true"></i>No run</li>
             <li data-legend="nodata" hidden><i class="lg" data-outcome="nodata" aria-hidden="true"></i>No data</li>
           </ul>
-          <p class="proof-routine-note">From local receipts on this PC. Streaks count completed real runs only, not measured sleep.</p>
+          <p class="proof-routine-note">Streaks count logged non-Test timer endings and emergency overrides; legacy entries remain. They do not verify Windows actions or measure sleep.</p>
           <details class="routine-details" id="routine-details">
           <summary>Routine details</summary>
           <div class="streaks-panel">
@@ -1101,7 +1114,7 @@
                  runs only). No ring, no trophies, no 30-day grid. Static. -->
             <div class="routine-spec" id="sleep-score-section">
               <div class="routine-cell">
-                <span class="routine-cell-label">Real streak</span>
+                <span class="routine-cell-label">Ritual streak</span>
                 <span class="routine-cell-val streak-number" id="streak-count">0</span>
               </div>
               <div class="routine-cell">
@@ -1109,11 +1122,11 @@
                 <span class="routine-cell-val" id="streak-best">0</span>
               </div>
               <div class="routine-cell">
-                <span class="routine-cell-label">Real completions</span>
+                <span class="routine-cell-label">Ritual nights</span>
                 <span class="routine-cell-val" id="streak-total">0</span>
               </div>
               <div class="routine-cell">
-                <span class="routine-cell-label">Avg lights-out</span>
+                <span class="routine-cell-label">Avg logged time</span>
                 <span class="routine-cell-val" id="streak-weekavg">--:--</span>
               </div>
               <div class="routine-cell">
@@ -1196,12 +1209,13 @@
           <label class="checkbox-label">
             <span class="set-row-text">
               <span class="set-row-title">Test Mode <span class="set-live-tag">Applies now</span></span>
-              <span class="set-row-desc" id="set-dryrun-desc">On: the timer runs, but no power action happens. Off: the action really runs.</span>
+              <span class="set-row-desc" id="set-dryrun-desc">On: rehearse the timer without automatic device or system changes. Off: the selected actions run.</span>
             </span>
             <input type="checkbox" id="chk-dryrun" data-live="1" aria-describedby="set-dryrun-desc set-testmode-scope">
           </label>
-          <!-- UI-R3 Fire 02: what Test Mode does not hold back (renderWindDownScope). -->
+          <!-- UI-R3 Fire 02: automatic effects skipped by Test Mode (renderWindDownScope). -->
           <p class="set-scope-note" id="set-testmode-scope" hidden></p>
+          <p class="help-text">Manual device controls and independent alarms or schedules remain live.</p>
         </div>
         <div class="option-group">
           <label for="sel-action">Action</label>
@@ -1267,10 +1281,9 @@
         <div class="option-group">
           <label class="checkbox-label">
             <span class="set-row-text">
-              <span class="set-row-title">Show current time when idle <span class="set-live-tag">Applies now</span></span>
-              <span class="set-row-desc">Off: Tonight shows the length of the timer you would start instead of the clock.</span>
+              <span class="set-row-title">Idle clock</span>
+              <span class="set-row-desc">The ring shows local time until you start. Duration stays in Tonight's Plan. Choose your clock face in Appearance.</span>
             </span>
-            <input type="checkbox" id="chk-clock-mode" checked data-live="1">
           </label>
         </div>
 
@@ -1340,7 +1353,7 @@
             <h3>Smart lights</h3>
             <span class="set-state-pill is-muted" id="lights-state-pill">Checking…</span>
           </div>
-          <p class="help-text">Connect your WiZ lights over Wi-Fi, use a Philips Hue bridge, or add a webhook. Verify your setup before enabling automatic lighting.</p>
+          <p class="help-text">Choose your lights, set the mood, and verify the connection before automatic lighting.</p>
 
           <div class="option-group">
             <label class="checkbox-label">
@@ -1370,32 +1383,52 @@
               </select>
             </div>
 
-            <div class="option-group">
-              <label for="sel-light-mode">Mode</label>
-              <select id="sel-light-mode">
-                <option value="gradual_dim">Gradual Dim</option>
-                <option value="warm_dim">Warm Shift + Dim</option>
-                <option value="off_at_end">Off at End Only</option>
-              </select>
-            </div>
-
-            <div class="option-group">
-              <label for="light-dim-minutes">Dim Duration</label>
-              <input type="number" id="light-dim-minutes" class="set-num" value="10" min="1" max="60">
-              <span>minutes before end</span>
-            </div>
-
-            <div id="wiz-config" style="display:none">
-              <div class="wiz-setup-block">
-              <div class="option-group wiz-selection-heading"><label>Choose lights or a room</label><button type="button" class="btn-secondary" id="btn-discover-wiz">Find WiZ lights</button><span id="wiz-discovery-result" role="status" aria-live="polite"></span></div>
+              <div id="wiz-targets" class="lighting-step wiz-setup-block" hidden>
+              <div class="option-group wiz-selection-heading"><div class="lighting-step-title"><span class="lighting-step-number">01</span><h4>Your lights &amp; rooms</h4></div><button type="button" class="btn-secondary" id="btn-discover-wiz">Find WiZ lights</button><span id="wiz-discovery-result" role="status" aria-live="polite"></span></div>
               <div class="wiz-selection-tools"><button type="button" class="btn-small" id="wiz-select-all">Select all</button><button type="button" class="btn-small" id="wiz-select-none">Clear selection</button><span id="wiz-selection-count" role="status" aria-live="polite">0 selected</span></div>
               <div id="wiz-room-options" class="wiz-selection-tools" aria-label="Select a room"></div>
               <div class="wiz-device-column-head" aria-hidden="true"><span>Selected light</span><span>Name</span><span>Room</span></div>
               <div id="wiz-device-list" class="wiz-device-list" role="group" aria-label="WiZ lights">Find lights or enter an IP address to begin.</div>
               <p class="help-text">Name your lights and rooms here. Room groups are saved in Lights Out on this PC. Finding lights keeps your current selection.</p>
-              <div class="option-group wiz-manual"><label for="wiz-addresses">Selected IP addresses · or enter manually</label><textarea id="wiz-addresses" rows="2" placeholder="192.168.0.40, 192.168.0.41" aria-describedby="wiz-setup-hint"></textarea></div>
-              <p class="help-text" id="wiz-setup-hint">Keep this PC and your lights on the same Wi-Fi. In the WiZ app, enable My home → Security → Allow local communication. Discovery and Verify only read light status.</p>
+              <details class="settings-help-details wiz-manual-details"><summary>Manual addresses &amp; connection help</summary><div class="option-group wiz-manual"><label for="wiz-addresses">Selected IP addresses · or enter manually</label><textarea id="wiz-addresses" rows="2" placeholder="192.168.0.40, 192.168.0.41" aria-describedby="wiz-setup-hint"></textarea></div>
+              <p class="help-text" id="wiz-setup-hint">Keep this PC and your lights on the same Wi-Fi. In the WiZ app, enable My home → Security → Allow local communication. Discovery and Verify only read light status.</p></details>
               </div>
+
+            <div class="lighting-step-title lighting-behavior-heading"><span class="lighting-step-number">02</span><h4>Timer lighting</h4></div>
+            <div class="option-group">
+              <label for="sel-light-mode">Timer behavior</label>
+              <select id="sel-light-mode">
+                <option value="gradual_dim">Gradual Dim</option>
+                <option value="warm_dim">Warm Shift + Dim</option>
+                <option value="off_at_end">Off at End Only</option>
+                <option value="hourglass">WiZ · Room Hourglass</option>
+                <option value="orbit">WiZ · Orbit countdown</option>
+                <option value="ember">WiZ · Ember trail</option>
+              </select>
+            </div>
+
+            <div class="option-group" id="light-dim-timing">
+              <label for="light-dim-minutes">Dim Duration</label>
+              <input type="number" id="light-dim-minutes" class="set-num" value="10" min="1" max="60">
+              <span>minutes before end</span>
+            </div>
+
+            <p id="light-full-timer-note" class="help-text lighting-timing-note" hidden>Follows the full countdown. Pauses when your timer pauses.</p>
+            <div id="wiz-config" style="display:none">
+              <div class="light-mode-grid" role="group" aria-label="WiZ timer experiences">
+                <button type="button" class="light-mode-card" data-light-mode="hourglass" aria-pressed="false"><span class="light-mode-art art-hourglass" aria-hidden="true"><i></i><i></i><i></i><i></i></span><strong>Room Hourglass</strong><small>Let the room count down.</small></button>
+                <button type="button" class="light-mode-card" data-light-mode="orbit" aria-pressed="false"><span class="light-mode-art art-orbit" aria-hidden="true"><i></i><i></i><i></i><i></i></span><strong>Orbit</strong><small>A slow lap around the room.</small></button>
+                <button type="button" class="light-mode-card" data-light-mode="ember" aria-pressed="false"><span class="light-mode-art art-ember" aria-hidden="true"><i></i><i></i><i></i><i></i></span><strong>Ember</strong><small>Ease into a warmer night.</small></button>
+              </div>
+              <div id="wiz-mode-preview" class="light-preview-card" data-preview-only hidden>
+                <div class="light-preview-heading"><div><span class="lighting-eyebrow">SCREEN PREVIEW</span><h4 id="wiz-preview-title">Room Hourglass</h4></div><span class="light-preview-badge">No lights change</span></div>
+                <p id="wiz-preview-description" class="help-text"></p>
+                <div class="light-experience-preview" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+                <div class="light-preview-range-head"><label for="wiz-mode-preview-progress">Move through your timer</label><output id="wiz-preview-progress-value" for="wiz-mode-preview-progress">45%</output></div>
+                <input id="wiz-mode-preview-progress" type="range" min="0" max="100" value="45">
+                <div class="light-preview-endpoints" aria-hidden="true"><span>Start</span><span>Lights out</span></div>
+              </div>
+              <div class="lighting-look-heading"><h4>Starting look</h4><span class="help-text">For gradual and warm dimming</span></div>
               <div class="wiz-setup-block wiz-look-grid">
               <div class="option-group"><label for="wiz-look-mode">Light look</label><select id="wiz-look-mode"><option value="current">Keep current color or scene</option><option value="white">White temperature</option><option value="color">Custom color</option><option value="scene">WiZ preset</option></select></div>
               <div class="option-group"><label for="wiz-brightness">Brightness</label><input type="range" id="wiz-brightness" min="10" max="100" value="50"><output id="wiz-brightness-value" for="wiz-brightness">50%</output></div>
@@ -1403,6 +1436,7 @@
               <div id="wiz-color-field" class="option-group" hidden><label for="wiz-color">Color</label><div class="wiz-color-control"><input type="color" id="wiz-color" value="#ff9f43"><output id="wiz-color-value" for="wiz-color">#FF9F43</output></div></div>
               <div id="wiz-scene-field" class="option-group" hidden><label for="wiz-scene">WiZ preset</label><select id="wiz-scene"><option value="14">Night light</option><option value="16">Relax</option><option value="10">Bedtime</option><option value="6">Cozy</option><option value="3">Sunset</option><option value="5">Fireplace</option><option value="1">Ocean</option><option value="2">Romance</option><option value="8">Pastel colors</option><option value="11">Warm white</option><option value="12">Daylight</option><option value="13">Cool white</option><option value="15">Focus</option><option value="18">TV time</option></select></div>
               </div>
+              <div class="lighting-beacon-card"><div class="lighting-step-title"><span class="lighting-step-number">03</span><h4>A gentle heads-up</h4></div><div class="option-group"><label class="checkbox-label" for="chk-wiz-timer-beacon"><span class="set-row-text"><span class="set-row-title">Soft blue finish beacon</span><span class="set-row-desc">A gentle pulse in the final six seconds. Uses selected lights that are already on.</span></span><input type="checkbox" id="chk-wiz-timer-beacon"></label></div><p class="help-text">Phone-app beacons have their own controls in the Android app.</p></div>
               <p class="help-text">During dimming, a chosen look starts at your brightness on lights that are already on. “Keep current” dims from their existing brightness. Warm Shift uses warm white; Off at End leaves the look unchanged. Presets and color support depend on your light.</p>
               <p class="help-text">Switch a light off in WiZ at any time to leave it off. Lights Out stops dimming that light for the rest of the run and leaves it alone if you cancel.</p>
             </div>
@@ -1634,12 +1668,12 @@
         <!-- WiFi Guard Section -->
         <div class="option-section wifi-guard-section" data-settings-category="protection">
           <details class="advanced-settings-group"><summary style="cursor:pointer;margin-bottom:8px"><h3>WiFi Guard <span class="tag-pill">Experimental</span></h3></summary>
-          <p class="help-text">Requires a compatible router or your own webhook. Windows Firewall on this PC cannot block a different phone or tablet on the LAN.</p>
+          <p class="help-text" id="wifi-blocking-hold">Wi-Fi blocking is unavailable in this candidate until crash-safe recovery is ready. Saved setup is preserved, but timers and Test Block cannot change your router or adapter. Explicit restoration remains available; existing blocks from other builds are not recovered automatically.</p>
 
           <div class="option-group">
             <label class="checkbox-label">
-              <input type="checkbox" id="chk-wifi-guard">
-              Enable WiFi Guard
+              <input type="checkbox" id="chk-wifi-guard" disabled aria-describedby="wifi-blocking-hold">
+              Saved WiFi Guard setting (blocking unavailable)
             </label>
           </div>
 
@@ -1700,15 +1734,15 @@
             <div class="option-group">
               <label class="checkbox-label">
                 <input type="checkbox" id="chk-wifi-unblock-cancel" checked>
-                Restore internet when timer is cancelled
+                Restore on cancel (completion always restores; unchecked retains only on cancel)
               </label>
             </div>
 
             <div class="option-group set-action-row" data-action-scoped="1">
-              <button type="button" id="btn-wifi-block-test" class="btn-secondary">Test Block</button>
-              <button type="button" id="btn-wifi-unblock-test" class="btn-secondary">Test Unblock</button>
+              <button type="button" id="btn-wifi-block-test" class="btn-secondary" disabled aria-describedby="wifi-blocking-hold">Test Block — unavailable</button>
+              <button type="button" id="btn-wifi-unblock-test" class="btn-secondary">Restore internet</button>
               <span id="wifi-test-result" style="font-size:11px;color:var(--text-muted)"></span>
-              <small class="help-text set-action-note">Test Block also saves this Wi-Fi Guard setup.</small>
+              <small class="help-text set-action-note">Restore internet is an explicit live provider request, not proof of end-to-end connectivity.</small>
             </div>
           </div>
           </details>
@@ -1997,7 +2031,7 @@
             </label>
           </div>
 
-          <!-- "Show current time when idle" and Time Format live in General. -->
+          <!-- Time Format lives in General; the idle clock always shows local time. -->
           <div class="option-group">
             <label for="cz-clockface">Clock Face <span class="set-live-tag">Applies now</span></label>
             <select id="cz-clockface" data-live="1">
@@ -2446,7 +2480,7 @@
     <div class="modal-content streak-celebration-content" style="text-align:center; max-width: 320px;">
       <div class="celebration-seal" aria-hidden="true"><svg viewBox="0 0 64 64" focusable="false"><circle class="seal-track" cx="32" cy="32" r="26"/><circle class="seal-arc" cx="32" cy="32" r="26" pathLength="100"/><path class="seal-check" d="M22 33l7 7 13-15"/></svg></div>
       <h3 id="streak-celebration-title" tabindex="-1" style="font-size:18px; color: var(--accent-amber); margin-bottom: 8px;">Ritual Complete!</h3>
-      <p style="font-size:13px; color: var(--text-secondary); margin-bottom: 16px;">You kept your promise tonight. Rest well.</p>
+      <p style="font-size:13px; color: var(--text-secondary); margin-bottom: 16px;">Your timer finished. Windows outcome remains unverified.</p>
       <div class="celebration-streak-number" id="celebration-streak-number" style="font-size: 64px; font-weight: 800; color: #fff; text-shadow: 0 0 20px rgba(245,166,35,0.5); line-height: 1;">0</div>
       <div style="font-size:11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 24px;">Completion Streak</div>
       <button class="btn btn-primary" id="btn-celebration-dismiss" style="width: 100%;">Good night</button>
@@ -2485,7 +2519,7 @@
           </li>
           <li>
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 3.5h12v17l-2.4-1.6-2.4 1.6-2.4-1.6-2.4 1.6L6 20.5z"/><path d="M9 8.5h6"/><path d="M9 12h6"/></svg>
-            <div><b>Every timer run leaves a receipt</b><span>Test Mode runs are labeled Test Mode.</span></div>
+            <div><b>Local receipts distinguish timer and command evidence</b><span>Test Mode is labeled. Windows outcomes remain unverified; save errors are shown.</span></div>
           </li>
         </ul>
 
@@ -2598,6 +2632,7 @@
   <script src="renderer-utils.js"></script>
   <script src="renderer-profiles.js"></script>
   <script src="calendarRecurrence.js"></script>
+  <script src="routine-transfer-ui.js"></script>
   <script src="renderer-calendar.js"></script>
   <script src="renderer-receipts.js"></script>
   <script src="renderer-family-remote.js"></script>
@@ -2608,5 +2643,9 @@
   <script src="renderer-night-modes.js"></script>
   <script src="renderer-signature.js"></script>
   <script src="renderer.js"></script>
+  <script src="handoff-ui.js"></script>
+  <script src="renderer-handoff.js"></script>
+  <script src="lightExperience.js"></script>
+  <script src="renderer-light-experience.js"></script>
 </body>
 </html>

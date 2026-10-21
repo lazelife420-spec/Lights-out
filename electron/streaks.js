@@ -1,5 +1,6 @@
-// Sleep streaks + insights engine.
-// Records bedtime events and computes streaks, weekly stats, and achievements.
+// Ritual record and insights. Existing counting rules are retained:
+// non-Test timer endings, emergency overrides, and legacy logged events.
+// These are neither independently observed Windows outcomes nor measured sleep.
 
 const path = require('path');
 const { writeTmpVerifyRename, safeLoadJson } = require('./durableJsonStore');
@@ -310,10 +311,10 @@ function getAchievementCatalog() {
   return [
     { id: 'first_light', name: 'First Light', desc: 'Completed your first bedtime ritual' },
     { id: 'weekly_warrior', name: 'Weekly Warrior', desc: '7 nights using Lights Out' },
-    { id: '3_night_streak', name: 'Triple Threat', desc: '3-night sleep streak' },
-    { id: '7_night_streak', name: 'Seven Strong', desc: '7-night sleep streak' },
-    { id: '14_night_streak', name: 'Fortnight Force', desc: '14-night sleep streak' },
-    { id: '30_night_streak', name: 'Monthly Monument', desc: '30-night sleep streak' },
+    { id: '3_night_streak', name: 'Triple Threat', desc: '3-night ritual record' },
+    { id: '7_night_streak', name: 'Seven Strong', desc: '7-night ritual record' },
+    { id: '14_night_streak', name: 'Fortnight Force', desc: '14-night ritual record' },
+    { id: '30_night_streak', name: 'Monthly Monument', desc: '30-night ritual record' },
     { id: 'centurion', name: 'Centurion', desc: 'Best streak of 100 nights' },
     { id: 'no_snooze_7', name: 'No Snooze Zone', desc: '7 nights with no snooze' },
     { id: 'last_light_activated', name: 'Last Light', desc: 'Used the Last Light finale' }
@@ -424,7 +425,7 @@ function getWeeklyReport(opts = {}) {
 function buildWeeklyNarrative(report) {
   if (!report || !report.nightsThisWeek) {
     if (report && Number(report.testModeRunsThisWeek) > 0) {
-      return 'No real completions this week. Test Mode runs are recorded in Proof but don\'t count toward your routine.';
+      return 'No non-Test ritual records this week. Test Mode runs are recorded in Proof but don\'t count toward your routine.';
     }
     return 'No nights logged this week yet. Start a timer tonight to begin this week\'s report.';
   }
@@ -440,7 +441,7 @@ function buildWeeklyNarrative(report) {
   // completed in Real mode -- not that a power action ran.
   const actionParts = Object.entries(report.realActionCounts || {})
     .map(([action, count]) => `${count} ${action}`);
-  if (actionParts.length) lines.push(`Real-mode completions: ${actionParts.join(', ')}.`);
+  if (actionParts.length) lines.push(`Non-Test ritual records: ${actionParts.join(', ')}.`);
   // Older nights can't be told apart (they may include Test Mode runs), so
   // they are stated neutrally, never as Real-mode.
   const legacyNights = Number(report.legacyNightsThisWeek) || 0;
@@ -454,6 +455,7 @@ function buildWeeklyNarrative(report) {
   // UI-R3 Fire 10: Routine no longer shows achievements, so the narrative
   // stops counting them (read-out only: report.achievements and every stored
   // field are unchanged).
+  lines.push('Ritual records include timer endings and emergency overrides, with legacy entries retained. They do not verify Windows actions or measured sleep.');
   return lines.join('\n');
 }
 

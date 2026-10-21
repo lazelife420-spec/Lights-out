@@ -12,6 +12,8 @@ const net = require('net');
 const dgram = require('dgram');
 const crypto = require('crypto');
 const wizLights = require('./wizLights');
+const lightExperience = require('./lightExperience');
+const isExperience = mode => ['hourglass','orbit','ember'].includes(mode);
 
 const SHIPPED_PROVIDERS = ['none', 'wiz', 'hue', 'http'];
 
@@ -25,6 +27,7 @@ let config = {
   wizAddresses: [],
   wizDevices: [],
   wizLook: wizLights.normalizeLook(),
+  timerBeacon: false,
   // Hue settings
   hueBridgeIp: '',
   hueUsername: '',
@@ -608,8 +611,8 @@ function startSmartLightDim(remainingSeconds) {
 
   state.dimStarted = true;
   state.dimStartTime = Date.now();
-  state.dimDurationMs = Math.min(remainingSeconds, config.dimMinutes * 60) * 1000;
-  if (config.provider === 'wiz' && config.mode !== 'off_at_end') {
+  state.dimDurationMs = (isExperience(config.mode) ? remainingSeconds : Math.min(remainingSeconds, config.dimMinutes * 60)) * 1000;
+  if (config.provider === 'wiz' && (config.mode !== 'off_at_end' || config.timerBeacon)) {
     const generation = ++wizGeneration;
     const addresses = [...config.wizAddresses];
     state.wizSnapshotPending = queueWizOperation(() => wizLights.readStates(addresses)).then(snapshot => {
@@ -627,10 +630,10 @@ function startSmartLightDim(remainingSeconds) {
 
 function updateSmartLightTick(remainingSeconds) {
   if (!config.enabled || !state.dimStarted) return;
-  if (config.mode === 'off_at_end') return;
+  if (config.mode === 'off_at_end' && !(config.provider==='wiz'&&config.timerBeacon&&remainingSeconds<=6)) return;
 
   const elapsedMs = Date.now() - state.dimStartTime;
-  const progress = Math.min(1.0, Math.max(0.0, elapsedMs / state.dimDurationMs));
+  const progress = Math.min(1.0, Math.max(0.0, isExperience(config.mode) ? 1-remainingSeconds*1000/state.dimDurationMs : elapsedMs / state.dimDurationMs));
 
   // Calculate target brightness (254 -> 0)
   const targetBri = Math.round(254 * (1.0 - progress));
@@ -649,10 +652,14 @@ function updateSmartLightTick(remainingSeconds) {
         wizBatchBusy = true;
         const generation = wizGeneration;
         const snapshot = state.wizOriginalState;
-        const warm = config.mode === 'warm_dim';
+        const warm = config.mode === 'warm_dim' && !(config.timerBeacon&&remainingSeconds<=6);
         const look = config.wizLook;
+        const seconds=state.dimDurationMs/1000-remainingSeconds;
+        const frame = config.timerBeacon && remainingSeconds<=6 && remainingSeconds>0
+          ? (index,count)=>lightExperience.beacon({elapsedSeconds:6-remainingSeconds,index,count,brightness:look.brightness})
+          : isExperience(config.mode) ? (index,count)=>lightExperience.frame(config.mode,{progress,elapsedSeconds:seconds,index,count,brightness:look.brightness}) : undefined;
         queueWizOperation(() => generation === wizGeneration ? wizLights.dimStates(snapshot, progress, warm, undefined,
-          { look, isCurrent: () => generation === wizGeneration && config.enabled }) : null)
+          { look, frame, isCurrent: () => generation === wizGeneration && config.enabled }) : null)
           .catch(() => {})
           .finally(() => { wizBatchBusy = false; });
       }
@@ -897,6 +904,7 @@ function loadConfig(newConfig) {
     wizAddresses: newConfig.wizAddresses !== undefined ? wizLights.normalizeAddresses(newConfig.wizAddresses) : config.wizAddresses,
     wizDevices: wizLights.normalizeDevices(newConfig.wizDevices ?? config.wizDevices, newConfig.wizAddresses ?? config.wizAddresses),
     wizLook: wizLights.normalizeLook(newConfig.wizLook ?? config.wizLook),
+    timerBeacon: newConfig.timerBeacon !== undefined ? newConfig.timerBeacon === true : config.timerBeacon,
     hueBridgeIp: (newConfig.hueBridgeIp && net.isIP(String(newConfig.hueBridgeIp).trim()) !== 0) ? String(newConfig.hueBridgeIp).trim() : config.hueBridgeIp,
     hueAllowLegacyHttp: newConfig.hueAllowLegacyHttp !== undefined ? Boolean(newConfig.hueAllowLegacyHttp) : config.hueAllowLegacyHttp,
     // Empty string means "keep existing" so a redacted (blanked) renderer field
@@ -911,6 +919,7 @@ function loadConfig(newConfig) {
     verifiedConfigKey: newConfig.verifiedConfigKey || ''
   };
   merged.enabled = Boolean(merged.enabled && merged.verifiedConfigKey && merged.verifiedConfigKey === configurationKey(merged));
+  if(merged.provider!=='wiz'&&isExperience(merged.mode))merged.mode='gradual_dim';
   if (!merged.enabled || configurationKey(merged) !== configurationKey(config) || merged.mode !== config.mode
       || JSON.stringify(merged.wizLook) !== JSON.stringify(config.wizLook)) resetSmartLightState();
   config = merged;
@@ -935,7 +944,7 @@ function getPublicConfig() {
 }
 
 function shouldStartDim(remainingSeconds) {
-  return config.enabled && !state.dimStarted && remainingSeconds <= config.dimMinutes * 60;
+  return config.enabled && !state.dimStarted && (config.provider==='wiz'&&isExperience(config.mode) || remainingSeconds <= config.dimMinutes * 60);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -1,0 +1,1211 @@
+{
+  "schema": "lights-out.rc5-source-custody/v1",
+  "version": "11.2.1-rc.5",
+  "disposition": "DRAFT_SOURCE_REVIEW_ONLY",
+  "restoredBaseCommit": "0b0b69826847b5d749db5858062ec82411bef8ef",
+  "packagedApplicationTreeSha1": "c9168852b47507cd105239d5bd4c291761c4caac",
+  "packagedApplicationInputsSha256": "e5c2cf4cdc8ac13a1861114d41240521d38bfa3fae3f5da3640dfe9eb5dd784d",
+  "packageLockSha256": "e0c9ff2ceb3c8bc8f50a9815e9f45c6c4178454d7c65ef45610bdca753e848bf",
+  "dependencyGraphSha256": "76a3e6a67972d92f84359a76f6b400a6c0b6a7b8b884b93a3de1dad70deed789",
+  "electronVersion": "43.7.11",
+  "qualifiedZipSha256": "ff80345ffe9c9e16dfff9dc7dee68569542b1df5cd50adb9ffa4de577a7a78e0",
+  "qualifiedExecutableSha256": "5becfb21039014cfd9f24e8d37fd70d8b571c2818e02954079a13cd3bc69e1ec",
+  "nativeHelperSha256": "79ca0642ae2dccd39553e2cf170cd572ef5dcca42829e81352f681abea3f9bd6",
+  "packagedInputs": [
+    {
+      "file": "accountability.js",
+      "sourceSha256": "1ffd97beec540f1e42e203ec1c9e0d5a2654bc54e24d995c2ed399a8f3195804",
+      "sha256": "1ffd97beec540f1e42e203ec1c9e0d5a2654bc54e24d995c2ed399a8f3195804"
+    },
+    {
+      "file": "alarm.js",
+      "sourceSha256": "f29b5204d5d59414971398a107ddcb3229bac770874809fbdc818c7e406441d4",
+      "sha256": "f29b5204d5d59414971398a107ddcb3229bac770874809fbdc818c7e406441d4"
+    },
+    {
+      "file": "ambientVisuals.js",
+      "sourceSha256": "3467036ddf5bd1df1f4f9847a30be99c5585faec01f57b5ec40b2b23ee9db89d",
+      "sha256": "3467036ddf5bd1df1f4f9847a30be99c5585faec01f57b5ec40b2b23ee9db89d"
+    },
+    {
+      "file": "assets/brand/lights-out-icon-small.svg",
+      "sourceSha256": "448fffb20408c8eaff4db5702568abcbdb5499dd76479d36377848e591bda554",
+      "sha256": "448fffb20408c8eaff4db5702568abcbdb5499dd76479d36377848e591bda554"
+    },
+    {
+      "file": "assets/brand/lights-out-icon.svg",
+      "sourceSha256": "ead182fd9c1c4d37e15b6033b3faead2daeacc3593f262008e744a450bbc1bf2",
+      "sha256": "ead182fd9c1c4d37e15b6033b3faead2daeacc3593f262008e744a450bbc1bf2"
+    },
+    {
+      "file": "assets/brand/lights-out-tray.svg",
+      "sourceSha256": "cac74429a1257f7e9e1bfa93dec8b9bc556c10b0ff8f7a76ad017a90e16bde26",
+      "sha256": "cac74429a1257f7e9e1bfa93dec8b9bc556c10b0ff8f7a76ad017a90e16bde26"
+    },
+    {
+      "file": "assets/brand/lights-out-wordmark-transparent.svg",
+      "sourceSha256": "6fce84404be4b8ec9c1c5cef16e1afefd3cb2593a70790b64160010c73af0237",
+      "sha256": "6fce84404be4b8ec9c1c5cef16e1afefd3cb2593a70790b64160010c73af0237"
+    },
+    {
+      "file": "assets/brand/lights-out-wordmark.svg",
+      "sourceSha256": "ce3a410eb4601322126f2fd83462d305c338dd632795c7566f3901169517cf95",
+      "sha256": "ce3a410eb4601322126f2fd83462d305c338dd632795c7566f3901169517cf95"
+    },
+    {
+      "file": "assets/icon-512.png",
+      "sourceSha256": "5467bee341bed876a507ececbcb5f89ad2ff7a5fc496d3d6105da33fc4e16163",
+      "sha256": "5467bee341bed876a507ececbcb5f89ad2ff7a5fc496d3d6105da33fc4e16163"
+    },
+    {
+      "file": "assets/icon.ico",
+      "sourceSha256": "6425b498287e08264a18d3a0acb15cacb2c1e942cc83f487629aa3837eb05245",
+      "sha256": "6425b498287e08264a18d3a0acb15cacb2c1e942cc83f487629aa3837eb05245"
+    },
+    {
+      "file": "assets/icon.svg",
+      "sourceSha256": "8653fdd8029527882244f2c01effc5f7cae3bfca1b0238071699c02a1cf30b67",
+      "sha256": "8653fdd8029527882244f2c01effc5f7cae3bfca1b0238071699c02a1cf30b67"
+    },
+    {
+      "file": "assets/logo-512.png",
+      "sourceSha256": "5467bee341bed876a507ececbcb5f89ad2ff7a5fc496d3d6105da33fc4e16163",
+      "sha256": "5467bee341bed876a507ececbcb5f89ad2ff7a5fc496d3d6105da33fc4e16163"
+    },
+    {
+      "file": "assets/logo-v2.svg",
+      "sourceSha256": "9b6af6abf5ecf405c41fc7e071779d2eeb18efb92a03a91875a18cb5f8066758",
+      "sha256": "9b6af6abf5ecf405c41fc7e071779d2eeb18efb92a03a91875a18cb5f8066758"
+    },
+    {
+      "file": "assets/logo.svg",
+      "sourceSha256": "3965ebe66e63cf652a28ffe3a04a3f567ddbaaf7d28e1f70caade17d9e07e1f3",
+      "sha256": "3965ebe66e63cf652a28ffe3a04a3f567ddbaaf7d28e1f70caade17d9e07e1f3"
+    },
+    {
+      "file": "assets/tray-32.png",
+      "sourceSha256": "071f553c0030f30bc55befb40faa7e8d3334ed4f5b3965e65fc8768ca286baa6",
+      "sha256": "071f553c0030f30bc55befb40faa7e8d3334ed4f5b3965e65fc8768ca286baa6"
+    },
+    {
+      "file": "assets/wordmark-1272.png",
+      "sourceSha256": "46ca0466e9b6950d0c8a95a59792cfd3696b66376a275aa5db0d48f20e299b42",
+      "sha256": "46ca0466e9b6950d0c8a95a59792cfd3696b66376a275aa5db0d48f20e299b42"
+    },
+    {
+      "file": "autopilot.js",
+      "sourceSha256": "07e3d3b2cce988bd7ec0c0ac829dbb71cb706a549352ea3f2cfdf7a1f96fa50b",
+      "sha256": "07e3d3b2cce988bd7ec0c0ac829dbb71cb706a549352ea3f2cfdf7a1f96fa50b"
+    },
+    {
+      "file": "bedtimeReminder.js",
+      "sourceSha256": "aabd078f30a8f5cae7fcbb9cfd7e4824544a69f1a0dd99a006c438c1462d4a4b",
+      "sha256": "aabd078f30a8f5cae7fcbb9cfd7e4824544a69f1a0dd99a006c438c1462d4a4b"
+    },
+    {
+      "file": "boundedProcess.js",
+      "sourceSha256": "ec57a39ec1c798f286e23fd8849781be4cbcc318161193128030b2ceb41b6b1c",
+      "sha256": "ec57a39ec1c798f286e23fd8849781be4cbcc318161193128030b2ceb41b6b1c"
+    },
+    {
+      "file": "calendar.js",
+      "sourceSha256": "660d36715919757e6c879145556851492b64e28d84d650e2dcb07b920a382211",
+      "sha256": "660d36715919757e6c879145556851492b64e28d84d650e2dcb07b920a382211"
+    },
+    {
+      "file": "calendarProviders.js",
+      "sourceSha256": "ef76c767717b7aa09983848e0022c9062bf4a0638881b01ce25feff4091bfa09",
+      "sha256": "ef76c767717b7aa09983848e0022c9062bf4a0638881b01ce25feff4091bfa09"
+    },
+    {
+      "file": "calendarRecurrence.js",
+      "sourceSha256": "c299428da7bfa5678e610a480ac198190310a4e458eb610e94314ff7e63e7670",
+      "sha256": "c299428da7bfa5678e610a480ac198190310a4e458eb610e94314ff7e63e7670"
+    },
+    {
+      "file": "capabilityTruth.js",
+      "sourceSha256": "dfa06b50eb1f8d2492cb4ddb65a928f0b5c96f6ffaa45356856467b34b8f4e10",
+      "sha256": "dfa06b50eb1f8d2492cb4ddb65a928f0b5c96f6ffaa45356856467b34b8f4e10"
+    },
+    {
+      "file": "companion.html",
+      "sourceSha256": "e9ed10d5c58e03b570633aa160ac29569e89ee23325b2ca7c36f2a792cb30ad3",
+      "sha256": "e9ed10d5c58e03b570633aa160ac29569e89ee23325b2ca7c36f2a792cb30ad3"
+    },
+    {
+      "file": "companion.js",
+      "sourceSha256": "16b968ffb6bb2a3fa565b9439c56ef6bc4914ae5fcc02f3615543ff809a3e1ce",
+      "sha256": "16b968ffb6bb2a3fa565b9439c56ef6bc4914ae5fcc02f3615543ff809a3e1ce"
+    },
+    {
+      "file": "companionFirewall.js",
+      "sourceSha256": "4f44176a31f27245165995a0b982bc72a80f64f3e1daba40ea47175dd0811e8e",
+      "sha256": "4f44176a31f27245165995a0b982bc72a80f64f3e1daba40ea47175dd0811e8e"
+    },
+    {
+      "file": "companionNetwork.js",
+      "sourceSha256": "2c7dcbb1888956ace7e0e6e6a9f690fe3113583342e8f7432ed872ee156feaa1",
+      "sha256": "2c7dcbb1888956ace7e0e6e6a9f690fe3113583342e8f7432ed872ee156feaa1"
+    },
+    {
+      "file": "contentBlocker.js",
+      "sourceSha256": "124b5dabf394f057444d62eb3f2aa44dff01d99d6cb3b43e504f8ad8d43bcaff",
+      "sha256": "124b5dabf394f057444d62eb3f2aa44dff01d99d6cb3b43e504f8ad8d43bcaff"
+    },
+    {
+      "file": "durableJsonStore.js",
+      "sourceSha256": "876c0fe752931e3e14d41999ccbb0fae69025c8b3d3e3afd08bcf1f38c0d4d77",
+      "sha256": "876c0fe752931e3e14d41999ccbb0fae69025c8b3d3e3afd08bcf1f38c0d4d77"
+    },
+    {
+      "file": "emergencyOverride.js",
+      "sourceSha256": "f3dc125ccae1fc3fa34f5c5d9221e86c7ca8d6ed9582e307441b6439ef5b29be",
+      "sha256": "f3dc125ccae1fc3fa34f5c5d9221e86c7ca8d6ed9582e307441b6439ef5b29be"
+    },
+    {
+      "file": "family.js",
+      "sourceSha256": "2ed00d2012b600323a495b5a1c6ccff7bae2117abdb61375bec58b9f57a3c726",
+      "sha256": "2ed00d2012b600323a495b5a1c6ccff7bae2117abdb61375bec58b9f57a3c726"
+    },
+    {
+      "file": "firstLightDelivery.js",
+      "sourceSha256": "18e9d67088ae604245788e3600d9a12edaf332dca78859946f3cc8ed57fc5838",
+      "sha256": "18e9d67088ae604245788e3600d9a12edaf332dca78859946f3cc8ed57fc5838"
+    },
+    {
+      "file": "focusSessions.js",
+      "sourceSha256": "02d38b0336d5a499d29e49b1ddc3acb3b41cfb9460338a16af01f38f067336b5",
+      "sha256": "02d38b0336d5a499d29e49b1ddc3acb3b41cfb9460338a16af01f38f067336b5"
+    },
+    {
+      "file": "handoff-ui.js",
+      "sourceSha256": "2ce92b94f53ed2ef647e39c1683c4dac49deed54fcf3d06efbff7de05a4747ca",
+      "sha256": "2ce92b94f53ed2ef647e39c1683c4dac49deed54fcf3d06efbff7de05a4747ca"
+    },
+    {
+      "file": "handoff.css",
+      "sourceSha256": "b6ced328440a6b1bab37122cc72fd9ff2d0205e8228c1f083ee7085c94dd7dee",
+      "sha256": "b6ced328440a6b1bab37122cc72fd9ff2d0205e8228c1f083ee7085c94dd7dee"
+    },
+    {
+      "file": "handoffConnection.js",
+      "sourceSha256": "823bb899a1619cc52e883c442f50aa527d1ea9f41064793a3184433a1eea36d4",
+      "sha256": "823bb899a1619cc52e883c442f50aa527d1ea9f41064793a3184433a1eea36d4"
+    },
+    {
+      "file": "handoffController.js",
+      "sourceSha256": "22b4cfc9d629df838dd378ca98512f1045805380ab7d25db9511014b989f4b16",
+      "sha256": "22b4cfc9d629df838dd378ca98512f1045805380ab7d25db9511014b989f4b16"
+    },
+    {
+      "file": "handoffIdentityWindows.js",
+      "sourceSha256": "7dcadfb2178a28cd0538154718a708eba16015c0bbd2a63723767bafb101a02f",
+      "sha256": "7dcadfb2178a28cd0538154718a708eba16015c0bbd2a63723767bafb101a02f"
+    },
+    {
+      "file": "handoffProtectionWindows.js",
+      "sourceSha256": "9f0fe6142b20976924e61d52a094c9d7c2f59217c9843a6ee48b77d1a6b66409",
+      "sha256": "9f0fe6142b20976924e61d52a094c9d7c2f59217c9843a6ee48b77d1a6b66409"
+    },
+    {
+      "file": "handoffService.js",
+      "sourceSha256": "4b2c3156c0b80dbc4328562cedf47298e97e8a9a103b2a9c0e230e7c270b12ee",
+      "sha256": "4b2c3156c0b80dbc4328562cedf47298e97e8a9a103b2a9c0e230e7c270b12ee"
+    },
+    {
+      "file": "handoffTrust.js",
+      "sourceSha256": "5562797da458f2aa0c8810720381de56d73637dfc999fe964cad22b6f3299605",
+      "sha256": "5562797da458f2aa0c8810720381de56d73637dfc999fe964cad22b6f3299605"
+    },
+    {
+      "file": "idleDetection.js",
+      "sourceSha256": "732f3ca27e3519aeccac14353705e927dd77ea6b349a6dfe2cd831836dca35a8",
+      "sha256": "732f3ca27e3519aeccac14353705e927dd77ea6b349a6dfe2cd831836dca35a8"
+    },
+    {
+      "file": "index.html",
+      "sourceSha256": "7381b287a03320ac2ee0597fe57d6be5e65a6e75ae5974636fcc7deecdc6e382",
+      "sha256": "7381b287a03320ac2ee0597fe57d6be5e65a6e75ae5974636fcc7deecdc6e382"
+    },
+    {
+      "file": "lastLight.js",
+      "sourceSha256": "a2e794a6fb8d55639684bfab62af6287a30d63a0ce6e6108a64523802c990adb",
+      "sha256": "a2e794a6fb8d55639684bfab62af6287a30d63a0ce6e6108a64523802c990adb"
+    },
+    {
+      "file": "light-experience.css",
+      "sourceSha256": "9752c308629b8e33c32eabb4942a1ca5c51abf6b27d9d4a298b6cbfab16a8aa9",
+      "sha256": "9752c308629b8e33c32eabb4942a1ca5c51abf6b27d9d4a298b6cbfab16a8aa9"
+    },
+    {
+      "file": "lightExperience.js",
+      "sourceSha256": "28bf142e4541e492af5c239fe5c0caa2f782400412d2ee257f852189e576e8e0",
+      "sha256": "28bf142e4541e492af5c239fe5c0caa2f782400412d2ee257f852189e576e8e0"
+    },
+    {
+      "file": "main.js",
+      "sourceSha256": "f29690668cc4e1f5c6185b7040ef68c52f1d94e0b8651ca8d5eab6bfa9405a92",
+      "sha256": "f29690668cc4e1f5c6185b7040ef68c52f1d94e0b8651ca8d5eab6bfa9405a92"
+    },
+    {
+      "file": "media.js",
+      "sourceSha256": "88862914675566b694aeb938cae59e1a9b84fb59832e5bc5b99d7671407cd37f",
+      "sha256": "88862914675566b694aeb938cae59e1a9b84fb59832e5bc5b99d7671407cd37f"
+    },
+    {
+      "file": "native/WindowsSuspend.cs",
+      "sourceSha256": "75df009af3b884a49e620f6fc20c3873a24268a4a906386bf2d5105938339874",
+      "sha256": "75df009af3b884a49e620f6fc20c3873a24268a4a906386bf2d5105938339874"
+    },
+    {
+      "file": "nightModes.js",
+      "sourceSha256": "60a3584ea95b8c511553be2fd3336c0b0f6008eae0f48f5aed8f56aa424c41ac",
+      "sha256": "60a3584ea95b8c511553be2fd3336c0b0f6008eae0f48f5aed8f56aa424c41ac"
+    },
+    {
+      "file": "overrideTax.js",
+      "sourceSha256": "fb4ff80d748548a584febd93688df0ae43a5ad69df7bc9a2282549b9c4d2006e",
+      "sha256": "fb4ff80d748548a584febd93688df0ae43a5ad69df7bc9a2282549b9c4d2006e"
+    },
+    {
+      "file": "package.json",
+      "sourceSha256": "03037ebd924ed2c12c659afdb2ac093fcb8d4428ebd7adc9f10a4acfe350d499",
+      "sha256": "244851d398b0561a5a097ae6bff0ef9e4ea11e0ab283545d43162e7bc93cdf17"
+    },
+    {
+      "file": "portableStartup.js",
+      "sourceSha256": "5039c17f104732006bfa21cd4f3aee1e9121054f11fb95da6034082c17deb9d2",
+      "sha256": "5039c17f104732006bfa21cd4f3aee1e9121054f11fb95da6034082c17deb9d2"
+    },
+    {
+      "file": "powerActionDispatcher.js",
+      "sourceSha256": "b83f007de54e34b23a82d73aac8c0fb8ca67af5e3818ba8bb417a7bc75fa52a6",
+      "sha256": "b83f007de54e34b23a82d73aac8c0fb8ca67af5e3818ba8bb417a7bc75fa52a6"
+    },
+    {
+      "file": "preload.js",
+      "sourceSha256": "b9047e9f40b0ab1847516ca2a4ced98c58180863f71b892d35bbf3df5ba7a297",
+      "sha256": "b9047e9f40b0ab1847516ca2a4ced98c58180863f71b892d35bbf3df5ba7a297"
+    },
+    {
+      "file": "profileIdentity.js",
+      "sourceSha256": "def043cb8c0dbeef6fe45d0a482b12625a2fde3809de5339e6994478534c56f5",
+      "sha256": "def043cb8c0dbeef6fe45d0a482b12625a2fde3809de5339e6994478534c56f5"
+    },
+    {
+      "file": "profileRitualContext.js",
+      "sourceSha256": "c63f5cf6dca11debe12315c1265f11cbb7bec707ed120da171ca56e35a7f3bf1",
+      "sha256": "c63f5cf6dca11debe12315c1265f11cbb7bec707ed120da171ca56e35a7f3bf1"
+    },
+    {
+      "file": "profiles.js",
+      "sourceSha256": "7132cbfc7454b0da7e94904a2411bbd9128f2e361c1e1dac0f16f03dab606f0d",
+      "sha256": "7132cbfc7454b0da7e94904a2411bbd9128f2e361c1e1dac0f16f03dab606f0d"
+    },
+    {
+      "file": "receiptPersistence.js",
+      "sourceSha256": "6cb17d8d3c0101cccf46a76de7cc074eca19d9a9711c4cf998b7bac625bd3916",
+      "sha256": "6cb17d8d3c0101cccf46a76de7cc074eca19d9a9711c4cf998b7bac625bd3916"
+    },
+    {
+      "file": "remoteControl.js",
+      "sourceSha256": "14a4a27f6b6b033c12f91ec1409a43aed83f23afe901a7c80116de537233a1e7",
+      "sha256": "14a4a27f6b6b033c12f91ec1409a43aed83f23afe901a7c80116de537233a1e7"
+    },
+    {
+      "file": "renderer-calendar.js",
+      "sourceSha256": "e5dde06f7200428227be6ffb71b95d78f7f37dd4084603a14c8c7cba03015b00",
+      "sha256": "e5dde06f7200428227be6ffb71b95d78f7f37dd4084603a14c8c7cba03015b00"
+    },
+    {
+      "file": "renderer-family-remote.js",
+      "sourceSha256": "cfcdd5c59373183a4981d7a0871ec4274ee7452d51dfe9a4543881e68ae9dd73",
+      "sha256": "cfcdd5c59373183a4981d7a0871ec4274ee7452d51dfe9a4543881e68ae9dd73"
+    },
+    {
+      "file": "renderer-handoff.js",
+      "sourceSha256": "e6ef510a69b62810dbbd65acf914dfd9d900461bccbe59a63f04f4464a856e69",
+      "sha256": "e6ef510a69b62810dbbd65acf914dfd9d900461bccbe59a63f04f4464a856e69"
+    },
+    {
+      "file": "renderer-lastlight-alarm.js",
+      "sourceSha256": "5ca2f3d7d6c3fe50d1e2337c629d5301c771b2eda2c4edca15a52433c404ad13",
+      "sha256": "5ca2f3d7d6c3fe50d1e2337c629d5301c771b2eda2c4edca15a52433c404ad13"
+    },
+    {
+      "file": "renderer-light-experience.js",
+      "sourceSha256": "70bd44db49be566a2616ca5ae3d3fb01bc4ae28b55e043681ba7b06308014571",
+      "sha256": "70bd44db49be566a2616ca5ae3d3fb01bc4ae28b55e043681ba7b06308014571"
+    },
+    {
+      "file": "renderer-night-modes.js",
+      "sourceSha256": "6c6224ba253987f7e15e8430bb813c787c2fca27bd681a5343b100e6a533ce3a",
+      "sha256": "6c6224ba253987f7e15e8430bb813c787c2fca27bd681a5343b100e6a533ce3a"
+    },
+    {
+      "file": "renderer-onboarding-updater.js",
+      "sourceSha256": "50f7309a0d14127e14cf7005fe8fdc7d34b8d0f639e1c7ab4cfd9cf6f599bd21",
+      "sha256": "50f7309a0d14127e14cf7005fe8fdc7d34b8d0f639e1c7ab4cfd9cf6f599bd21"
+    },
+    {
+      "file": "renderer-profiles.js",
+      "sourceSha256": "dcca97a8ca52b61384f7f141bbf5872960df69dc06e97c84fb469019442ff350",
+      "sha256": "dcca97a8ca52b61384f7f141bbf5872960df69dc06e97c84fb469019442ff350"
+    },
+    {
+      "file": "renderer-receipts.js",
+      "sourceSha256": "9b75c114944eb8bc7aa99f7108abc2be9f17952161d7bfc54cbf65cd8423e50f",
+      "sha256": "9b75c114944eb8bc7aa99f7108abc2be9f17952161d7bfc54cbf65cd8423e50f"
+    },
+    {
+      "file": "renderer-ritual-focus.js",
+      "sourceSha256": "a64694c5b505c6564132f5d683835eed7bae1138c4b51a76416d59e57cd4cc63",
+      "sha256": "a64694c5b505c6564132f5d683835eed7bae1138c4b51a76416d59e57cd4cc63"
+    },
+    {
+      "file": "renderer-settings.js",
+      "sourceSha256": "842eb94c1edf0c3bcb41cbe39f3bbf70e60267df0c70401422483ab401593e71",
+      "sha256": "842eb94c1edf0c3bcb41cbe39f3bbf70e60267df0c70401422483ab401593e71"
+    },
+    {
+      "file": "renderer-signature.js",
+      "sourceSha256": "b1dff84498555192b784f4ac8426d248189610dae431c692a194dd31e48135d8",
+      "sha256": "b1dff84498555192b784f4ac8426d248189610dae431c692a194dd31e48135d8"
+    },
+    {
+      "file": "renderer-utils.js",
+      "sourceSha256": "5d38d78d111e0d5a88736917ec9fd9352bd3751669ca72bfeb716b1ab066f889",
+      "sha256": "5d38d78d111e0d5a88736917ec9fd9352bd3751669ca72bfeb716b1ab066f889"
+    },
+    {
+      "file": "renderer.js",
+      "sourceSha256": "b8d07a30bea6803e0594a358a09f31ffd31c968d5fce4f2b4dc5336a8d25f21e",
+      "sha256": "b8d07a30bea6803e0594a358a09f31ffd31c968d5fce4f2b4dc5336a8d25f21e"
+    },
+    {
+      "file": "ritualMode.js",
+      "sourceSha256": "e246717d5d4ea3b20d99f04584f2a962f8d3cfcd25c833686f461cd4d640e41b",
+      "sha256": "e246717d5d4ea3b20d99f04584f2a962f8d3cfcd25c833686f461cd4d640e41b"
+    },
+    {
+      "file": "routine-transfer-ui.js",
+      "sourceSha256": "a2364df4cdb11c71faf53cc3959bc1dd4a1c83537af4ae726eb12b1b30d872ea",
+      "sha256": "a2364df4cdb11c71faf53cc3959bc1dd4a1c83537af4ae726eb12b1b30d872ea"
+    },
+    {
+      "file": "routineHandoff.js",
+      "sourceSha256": "74892d01d47ae5aaa3292a4d08cf213cd8378e30b32f776fb850a859b66a9392",
+      "sha256": "74892d01d47ae5aaa3292a4d08cf213cd8378e30b32f776fb850a859b66a9392"
+    },
+    {
+      "file": "routineHandoffInbox.js",
+      "sourceSha256": "f66435277b4a5ceb9110902d3724e037798f95b392a574404bbd788702443714",
+      "sha256": "f66435277b4a5ceb9110902d3724e037798f95b392a574404bbd788702443714"
+    },
+    {
+      "file": "routineInterchangeStore.js",
+      "sourceSha256": "5d48ad2fe828f19b41ef76acf08d6f7beb80cfc3e2d5a2f18c40a5c230d7d83d",
+      "sha256": "5d48ad2fe828f19b41ef76acf08d6f7beb80cfc3e2d5a2f18c40a5c230d7d83d"
+    },
+    {
+      "file": "routineLedger.js",
+      "sourceSha256": "67d4d15ad42f36d6f4d33a2c08b375b705c21533348d7506128022937602b7b1",
+      "sha256": "67d4d15ad42f36d6f4d33a2c08b375b705c21533348d7506128022937602b7b1"
+    },
+    {
+      "file": "routineModel.js",
+      "sourceSha256": "7b75d11c7e1bb920e4cfaf39dcc567a686aae60084725f29ea287267288cda2e",
+      "sha256": "7b75d11c7e1bb920e4cfaf39dcc567a686aae60084725f29ea287267288cda2e"
+    },
+    {
+      "file": "runReceipts.js",
+      "sourceSha256": "93255851efa4cf8dc6b174f54865c02485009d65d52bafdec056038c815e6be6",
+      "sha256": "93255851efa4cf8dc6b174f54865c02485009d65d52bafdec056038c815e6be6"
+    },
+    {
+      "file": "screenTime.js",
+      "sourceSha256": "f3529212957743020cf895ebb31540cdcc2c9fa83b2e981a09ec90262a754de4",
+      "sha256": "f3529212957743020cf895ebb31540cdcc2c9fa83b2e981a09ec90262a754de4"
+    },
+    {
+      "file": "settings.js",
+      "sourceSha256": "6d649eedc92e028fad2601f8d1026211034ef76e275eae3cde2104d19caf578a",
+      "sha256": "6d649eedc92e028fad2601f8d1026211034ef76e275eae3cde2104d19caf578a"
+    },
+    {
+      "file": "sleepDebt.js",
+      "sourceSha256": "325ade406b32ef31fcdd5aeb14c7ff3870832653b4d5cf5e4438971f059dd55b",
+      "sha256": "325ade406b32ef31fcdd5aeb14c7ff3870832653b4d5cf5e4438971f059dd55b"
+    },
+    {
+      "file": "smartLights.js",
+      "sourceSha256": "04c4337672bf43f04686c654700a6b84813f69dd2638858945d49716d9b7d64e",
+      "sha256": "04c4337672bf43f04686c654700a6b84813f69dd2638858945d49716d9b7d64e"
+    },
+    {
+      "file": "smartSuggestions.js",
+      "sourceSha256": "b66ae31c738f0129b3e8e13fcf0322d99cda37d364d495ffb88b12b30472581d",
+      "sha256": "b66ae31c738f0129b3e8e13fcf0322d99cda37d364d495ffb88b12b30472581d"
+    },
+    {
+      "file": "startDecision.js",
+      "sourceSha256": "6dd2f15074f04ad9dd48a48b95901b1fee77153b218d89b6f9150c6b7c259d4b",
+      "sha256": "6dd2f15074f04ad9dd48a48b95901b1fee77153b218d89b6f9150c6b7c259d4b"
+    },
+    {
+      "file": "statsDashboard.js",
+      "sourceSha256": "a47dd50b60e58e0b51ca163b9f6d0a1cd06c0d71a6c8aeecee528e07238f07bb",
+      "sha256": "a47dd50b60e58e0b51ca163b9f6d0a1cd06c0d71a6c8aeecee528e07238f07bb"
+    },
+    {
+      "file": "streaks.js",
+      "sourceSha256": "47b004656958e8d8e033cca28aa289441b753ab79a487c7ac5b2d424749eccab",
+      "sha256": "47b004656958e8d8e033cca28aa289441b753ab79a487c7ac5b2d424749eccab"
+    },
+    {
+      "file": "studio.css",
+      "sourceSha256": "c2109befe0cb59c9836f7948088d4ec0555d875e3063de7d8ab784e2f37e386d",
+      "sha256": "c2109befe0cb59c9836f7948088d4ec0555d875e3063de7d8ab784e2f37e386d"
+    },
+    {
+      "file": "styles.css",
+      "sourceSha256": "53a4dc100734d4542c712fb97aa4198d3c7233c478cd46e4fa09d68dc2bd55e9",
+      "sha256": "53a4dc100734d4542c712fb97aa4198d3c7233c478cd46e4fa09d68dc2bd55e9"
+    },
+    {
+      "file": "unsavedGuard.js",
+      "sourceSha256": "495ba30c7516d47f34c58704ad8dc5b1b4b118acabf1fa0ab6d0936c411fe65e",
+      "sha256": "495ba30c7516d47f34c58704ad8dc5b1b4b118acabf1fa0ab6d0936c411fe65e"
+    },
+    {
+      "file": "updater.js",
+      "sourceSha256": "9e3c6c14ffe8831df6987c6fbf85ffd4edaaf0d1b2c6e84811b1a92fe850e2c8",
+      "sha256": "9e3c6c14ffe8831df6987c6fbf85ffd4edaaf0d1b2c6e84811b1a92fe850e2c8"
+    },
+    {
+      "file": "updaterPolicy.js",
+      "sourceSha256": "423c63315757a9d8adcfc528113f6198b3cdc7d5da3a38259335d0c378fae7ab",
+      "sha256": "423c63315757a9d8adcfc528113f6198b3cdc7d5da3a38259335d0c378fae7ab"
+    },
+    {
+      "file": "widget.html",
+      "sourceSha256": "311301fa87bf86ff479fad85b9a31d4cc8c26c9c57c2ba317b58a70c96ebb47a",
+      "sha256": "311301fa87bf86ff479fad85b9a31d4cc8c26c9c57c2ba317b58a70c96ebb47a"
+    },
+    {
+      "file": "wifiGuard.js",
+      "sourceSha256": "ff1925f23f5cffea261c2a4fcfc335f98db767fdbbca2ccdca057e048db2b6f8",
+      "sha256": "ff1925f23f5cffea261c2a4fcfc335f98db767fdbbca2ccdca057e048db2b6f8"
+    },
+    {
+      "file": "wifiGuardLifecycle.js",
+      "sourceSha256": "c6983cdd961e30b3140d87ce942906bdfc71d9cecd425fa475d99954d88751d9",
+      "sha256": "c6983cdd961e30b3140d87ce942906bdfc71d9cecd425fa475d99954d88751d9"
+    },
+    {
+      "file": "windowGeometry.js",
+      "sourceSha256": "e01ce2c43a647c9ce14feea0841d6098e5b756e8e935aeca6c254aa07e1bd961",
+      "sha256": "e01ce2c43a647c9ce14feea0841d6098e5b756e8e935aeca6c254aa07e1bd961"
+    },
+    {
+      "file": "windowsSuspend.js",
+      "sourceSha256": "969e150f862c629a0dbbc55078a5e548c98fa224e41eb03a60df12deca5e90fa",
+      "sha256": "969e150f862c629a0dbbc55078a5e548c98fa224e41eb03a60df12deca5e90fa"
+    },
+    {
+      "file": "wizLights.js",
+      "sourceSha256": "fc96cee79bb04aa3e243351ee8b33d7e01c40e69e4f82e369513ebff59240afc",
+      "sha256": "fc96cee79bb04aa3e243351ee8b33d7e01c40e69e4f82e369513ebff59240afc"
+    }
+  ],
+  "buildTransforms": [
+    {
+      "file": "package.json",
+      "sourceSha256": "03037ebd924ed2c12c659afdb2ac093fcb8d4428ebd7adc9f10a4acfe350d499",
+      "sha256": "244851d398b0561a5a097ae6bff0ef9e4ea11e0ab283545d43162e7bc93cdf17",
+      "operation": "Add lightsOutDistribution:portable only to staged package.json"
+    }
+  ],
+  "qualifiedSourceFiles": [
+    {
+      "file": "docs/LO_FINAL_CLOSEOUT_1.md",
+      "sha256": "e978e43734fe0cd4a2b0a34b0f1e203e6aaa428123c51ccc6b5d8a264c876bdb",
+      "qualification": "LO-FINAL-CLOSEOUT-1"
+    },
+    {
+      "file": "docs/LO_POWER_2.md",
+      "sha256": "77912bba445867a02d866f4afb73802e49e0c3c6dc155d4c0ae66faa4dca99e9",
+      "qualification": "LO-POWER-2"
+    },
+    {
+      "file": "docs/LO_RC3_FINAL_BOUNDARY_1.md",
+      "sha256": "0efe61633a8aa279d89731a59479f22101c18e8a0686dbf2897e3163bb404f6f",
+      "qualification": "LO-RC3-FINAL-BOUNDARY-1"
+    },
+    {
+      "file": "docs/LO_RC4_DIRECT_ENTRY_1.md",
+      "sha256": "cbd5dd7186950ef7d303597a53befc3628e98c3b2704b25c2059a3b3c3a3cfc8",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "docs/LO_UX_CLOCK_1.md",
+      "sha256": "c2670dafe542e1e6fd8a7254e2fa74b107f473e63f9be07e9138aff14da54267",
+      "qualification": "LO-UX-CLOCK-1"
+    },
+    {
+      "file": "electron/accountability.js",
+      "sha256": "1ffd97beec540f1e42e203ec1c9e0d5a2654bc54e24d995c2ed399a8f3195804",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/alarm.js",
+      "sha256": "f29b5204d5d59414971398a107ddcb3229bac770874809fbdc818c7e406441d4",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/ambientVisuals.js",
+      "sha256": "3467036ddf5bd1df1f4f9847a30be99c5585faec01f57b5ec40b2b23ee9db89d",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/assets/brand/lights-out-icon-small.svg",
+      "sha256": "448fffb20408c8eaff4db5702568abcbdb5499dd76479d36377848e591bda554",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/assets/brand/lights-out-icon.svg",
+      "sha256": "ead182fd9c1c4d37e15b6033b3faead2daeacc3593f262008e744a450bbc1bf2",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/assets/brand/lights-out-tray.svg",
+      "sha256": "cac74429a1257f7e9e1bfa93dec8b9bc556c10b0ff8f7a76ad017a90e16bde26",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/assets/brand/lights-out-wordmark-transparent.svg",
+      "sha256": "6fce84404be4b8ec9c1c5cef16e1afefd3cb2593a70790b64160010c73af0237",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/assets/brand/lights-out-wordmark.svg",
+      "sha256": "ce3a410eb4601322126f2fd83462d305c338dd632795c7566f3901169517cf95",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/assets/icon-512.png",
+      "sha256": "5467bee341bed876a507ececbcb5f89ad2ff7a5fc496d3d6105da33fc4e16163",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/assets/icon.ico",
+      "sha256": "6425b498287e08264a18d3a0acb15cacb2c1e942cc83f487629aa3837eb05245",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/assets/icon.svg",
+      "sha256": "8653fdd8029527882244f2c01effc5f7cae3bfca1b0238071699c02a1cf30b67",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/assets/logo-512.png",
+      "sha256": "5467bee341bed876a507ececbcb5f89ad2ff7a5fc496d3d6105da33fc4e16163",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/assets/logo-v2.svg",
+      "sha256": "9b6af6abf5ecf405c41fc7e071779d2eeb18efb92a03a91875a18cb5f8066758",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/assets/logo.svg",
+      "sha256": "3965ebe66e63cf652a28ffe3a04a3f567ddbaaf7d28e1f70caade17d9e07e1f3",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/assets/tray-32.png",
+      "sha256": "071f553c0030f30bc55befb40faa7e8d3334ed4f5b3965e65fc8768ca286baa6",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/assets/wordmark-1272.png",
+      "sha256": "46ca0466e9b6950d0c8a95a59792cfd3696b66376a275aa5db0d48f20e299b42",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/autopilot.js",
+      "sha256": "07e3d3b2cce988bd7ec0c0ac829dbb71cb706a549352ea3f2cfdf7a1f96fa50b",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/bedtimeReminder.js",
+      "sha256": "aabd078f30a8f5cae7fcbb9cfd7e4824544a69f1a0dd99a006c438c1462d4a4b",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/boundedProcess.js",
+      "sha256": "ec57a39ec1c798f286e23fd8849781be4cbcc318161193128030b2ceb41b6b1c",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/calendar.js",
+      "sha256": "660d36715919757e6c879145556851492b64e28d84d650e2dcb07b920a382211",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/calendarProviders.js",
+      "sha256": "ef76c767717b7aa09983848e0022c9062bf4a0638881b01ce25feff4091bfa09",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/calendarRecurrence.js",
+      "sha256": "c299428da7bfa5678e610a480ac198190310a4e458eb610e94314ff7e63e7670",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/capabilityTruth.js",
+      "sha256": "dfa06b50eb1f8d2492cb4ddb65a928f0b5c96f6ffaa45356856467b34b8f4e10",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/companion.html",
+      "sha256": "e9ed10d5c58e03b570633aa160ac29569e89ee23325b2ca7c36f2a792cb30ad3",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/companion.js",
+      "sha256": "16b968ffb6bb2a3fa565b9439c56ef6bc4914ae5fcc02f3615543ff809a3e1ce",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/companionFirewall.js",
+      "sha256": "4f44176a31f27245165995a0b982bc72a80f64f3e1daba40ea47175dd0811e8e",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/companionNetwork.js",
+      "sha256": "2c7dcbb1888956ace7e0e6e6a9f690fe3113583342e8f7432ed872ee156feaa1",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/contentBlocker.js",
+      "sha256": "124b5dabf394f057444d62eb3f2aa44dff01d99d6cb3b43e504f8ad8d43bcaff",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/durableJsonStore.js",
+      "sha256": "876c0fe752931e3e14d41999ccbb0fae69025c8b3d3e3afd08bcf1f38c0d4d77",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/emergencyOverride.js",
+      "sha256": "f3dc125ccae1fc3fa34f5c5d9221e86c7ca8d6ed9582e307441b6439ef5b29be",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/family.js",
+      "sha256": "2ed00d2012b600323a495b5a1c6ccff7bae2117abdb61375bec58b9f57a3c726",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/firstLightDelivery.js",
+      "sha256": "18e9d67088ae604245788e3600d9a12edaf332dca78859946f3cc8ed57fc5838",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/focusSessions.js",
+      "sha256": "02d38b0336d5a499d29e49b1ddc3acb3b41cfb9460338a16af01f38f067336b5",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/handoff-ui.js",
+      "sha256": "2ce92b94f53ed2ef647e39c1683c4dac49deed54fcf3d06efbff7de05a4747ca",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/handoff.css",
+      "sha256": "b6ced328440a6b1bab37122cc72fd9ff2d0205e8228c1f083ee7085c94dd7dee",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/handoffConnection.js",
+      "sha256": "823bb899a1619cc52e883c442f50aa527d1ea9f41064793a3184433a1eea36d4",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/handoffController.js",
+      "sha256": "22b4cfc9d629df838dd378ca98512f1045805380ab7d25db9511014b989f4b16",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/handoffIdentityWindows.js",
+      "sha256": "7dcadfb2178a28cd0538154718a708eba16015c0bbd2a63723767bafb101a02f",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/handoffProtectionWindows.js",
+      "sha256": "9f0fe6142b20976924e61d52a094c9d7c2f59217c9843a6ee48b77d1a6b66409",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/handoffService.js",
+      "sha256": "4b2c3156c0b80dbc4328562cedf47298e97e8a9a103b2a9c0e230e7c270b12ee",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/handoffTrust.js",
+      "sha256": "5562797da458f2aa0c8810720381de56d73637dfc999fe964cad22b6f3299605",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/idleDetection.js",
+      "sha256": "732f3ca27e3519aeccac14353705e927dd77ea6b349a6dfe2cd831836dca35a8",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/index.html",
+      "sha256": "7381b287a03320ac2ee0597fe57d6be5e65a6e75ae5974636fcc7deecdc6e382",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/lastLight.js",
+      "sha256": "a2e794a6fb8d55639684bfab62af6287a30d63a0ce6e6108a64523802c990adb",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/light-experience.css",
+      "sha256": "9752c308629b8e33c32eabb4942a1ca5c51abf6b27d9d4a298b6cbfab16a8aa9",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/lightExperience.js",
+      "sha256": "28bf142e4541e492af5c239fe5c0caa2f782400412d2ee257f852189e576e8e0",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/main.js",
+      "sha256": "f29690668cc4e1f5c6185b7040ef68c52f1d94e0b8651ca8d5eab6bfa9405a92",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/media.js",
+      "sha256": "88862914675566b694aeb938cae59e1a9b84fb59832e5bc5b99d7671407cd37f",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/native/WindowsSuspend.cs",
+      "sha256": "75df009af3b884a49e620f6fc20c3873a24268a4a906386bf2d5105938339874",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/nightModes.js",
+      "sha256": "60a3584ea95b8c511553be2fd3336c0b0f6008eae0f48f5aed8f56aa424c41ac",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/overrideTax.js",
+      "sha256": "fb4ff80d748548a584febd93688df0ae43a5ad69df7bc9a2282549b9c4d2006e",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/package-lock.json",
+      "sha256": "e0c9ff2ceb3c8bc8f50a9815e9f45c6c4178454d7c65ef45610bdca753e848bf",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/package.json",
+      "sha256": "03037ebd924ed2c12c659afdb2ac093fcb8d4428ebd7adc9f10a4acfe350d499",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/portableStartup.js",
+      "sha256": "5039c17f104732006bfa21cd4f3aee1e9121054f11fb95da6034082c17deb9d2",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/powerActionDispatcher.js",
+      "sha256": "b83f007de54e34b23a82d73aac8c0fb8ca67af5e3818ba8bb417a7bc75fa52a6",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/preload.js",
+      "sha256": "b9047e9f40b0ab1847516ca2a4ced98c58180863f71b892d35bbf3df5ba7a297",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/profileIdentity.js",
+      "sha256": "def043cb8c0dbeef6fe45d0a482b12625a2fde3809de5339e6994478534c56f5",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/profileRitualContext.js",
+      "sha256": "c63f5cf6dca11debe12315c1265f11cbb7bec707ed120da171ca56e35a7f3bf1",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/profiles.js",
+      "sha256": "7132cbfc7454b0da7e94904a2411bbd9128f2e361c1e1dac0f16f03dab606f0d",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/receiptPersistence.js",
+      "sha256": "6cb17d8d3c0101cccf46a76de7cc074eca19d9a9711c4cf998b7bac625bd3916",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/remoteControl.js",
+      "sha256": "14a4a27f6b6b033c12f91ec1409a43aed83f23afe901a7c80116de537233a1e7",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/renderer-calendar.js",
+      "sha256": "e5dde06f7200428227be6ffb71b95d78f7f37dd4084603a14c8c7cba03015b00",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/renderer-family-remote.js",
+      "sha256": "cfcdd5c59373183a4981d7a0871ec4274ee7452d51dfe9a4543881e68ae9dd73",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/renderer-handoff.js",
+      "sha256": "e6ef510a69b62810dbbd65acf914dfd9d900461bccbe59a63f04f4464a856e69",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/renderer-lastlight-alarm.js",
+      "sha256": "5ca2f3d7d6c3fe50d1e2337c629d5301c771b2eda2c4edca15a52433c404ad13",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/renderer-light-experience.js",
+      "sha256": "70bd44db49be566a2616ca5ae3d3fb01bc4ae28b55e043681ba7b06308014571",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/renderer-night-modes.js",
+      "sha256": "6c6224ba253987f7e15e8430bb813c787c2fca27bd681a5343b100e6a533ce3a",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/renderer-onboarding-updater.js",
+      "sha256": "50f7309a0d14127e14cf7005fe8fdc7d34b8d0f639e1c7ab4cfd9cf6f599bd21",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/renderer-profiles.js",
+      "sha256": "dcca97a8ca52b61384f7f141bbf5872960df69dc06e97c84fb469019442ff350",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/renderer-receipts.js",
+      "sha256": "9b75c114944eb8bc7aa99f7108abc2be9f17952161d7bfc54cbf65cd8423e50f",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/renderer-ritual-focus.js",
+      "sha256": "a64694c5b505c6564132f5d683835eed7bae1138c4b51a76416d59e57cd4cc63",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/renderer-settings.js",
+      "sha256": "842eb94c1edf0c3bcb41cbe39f3bbf70e60267df0c70401422483ab401593e71",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/renderer-signature.js",
+      "sha256": "b1dff84498555192b784f4ac8426d248189610dae431c692a194dd31e48135d8",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/renderer-utils.js",
+      "sha256": "5d38d78d111e0d5a88736917ec9fd9352bd3751669ca72bfeb716b1ab066f889",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/renderer.js",
+      "sha256": "b8d07a30bea6803e0594a358a09f31ffd31c968d5fce4f2b4dc5336a8d25f21e",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/ritualMode.js",
+      "sha256": "e246717d5d4ea3b20d99f04584f2a962f8d3cfcd25c833686f461cd4d640e41b",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/routine-transfer-ui.js",
+      "sha256": "a2364df4cdb11c71faf53cc3959bc1dd4a1c83537af4ae726eb12b1b30d872ea",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/routineHandoff.js",
+      "sha256": "74892d01d47ae5aaa3292a4d08cf213cd8378e30b32f776fb850a859b66a9392",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/routineHandoffInbox.js",
+      "sha256": "f66435277b4a5ceb9110902d3724e037798f95b392a574404bbd788702443714",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/routineInterchangeStore.js",
+      "sha256": "5d48ad2fe828f19b41ef76acf08d6f7beb80cfc3e2d5a2f18c40a5c230d7d83d",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/routineLedger.js",
+      "sha256": "67d4d15ad42f36d6f4d33a2c08b375b705c21533348d7506128022937602b7b1",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/routineModel.js",
+      "sha256": "7b75d11c7e1bb920e4cfaf39dcc567a686aae60084725f29ea287267288cda2e",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/runReceipts.js",
+      "sha256": "93255851efa4cf8dc6b174f54865c02485009d65d52bafdec056038c815e6be6",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/screenTime.js",
+      "sha256": "f3529212957743020cf895ebb31540cdcc2c9fa83b2e981a09ec90262a754de4",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/scripts/app-source-files.js",
+      "sha256": "a896f604962dd5f4726d92e3cd3593772e93d0073986c4e489a2371dd03395eb",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/scripts/build-windows-suspend.ps1",
+      "sha256": "6086aae91775367e96254214149cd92a512da3b7e739e3fb17e02cd5874eb545",
+      "qualification": "LO-POWER-2"
+    },
+    {
+      "file": "electron/scripts/package-native-windows.ps1",
+      "sha256": "e5627238608452dfefcea975d03063cd75eaa87035f1b21b37344b2f7e74a7e4",
+      "qualification": "LO-POWER-2"
+    },
+    {
+      "file": "electron/scripts/stamp-portable-mode.cjs",
+      "sha256": "b80e79098647c0c765c9652f17f849e33b5614cd49d9d54dc31ba70b25e579c4",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/scripts/stamp-windows-identity.ps1",
+      "sha256": "8eae206339e0220b5e6d42c1308ce45067d3eef5d47c754a6c119c3e8fe4f3ba",
+      "qualification": "LO-FINAL-CLOSEOUT-1"
+    },
+    {
+      "file": "electron/scripts/verify-windows-identity.ps1",
+      "sha256": "d198293a6aebf5b3742fac62658b5f822dc23d2c1fe18c22912388c8563aab21",
+      "qualification": "LO-FINAL-CLOSEOUT-1"
+    },
+    {
+      "file": "electron/scripts/windows-suspend-proof.js",
+      "sha256": "81b89a1090f16a190bc36a1ef307f2678fa051272ba251aa8c58372d94d9ed90",
+      "qualification": "LO-POWER-2"
+    },
+    {
+      "file": "electron/settings.js",
+      "sha256": "6d649eedc92e028fad2601f8d1026211034ef76e275eae3cde2104d19caf578a",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/sleepDebt.js",
+      "sha256": "325ade406b32ef31fcdd5aeb14c7ff3870832653b4d5cf5e4438971f059dd55b",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/smartLights.js",
+      "sha256": "04c4337672bf43f04686c654700a6b84813f69dd2638858945d49716d9b7d64e",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/smartSuggestions.js",
+      "sha256": "b66ae31c738f0129b3e8e13fcf0322d99cda37d364d495ffb88b12b30472581d",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/startDecision.js",
+      "sha256": "6dd2f15074f04ad9dd48a48b95901b1fee77153b218d89b6f9150c6b7c259d4b",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/statsDashboard.js",
+      "sha256": "a47dd50b60e58e0b51ca163b9f6d0a1cd06c0d71a6c8aeecee528e07238f07bb",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/streaks.js",
+      "sha256": "47b004656958e8d8e033cca28aa289441b753ab79a487c7ac5b2d424749eccab",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/studio.css",
+      "sha256": "c2109befe0cb59c9836f7948088d4ec0555d875e3063de7d8ab784e2f37e386d",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/styles.css",
+      "sha256": "53a4dc100734d4542c712fb97aa4198d3c7233c478cd46e4fa09d68dc2bd55e9",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/test-support/WindowsSuspendFake.cs",
+      "sha256": "1bcf11613b3ebd27b3a9a113e7babed3b88398289193987d1a3ab6c015c5b237",
+      "qualification": "LO-POWER-2"
+    },
+    {
+      "file": "electron/test/accountability-truth.test.js",
+      "sha256": "da85a8e708fca160e7b1aa2e1c9145a7d7a5f7f4dd935663d628fbf5962dcbe2",
+      "qualification": "LO-FINAL-CLOSEOUT-1"
+    },
+    {
+      "file": "electron/test/portable-startup-boundary.test.js",
+      "sha256": "74cc99a1fad406d3a33af65e883cda88b2b15dd2c242714d8bf625cc96c6e594",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/test/power-action-lock-parity.test.js",
+      "sha256": "841d320da7cdf2668e46dd938958cda7921e113791b12b69ff0699676b7b4259",
+      "qualification": "LO-POWER-2"
+    },
+    {
+      "file": "electron/test/power-action-truth.test.js",
+      "sha256": "e6c0db800177ef5a038b17e34490efceaaac14db831fd29991f23d29c7c2dfcc",
+      "qualification": "LO-POWER-2"
+    },
+    {
+      "file": "electron/test/profile-load-test-mode.test.js",
+      "sha256": "bda6b06ceaf0b68830db1a27976fe5b0395380242b4954f38d56e5c20fc2aafd",
+      "qualification": "LO-UX-CLOCK-1"
+    },
+    {
+      "file": "electron/test/routine-ritual-correlation.test.js",
+      "sha256": "b771b5060d525a6fb026128c2f42d053f8a3e0da6285476c34415ee39e68120a",
+      "qualification": "LO-FINAL-CLOSEOUT-1"
+    },
+    {
+      "file": "electron/test/settings-durability.test.js",
+      "sha256": "9ff532a0d739bbbab77bf74fe80f336f6be845976f9dcc31561acd22b62da453",
+      "qualification": "LO-FINAL-CLOSEOUT-1"
+    },
+    {
+      "file": "electron/test/settings-general.test.js",
+      "sha256": "558102a92a36191ee0ed91afbebdbd43680182a88eb9eb2b74f6b349d6c327a2",
+      "qualification": "LO-UX-CLOCK-1"
+    },
+    {
+      "file": "electron/test/settings-secret-coverage.test.js",
+      "sha256": "0e5430867e1f2ddf3304f96ebfab3ddc3a9eb377f0f39e4abf1e7b2ead213117",
+      "qualification": "LO-FINAL-CLOSEOUT-1"
+    },
+    {
+      "file": "electron/test/smart-lights-truth.test.js",
+      "sha256": "9ebb50a3f839fb2e57ac56b08ffb18d6245054fd554dc8a97e6ff37c5d3075a1",
+      "qualification": "LO-FINAL-CLOSEOUT-1"
+    },
+    {
+      "file": "electron/test/timer-rehearsal-safety.test.js",
+      "sha256": "654d76fc514c3199bfe9faf71e0aca5a8938a7ec7129eafbadbbd90409da8e97",
+      "qualification": "LO-FINAL-CLOSEOUT-1"
+    },
+    {
+      "file": "electron/test/tonight-instrument.test.js",
+      "sha256": "2fcfc4482a3784a7d2142eaec783e7922b4b5d18737d4e34c7b4f7d8b7f3b42a",
+      "qualification": "LO-UX-CLOCK-1"
+    },
+    {
+      "file": "electron/test/tonights-plan-contract.test.js",
+      "sha256": "bc9f8e8eb9c89f7a3cef0e1d6254a71cff1cb2367e19a4477fed32876822373e",
+      "qualification": "LO-UX-CLOCK-1"
+    },
+    {
+      "file": "electron/test/ux-clock.test.js",
+      "sha256": "e6bd6d5f3d4eb09f5b44469b2d9fd536762bda02d405640eb1e4c05e52cb52d0",
+      "qualification": "LO-UX-CLOCK-1"
+    },
+    {
+      "file": "electron/test/wifi-blocking-release-boundary.test.js",
+      "sha256": "c08c3ff8545ff1b48879618b9d56db62721ccca6c96aa64d45ffe0b22cf8546f",
+      "qualification": "LO-RC3-FINAL-BOUNDARY-1"
+    },
+    {
+      "file": "electron/test/wifi-guard-adapter-ownership.test.js",
+      "sha256": "6dbf5dd7d587d2eea5b5a4ef833390fea161c18213a34ad1dca9b8767b960c57",
+      "qualification": "LO-FINAL-CLOSEOUT-1"
+    },
+    {
+      "file": "electron/test/wifi-guard-lifecycle.test.js",
+      "sha256": "b5354a076165c42aaf21d1261fd849fcb52e6978629f9c3e9ccaf0d324127e4d",
+      "qualification": "LO-FINAL-CLOSEOUT-1"
+    },
+    {
+      "file": "electron/test/wind-down-scope.test.js",
+      "sha256": "31371270155b3e72cfe6a1b537e28571b56157e867253911338efadd347c72e1",
+      "qualification": "LO-FINAL-CLOSEOUT-1"
+    },
+    {
+      "file": "electron/test/windows-suspend-ui.test.js",
+      "sha256": "d72fa2258f3b72f1a8e76e3fa71e7c49b76cbad1dd274728fca79076af9c81ab",
+      "qualification": "LO-POWER-2"
+    },
+    {
+      "file": "electron/test/windows-suspend.test.js",
+      "sha256": "65d323f59951d6cbf8a6fab8b6d8c0e554611335bc2d85116bd32d38a19807aa",
+      "qualification": "LO-POWER-2"
+    },
+    {
+      "file": "electron/unsavedGuard.js",
+      "sha256": "495ba30c7516d47f34c58704ad8dc5b1b4b118acabf1fa0ab6d0936c411fe65e",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/updater.js",
+      "sha256": "9e3c6c14ffe8831df6987c6fbf85ffd4edaaf0d1b2c6e84811b1a92fe850e2c8",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/updaterPolicy.js",
+      "sha256": "423c63315757a9d8adcfc528113f6198b3cdc7d5da3a38259335d0c378fae7ab",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/widget.html",
+      "sha256": "311301fa87bf86ff479fad85b9a31d4cc8c26c9c57c2ba317b58a70c96ebb47a",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/wifiGuard.js",
+      "sha256": "ff1925f23f5cffea261c2a4fcfc335f98db767fdbbca2ccdca057e048db2b6f8",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/wifiGuardLifecycle.js",
+      "sha256": "c6983cdd961e30b3140d87ce942906bdfc71d9cecd425fa475d99954d88751d9",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/windowGeometry.js",
+      "sha256": "e01ce2c43a647c9ce14feea0841d6098e5b756e8e935aeca6c254aa07e1bd961",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/windowsSuspend.js",
+      "sha256": "969e150f862c629a0dbbc55078a5e548c98fa224e41eb03a60df12deca5e90fa",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    },
+    {
+      "file": "electron/wizLights.js",
+      "sha256": "fc96cee79bb04aa3e243351ee8b33d7e01c40e69e4f82e369513ebff59240afc",
+      "qualification": "LO-RC4-DIRECT-ENTRY-1 / frozen RC5"
+    }
+  ],
+  "limits": [
+    "Runtime source hashes match the already-qualified RC5; this does not claim a rebuilt clean-commit ZIP",
+    "Physical power, wake, overnight and hardware outcomes remain unqualified",
+    "No binaries, profiles, credentials or raw local acceptance logs are included"
+  ]
+}

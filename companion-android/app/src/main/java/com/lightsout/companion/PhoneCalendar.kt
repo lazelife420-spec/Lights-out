@@ -55,13 +55,14 @@ object PhoneCalendar {
         val day = occurrence.toLocalDate()
         val expected = day.atTime(rule.time).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
         if (!rule.matches(day) || expected != wall || wall < rule.createdAt) return null
-        if (!PhoneHomeStore.claim(c, rule.key(occurrence.toLocalDate()))) return null
         val p = PhoneHomeStore.routines(c).find { it.id == rule.routineId } ?: return null
+        val key = PhoneRoutineOutcomes.claim(c, rule, RoutinePlan.from(p, rule), wall) ?: return null
         if (PhoneTimerStore.read(c).phase in setOf("running", "paused")) {
             PhoneHomeStore.event(c, "Skipped ${p.name}: another phone timer is active.")
+            PhoneRoutineOutcomes.skipped(c, key, "timer-active")
             return null
         }
-        return p
+        return p.copy(occurrenceKey = key)
     }
     fun upcoming(c: Context): org.json.JSONArray {
         val zone = ZoneId.systemDefault()

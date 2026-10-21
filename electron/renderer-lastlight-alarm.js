@@ -28,8 +28,8 @@ function setupAlarmHandlers() {
   });
 
   els.btnRemoveAlarm?.addEventListener('click', async () => {
-    await api.removeWakeAlarm();
-    notify('First Light removed', 'info');
+    const result = await api.removeWakeAlarm();
+    notify(result.success ? 'First Light removed' : `Alarm removal failed: ${result.error}`, result.success ? 'info' : 'error');
     refreshAlarmStatus();
   });
 
@@ -63,7 +63,7 @@ async function refreshAlarmStatus() {
         els.alarmStatus.textContent = `First Light at ${status.alarmTime || 'scheduled'}`;
         els.alarmStatus.style.color = 'var(--accent-green)';
       } else {
-        els.alarmStatus.textContent = 'No First Light scheduled';
+        els.alarmStatus.textContent = status.error || 'No First Light scheduled';
         els.alarmStatus.style.color = 'var(--text-muted)';
       }
     }

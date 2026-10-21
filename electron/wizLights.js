@@ -177,7 +177,7 @@ function restorePilot(pilot) {
   return result;
 }
 
-async function dimStates(snapshot,progress,warm,requestOptions, { look, isCurrent = () => true } = {}) {
+async function dimStates(snapshot,progress,warm,requestOptions, { look, frame, isCurrent = () => true } = {}) {
   progress=Math.max(0,Math.min(1,Number(progress)||0));
   const chosen = normalizeLook(look);
   const replies=await Promise.all(snapshot.filter(item=>item.pilot.state===true && !item.released && !item.finished).map(async item=>{
@@ -193,7 +193,8 @@ async function dimStates(snapshot,progress,warm,requestOptions, { look, isCurren
     // Brightness/mode changes are separate from power in the WiZ local API.
     // Never include state:true in an automatic dim, even between read/write.
     const params=progress>=1?{state:false}:{dimming:Math.max(10,Math.round(baseline*(1-progress)))};
-    if (progress < 1 && !item.lookApplied) Object.assign(params, lookPilot(chosen));
+    if (progress < 1 && frame) Object.assign(params, frame(snapshot.indexOf(item),snapshot.length));
+    else if (progress < 1 && !item.lookApplied) Object.assign(params, lookPilot(chosen));
     if(warm&&progress<1)params.temp=Math.max(2200,Math.round((chosen.mode === 'white' ? chosen.temperature : Number(item.pilot.temp)||2700)*(1-progress)+2200*progress));
     if (warm) { delete params.sceneId; delete params.r; delete params.g; delete params.b; }
     const reply = await request(item.ip,'setPilot',params,requestOptions);

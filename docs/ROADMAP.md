@@ -1,228 +1,160 @@
-# Lights Out PC™ — A Proof Foundry Product
+# Lights Out — Windows and standalone Android
 
-# Roadmap
+## Current truth
 
-## Current Truth
+Lights Out is a local-first night timer and routine product. Windows and Android
+execute independently and keep separate data. Optional phone-to-PC controls
+require a running desktop. A shared builder and cross-device coordination are
+future architecture; existing local calendars do not establish that architecture.
 
-The **v11.2.0 release scope is qualified**. The five original product
-pillars are implemented. This release closes the October desktop/settings/WiZ
-work and reconciles the existing Android source; parked features remain outside
-its scope. Published version and downloadable artifacts are authoritative on
-[GitHub Releases](https://github.com/lazelife420-spec/Lights-out/releases/latest).
+Windows **v11.2.0 is published** at
+[GitHub Releases](https://github.com/lazelife420-spec/Lights-out/releases/latest),
+from `335ba773b364dda45a26e60524cd1b95ed0b7f39`.
+The [release qualification record](RELEASE_QUALIFICATION_11.2.0.md) describes the
+Windows and Android evidence. Android source/debug qualification is separate
+from production APK signing and physical-device reliability.
 
-Source committed, automated tests passed, packaged runtime qualified, release
-published and physical-device reliability proven are separate claims. The release
-pipeline requires Linux and Windows tests, Android debug tests/lint/build,
-packaged Windows runtime checks, installer/portable verification and checksums.
-Android production APK signing is separate. WiZ remains opt-in/experimental;
-emulator and UDP stand-ins do not establish physical phone/router/bulb reliability.
-The [v11.2.0 qualification record](RELEASE_QUALIFICATION_11.2.0.md) links the
-automated gates and describes the native desktop, Android and artifact evidence.
-Current strongest product promise:
+Use distinct labels: **SHIPPED**, **SOURCE-PRESENT**, **TEST-PROVEN**,
+**FIELD-UNPROVEN**, **PLANNED**, **DEFERRED**, and **UNKNOWN**. Code, tests,
+publication and physical proof are different claims. The Windows release scope
+is complete; the broader platform roadmap remains open.
 
-```text
-Lights Out helps Windows users stop drifting past bedtime by turning shutdown into a visible, repeatable routine with proof.
-```
+## Shipped
 
-## The Proof Foundry Standard
+- Windows v11.2.0: Electron timer and safe power controls, profiles/calendar,
+  Night Modes, receipts, settings/navigation polish and optional LAN PC controls.
+  Installer and portable ZIP have verified source provenance and checksums.
+- Windows WiZ selection, locally named room groups, brightness/white/RGB/presets
+  and manual-off protection are shipped as **experimental and opt-in**. Automated
+  UDP proof does not make the integration field-proven.
+- Prior Windows release history belongs in `CHANGELOG.md` and release notes.
+  The original five Windows pillars do not define completion of the platform.
 
-> No fake claims. No missing receipts. Ship with proof.
+## In-source awaiting qualification
 
-## Roadmap Hygiene
+- **Desktop UI continuation:** Tonight now uses an open ambient scene with a
+  compact setup, expandable immediate-start presets and the same local timer
+  authority. Source runtime checks cover both themes, 900×640 and 1440×900,
+  visible safety/readiness, button-driven starts/cancellation, paused/running
+  controls, mini and full-screen clocks. This is local unreleased UI work;
+  the separate Android build and deferred product features are unchanged.
+- **Standalone Android:** native offline timer, foreground notification controls,
+  screen-off alarms, phone-local WiZ, saved routines and recurring/date calendar
+  rules are SOURCE-PRESENT and debug/emulator TEST-PROVEN. Current source is not
+  a newly published production APK. Physical background/LAN behavior is
+  FIELD-UNPROVEN. Phone data remains independent from Windows.
+- **Optional Android PC controls:** separate QR/pairing WebView. Desktop protocol
+  qualification and historical phone pairing do not substitute for current
+  signed-APK and physical-device regression evidence.
+- **Local Calendar Routine Builder v1:** a common versioned plan now covers
+  explicit Windows/Android local ownership, validated timer actions, existing
+  phone WiZ adapters, weekly/monthly/date recurrence, durable occurrence claims
+  and visible outcomes. UI-to-executor candidates are TEST-PROVEN with isolated
+  Windows Test Mode and Android loopback fixtures; no new public release is
+  implied. Existing data and independent engines are preserved. See
+  [the contract and migration boundary](CALENDAR_ROUTINE_V1.md).
+  The local continuation corrects leap-day alarm lookup, adds explicit action
+  editing with separate phone lighting targets, and correlates delayed Windows
+  rituals through timer receipts. These changes remain local and unreleased.
+  **LO-RIE-1** adds versioned offline files, native file pickers, previews, safe
+  conflict copies and explicit local adoption. Windows/phone execution stays
+  independent; file intent never grants remote authority. See
+  [routine interchange v1](ROUTINE_INTERCHANGE_V1.md).
+  **LO-SDH-0** adds locally tested mutual-TLS protocol components, explicit
+  enrollment/recipient consent, replay/expiry/revocation checks and adapters into
+  inactive import preview. Isolated endpoints only; no production listener,
+  discovery, transfer UI or persistent key/trust management was enabled in that tranche. See
+  [secured handoff foundation](SECURED_DEVICE_HANDOFF_FOUNDATION.md).
+  **LO-SDH-1** adds protected persistent identity, durable trust/revocation/replay
+  records and actual pairing/receiving UI through existing inactive import.
+  Local opt-in WiZ timer experiences and phone notification beacons are now
+  SOURCE-PRESENT, with loopback/emulator runtime evidence; see
+  [light experiences v1](LIGHT_EXPERIENCES_V1.md). Physical light/phone
+  reliability remains FIELD-UNPROVEN. The native cross-device TLS gate is open.
+  Production LAN transport remains disabled; physical-device transfer is still
+  FIELD-UNPROVEN. See [protected pairing v1](SECURED_DEVICE_PAIRING_V1.md).
+- **Windows invisible-host objective:** Electron main owns the timer/listener/
+  receipts. The reviewed v11.2.0 qualification reported seven lifecycle checks
+  passing: close/reopen, single timer authority, tray controls, hidden completion,
+  intentional Quit, crash recovery and cleanup. Instrumented startup also exposed
+  a transient window in a secondary process that lost the lock, without a second
+  timer or receipt. The uncommitted correction is now TEST-PROVEN: a fresh build
+  passed seven cases in each of ordinary and instrumented startup modes, with
+  zero secondary windows, trays, timer starts, startup listeners or receipt work.
+  Ordinary startup used a safety bootstrap with unchanged candidate main code;
+  the instrumented lane used the unmodified packaged candidate. See the ledger.
+  No separate service/daemon is approved here.
+- **Windows First Light:** Task Scheduler wake/sunrise source exists; supported
+  wake states and physical lighting effects require their own qualification.
+  A phone-owned morning path is PLANNED.
+- **Hue and generic webhook source:** presence of adapter code is not qualified
+  device support. Each needs a bounded spec, fixtures and authorized field tests.
 
-This document's only job is **what's next** — not an audit trail of
-everything ever done. Keep it that way:
+## Active next
 
-- When an item ships: **delete its line**, don't strike it through and
-  leave a paragraph of detail behind. The detail belongs in the PR
-  description now, and in `CHANGELOG.md` once a release is cut.
-- Before starting work on any line here, verify it's still actually open —
-  re-read the code, don't trust the checklist. This document drifted out of
-  sync with reality multiple times before the 2026-07-09 pass caught it
-  (see `docs/ROADMAP_ARCHIVE_2026-07.md` for exactly what that looked like
-  and how it was found).
-- If you're an agent picking up this file cold: the archive is provenance,
-  not instructions. Don't re-verify things it already verified unless the
-  code has changed since.
+1. **Platform truth and Android evidence:** align documentation, preserve the
+   qualified Windows release, close safe Android coverage gaps, and maintain the
+   [Android field checklist](ANDROID_FIELD_QA.md). Current candidate details and
+   command receipts are in [the execution ledger](PLATFORM_ALIGNMENT_EXECUTION_2026-10-16.md).
+2. **Windows Host qualification: bounded local gate PASS.** Fresh ordinary and
+   instrumented runs close the reviewed lifecycle/startup gate. The corrected
+   candidate is committed locally and is not published. Listener opt-in
+   and idle login remain safe defaults. No daemon migration is justified.
+3. **Calendar Routine Builder continuation:** the first local vertical slice is
+   implemented, including bounded local action editing and delayed Windows
+   receipt correlation. Offline v1 import/export is implemented with validation,
+   inactive drafts, conflict handling and explicit local adoption. Next, qualify
+   future format migrations. The secured-handoff protocol foundation is locally
+   implemented and isolated-test qualified. Next specify protected identity/key
+   storage, durable trust/revocation, visible pairing/transfer consent and bounded
+   connection policy before enabling a separately authorized LAN surface. No hidden
+   synchronization, arbitrary remote execution or unsupported adapter claims.
+4. **First Light extension:** specify a separately qualified phone-owned morning
+   path and compatible lighting actions after routine ownership is explicit.
+   Never promise PC-off execution from a Windows-only adapter.
 
-## Product Pillars
+These are sequenced engineering gates, not claims that host migration, shared
+scheduling or new adapters are already built or released.
 
-### 1. Reliable Shutdown
+## Blocked on hardware or permissions
 
-The timer must always feel trustworthy.
+- Physical Android notification/precise-alarm/OEM background, reboot/unlock,
+  Wi-Fi/broadcast discovery, bulb acknowledgement and manual-off reliability:
+  **HOLD** pending owner-authorized phone/router/bulb tests.
+- New production-signed Android APK: separate owner-controlled signing and
+  distribution gate. Never inspect or create the production signing identity.
+- Real router control, new Hue/webhook support, physical sunrise and PC wake
+  behavior: require a real supported integration and specific hardware authority.
+  An absent adapter is blocked or planned; never simulate it as supported.
+- Scoped, non-destructive local development and commits have standing owner
+  authorization. Remote pushes/merges, release tags, `[release]` triggers,
+  production signing and public deployment require separate authorization.
 
-**Historical runtime proof:** verified 2026-07-09 (forced
-dry-run throughout — never a real power action): start/pause/resume/
-snooze/cancel, natural dry-run completion, and crash-recovery-on-relaunch
-(kill the process mid-timer, relaunch, confirm the recovery banner reads
-the persisted snapshot correctly) all confirmed working. No open items.
+Hardware HOLDs do not reopen the qualified Windows v11.2.0 release. They constrain
+what can be claimed for those surfaces and future independent release trains.
 
-**Ongoing commitment**, not a task list:
+## Deferred
 
-- Force shutdown stays explicit and never accidental.
-- Tray behavior stays predictable.
-- Updater links and release assets stay verified.
-- Any change that touches the timer/pause/snooze/cancel/recovery loop gets
-  re-verified live before merge, not just unit-tested.
+Keep these outside the current release and alignment tranche:
 
-Proof gates: start timer, pause, snooze, cancel, quit from tray, relaunch,
-build, smoke tests.
-
-### 2. Personal Wind-Down
-
-Lights Out should feel like a nightly cockpit, not a generic timer.
-
-**Feature scope:** implemented; v11.2.0 qualification passed.
-
-Proof gates: create profile, load profile, auto-start profile if enabled,
-export/import profiles, no layout break at normal window size.
-
-### 3. Streaks And Accountability
-
-The streak UI should make the habit visible without pretending to be
-medical sleep tracking.
-
-**Feature scope:** implemented; v11.2.0 qualification passed.
-
-Avoid (timeless guardrail, not a task list):
-
-- Medical language.
-- Sleep-quality diagnosis.
-- Fake scores that are not backed by actual events.
-
-Proof gates: seed streak data, display current/best streak, display total
-nights, display average bedtime, verify all tabs switch.
-
-### 4. Proof And Receipts
-
-Lights Out should prove what happened.
-
-**Feature scope:** implemented; v11.2.0 qualification passed.
-
-Proof gates: start timer, complete/cancel session, receipt exists, receipt
-can be viewed, proof can be copied, receipt does not overclaim.
-
-### 5. Safe Remote Control
-
-Remote control should be useful only when safe.
-
-**Feature scope:** implemented; v11.2.0 qualification passed.
-
-**Trusted LAN mode, decided and shipped 2026-07-09:** "trusted" means an
-explicit, informed choice at the moment of exposure, not a new
-device-identity system. Enabling "Connect Phone" (the `wifi` mode that
-binds `0.0.0.0` and opens the firewall — see `startRemoteControl` in
-`main.js`) now gates behind a warning modal
-(`#lan-warning-modal`/`showLanWarningModal` in
-`renderer-family-remote.js`) that states plainly what's exposed (any
-device on the Wi-Fi network with the pairing code can start/pause/snooze/
-cancel) and what stays off-limits (never a forced shutdown/logout/
-hibernate, regenerating the code revokes access instantly). Per-device
-allowlisting and longer-lived tokens were considered and explicitly
-declined for v1 of this: the app is a single-user LAN control surface
-already gated by network membership + a shared pairing token, and adding
-per-device identity would be new security-model surface without a clear
-user story yet. Revisit only if a concrete need shows up (e.g. multiple
-household members each wanting independent revocation).
-
-**Critical bug found + fixed 2026-07-09 via live device testing:** physically
-paired an Android phone (the real `companion-android` release build, not a
-simulation) against a running desktop instance over LAN, and the phone
-never got past "Connecting…" — for any token, on any network. Root cause:
-`electron/companion.html` had two unguarded dead DOM references
-(`#pair-reset`, then `#disconnected`/`#disconnected-msg`) left behind by
-separate past markup redesigns; each threw an uncaught TypeError that
-silently aborted the page's top-level script, meaning `connect()` never
-even ran. This made the entire phone companion feature non-functional for
-every user, regardless of correct setup, for as long as those dead
-references have been on `main`. Fixed by deleting the dead code (the
-status pill and automatic `scheduleReconnect()` already cover what the
-removed UI provided). Re-verified end-to-end after the fix: real phone,
-real desktop, real WebSocket, "Connected to `<hostname>`" with live state.
-No APK rebuild needed for already-installed phones — `companion-android`
-loads `companion.html` live from the desktop on every connection.
-
-**Ongoing commitment:** remote control stays off by default, pairing token
-stays required, companion stays bound to `127.0.0.1` by default.
-
-Proof gates: default no listener, enable generates token, bad token
-rejected, good token works, regenerate revokes old token, disable stops
-listener, enabling `wifi` mode is blocked until the warning is explicitly
-confirmed (verified live in-browser: Cancel leaves the mode off and never
-calls `setRemoteControlMode`; Confirm calls it with `'wifi'`).
-
-## Release Sequence
-
-Item names are the source of truth, not the version numbers attached to
-them — actual shipped versions have repeatedly not matched what was
-originally planned for that slot.
-
-### Shipped
-
-- **v10.1.0 — Runtime Trust Polish:** northstar visual UI, cinematic Last
-  Light "Exit the Grid" finale, Lobby "Tonight's Run" shell, Morning Proof
-  "Mission complete" hero.
-- **v10.2.0 — Override Tax + Autopilot:** escalating snooze cost, Autopilot
-  Bedtime.
-- **v10.3.0 — Ritual Mode + Intelligence:** guided ritual flow, Stats
-  Dashboard, Smart Suggestions, Notification Center, hardened network
-  layer.
-- **v10.4.0 — Phone Companion + Profiles + Streaks:** Phone Companion Easy
-  Connect, profile search/filter/pin, 30-day sleep-history grid,
-  streak-celebration modal.
-- **v11.0.0 — Serious Night Mode:** full-screen clock mode, Trusted LAN
-  mode's explicit warning gate (see Pillar 5), Weekly Reports, and a fix
-  for a critical bug where the phone companion never actually connected
-  for anyone (dead DOM references crashing `companion.html` on load —
-  found via live device testing, not code review). Smart light integration
-  was explicitly descoped from this release: code exists (`smartLights.js`:
-  Hue + generic HTTP webhook) but has zero test coverage, and
-  "runtime-proven" means proof against real hardware, which no agent
-  working on this repo has access to. Not deleted — just not claimed done.
-  Parked until either real hardware is available, or there's an explicit
-  product call to ship it labeled experimental.
-- **v11.0.1 — Windows Production Readiness:** window movement/geometry,
-  companion recovery diagnostics, family identity attribution, profile
-  accents, media-volume correction, and clean lint/runtime proof.
-- **v11.1.0 — Night Modes Library:** six declarative cards, four ready modes,
-  canonical main-process resolution, safe lobby arming, receipt attribution,
-  static-preview support, and real Electron runtime proof.
-
-### v12.0.0 — Candidates (not yet prioritized)
-
-The Backlog Parking Lot — good ideas, not yet scoped. **Not ordered** — this
-is a menu, not a plan, until there's a product-priority call on which one
-(if any) goes next. Each carries different risk. Reason all of these are
-parked rather than started: they're feature-expansion lanes, and the
-existing nightly workflow's reliability only just got affirmatively
-verified (see Pillar 1) rather than assumed — these are genuine
-scope-expansion decisions, not a continuation of already-declared work.
-
-| Candidate | Why it's not started |
+| Candidate | Why it remains deferred |
 |---|---|
-| Family Profiles v1 | Scoped as a local-only household member directory, profile assignment/filtering, and canonical receipt attribution. LAN sync, authentication, and remote profile mutation are explicitly out of scope. See `docs/FAMILY_PROFILES_V1_SCOPE.md`. |
-| Focus scoring | Would need a new persistence layer (Focus Sessions currently has no historical event log, unlike Streaks). Also carries messaging risk against the "no guaranteed productivity" brand promise — needs the same care Sleep Score got to avoid gamification/fake-score framing. |
-| Screen-time limits | `screenTime.js` today is read-only/advisory (a "reality check" message), not enforcement. Actual *limits* imply a new blocking mechanism — real system-modification risk, same category as content-blocker schedules but with a different (unbuilt) trigger. |
+| Quiet House / School Night | Unavailable Night Modes; not release blockers. |
+| Family Profiles / extensive household-member management | New local member-directory and assignment scope; see `FAMILY_PROFILES_V1_SCOPE.md`. LAN synchronization/authentication/remote mutation are not implied. |
+| Kids Mode | Separate product and permission scope. |
+| Focus scoring | Needs a historical event log and careful non-medical, non-guaranteed-productivity messaging. |
+| Enforced screen-time limits | Current advisory behavior is not enforcement; blocking adds system-modification risk. |
+| Wake-on-LAN | Not authorized as part of this tranche. |
 
-**Checked and dropped, 2026-07-10: "Recurring alarms."** Confirmed fully
-redundant with the Schedule tab's existing multi-rule builtin calendar
-(`calendarProviders.js`'s `normalizeScheduleRules`/`getDefaultCalendarEvents`,
-UI in `index.html`'s `#schedule-rule-form`): named rules, a time, a
-per-weekday toggle grid, an action (shutdown/sleep/hibernate), and a
-duration are all already there and already shipped. There was never a
-distinct feature here to build — just a naming mismatch between the
-backlog entry and what had already shipped under "Schedule." Not
-re-scoping; removing it.
+## Maintenance and safety
 
-## Brand Promise
+Keep this as the single forward-looking roadmap. Move completed-task details and
+audit history into changelog/release/evidence documents. Verify a line against
+current source before starting it. Do not restart completed release repairs or
+resurrect the removed PowerShell/WinForms app.
 
-Proof-first software forged for builders.
-
-- Direct
-- Confident
-- Evidence-backed
-- Practical
-- No hype
-- No fake AI claims
-- No medical sleep claims
-- No guaranteed productivity/sleep claims
+All device/network/system actions remain opt-in. Preserve independent timers,
+reduced motion, accessible Stop/Cancel, explicit force-shutdown selection, idle
+login startup, token-protected optional LAN controls and forbidden remote power
+commands. Automated QA uses dry-run, owned emulators and fixtures. No fake sleep,
+medical, hardware-support or execution claims.

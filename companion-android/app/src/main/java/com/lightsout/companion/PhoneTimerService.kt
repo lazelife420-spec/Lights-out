@@ -15,9 +15,11 @@ class PhoneTimerService : Service() {
         override fun run() {
             PhoneTimerStore.finishIfDue(this@PhoneTimerService)
             val state = PhoneTimerStore.read(this@PhoneTimerService)
+            PhoneLightExperience.tick(this@PhoneTimerService)
             if (state.phase in listOf("running", "paused")) {
                 handler.postDelayed(this, if (state.phase == "paused") 60000 else 1000)
             } else {
+                PhoneLightExperience.stopTimer(this@PhoneTimerService)
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
@@ -35,7 +37,11 @@ class PhoneTimerService : Service() {
         var action = intent?.action
         var profile: PhoneRoutine? = null
         if (calendar) {
-            profile = PhoneCalendar.due(this, intent?.getStringExtra("ruleId") ?: "", intent?.getLongExtra("wall", 0) ?: 0)
+            profile = try { PhoneCalendar.due(this, intent?.getStringExtra("ruleId") ?: "", intent?.getLongExtra("wall", 0) ?: 0) }
+            catch (_: Exception) {
+                PhoneHomeStore.event(this, "Could not claim the calendar routine; nothing was started. Check routine history and storage.")
+                null
+            }
             action = if (profile != null) "start" else null
             PhoneCalendar.schedule(this)
         } else if (action == "startRoutine") {
@@ -46,11 +52,12 @@ class PhoneTimerService : Service() {
             try {
                 state = state.command(action, profile?.seconds ?: intent?.getLongExtra("seconds", 0) ?: 0, SystemClock.elapsedRealtime(),
                     System.currentTimeMillis(), PhoneTimerStore.boot(this), UUID.randomUUID().toString())
-                if (profile != null) state = state.copy(label = profile.name, lightTargets = profile.targets, offAtEnd = profile.offAtEnd)
+                if (profile != null) state = state.copy(label = profile.name, lightTargets = profile.offTargets, offAtEnd = profile.offAtEnd)
                 PhoneTimerStore.write(this, state)
                 if (profile != null) {
+                    PhoneRoutineOutcomes.started(this, profile.occurrenceKey, state.runId)
                     PhoneHomeStore.event(this, "Started ${profile.name} on this phone.")
-                    if (profile.brightness > 0) PhoneLights.perform(this, profile.targets, "warm", profile.brightness, state.runId)
+                    if (profile.brightness > 0) PhoneLights.perform(this, profile.warmTargets, "warm", profile.brightness, state.runId)
                 }
             } catch (_: IllegalArgumentException) { /* Repeated/stale actions must not overwrite an active timer. */ }
         }

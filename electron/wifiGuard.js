@@ -7,6 +7,7 @@ const http = require('http');
 const https = require('https');
 const net = require('net');
 const { spawn } = require('child_process');
+const { runBounded } = require('./boundedProcess');
 
 // Only ever interpolate strictly-validated values into PowerShell command
 // strings. Device IPs and MACs may originate from imported/shared config, so a
@@ -183,22 +184,27 @@ async function firewallCleanup() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function disableWiFiAdapter() {
+  let adapterId = null;
   try {
-    // Find the WiFi adapter and disable it.
-    await executePS(
-      `$adapter = Get-NetAdapter | Where-Object { $_.InterfaceDescription -match 'Wi-Fi|Wireless|802.11|WLAN' -and $_.Status -eq 'Up' } | Select-Object -First 1; if ($adapter) { Disable-NetAdapter -Name $adapter.Name -Confirm:$false; Write-Output $adapter.Name }`
-    );
-    return { success: true, provider: 'adapter' };
-  } catch (e) {
-    return { success: false, provider: 'adapter', error: e.message };
+    // Capture identity before changing anything. Restoration must never pick
+    // some other adapter that was already disabled before this run.
+    adapterId = await executePS(`$adapter = Get-NetAdapter | Where-Object { $_.InterfaceDescription -match 'Wi-Fi|Wireless|802.11|WLAN' -and $_.Status -eq 'Up' } | Select-Object -First 1; if ($adapter) { Write-Output $adapter.InterfaceGuid }`);
+    if (!validAdapterId(adapterId)) return { success: false, provider: 'adapter', error: 'No active Wi-Fi adapter found' };
+    await executePS(`$adapter = Get-NetAdapter | Where-Object { $_.InterfaceGuid -eq [Guid]'${adapterId}' }; if (-not $adapter) { throw 'Adapter unavailable' }; Disable-NetAdapter -InputObject $adapter -Confirm:$false -ErrorAction Stop`);
+    return { success: true, provider: 'adapter', adapterId };
+  } catch {
+    return { success: false, provider: 'adapter', adapterId, error: 'Wi-Fi adapter change was not confirmed' };
   }
 }
 
-async function enableWiFiAdapter() {
+function validAdapterId(value) {
+  return typeof value === 'string' && /^\{?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\}?$/i.test(value);
+}
+
+async function enableWiFiAdapter(adapterId) {
+  if (!validAdapterId(adapterId)) return { success: false, provider: 'adapter', error: 'No timer-owned adapter identity is available. Restore Wi-Fi in Windows settings.' };
   try {
-    await executePS(
-      `$adapter = Get-NetAdapter | Where-Object { $_.InterfaceDescription -match 'Wi-Fi|Wireless|802.11|WLAN' -and $_.Status -ne 'Up' } | Select-Object -First 1; if ($adapter) { Enable-NetAdapter -Name $adapter.Name -Confirm:$false; Write-Output $adapter.Name }`
-    );
+    await executePS(`$adapter = Get-NetAdapter | Where-Object { $_.InterfaceGuid -eq [Guid]'${adapterId}' }; if (-not $adapter) { throw 'Adapter unavailable' }; Enable-NetAdapter -InputObject $adapter -Confirm:$false -ErrorAction Stop`);
     return { success: true, provider: 'adapter' };
   } catch (e) {
     return { success: false, provider: 'adapter', error: e.message };
@@ -243,7 +249,7 @@ async function unblockInternet(config) {
     case 'firewall':
       return { success: false, provider: 'firewall', error: 'Windows Firewall LAN-device mode is unsupported; no remote-device rule was changed.' };
     case 'adapter':
-      return enableWiFiAdapter();
+      return enableWiFiAdapter(config.adapterId);
     default:
       return { success: false, error: `Unknown provider: ${provider}` };
   }
@@ -299,7 +305,12 @@ function httpPost(url, body, extraHeaders = {}, { allowSelfSigned = false } = {}
         if (res.statusCode >= 200 && res.statusCode < 300) resolve(result);
         else reject(new Error(`HTTP ${res.statusCode || 'error'}`));
       });
+      res.on('aborted', () => reject(new Error('Router response interrupted')));
+      res.on('error', () => reject(new Error('Router response failed')));
     });
+    // Inactivity alone does not bound a peer that trickles data indefinitely.
+    const deadline = setTimeout(() => { req.destroy(); reject(new Error('Router request deadline exceeded')); }, 8000);
+    req.on('close', () => clearTimeout(deadline));
     req.on('error', reject);
     req.setTimeout(8000, () => { req.destroy(); reject(new Error('Timeout')); });
     req.write(data);
@@ -312,19 +323,9 @@ function httpPost(url, body, extraHeaders = {}, { allowSelfSigned = false } = {}
 // ─────────────────────────────────────────────────────────────────────────────
 
 function executePS(command) {
-  return new Promise((resolve, reject) => {
-    const ps = spawn('powershell.exe', [
+  return runBounded({ spawn, file: 'powershell.exe', args: [
       '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command
-    ], { stdio: ['ignore', 'pipe', 'pipe'] });
-    let output = '';
-    ps.stdout.on('data', data => { output += data.toString(); });
-    ps.stderr.on('data', data => { output += data.toString(); });
-    ps.on('error', reject);
-    ps.on('close', code => {
-      if (code === 0) resolve(output.trim());
-      else reject(new Error(output.trim() || `PS exit ${code}`));
-    });
-  });
+    ], timeoutMs: 8000, maxBytes: 256 * 1024, errorPrefix: 'WIFI_GUARD' });
 }
 
 module.exports = {

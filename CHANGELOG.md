@@ -2,6 +2,91 @@
 
 ## Unreleased
 
+- Reworked Windows Tonight around an open horizon scene, larger typography,
+  compact navigation and directly editable duration. Quick start now expands
+  separately and explicitly labels its immediate-start presets; the final
+  action, device scope, Test/Real status and Start stay visible at 900×640.
+  Running and paused controls share the new layout. Mini and full-screen clocks
+  keep their existing behavior. This follow-up changes Windows only.
+
+- Introduced the Studio interface on Windows and standalone Android: a labelled
+  desktop sidebar, clearer timer setup, calmer branding,
+  redesigned mode library, consistent page surfaces and mobile bottom navigation.
+  Existing local timers, device ownership, safety controls and light modes keep
+  their established behavior. Mini mode and the full-screen clock remain separate.
+
+- Redesigned Windows Lighting settings and the standalone Android light builder
+  with visual mode cards, compact previews, clearer light selection, separate
+  alert sections and a persistent phone save bar. Connection help is collapsible;
+  controls follow the chosen mode/provider. Preview scrubbing no longer marks
+  settings as edited, and delayed phone refreshes preserve unsaved changes.
+  Desktop navigation, page typography and timer controls now share a clearer
+  visual hierarchy. Saved phone connections and manual room controls fold away
+  to keep timer modes in reach.
+
+- Added opt-in WiZ Room Hourglass, Orbit and Ember timer modes with screen-only
+  previews. Windows offers a separate final-six-second beacon; Android has
+  independent timer/reminder and selected-app beacon switches, separate light
+  targets, explicit OS notification access and an app allowlist. Manual off
+  releases lights; beacons restore only still-owned, on lights. No notification
+  message text is read or stored. Physical-device reliability remains unproven.
+
+- Added LO-SDH-1 protected device identities, durable pairing/revocation/replay
+  storage, and Windows/Android pairing and receiving screens. Windows uses
+  current-user DPAPI; Android uses non-exportable AndroidKeyStore key handles.
+  Authenticated enrollment, recipient acceptance and inactive import remain
+  separate confirmations. Production LAN transport/discovery remains disabled;
+  see `docs/SECURED_DEVICE_PAIRING_V1.md` for scope and security limits.
+
+- Added LO-SDH-0 secured routine-handoff protocol foundations for Windows and
+  Android: explicit fingerprint enrollment, mutual TLS, fresh recipient
+  challenges, bounded expiring transfers, revocation and separate confirmation
+  before saving inactive LO-RIE-1 intent. Isolated Node/Kotlin loopback and native
+  Android storage proofs qualify the foundation. Production listeners, discovery,
+  persistent device trust/key storage and transfer UI were deferred to LO-SDH-1.
+- Routine files now explain that Windows Test Mode skips final PC power actions
+  while other explicitly enabled wind-down effects may still run.
+- Added LO-RIE-1 offline routine files on Windows and standalone Android. The
+  shared versioned JSON contract exports selected timer/action intent and
+  associated rules without endpoints, credentials, ownership grants or history.
+  Native file pickers, previews, explicit conflict copies and checked local
+  writes preserve existing data. Imports remain inactive until reviewed; local
+  adoption saves calendar rules disabled and requires explicit resolution of
+  platform endings and light bindings. No networking or handoff was added.
+- Corrected Android leap-day recurrence beyond the old 741-day cutoff, including
+  the non-leap century gap. Selected-month candidates, consumed dates and DST
+  policies retain their existing meaning; saved schedules are unchanged.
+- Made local routine actions explicit in both editors. Windows rules can require
+  Test Mode; Android warm-start and finish actions can select different saved
+  WiZ lights. Edits preserve identities and refresh saved calendar plans without
+  rewriting a running timer or its receipts.
+- Correlated delayed Windows calendar rituals with their eventual timer receipts.
+  Accepted, running, cancelled, simulated completion and failure stay distinct;
+  a ritual ending without a timer never reports completion. Calendar preparation
+  respects timed steps; phone ritual starts retain immediate fast-forward.
+- Added a common v1 local routine/action contract for Windows and standalone
+  Android, with explicit local ownership, weekly/monthly/date schedules and
+  stable local-day occurrence identity. Existing saved rules and timer engines
+  remain compatible; cross-device execution and cloud synchronization are absent.
+- Calendar dispatch now records durable claims before execution and exposes
+  recent outcomes. Phone WiZ results distinguish acknowledgement, failure and
+  cancelled finish actions. Corrupt history does not disable manual phone timers.
+- Corrected Android weekly rules to respect selected months, matching the shared
+  model and planner. Checked desktop calendar saves roll back after disk failure.
+- Guarded queued Electron readiness after losing the single-instance lock, so
+  a quitting secondary cannot initialize a window, tray or startup services.
+  Added focused primary-startup, lock-loss and second-instance focus regressions.
+- Corrected Windows update discovery documentation to name Proof Foundry
+  machine-truth release metadata, and normalized roadmap line endings.
+- Clarified Windows + standalone Android positioning, independent execution and
+  release trains. Reorganized the single roadmap around shipped work, source
+  awaiting qualification, active next gates, hardware/permission blockers and
+  deferred scope. Added a physical Android/WiZ QA checklist; field reliability
+  remains unqualified.
+- Added guarded Android emulator lifecycle/calendar QA for permission denial and
+  grant, offline controls, timezone/clock changes, stale commands, process
+  recovery, screen-off notifications and early/duplicate/late alarm delivery.
+
 ## v11.2.0 — 2026-10-16
 
 ### Release qualification

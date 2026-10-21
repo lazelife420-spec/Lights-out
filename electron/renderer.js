@@ -1146,7 +1146,7 @@ function actionLabel(action = state.action) {
 const CLOCK_PREF_KEYS = ['clockFace', 'clockStyle', 'clockDial', 'clockFormat', 'clockScale', 'clockShowDate', 'clockHandColor', 'clockSeconds', 'clockSweep'];
 
 // -- What still runs in Test Mode (UI-R3 Fire 02) ------------------------------
-// Test Mode holds back only the power action; the wind-down still runs (see
+// Test Mode rehearses the in-app scene and skips automatic external effects (see
 // pickWindDownFacts / windDownEffects in renderer-utils.js). windDownFacts holds
 // only those non-secret facts; other scripts read it through the getter.
 let windDownFacts = null;
@@ -1171,7 +1171,7 @@ async function refreshWindDownFacts() {
 }
 
 // Settings › Power & Safety (both modes; amber in Test Mode) and Tonight's
-// plan (Test Mode only) say which wind-down effects still run. Static text,
+// plan (Test Mode only) describe which automatic effects are skipped. Static text,
 // written only on change; hidden while settings load or when nothing runs.
 function renderWindDownScope() {
   const scope = windDownFacts ? windDownEffects(windDownFacts) : { effects: [], unknown: [] };
@@ -1191,11 +1191,11 @@ function renderWindDownScope() {
   const k = scope.unknown.length;
   const unread = k ? ` · ${k} setting${k === 1 ? '' : 's'} could not be read` : '';
   write(document.getElementById('set-testmode-scope'), loaded && labels.length > 0,
-    `Test Mode holds back only the power action. Wind-down still runs: ${labels.join(' · ')}${unread}.`,
+    `Test Mode skips automatic timer effects. Real sessions may run: ${labels.join(' · ')}${unread}.`,
     testOn ? 'test' : 'muted');
   // The short lead: it has to fit above the Start button at 900x640.
   write(document.getElementById('plan-scope-note'), testOn && labels.length > 0,
-    `Still runs in Test Mode: ${labels.join(' · ')}.`);
+    `Skipped in Test Mode: ${labels.join(' · ')}.`);
 }
 
 // UI-R3 P13: Settings › Power & Safety tells the truth about the end of the
@@ -1217,7 +1217,7 @@ function renderSafetyTruth() {
     const text = !known
       ? 'Checking mode…'
       : state.dryRun
-        ? 'On: the timer runs, but no power action will happen.'
+        ? 'On: rehearse the timer and ritual. Their automatic power, lighting, router, system and partner actions are skipped.'
         : `Off: ${actionLabel()} will really run when the timer ends${warning}`;
     if (els.setDryrunDesc.textContent !== text) els.setDryrunDesc.textContent = text;
   }
@@ -1388,11 +1388,8 @@ function clearIdleBezel() {
 }
 
 // Truthful by mode: Test Mode never names a power action as if it will run.
-function idleBezelLabel(planSeconds) {
-  const eff = state.armedNightMode?.action || state.action;
-  const at = formatIdleClockTime(new Date(Date.now() + planSeconds * 1000), true);
-  if (!state.settingsLoaded) return `Would end ${at}`;
-  return state.dryRun ? `Test · would end ${at}` : `${actionLabel(eff)} at ${at} if started now`;
+function idleBezelLabel(planSeconds, now = new Date()) {
+  return `If started now · ${formatClockTarget(new Date(now.getTime() + planSeconds * 1000), now)}`;
 }
 
 // True when the plan would end after the most recent bedtime occurrence, and
@@ -1414,12 +1411,11 @@ function setTextIfChanged(el, text) {
   if (el && el.textContent !== text) el.textContent = text;
 }
 
-function updatePlanFacts() {
+function updatePlanFacts(now = new Date()) {
   const secs = planSecondsNow();
-  setTextIfChanged(document.getElementById('plan-out-at'), `~${formatIdleClockTime(new Date(Date.now() + secs * 1000), true)}`);
-  // dt follows the mode: a Test Mode run ends without a power action.
-  setTextIfChanged(document.getElementById('plan-out-at-label'), state.settingsLoaded && state.dryRun ? 'Test ends' : 'Ends at');
-  const hour = new Date().getHours();
+  setTextIfChanged(document.getElementById('plan-out-at'), formatClockTarget(new Date(now.getTime() + secs * 1000), now));
+  setTextIfChanged(document.getElementById('plan-out-at-label'), 'If started now');
+  const hour = now.getHours();
   setTextIfChanged(document.getElementById('ns-hero-label'), (hour >= 17 || hour < 5) ? "TONIGHT'S PLAN" : 'NEXT RUN');
 }
 
@@ -1427,29 +1423,37 @@ function updatePlanFacts() {
 // end. textContent only.
 // 'Focus' belongs to Focus Sessions only (Fire 02): a session's first phase is Running.
 const SESSION_PHASE_LABELS = Object.freeze({ focus: 'Running', dim: 'Winding down', lastlight: 'Last light' });
-function updateSessionHead() {
+function updateSessionHead(now = new Date()) {
   // Only a key of the frozen ORIGIN_LABELS map (renderer-utils.js) adds a
   // phrase; 'this-pc' and any unknown value add nothing.
   const origin = typeof ORIGIN_LABELS !== 'undefined' && typeof state.origin === 'string'
     && Object.prototype.hasOwnProperty.call(ORIGIN_LABELS, state.origin) ? ORIGIN_LABELS[state.origin] : '';
   const phase = state.paused ? 'Paused' : (SESSION_PHASE_LABELS[state.phase] || 'Running');
   setTextIfChanged(document.getElementById('session-phase'), origin ? `${phase} · ${origin}` : phase);
-  const endText = formatEndTime(state.endsAt);
-  const known = endText !== 'Idle';
+  const endText = state.endsAt ? formatClockTarget(new Date(state.endsAt), now) : '';
+  const known = Boolean(endText);
   const ends = state.paused ? 'On hold until you resume'
     : !known ? (state.dryRun ? 'Test Mode session' : `${actionLabel()} at the end`)
       : (state.dryRun ? `Test ends ${endText}` : `${actionLabel()} at ${endText}`);
   setTextIfChanged(document.getElementById('session-ends'), ends);
 }
 
-function countdownRingLabel() {
+function countdownRingLabel(now = new Date()) {
   if (state.paused) return 'On hold until you resume';
-  const end = formatEndTime(state.endsAt);
-  if (state.dryRun) return end === 'Idle' ? 'Test Mode · no power action' : `Test ends ${end}`;
-  return end === 'Idle' ? `${actionLabel()} when timer ends` : `${actionLabel()} at ${end}`;
+  const end = state.endsAt ? formatClockTarget(new Date(state.endsAt), now) : '';
+  if (state.dryRun) return end ? `Test ends ${end}` : 'Test Mode · no power action';
+  return end ? `${actionLabel()} at ${end}` : `${actionLabel()} when timer ends`;
 }
 
-function showToast(message, type = 'info', duration = 3000) {
+function dismissSessionOutcomeToasts() {
+  for (const toast of document.querySelectorAll('.toast[data-session-outcome="true"]')) {
+    clearTimeout(toast._dismissTimer);
+    clearTimeout(toast._removeTimer);
+    toast.remove();
+  }
+}
+
+function showToast(message, type = 'info', duration = 3000, { sessionOutcome = false } = {}) {
   let container = document.getElementById('toast-container');
   if (!container) {
     container = document.createElement('div');
@@ -1460,6 +1464,7 @@ function showToast(message, type = 'info', duration = 3000) {
   const toastKey = `${type}:${message}`;
   const duplicate = [...container.querySelectorAll('.toast')].find(item => item.dataset.toastKey === toastKey);
   if (duplicate) {
+    duplicate.dataset.sessionOutcome = String(sessionOutcome);
     clearTimeout(duplicate._dismissTimer);
     clearTimeout(duplicate._removeTimer);
     duplicate.classList.add('visible');
@@ -1473,6 +1478,7 @@ function showToast(message, type = 'info', duration = 3000) {
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
   toast.dataset.toastKey = toastKey;
+  toast.dataset.sessionOutcome = String(sessionOutcome);
   toast.textContent = message;
   container.appendChild(toast);
 
@@ -1489,8 +1495,8 @@ const MAX_NOTIFICATIONS = 50;
 // { toast: false } records a feed-only entry (UI-R3 Fire 02): the
 // notification centre and its badge still get it, but nothing pops over a
 // surface that already shows the change (the ring and console on Tonight).
-function notify(message, type = 'info', duration = 3000, { toast = true } = {}) {
-  if (toast) showToast(message, type, duration);
+function notify(message, type = 'info', duration = 3000, { toast = true, sessionOutcome = false } = {}) {
+  if (toast) showToast(message, type, duration, { sessionOutcome });
   const now = Date.now();
   const latest = notificationFeed[0];
   if (latest && latest.message === message && latest.type === type && now - new Date(latest.time).getTime() < 2000) {
@@ -1687,6 +1693,7 @@ async function saveSettingsPanel() {
     provider: els.selLightProvider?.value || 'none',
     ...collectWizSettings(),
     mode: els.selLightMode?.value || 'gradual_dim',
+    timerBeacon: document.getElementById('chk-wiz-timer-beacon')?.checked === true,
     dimMinutes: clamp(Number(els.lightDimMinutes?.value) || 10, 1, 60),
     hueBridgeIp: els.hueBridgeIp?.value || '',
     // Blank means "keep the stored credential" — the renderer never sees the
@@ -1953,8 +1960,8 @@ async function renderStatusPanel() {
     // UI-R3 P11: each row is a button into its ledger receipt, coloured by
     // the shared RECEIPT_TONE map (renderer-receipts.js) and tagged with its
     // mode: TEST MODE for every dryRun receipt, REAL only for a command main
-    // confirmed (power_executed). Clicks are delegated (#stats-session-summary).
-    const toneOf = r => (typeof receiptToneOf === 'function' ? receiptToneOf(r.result).tone : 'neutral');
+    // recorded (with Windows outcome explicitly unverified). Clicks are delegated (#stats-session-summary).
+    const toneOf = r => (typeof receiptDisplayTone === 'function' ? receiptDisplayTone(r).tone : 'neutral');
     els.statsSessionSummary.innerHTML = receipts.map(r => {
       const started = r.startedAt ? new Date(r.startedAt) : null;
       const valid = started && !Number.isNaN(started.getTime());
@@ -1968,17 +1975,17 @@ async function renderStatusPanel() {
       const duration = typeof receiptRunDetail === 'function'
         ? receiptRunDetail(r)
         : (mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`);
-      const label = typeof humanizeReceiptResult === 'function' ? humanizeReceiptResult(r.result) : (r.result || '');
+      const label = typeof receiptResultLabel === 'function' ? receiptResultLabel(r) : (r.result || '');
       const action = typeof receiptActionName === 'function' ? receiptActionName(r.action) : actionLabel(r.action);
       const details = [action, duration,
         r.pauseCount ? `${r.pauseCount} pause${r.pauseCount === 1 ? '' : 's'}` : '',
         r.snoozeCount ? `${r.snoozeCount} snooze${r.snoozeCount === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
-      const mode = r.dryRun ? 'test' : (r.dryRun === false && r.result === 'power_executed' ? 'real' : '');
+      const mode = r.dryRun ? 'test' : (r.dryRun === false ? 'real' : '');
       const tag = mode === 'test' ? '<span class="proof-tag" data-truth="test">TEST MODE</span>'
-        : mode === 'real' ? '<span class="proof-tag" data-truth="real">REAL</span>'
+        : mode === 'real' ? '<span class="proof-tag" data-truth="real">REAL MODE</span>'
           : '<span class="proof-tag-slot" aria-hidden="true"></span>';
       const id = typeof safeReceiptId === 'function' ? safeReceiptId(r.id) : '';
-      const aria = ['Open receipt', [date, time].filter(Boolean).join(' '), name, mode === 'test' ? 'Test Mode' : (mode === 'real' ? 'Real action' : ''), label].filter(Boolean).join(', ');
+      const aria = ['Open receipt', [date, time].filter(Boolean).join(' '), name, mode === 'test' ? 'Test Mode' : (mode === 'real' ? 'Real mode; Windows outcome unverified' : ''), label].filter(Boolean).join(', ');
       return `<button type="button" class="proof-row" data-tone="${toneOf(r)}"${id ? ` data-receipt-id="${escapeHtml(id)}"` : ''} aria-label="${escapeHtml(aria).replace(/"/g, '&quot;')}">`
         + `<span class="proof-when"><b>${escapeHtml(date)}</b><small>${escapeHtml(time)}</small></span>`
         + '<span class="proof-dot" aria-hidden="true"></span>'
@@ -2137,6 +2144,7 @@ async function renderDevicesPanel() {
   // Wi-Fi Guard: only non-secret fields are read (and kept) here.
   devicesWifiSettings = wifi ? {
     enabled: Boolean(wifi.enabled),
+    blockingAvailable: wifi.blockingAvailable !== false,
     provider: wifi.provider,
     deviceMacs: Array.isArray(wifi.deviceMacs) ? wifi.deviceMacs : [],
     deviceIps: Array.isArray(wifi.deviceIps) ? wifi.deviceIps : [],
@@ -2477,10 +2485,11 @@ function applyWifiGuardCard() {
     const autoBlock = wifi.blockOnDim !== false;
     const adapter = wifi.provider === 'adapter';
     adapterRow = Boolean(wifi.enabled) && adapter;
-    adapterNote = adapterRow && autoBlock;
+    adapterNote = adapterRow && autoBlock && wifi.blockingAvailable !== false;
     let cardState;
     let cardLabel;
     if (blockedNow) { cardState = 'warn'; cardLabel = 'Internet paused'; }
+    else if (wifi.blockingAvailable === false) { cardState = 'warn'; cardLabel = 'Blocking unavailable'; }
     else if (!wifi.enabled) { cardState = 'off'; cardLabel = 'Off'; }
     else if (adapter) { cardState = autoBlock ? 'ok' : 'warn'; cardLabel = autoBlock ? "Armed · this PC's Wi-Fi" : 'Manual only'; }
     else if (!autoBlock) { cardState = 'warn'; cardLabel = 'Manual only'; }
@@ -2497,7 +2506,7 @@ function applyWifiGuardCard() {
   if (els.deviceWifiNow) {
     els.deviceWifiNow.textContent = !live ? '— (no change this session)'
       : live.blocked ? `Internet paused since ${formatEndTime(new Date(live.at).toISOString())}`
-      : `Internet restored ${formatEndTime(new Date(live.at).toISOString())}`;
+      : `Restore acknowledged ${formatEndTime(new Date(live.at).toISOString())} · connectivity unverified`;
     els.deviceWifiNow.classList.toggle('warn', blockedNow);
   }
   // Restore only while paused AND no run is active: during a run the run
@@ -2505,11 +2514,10 @@ function applyWifiGuardCard() {
   const runActive = Boolean(state.running || state.paused);
   if (els.btnDeviceWifiRestore) els.btnDeviceWifiRestore.hidden = !blockedNow || runActive;
   if (els.deviceWifiRestoreResult && blockedNow && runActive && !wifiRestoreBusy) {
-    // main restores on cancel or end only when the guard is on with
-    // 'Restore internet when timer is cancelled' checked.
+    // Normal completion restores; the unchecked option retains only on cancel.
     els.deviceWifiRestoreResult.textContent = wifi && wifi.enabled && wifi.unblockOnCancel !== false
       ? 'A run is active. Cancelling it, or its end, restores internet.'
-      : 'A run is active. Restore here once it ends.';
+      : 'A run is active. Its end restores internet; cancelling retains the block until you restore it.';
     els.deviceWifiRestoreResult.dataset.tone = 'muted';
   } else if (els.deviceWifiRestoreResult && els.deviceWifiRestoreResult.dataset.tone === 'muted') {
     els.deviceWifiRestoreResult.textContent = '';
@@ -2532,7 +2540,7 @@ els.btnDeviceWifiRestore?.addEventListener('click', async () => {
     const r = await api.wifiGuardUnblock?.();
     if (r?.success) {
       restored = true;
-      text = 'Internet restored';
+      text = 'Restore request accepted · connectivity unverified';
       tone = 'ok';
     } else {
       text = r?.error ? `Not restored: ${r.error}` : 'Wi-Fi Guard not configured';
@@ -2974,8 +2982,8 @@ function renderFooterTruth(isIdle) {
   const outcomeKind = isIdle && state.settingsLoaded && state.lastOutcome && state.lastOutcomeTestMode === (state.dryRun === true) ? state.lastOutcome : null;
   // The class is a styling hook: 'complete' only for a REAL completion.
   const outcomePill = outcomeKind && {
-    completed: { cls: state.dryRun ? 'dryrun' : 'complete', slot: 'Done' },
-    dryrun: { cls: 'dryrun', slot: 'Done' },
+    completed: { cls: state.dryRun ? 'dryrun' : 'complete', slot: 'Timer done' },
+    dryrun: { cls: 'dryrun', slot: 'Test done' },
     cancelled: { cls: 'cancelled', slot: 'Cancelled' }
   }[outcomeKind];
   if (els.statusTime) {
@@ -3018,6 +3026,7 @@ function renderFooterTruth(isIdle) {
   let pillLabel;
   if (outcomePill) {
     pillLabel = `${modeWords}, last session ${outcomePill.slot.toLowerCase()}`;
+    if (outcomeKind === 'completed' && !state.dryRun) pillLabel += ', Windows outcome unverified';
   } else {
     const visibleLabel = [statusText, els.statusTime && !els.statusTime.hidden ? els.statusTime.textContent : ''].filter(Boolean).join(' ');
     const namesMode = !modeWords || visibleLabel.startsWith(state.dryRun ? 'Test Mode' : 'Real');
@@ -3050,14 +3059,24 @@ function syncTimerNameDefault() {
   nameEl.classList.toggle('is-default', text === '' || text === DEFAULT_TIMER_NAME);
 }
 
+function updateWallClock(now = new Date(), idleClockVisible = false) {
+  const line = document.getElementById('timer-wall-clock');
+  if (!line) return;
+  line.hidden = !(state.running || state.paused || (idleClockVisible && ['analog', 'hybrid'].includes(state.clockFace)));
+  setTextIfChanged(line, `Now ${formatIdleClockTime(now, false)}`);
+}
+
 function render() {
+  const now = new Date();
   const isIdle = !state.running && !state.paused;
   // UI-R3 P07 completion hold: for 8 s after main reports a completion the
   // face reads 0:00 on an empty arc (no bezel, no clock) while the lamp is out.
   const outcomeHold = isIdle && (state.lastOutcome === 'completed' || state.lastOutcome === 'dryrun');
   const displaySeconds = state.running || state.paused ? state.remainingSeconds : (outcomeHold ? 0 : inputSeconds());
   const totalSeconds = state.running || state.paused ? state.totalSeconds : (outcomeHold ? 1 : displaySeconds);
-  const idleClockVisible = isIdle && state.clockMode && !outcomeHold;
+  // Legacy clockMode:false remains stored, but never turns a duration into a
+  // wall-clock lookalike. Explicit clockFace/format choices still apply.
+  const idleClockVisible = isIdle && !outcomeHold;
   // The fullscreen clock is idle-only: it hides the controls, so a session
   // that starts while it is up (Space, schedule, phone, tray) leaves it at once.
   if (state.fullscreenClock && !isIdle && !fullscreenExitPending) { fullscreenExitPending = true; exitFullscreenClock(); }
@@ -3076,16 +3095,15 @@ function render() {
     button.setAttribute('aria-pressed', button.dataset.clockChoice === state.clockFace ? 'true' : 'false');
   });
   setTextIfChanged(document.getElementById('timer-readout-label'), state.paused ? 'Paused'
-    : state.running ? 'Time remaining' : outcomeHold ? 'Complete' : idleClockVisible ? 'Clock' : 'Ready');
+    : state.running ? 'Time remaining' : outcomeHold ? 'Complete' : 'Ready · not started');
+  updateWallClock(now, idleClockVisible);
 
   // Clock Mode: show current time when idle instead of countdown input.
   let bezelDrawn = false;
   if (idleClockVisible) {
-    const now = new Date();
     const face = state.clockFace || 'digital';
     const showAnalog = face === 'analog' || face === 'hybrid';
     const timeText = formatIdleClockTime(now, false);
-    const compactTimeText = formatIdleClockTime(now, true);
     const dateText = state.clockShowDate ? formatIdleClockDate(now, false) : '';
     const compactDateText = state.clockShowDate ? formatIdleClockDate(now, true) : '';
     if (els.analogClock) {
@@ -3109,19 +3127,13 @@ function render() {
       const planSeconds = planSecondsNow();
       updateIdleBezel(now, planSeconds);
       bezelDrawn = true;
-      setTextIfChanged(els.timerLabel, idleBezelLabel(planSeconds));
-      const past = planEndsPastBedtime(new Date(Date.now() + planSeconds * 1000), state.bedtime);
-      const sub = [face === 'hybrid' ? `Now ${compactTimeText}` : '', past ? 'past bedtime' : ''].filter(Boolean).join(' · ');
-      setTextIfChanged(els.timerSub, sub);
+      setTextIfChanged(els.timerLabel, 'Local time');
+      if (els.timerLabel) els.timerLabel.title = idleBezelLabel(planSeconds, now);
+      const past = planEndsPastBedtime(new Date(now.getTime() + planSeconds * 1000), state.bedtime);
+      setTextIfChanged(els.timerSub, [dateText, past ? 'past bedtime' : ''].filter(Boolean).join(' · '));
     } else {
       if (els.timerSub) els.timerSub.textContent = dateText;
-      // Show next bedtime reminder if configured.
-      const bedtime = state.bedtime || '';
-      if (bedtime && els.timerLabel) {
-        els.timerLabel.textContent = `Bedtime ${bedtime}`;
-      } else {
-        els.timerLabel.textContent = 'ready';
-      }
+      setTextIfChanged(els.timerLabel, 'Local time');
     }
   } else {
     if (els.analogClock) {
@@ -3137,7 +3149,7 @@ function render() {
     els.timerMain.classList.toggle('tm-long', countdownText.length > 5);
     // Short enough to stay on one line inside the desktop ring (the full
     // 'test · no power action' wrapped at 900x800). The pill states it in full.
-    els.timerLabel.textContent = state.running || state.paused ? countdownRingLabel() : 'ready';
+    els.timerLabel.textContent = state.running || state.paused ? countdownRingLabel(now) : 'ready';
     if (els.timerSub) els.timerSub.textContent = '';
   }
 
@@ -3160,8 +3172,8 @@ function render() {
     clearIdleBezel();
     updateRing(displaySeconds, totalSeconds);
   }
-  if (isIdle) updatePlanFacts();
-  else updateSessionHead();
+  if (isIdle) updatePlanFacts(now);
+  else updateSessionHead(now);
 
   els.btnStop.style.display = state.running || state.paused ? 'flex' : 'none';
   els.btnPause.style.display = state.running || state.paused ? 'flex' : 'none';
@@ -3227,7 +3239,7 @@ function render() {
   // only when it changes. The bands carry no live region; the pill is the one.
   const truthText = state.dryRun
     ? 'TEST MODE · No PC power action will run'
-    : `REAL ACTION · ${actionLabel()} will run at end`;
+    : `REAL ACTION · ${actionLabel()} request at end`;
   const pillText = !state.settingsLoaded ? 'Checking mode…' : truthText;
   if (els.testmodePill) {
     if (els.testmodePill.textContent !== pillText) els.testmodePill.textContent = pillText;
@@ -3540,12 +3552,13 @@ function renderTonightHero() {
   // typed on the ring, else 'Countdown' (sessionDisplayName, renderer-utils.js).
   const planTitle = armed ? armed.nightModeTitle : (profile ? profile.name : sessionDisplayName({ timerName: state.timerName }));
   const durationSeconds = armed ? armed.durationSeconds : inputSeconds();
-  const durationMin = Math.max(1, Math.round(durationSeconds / 60));
   const effectiveAction = armed ? armed.action : state.action;
 
-  if (titleEl) titleEl.textContent = `${planTitle} · ${durationMin} min`;
-  if (previewEl) previewEl.textContent = formatTime(durationSeconds);
+  if (titleEl) titleEl.textContent = `${planTitle} · ${formatDuration(durationSeconds)}`;
+  if (previewEl) previewEl.textContent = formatDuration(durationSeconds);
   if (playLabelEl) playLabelEl.textContent = planTitle === 'Countdown' ? 'Start countdown' : `Start ${planTitle}`;
+  const playButton = document.getElementById('ns-play-btn');
+  if (playButton) playButton.setAttribute('aria-label', `${planTitle === 'Countdown' ? 'Start countdown' : `Start ${planTitle}`}, ${formatDuration(durationSeconds)}`);
   // "Ends with": the action this plan really runs, plus the Last Light finale
   // only when one is enabled. Mode (Test/REAL) is stated by the truth pill.
   const endingEl = document.getElementById('ns-meta-ending');
@@ -3586,14 +3599,13 @@ function renderArmedModeBanner() {
     return;
   }
   const m = state.armedNightMode;
-  const durMin = Math.round(m.durationSeconds / 60);
   const actionLabel = { shutdown: 'Shutdown', sleep: 'Sleep', restart: 'Restart', hibernate: 'Hibernate', lock: 'Lock', logout: 'Log out' }[m.action] || m.action;
   banner.style.display = '';
   const titleEl = document.getElementById('armed-mode-title');
   const metaEl = document.getElementById('armed-mode-meta');
   if (titleEl) titleEl.textContent = m.nightModeTitle;
   const ritualLabel = m.ritualId === 'standard' ? 'Standard ritual' : 'Direct';
-  if (metaEl) metaEl.textContent = `${durMin} min \u00B7 ${actionLabel} \u00B7 ${ritualLabel}`;
+  if (metaEl) metaEl.textContent = `${formatDuration(m.durationSeconds)} \u00B7 ${actionLabel} \u00B7 ${ritualLabel}`;
 }
 
 // Check whether the current lobby values still match the armed mode's canonical values.
@@ -3695,11 +3707,10 @@ async function startTimer(seconds = inputSeconds(), origin = null) {
       return;
     }
 
-    state.running = true;
-    state.paused = false;
-    state.totalSeconds = durationSeconds;
-    state.remainingSeconds = durationSeconds;
-    state.endsAt = new Date(Date.now() + durationSeconds * 1000).toISOString();
+    dismissSessionOutcomeToasts();
+    // The IPC snapshot owns both remaining time and deadline. Never overwrite
+    // a gateway-adjusted plan or a newer timer event with a simulated deadline.
+    if (result?.state) applyTimerPayload({ type: 'started', ...result.state });
     state.lastOutcome = null;
     state.outcomeSkipConfirmed = false;
     if (outcomeTimer) clearTimeout(outcomeTimer);
@@ -3737,14 +3748,14 @@ async function togglePause() {
     // the change goes to the notification centre only; elsewhere it toasts.
     const tonightVisible = Boolean(els.panelLib) && els.panelLib.style.display !== 'none';
     if (state.paused) {
-      await api.resumeTimer();
-      state.paused = false;
-      state.running = true;
-      state.endsAt = new Date(Date.now() + state.remainingSeconds * 1000).toISOString();
+      const result = await api.resumeTimer();
+      if (result?.success === false) throw new Error(result.error || 'Resume was refused');
+      if (result?.state) applyTimerPayload({ type: 'resumed', ...result.state });
       notify('Timer resumed', 'success', 3000, { toast: !tonightVisible });
     } else {
-      await api.pauseTimer();
-      state.paused = true;
+      const result = await api.pauseTimer();
+      if (result?.success === false) throw new Error(result.error || 'Pause was refused');
+      if (result?.state) applyTimerPayload({ type: 'paused', ...result.state });
       notify('Timer paused', 'warning', 3000, { toast: !tonightVisible });
     }
     render();
@@ -3972,8 +3983,8 @@ function igniteLamp() {
 }
 
 // -- The morning after (UI-R3 P11) ---------------------------------------------
-// After a REAL Sleep, Hibernate or Shutdown that main confirmed
-// (power_executed, ended < 16 h ago; morningNoteFor in renderer-receipts.js),
+// After recent Sleep, Hibernate or Shutdown command evidence, including
+// legacy/unverified records (morningNoteFor in renderer-receipts.js),
 // Tonight's plan column greets you with one line and a link to the receipt.
 // Never for Test Mode, blocked, failed, interrupted or cancelled runs; hidden
 // while a run is active (render()) and in mini / fullscreen mode (CSS). The
@@ -3992,7 +4003,7 @@ async function refreshMorningNote() {
   }
   const textEl = document.getElementById('morning-note-text');
   const at = formatClock(info.endedAt);
-  if (textEl) textEl.textContent = `${info.lead || 'Latest'}: ${info.action} at ${at} · receipt ${info.shortId}`;
+  if (textEl) textEl.textContent = `${info.lead || 'Latest'}: ${info.action} ${info.outcomeLabel} at ${at} · receipt ${info.shortId}`;
   note.hidden = false;
   if (info.id !== lastMorningNoteId) {
     lastMorningNoteId = info.id;
@@ -4115,7 +4126,16 @@ function applyTimerPayload(data) {
     state.runGraceMinutes = data.gracePeriod !== null && Number.isFinite(Number(data.gracePeriod)) && Number(data.gracePeriod) >= 0 ? Number(data.gracePeriod) : null;
   }
 
-  if (data.type === 'complete') {
+  if (data.type === 'action-status') {
+    if (['blocked', 'spawn_failed', 'command_returned_failure'].includes(data.actionStatus)) dropOutcomeHold();
+    const warningId = data.receiptId || 'unknown-receipt';
+    const storageWarning = data.proofSaved === false && state._receiptSaveWarningId !== warningId;
+    if (!state.running && !state.paused && (data.actionStatus === 'blocked' || data.actionStatus === 'spawn_failed' || data.actionStatus === 'command_returned_failure' || storageWarning)) {
+      if (storageWarning) state._receiptSaveWarningId = warningId;
+      notify(data.message || 'Power outcome unverified', 'warning', 5000, { sessionOutcome: true });
+    }
+    if (typeof refreshProofSurfaces === 'function') refreshProofSurfaces();
+  } else if (data.type === 'complete') {
     state.running = false;
     state.paused = false;
     state.runGraceMinutes = null;
@@ -4133,7 +4153,7 @@ function applyTimerPayload(data) {
       showStreakCelebration(data.streaks.streak);
     }
     // main's completeTimer() sends the one native notification for this.
-    notify(data.message || 'Timer complete', 'success', 5000);
+    notify(data.message || 'Timer complete', 'success', 5000, { sessionOutcome: true });
     setSessionOutcome(state.dryRun ? 'dryrun' : 'completed');
     if (typeof AmbientVisuals !== 'undefined') AmbientVisuals.stop();
   } else if (data.type === 'cancelled') {
@@ -4146,7 +4166,7 @@ function applyTimerPayload(data) {
     hideWarningModal();
     removeWarmFilter();
     setSessionOutcome('cancelled');
-    notify('Session cancelled', 'info');
+    notify('Session cancelled', 'info', 3000, { sessionOutcome: true });
     if (typeof AmbientVisuals !== 'undefined') AmbientVisuals.stop();
   } else if (data.type === 'warning') {
     SoundSystem.playWarning();
@@ -4169,6 +4189,7 @@ function applyTimerPayload(data) {
     }
     if (data.phase === 'lastlight') Soundscape.fadeToZero(3);
   } else if (data.type === 'started') {
+    dismissSessionOutcomeToasts();
     state.phase = 'focus';
     // A countdown really began (any origin): the last outcome is over.
     state.lastOutcome = null;
@@ -4181,7 +4202,7 @@ function applyTimerPayload(data) {
   } else if (data.type === 'tick' && state.remainingSeconds <= 10 && state.remainingSeconds > 0) {
     SoundSystem.playTone(800, 0.04, 'sine', 0.08);
   } else if (data.type === 'dryrun') {
-    notify(data.message || 'Test Mode skipped the power action', 'info');
+    notify(data.message || 'Test Mode skipped the power action', 'info', 3000, { sessionOutcome: true });
     // Test Mode: main confirms it skipped the action. A REAL run reported as
     // 'dryrun' was blocked (QA power lock): withdraw the completion payoff.
     if (state.dryRun) {
@@ -4248,7 +4269,7 @@ function renderTrend(trend) {
       <div class="trend-row">
         <span class="trend-row-label">${escapeHtml(t.label)}</span>
         <div class="trend-row-track"><div class="trend-row-fill" style="width:${pct}%"></div></div>
-        <span class="trend-row-val">${t.nights}/${t.periodLength} runs · avg lights-out ${t.avgBedTime} · ${t.onTimePercent}% before 11 PM</span>
+        <span class="trend-row-val">${t.nights}/${t.periodLength} ritual nights · avg logged time ${t.avgBedTime} · ${t.onTimePercent}% before 11 PM</span>
       </div>
     `;
   }).join('');
@@ -4610,7 +4631,7 @@ if (els.btnWifiUnblockTest) {
     try {
       const result = await api.wifiGuardUnblock?.();
       if (result?.success) noteWifiGuardLive(false);
-      els.wifiTestResult.textContent = result.success ? 'Unblocked!' : `Failed: ${result.error}`;
+      els.wifiTestResult.textContent = result.success ? 'Restore request accepted · connectivity unverified' : `Failed: ${result.error}`;
       els.wifiTestResult.style.color = result.success ? '#4caf50' : '#ff4d4d';
     } catch { els.wifiTestResult.textContent = 'Error'; }
   });
@@ -4619,10 +4640,16 @@ if (els.btnWifiUnblockTest) {
 // WiFi Guard status notification.
 api.onWifiGuardStatus?.(data => {
   if (!data || typeof data !== 'object') return;
+  // A failed provider result must never be presented as restored internet.
+  if (data.success === false || data.recoveryRequired) {
+    notify(data.error || 'Wi-Fi Guard restoration is unconfirmed. Use Restore internet before a power action.', 'error');
+    return;
+  }
   // A real event from main: the only push source for the Devices 'Right now' row.
-  noteWifiGuardLive(Boolean(data.blocked));
+  if (typeof data.blocked !== 'boolean') return;
+  noteWifiGuardLive(data.blocked);
   if (data.blocked) notify('WiFi Guard: Internet blocked', 'warning');
-  else notify('WiFi Guard: Internet restored', 'info');
+  else notify('WiFi Guard: Restore request accepted; connectivity unverified', 'info');
 });
 
 // Bedtime Reminder notification.
@@ -5030,7 +5057,11 @@ if (els.btnExportReceipts) {
         const end = r.endedAt ? new Date(r.endedAt).toLocaleString() : 'N/A';
         const durMin = r.durationSeconds ? Math.floor(r.durationSeconds / 60) : 0;
         ledger += `${start}\n`;
-        ledger += `  Result: ${humanizeReceiptResult(r.result)}\n`;
+        ledger += `  Result: ${receiptResultLabel(r)}\n`;
+        ledger += `  ${receiptTruth(r).text}\n`;
+        for (const event of r.powerEvidence?.events || []) {
+          ledger += `  Command evidence: ${humanizeReceiptResult(event.state)} at ${event.at}${Number.isInteger(event.exitCode) ? ` (exit ${event.exitCode})` : ''}\n`;
+        }
         if (getReceiptProfileLabel(r)) ledger += `  ${getReceiptProfileLabel(r)}\n`;
         ledger += `  Action: ${r.action || 'N/A'}${r.forceShutdown ? ' (Force)' : ''}${r.dryRun ? ' (Test Mode)' : ''}\n`;
         // durationSeconds is the planned length (Fire 10), never 'Duration'.
@@ -5161,6 +5192,7 @@ document.getElementById('receipts-confirm')?.addEventListener('keydown', (event)
       let ledger = `LIGHTS OUT BEDTIME LEDGER\n`;
       ledger += `=========================\n`;
       ledger += `Generated: ${new Date().toLocaleString()}\n`;
+      ledger += `Streak measure: logged non-Test timer endings and emergency overrides; legacy events retained. Not verified Windows actions or measured sleep.\n`;
       ledger += `Current Streak: ${summary.streak} nights\n`;
       ledger += `Best Streak: ${summary.bestStreak} nights\n`;
       ledger += `Total Rituals: ${summary.totalNights}\n`;
@@ -5233,14 +5265,15 @@ document.getElementById('receipts-confirm')?.addEventListener('keydown', (event)
 
   // UI-R3 P13: one delegated listener tracks real unsaved edits. Edits inside
   // [data-live] (persisted at once) or [data-action-scoped] (applied by their
-  // own buttons) never make the panel dirty; everything else waits for Save.
+  // own buttons), or screen-only previews never make the panel dirty;
+  // everything else waits for Save.
   const markSettingsDirty = () => {
     if (!els.panelSet || els.panelSet.style.display === 'none') return;
     els.panelSet.classList.add('is-dirty');
     if (els.setDirtyNote) els.setDirtyNote.textContent = 'Unsaved changes';
   };
   const isStagedSettingsEdit = target => Boolean(target?.closest)
-    && !target.closest('[data-live], [data-action-scoped]');
+    && !target.closest('[data-live], [data-action-scoped], [data-preview-only]');
   ['input', 'change'].forEach(type => {
     els.settingsCategories?.addEventListener(type, event => {
       if (isStagedSettingsEdit(event.target)) markSettingsDirty();
@@ -5559,7 +5592,7 @@ document.getElementById('receipts-confirm')?.addEventListener('keydown', (event)
     }
 
     const clock = event.target.closest ? event.target.closest('.timer-display') : null;
-    if (clock && state.clockMode && !state.running && !state.paused) {
+    if (clock && !state.running && !state.paused) {
       cycleClockFace();
     }
   });
@@ -5654,6 +5687,7 @@ document.getElementById('receipts-confirm')?.addEventListener('keydown', (event)
     provider: els.selLightProvider.value,
     ...collectWizSettings(),
     mode: els.selLightMode.value,
+    timerBeacon: document.getElementById('chk-wiz-timer-beacon')?.checked === true,
     dimMinutes: Number(els.lightDimMinutes.value) || 10,
     hueBridgeIp: els.hueBridgeIp.value,
     hueUsername: els.hueUsername.value,
@@ -5887,10 +5921,14 @@ function updateLightsUI() {
   // UI-R3 P13: the staged provider lives in the (hidden) select, not in
   // state.smartLights, which stays the config main last returned.
   const provider = els.selLightProvider?.value || state.smartLights.provider || 'none';
+  els.selLightMode?.querySelectorAll('option').forEach(option=>{if(['hourglass','orbit','ember'].includes(option.value))option.disabled=provider!=='wiz';});
+  if(provider!=='wiz'&&['hourglass','orbit','ember'].includes(els.selLightMode?.value))els.selLightMode.value='gradual_dim';
   if (els.lightsConfig) {
     els.lightsConfig.style.display = 'block';
   }
   if (els.wizConfig) els.wizConfig.style.display = provider === 'wiz' ? 'block' : 'none';
+  const wizTargets = document.getElementById('wiz-targets');
+  if (wizTargets) wizTargets.hidden = provider !== 'wiz';
   if (els.hueConfig) {
     els.hueConfig.style.display = provider === 'hue' ? 'block' : 'none';
   }
@@ -6115,6 +6153,7 @@ function updateLightsUIFromState() {
   if (els.wizAddresses) els.wizAddresses.value = (state.smartLights.wizAddresses || []).join(', ');
   applyWizSettings(state.smartLights);
   if (els.selLightMode) els.selLightMode.value = state.smartLights.mode;
+  const beacon=document.getElementById('chk-wiz-timer-beacon');if(beacon)beacon.checked=state.smartLights.timerBeacon===true;
   if (els.lightDimMinutes) els.lightDimMinutes.value = state.smartLights.dimMinutes;
   if (els.hueBridgeIp) els.hueBridgeIp.value = state.smartLights.hueBridgeIp;
   if (els.hueUsername) {
@@ -6322,13 +6361,11 @@ void (async function initializeRenderer() {
   setTimeout(fit, 150);
 })();
 
-// Clock Mode: tick the displayed time every second while idle. With clock
-// mode off, only the plan's "Ends at" fact is refreshed (textContent, and only
-// when its minute-granular text actually changes).
+// One wall-clock presentation tick. Active/paused updates touch only local-time
+// text; the countdown render is owned by engine payloads, never this interval.
 (function setupClockTick() {
   setInterval(() => {
-    if (state.running || state.paused) return;
-    if (state.clockMode) render();
-    else updatePlanFacts();
+    if (state.running || state.paused) { updateWallClock(); updateSessionHead(); }
+    else render();
   }, 1000);
 })();

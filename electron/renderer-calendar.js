@@ -295,7 +295,7 @@ async function startFromScheduleEvent(evt) {
   const action = evt.action || calBuiltinAction || 'shutdown';
   const profile = evt.profileId ? (state.profiles || []).find(profile => profile.id === evt.profileId) : null;
   if (evt.profileId && !profile) { notify('Choose an available routine for this rule first.', 'warning'); return false; }
-  const dryRun = Boolean(state.dryRun || profile?.dryRun);
+  const dryRun = Boolean(state.dryRun || profile?.dryRun || evt.testMode);
   const result = await api.startTimer({ durationSeconds: Math.round(ms / 1000), action, dryRun,
     profileId: profile?.id || null, forceShutdown: false, gracePeriod: profile?.gracePeriod ?? state.graceMinutes,
     startOrigin: profile ? 'profile-start' : 'schedule', origin: 'schedule' });
@@ -337,6 +337,7 @@ async function loadCalendarConfig() {
   try {
     const cal = await api.getCalendarSettings();
     if (!cal) return;
+    renderRoutineOutcomes(cal.routineOutcomes || []);
     // Exactly main's test (checkCalendarAutoStart: `!calSettings.enabled`).
     calConfigEnabled = Boolean(cal.enabled);
     calAutoStartArmed = Boolean(cal.autoStartFromEvents);
@@ -354,6 +355,24 @@ async function loadCalendarConfig() {
     renderScheduleState();
   } catch (e) {
     console.error('Failed to load calendar config:', e);
+  }
+}
+
+function renderRoutineOutcomes(entries) {
+  const container = document.getElementById('routine-outcomes');
+  if (!container) return;
+  const labels = { claimed: 'Claimed; dispatch not confirmed', accepted: 'Ritual accepted; timer pending', running: 'Timer running', simulated: 'Completed in Test Mode',
+    completed: 'Legacy outcome unverified', unverified: 'Windows outcome unverified', timer_elapsed: 'Timer finished; request pending',
+    action_requested: 'Power requested; Windows outcome unverified', command_spawned: 'Command started; Windows outcome unverified',
+    command_returned_failure: 'Command returned an error; Windows outcome unverified', spawn_failed: 'Command could not start',
+    cancelled: 'Cancelled', interrupted: 'Interrupted', skipped: 'Skipped', failed: 'Failed', unavailable: 'Unavailable' };
+  container.replaceChildren();
+  if (!entries.length) { container.textContent = 'No calendar routine has run yet.'; return; }
+  for (const entry of entries) {
+    const row = document.createElement('p');
+    const label = entry.status === 'running' && entry.receiptAvailable === false ? 'Timer status unverified; receipt unavailable' : labels[entry.status] || 'Outcome unknown';
+    row.textContent = `${entry.name || 'Routine'} · ${label}${entry.reason ? ' · ' + entry.reason : ''}${entry.proofSaved === false ? ' · receipt save unavailable' : ''}`;
+    container.append(row);
   }
 }
 
@@ -637,6 +656,14 @@ function stopScheduleClock() {
 // tick. loadCalendarConfig() already re-renders from the cached events.
 async function renderSchedulePage() {
   await loadCalendarConfig();
+  if (typeof api !== 'undefined' && api.routineFileList && document.getElementById('routine-transfer-body')) {
+    if (!window.routineTransfer) window.routineTransfer = RoutineTransferUI.mount(document.getElementById('routine-transfer-body'), {
+      platform:'windows', list:()=>api.routineFileList(), exportFile:selection=>api.routineFileExport(selection),
+      openFile:()=>api.routineFileOpen(), preview:text=>api.routineFilePreview(text),
+      commitImport:(text,policy)=>api.routineFileImport(text,policy), adopt:async options=>{const r=await api.routineFileAdopt(options);await loadCalendarConfig();return r;},
+      start:async id=>{const r=await api.routineFileStart(id);if(!r?.success)throw Error(r?.error || 'Timer could not start');}
+    }); else await window.routineTransfer.refresh();
+  }
   if (Date.now() - calLastFetchAt > CAL_REFETCH_MS) await fetchAndRenderEvents();
   startScheduleClock();
 }
@@ -690,6 +717,15 @@ function updateRuleRepeatFields() {
   }
 }
 
+function updateRuleActionPreview() {
+  const preview = document.getElementById('rule-action-preview'); if (!preview) return;
+  const minutes = Math.max(5, Number(document.getElementById('rule-duration')?.value) || 60);
+  const action = SCHEDULE_ACTION_LABELS[document.getElementById('rule-action')?.value] || 'Shutdown';
+  const profile = (state.profiles || []).find(p => p.id === document.getElementById('rule-profile')?.value);
+  const test = Boolean(state.dryRun || profile?.dryRun || document.getElementById('rule-test-mode')?.checked);
+  preview.textContent = `On this PC: start a ${minutes} min timer, then ${test ? 'simulate ' : ''}${action.toLowerCase()}. ${test ? 'Nothing will power off.' : 'Uses your power safety settings.'}`;
+}
+
 function setupMonthPlanner() {
   const month=document.getElementById('planner-month');
   if(!month) return;
@@ -705,11 +741,13 @@ function setupMonthPlanner() {
   toggles('rule-monthdays',[...Array.from({length:31},(_,i)=>i+1),-1],day=>day===-1?'Last':String(day));
   toggles('rule-months',Array.from({length:12},(_,i)=>i+1),m=>new Date(2026,m-1,1).toLocaleDateString([], {month:'short'}));
   document.getElementById('rule-repeat')?.addEventListener('change',updateRuleRepeatFields);
+  document.getElementById('rule-actions')?.addEventListener('input', updateRuleActionPreview);
   document.getElementById('rule-profile')?.addEventListener('change',event=>{
     const profile=(state.profiles || []).find(profile=>profile.id===event.target.value);if(!profile)return;
     document.getElementById('rule-label').value=profile.name;
     document.getElementById('rule-duration').value=String(Math.max(1,Math.min(1440,Math.round((profile.seconds || 3600)/60))));
     if(['shutdown','sleep','hibernate'].includes(profile.action))document.getElementById('rule-action').value=profile.action;
+    updateRuleActionPreview();
   });
   renderMonthPlanner();
 }
@@ -797,7 +835,7 @@ function ruleCardHtml(rule) {
         <div class="schedule-rule-label">${escapeHtml(label)}${off ? '<span class="sch-rule-off">Off</span>' : ''}</div>
         <div class="sch-rule-line" aria-hidden="true"><strong>${escapeHtml(c.action)}</strong>${notes}</div>
         <span class="sr-only">${ruleTruthLine(rule)}</span>
-        <div class="sch-rule-recurrence">${escapeHtml(ruleRecurrenceLabel(rule))}${rule.profileId ? ` · ${escapeHtml((state.profiles || []).find(profile => profile.id === rule.profileId)?.name || 'Routine unavailable')}` : ''}</div>
+        <div class="sch-rule-recurrence">${escapeHtml(ruleRecurrenceLabel(rule))}${rule.testMode ? ' · Test Mode only' : ''}${rule.profileId ? ` · ${escapeHtml((state.profiles || []).find(profile => profile.id === rule.profileId)?.name || 'Routine unavailable')}` : ''}</div>
         ${!rule.repeat || rule.repeat === 'weekly' ? `<div class="sch-rule-days" aria-label="Active days: ${ruleAttr(formatRuleDays(rule.days) || 'none')}">${ruleDayDots(rule.days)}</div>` : ''}
       </div>
       <div class="schedule-rule-actions">
@@ -923,6 +961,7 @@ function openRuleForm(ruleId, selectedDate) {
   if (timeEl) timeEl.value = rule?.time || '22:30';
   if (durationEl) durationEl.value = rule?.durationMinutes || 60;
   if (actionEl) actionEl.value = rule?.action || 'shutdown';
+  const testModeInput = document.getElementById('rule-test-mode'); if (testModeInput) testModeInput.checked = Boolean(rule?.testMode);
   document.getElementById('rule-repeat').value=selectedDate?'once':(rule?.repeat || 'weekly');
   document.getElementById('rule-date').value=selectedDate || rule?.date || CalendarRecurrence.dateKey(new Date());
   const profiles=document.getElementById('rule-profile');profiles.replaceChildren();
@@ -930,6 +969,7 @@ function openRuleForm(ruleId, selectedDate) {
   for(const profile of state.profiles || []) { if(!['shutdown','sleep','hibernate'].includes(profile.action))continue;const option=document.createElement('option');option.value=profile.id;option.textContent=profile.name;profiles.append(option); }
   if(rule?.profileId && !(state.profiles || []).some(profile=>profile.id===rule.profileId)) { const missing=document.createElement('option');missing.value=rule.profileId;missing.textContent='Routine unavailable — choose another';profiles.append(missing); }
   profiles.value=rule?.profileId || '';
+  updateRuleActionPreview();
   for(const [id,values] of [['rule-monthdays',rule?.monthDays || [new Date().getDate()]],['rule-months',rule?.months || Array.from({length:12},(_,i)=>i+1)]])document.querySelectorAll('#'+id+' .day-toggle').forEach(button=>{const selected=values.includes(Number(button.dataset.value));button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected));});
   updateRuleRepeatFields();
   const days = rule?.days || ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
@@ -960,6 +1000,7 @@ async function saveRuleFromForm() {
   const monthDays=[...document.querySelectorAll('#rule-monthdays .day-toggle.active')].map(button=>Number(button.dataset.value));
   const months=[...document.querySelectorAll('#rule-months .day-toggle.active')].map(button=>Number(button.dataset.value));
   const profileId=document.getElementById('rule-profile').value || null;
+  const testMode=Boolean(document.getElementById('rule-test-mode')?.checked);
   if(repeat==='weekly'&&!days.length){notify('Pick at least one active day','warning');return;}
   if(repeat==='monthly'&&!monthDays.length){notify('Pick at least one day of the month','warning');return;}
   if(repeat!=='once'&&!months.length){notify('Pick at least one active month','warning');return;}
@@ -968,11 +1009,11 @@ async function saveRuleFromForm() {
 
   if (editingRuleId) {
     const rule = scheduleRules.find(r => r.id === editingRuleId);
-    if (rule) Object.assign(rule, { label, time, durationMinutes, action, days, repeat, date, monthDays, months, profileId });
+    if (rule) Object.assign(rule, { label, time, durationMinutes, action, days, repeat, date, monthDays, months, profileId, testMode });
   } else {
     scheduleRules.push({
       id: `rule-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
-      label, time, durationMinutes, action, days, repeat, date, monthDays, months, profileId, enabled: true
+      label, time, durationMinutes, action, days, repeat, date, monthDays, months, profileId, testMode, enabled: true
     });
   }
   const button=document.getElementById('btn-save-rule'); if(button)button.disabled=true;

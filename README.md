@@ -1,25 +1,33 @@
-# Lights Out PC
+# Lights Out for Windows and Android
 
-**Bedtime Mode for Windows — a shutdown timer that gets out of your way until it matters.**
+**Local night timers and routines, with independent execution on each device.**
 A [Proof Foundry](https://prooffoundry.com) product.
 
-Set a time. Press START. Lights Out PC walks you through a calm wind-down, then a
-cinematic Last Light final countdown before your PC shuts off. Emergency cancel
-is always available. No surprise force-quits. No cloud account. No drama.
+On Windows, set a time and press START for a calm wind-down and Last Light
+countdown before the chosen PC action. Emergency cancel stays available.
+The native Android app has its own offline timer, local WiZ controls and phone
+calendar routines. Optional PC controls connect to a running desktop; phone and
+PC timers and settings remain independent. No cloud account is required.
 
 [![Release v11.2.0](https://img.shields.io/badge/Release-v11.2.0-blue?style=for-the-badge)](https://github.com/lazelife420-spec/Lights-out/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?style=for-the-badge)](https://theprooffoundry.com/lights-out/)
+[![Platforms: Windows and Android](https://img.shields.io/badge/Platforms-Windows%20%2B%20Android-0078D6?style=for-the-badge)](companion-android/README.md)
 
 **Website:** [prooffoundry.com/lights-out](https://prooffoundry.com/lights-out/)
 
-## Download
+## Windows downloads and Android source
 
 **[→ Lights Out releases — installer, portable ZIP, SHA256 checksums](https://github.com/lazelife420-spec/Lights-out/releases/latest)**
 
 - `Lights-Out-Setup-v11.2.0.exe` — NSIS installer, standard Windows install
 - `Lights-Out-Portable-v11.2.0-win-x64.zip` — extract, then run `Lights Out.exe`; no install needed
 - `SHA256SUMS.txt` — checksums for both artifacts
+
+Windows v11.2.0 is published. Android is a separate release train: this release
+includes its source and debug/emulator qualification, with **no new
+production-signed Android APK**. See the [Android build and usage guide](companion-android/README.md)
+and [physical-device QA checklist](docs/ANDROID_FIELD_QA.md). Emulator evidence
+does not establish physical phone/router/bulb reliability.
 
 <img src="docs/assets/lights-out-keyart-hero-ui.png" width="720" alt="Lights Out PC key art showing the glowing lamp, word-mark, tagline, and cockpit dashboard UI">
 
@@ -39,17 +47,22 @@ keystroke away (`Ctrl+Shift+S`).
 
 - **No account.** Nothing to sign up for.
 - **No subscription.** The whole app is free.
-- **No ads. No telemetry.** Your data stays on your machine.
-- **No cloud.** Receipts and settings live in `AppData`, never a server.
+- **No ads. No telemetry.** Data stays on the device that owns it.
+- **No cloud requirement.** Windows settings and receipts live in `AppData`;
+  Android keeps its timer, routines, light targets and occurrence ledger locally.
 
-One outbound connection by default: a periodic check against the GitHub Releases
-API for a newer version. No personal data. No usage analytics. Smart-light,
+The Windows app periodically checks Proof Foundry machine-truth release metadata
+for a newer version. No personal data. No usage analytics. Smart-light,
 calendar, and Wi-Fi features only reach out when you configure them.
 
 ### Standalone phone app
 
 The [Android app](companion-android/README.md) has its own offline reminder timer,
 with the countdown ring, optional analog clock, and native background alerts.
+Its Lighting, Routines and Calendar tabs execute on the phone. Direct local WiZ
+commands require the bulbs' network; native calendar starts require Alarms &
+reminders access. Visible alerts require notification permission. Android
+force-stop suspends delivery until the app is reopened.
 Use **PC controls** to pair with a desktop and control its timer and routines over
 the same Wi-Fi. Phone and PC timers stay independent; the phone works with the PC
 off. PC power actions and PC-connected lighting routines require a running PC.
@@ -63,10 +76,10 @@ runtime checks and installer/portable verification before publication. Source on
 main alone does not establish that a release is published.
 
 - Latest release: https://github.com/lazelife420-spec/Lights-out/releases/latest
-- v11.2.0 release target: https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.2.0
+- Published Windows v11.2.0: https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.2.0
 - Smoke suite: 299 checks
 
-## Surface
+## Windows desktop surface
 
 The app is a single Electron edition under **`electron/`** - a cockpit-style
 dashboard. (A legacy PowerShell / WinForms "classic" app was removed on
@@ -94,8 +107,10 @@ contributor handoff.
   restored on launch.
 - **Customization console** - accent color, theme (Midnight / Carbon / Aurora),
   ring style, window opacity, and sound volume, applied live.
-- **Smart Lights** - WiZ Wi-Fi lights, Philips Hue, or HTTP webhook (gradual dim,
-  warm shift, off-at-end). WiZ discovery and connection verification read status;
+- **Smart Lights** - experimental WiZ local control (gradual dim, warm shift,
+  off-at-end). Hue and generic webhook adapter source/configuration also exist;
+  current qualification does not establish physical hardware support for them.
+  WiZ discovery and connection verification read status;
   automatic lighting stays off until enabled. Select individual WiZ lights or
   locally named room groups, and choose brightness, white temperature, custom
   color, or a WiZ preset in Settings → Lighting. Discovery keeps your selection.
@@ -166,8 +181,9 @@ npm run icons   # regenerate app icon/logo from assets/*.svg
 npm run smoke   # syntax, settings round-trips, startup/tray guards, UI wiring, preview-safe defaults
 ```
 
-CI (`.github/workflows/ci.yml`) runs lint + smoke on Linux and packages on Windows
-for every push.
+CI (`.github/workflows/ci.yml`) qualifies Linux tests, isolated Android debug
+tests/lint/build and Windows runtime/package checks on its declared branches and
+pull requests. Publication requires all release gates and explicit release intent.
 
 ## License
 
@@ -175,4 +191,4 @@ for every push.
 
 ---
 
-<sub>Lights Out™ — a [Proof Foundry](https://prooffoundry.com) product. Built for Windows 10/11.</sub>
+<sub>Lights Out™ — a [Proof Foundry](https://prooffoundry.com) product. Windows desktop and standalone native Android.</sub>

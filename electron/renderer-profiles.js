@@ -373,11 +373,7 @@ async function applyProfile(profileId, opts = {}) {
       if (idx >= 0) state.profiles[idx] = result.profile;
     }
 
-    // Dismiss clock mode so the user sees the loaded timer value, not the clock face.
-    if (state.clockMode) {
-      state.clockMode = false;
-      state._clockDismissedByProfile = true;
-    }
+    // Loading changes Tonight's Plan, not the idle wall clock or chosen face.
 
     // Apply timer options from profile
     const testModeOn = state.dryRun === true;
@@ -410,7 +406,6 @@ async function applyProfile(profileId, opts = {}) {
 
     // Selection is always inert. Only an explicit "start" action may run it.
     if (shouldStartOnProfileSelection(opts) && !state.running && !state.paused) {
-      state._clockDismissedByProfile = false; // timer starting, no restore needed
       startTimer(result.timerOptions?.durationSeconds, 'profile-start');
     }
     // UI-R3 Fire 08: a card click / Enter lands on Tonight with the loaded
