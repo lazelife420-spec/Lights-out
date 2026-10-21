@@ -2,15 +2,37 @@
 // Append-only, local-only, no cloud telemetry.
 // Stores in userData/run-receipts.json, keeps latest 100.
 
-const fs = require('fs');
 const path = require('path');
+const { createPersistence } = require('./receiptPersistence');
 
 const RECEIPTS_FILE = 'run-receipts.json';
 const MAX_RECEIPTS = 100;
-const RECEIPT_VERSION = 1;
+const RECEIPT_VERSION = 2;
 
 let cache = null;
 let configPath = null;
+let persistence = null;
+
+function storage() {
+  if (!persistence) {
+    const file = getConfigPath();
+    persistence = file ? createPersistence(file, {
+      diagnose: ({ code }) => console.warn('[receipt-persistence]', code, 'Proof save unavailable; timer intent is preserved.')
+    }) : {
+      load: () => ({ receipts: [] }), save: () => false,
+      getStatus: () => ({ saved: false, pending: true, recoveredFrom: null, errorCode: 'USERDATA_UNAVAILABLE' })
+    };
+  }
+  return persistence;
+}
+
+function getPersistenceStatus() { return storage().getStatus(); }
+function view(receipt) { return receipt ? { ...receipt, persistence: getPersistenceStatus() } : null; }
+function assertReadable(data) {
+  if (!data.receipts.length && getPersistenceStatus().saved === false) {
+    throw Object.assign(new Error('Receipts unavailable; existing history has been preserved'), { code: 'RECEIPTS_UNAVAILABLE' });
+  }
+}
 
 // Lazily get the userData path. Falls back to os.tmpdir() if not in Electron.
 function getConfigPath() {
@@ -20,8 +42,15 @@ function getConfigPath() {
       const { app } = require('electron');
       userDataDir = app.getPath('userData');
     } catch {
+      if (process.versions.electron) {
+        console.warn('[receipt-persistence] USERDATA_UNAVAILABLE; no alternate user profile will be written.');
+        return null;
+      }
       const os = require('os');
-      userDataDir = os.tmpdir();
+      // Non-Electron callers have no application profile. Keep separate test /
+      // CLI processes from corrupting each other's pending receipt transitions.
+      configPath = path.join(os.tmpdir(), `lightsout-${process.pid}-${RECEIPTS_FILE}`);
+      return configPath;
     }
     configPath = path.join(userDataDir, RECEIPTS_FILE);
   }
@@ -30,24 +59,12 @@ function getConfigPath() {
 
 function load() {
   if (cache) return cache;
-  try {
-    const raw = fs.readFileSync(getConfigPath(), 'utf-8');
-    const parsed = JSON.parse(raw);
-    // Validate structure.
-    if (!Array.isArray(parsed.receipts)) throw new Error('bad structure');
-    cache = parsed;
-  } catch {
-    // Malformed or missing file: recover safely.
-    cache = { receipts: [] };
-  }
+  cache = storage().load();
   return cache;
 }
 
-function save() {
-  if (!cache) return;
-  try {
-    fs.writeFileSync(getConfigPath(), JSON.stringify(cache, null, 2), 'utf-8');
-  } catch { /* best effort */ }
+function save(options) {
+  return cache ? storage().save(cache, options) : false;
 }
 
 function generateId() {
@@ -60,6 +77,8 @@ function createRunReceipt(timerState) {
     id: generateId(),
     version: RECEIPT_VERSION,
     startedAt: new Date().toISOString(),
+    plannedEndsAt: timerState.endsAt || null,
+    timerElapsedAt: null,
     endedAt: null,
     action: timerState.action || 'shutdown',
     profileId: timerState.profileId || null,
@@ -89,7 +108,7 @@ function createRunReceipt(timerState) {
   data.receipts.push(receipt);
   prune(data);
   save();
-  return receipt;
+  return view(receipt);
 }
 
 // Update a receipt by id.
@@ -99,7 +118,28 @@ function updateRunReceipt(id, updates) {
   if (!receipt) return null;
   Object.assign(receipt, updates);
   save();
-  return receipt;
+  return view(receipt);
+}
+
+// Capture events at their source. An exit status is never an OS outcome.
+// Legacy result values remain stored intact and are interpreted at read time.
+function recordActionEvent(id, event) {
+  const allowed = ['timer_elapsed', 'action_requested', 'command_spawned', 'command_returned_success',
+    'command_returned_failure', 'spawn_failed', 'outcome_unverified', 'cancelled', 'blocked'];
+  if (!event || !allowed.includes(event.state)) throw new TypeError('Unknown action evidence');
+  const receipt = load().receipts.find(r => r.id === id);
+  if (!receipt) return null;
+  const evidence = receipt.powerEvidence || { version: 1, systemOutcome: 'unverified', events: [] };
+  const entry = { ...event, systemOutcome: 'unverified' };
+  evidence.events.push(entry);
+  evidence.systemOutcome = 'unverified';
+  receipt.powerEvidence = evidence;
+  receipt.result = entry.state;
+  if (entry.state === 'timer_elapsed') receipt.timerElapsedAt = entry.at;
+  if (entry.state === 'action_requested') receipt.powerCommand = entry.command
+    ? [entry.command, ...(entry.arguments || [])].join(' ') : receipt.action;
+  save();
+  return view(receipt);
 }
 
 // Mark a receipt as paused (increment pauseCount).
@@ -109,7 +149,7 @@ function receiptPaused(id) {
   if (!receipt) return null;
   receipt.pauseCount = (receipt.pauseCount || 0) + 1;
   save();
-  return receipt;
+  return view(receipt);
 }
 
 // Mark a receipt as snoozed (increment snoozeCount).
@@ -119,7 +159,7 @@ function receiptSnoozed(id) {
   if (!receipt) return null;
   receipt.snoozeCount = (receipt.snoozeCount || 0) + 1;
   save();
-  return receipt;
+  return view(receipt);
 }
 
 // Mark a warning shown (increment warningsShown).
@@ -129,7 +169,7 @@ function receiptWarning(id) {
   if (!receipt) return null;
   receipt.warningsShown = (receipt.warningsShown || 0) + 1;
   save();
-  return receipt;
+  return view(receipt);
 }
 
 // Look up a single receipt by id (used to decide whether a persisted
@@ -137,12 +177,12 @@ function receiptWarning(id) {
 function getReceiptById(id) {
   if (!id) return null;
   const data = load();
-  return data.receipts.find(r => r.id === id) || null;
+  return view(data.receipts.find(r => r.id === id));
 }
 
 function getReceiptByOccurrence(key) {
   if (!key) return null;
-  return load().receipts.find(r => r.routineOccurrenceKey === key) || null;
+  return view(load().receipts.find(r => r.routineOccurrenceKey === key));
 }
 
 // Fallback correlation for a persisted activeTimer snapshot saved by a
@@ -173,12 +213,21 @@ function reconcileOrphanedRunningReceipts(protectedReceiptId, reconciledAt) {
   const timestamp = reconciledAt || new Date().toISOString();
   const reconciledIds = [];
   for (const receipt of data.receipts) {
-    if (receipt.result !== 'running') continue;
-    if (protectedReceiptId && receipt.id === protectedReceiptId) continue;
-    receipt.result = 'interrupted';
-    receipt.endedAt = timestamp;
-    receipt.reconciliationReason = 'orphaned-running-receipt';
+    const inFlight = ['action_requested', 'command_spawned', 'completing'].includes(receipt.result);
+    if (receipt.result !== 'running' && receipt.result !== 'timer_elapsed' && !inFlight) continue;
+    if (!inFlight && protectedReceiptId && receipt.id === protectedReceiptId) continue;
+    const lastState = receipt.result;
+    receipt.result = inFlight ? 'outcome_unverified' : 'interrupted';
+    if (!inFlight || !receipt.endedAt) receipt.endedAt = timestamp;
+    receipt.reconciliationReason = inFlight ? 'host-ended-during-action; Windows outcome unknown' : 'orphaned-running-receipt';
     receipt.reconciledAt = timestamp;
+    if (inFlight) {
+      receipt.lastActionState = lastState;
+      const evidence = receipt.powerEvidence || { version: 1, events: [] };
+      evidence.systemOutcome = 'unverified';
+      evidence.events.push({ state: 'outcome_unverified', at: timestamp, systemOutcome: 'unverified', reason: 'startup-reconciliation', lastState });
+      receipt.powerEvidence = evidence;
+    }
     reconciledIds.push(receipt.id);
   }
   if (reconciledIds.length) save();
@@ -188,27 +237,32 @@ function reconcileOrphanedRunningReceipts(protectedReceiptId, reconciledAt) {
 // Get the latest receipt.
 function getLatestReceipt() {
   const data = load();
-  return data.receipts.length ? data.receipts[data.receipts.length - 1] : null;
+  assertReadable(data);
+  return view(data.receipts[data.receipts.length - 1]);
 }
 
 // List receipts (most recent first).
 function listReceipts(limit = 20) {
   const data = load();
-  return data.receipts.slice(-limit).reverse();
+  assertReadable(data);
+  return data.receipts.slice(-limit).reverse().map(view);
 }
 
 // All receipts, oldest first -- unlike listReceipts() (most-recent-first,
 // capped at a display limit), this is the full stored ledger for export.
 function getAllReceiptsForExport() {
   const data = load();
-  return [...data.receipts];
+  assertReadable(data);
+  return data.receipts.map(view);
 }
 
 // Clear all receipts.
 function clearReceipts() {
+  const previous = load();
   cache = { receipts: [] };
-  save();
-  return { cleared: true };
+  const cleared = save({ recoverPending: false });
+  if (!cleared) cache = previous;
+  return { cleared };
 }
 
 // Prune to MAX_RECEIPTS, keeping the most recent.
@@ -222,8 +276,8 @@ function prune(data) {
 // - Outcome: every receipt lands in exactly one bucket, so completed +
 //   cancelled + dryRun + blocked + interrupted + other always equals total
 //   ('other' = running, completing or an unknown result). 'completed' is a
-//   REAL completion only (power_executed / completed with dryRun !== true);
-//   a completed result on a Test Mode receipt joins the 'dryRun' (Test
+//   an unverified non-Test ending only; it never means Windows acted.
+//   A completed result on a Test Mode receipt joins the 'dryRun' (Test
 //   completed) bucket, so a Test Mode run is never counted as real.
 // - Mode (UI-R3 Fire 10): testRuns (dryRun === true) + realRuns (dryRun ===
 //   false) + unknownModeRuns (anything else, e.g. a receipt with no dryRun
@@ -231,28 +285,37 @@ function prune(data) {
 // Read-only: nothing stored is changed.
 function getReceiptStats() {
   const data = load();
+  assertReadable(data);
   const receipts = data.receipts;
   const total = receipts.length;
-  const isFinished = r => r.result === 'power_executed' || r.result === 'completed';
+  // Compatibility key 'completed' now labels UNVERIFIED endings in every UI.
+  // Timer endings and independently observed Windows outcomes are separate.
+  const isFinished = r => ['power_executed', 'completed', 'command_returned_success', 'outcome_unverified'].includes(r.result);
   const completed = receipts.filter(r => isFinished(r) && r.dryRun !== true).length;
   const cancelled = receipts.filter(r => r.result === 'cancelled').length;
   const dryRun = receipts.filter(r => r.result === 'dry_run_completed' || (isFinished(r) && r.dryRun === true)).length;
-  const blocked = receipts.filter(r => r.result === 'blocked' || r.result === 'error').length;
+  const blocked = receipts.filter(r => ['blocked', 'error', 'spawn_failed', 'command_returned_failure'].includes(r.result)).length;
   const interrupted = receipts.filter(r => r.result === 'interrupted').length;
   const other = total - completed - cancelled - dryRun - blocked - interrupted;
   const testRuns = receipts.filter(r => r.dryRun === true).length;
   const realRuns = receipts.filter(r => r.dryRun === false).length;
   const unknownModeRuns = total - testRuns - realRuns;
-  return { total, completed, cancelled, dryRun, blocked, interrupted, other, testRuns, realRuns, unknownModeRuns };
+  const timerFinished = receipts.filter(r => r.timerElapsedAt || ['power_executed', 'completed', 'dry_run_completed'].includes(r.result)).length;
+  const legacyUnverified = receipts.filter(r => ['power_executed', 'completed'].includes(r.result) && r.dryRun !== true).length;
+  return { total, completed, cancelled, dryRun, blocked, interrupted, other, testRuns, realRuns, unknownModeRuns,
+    timerFinished, legacyUnverified, systemOutcomesObserved: 0, persistence: getPersistenceStatus() };
 }
 
 function reset() {
   cache = null;
+  persistence = null;
 }
 
 module.exports = {
   createRunReceipt,
   updateRunReceipt,
+  recordActionEvent,
+  getPersistenceStatus,
   receiptPaused,
   receiptSnoozed,
   receiptWarning,

@@ -157,10 +157,10 @@ test('renderWindDownScope: Settings note in both modes (amber only in Test Mode)
   const set = test.elements['set-testmode-scope'];
   const plan = test.elements['plan-scope-note'];
   assert.equal(set.hidden, false);
-  assert.equal(set.textContent, 'Test Mode holds back only the power action. Wind-down still runs: closes 2 apps · blocks sites.');
+  assert.equal(set.textContent, 'Test Mode skips automatic timer effects. Real sessions may run: closes 2 apps · blocks sites.');
   assert.equal(set.dataset.tone, 'test');
   assert.equal(plan.hidden, false);
-  assert.equal(plan.textContent, 'Still runs in Test Mode: closes 2 apps · blocks sites.');
+  assert.equal(plan.textContent, 'Skipped in Test Mode: closes 2 apps · blocks sites.');
 
   const real = createSandbox({ dryRun: false });
   real.setWindDownFacts(real.pickWindDownFacts(CONFIGURED));
@@ -198,5 +198,5 @@ test('renderWindDownScope: hides both when nothing runs or settings have not loa
 test('renderWindDownScope: an unreadable section is named, never guessed', () => {
   const s = createSandbox({ dryRun: true });
   s.setWindDownFacts(s.pickWindDownFacts({ app: { nightLightOnDim: true }, contentBlocker: null, wifiGuard: null, lights: { enabled: false } }));
-  assert.equal(s.elements['set-testmode-scope'].textContent, 'Test Mode holds back only the power action. Wind-down still runs: turns on Night Light · 2 settings could not be read.');
+  assert.equal(s.elements['set-testmode-scope'].textContent, 'Test Mode skips automatic timer effects. Real sessions may run: turns on Night Light · 2 settings could not be read.');
 });

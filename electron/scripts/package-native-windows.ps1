@@ -78,6 +78,7 @@ foreach ($relative in $files) {
     Copy-Item -LiteralPath $src -Destination $dst -Force
 }
 # 4. Copy package manifests and install production dependencies
+& (Join-Path $PSScriptRoot 'build-windows-suspend.ps1') -SourceRoot $SourceRoot -OutputDirectory (Join-Path $AppDir 'native')
 Copy-Item (Join-Path $SourceRoot 'package.json') (Join-Path $AppDir 'package.json') -Force
 Copy-Item (Join-Path $SourceRoot 'package-lock.json') (Join-Path $AppDir 'package-lock.json') -Force
 Push-Location $AppDir

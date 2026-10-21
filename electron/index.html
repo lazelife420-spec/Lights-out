@@ -8,9 +8,8 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="handoff.css">
   <link rel="stylesheet" href="light-experience.css">
-  <link rel="stylesheet" href="studio.css">
 </head>
-<body class="studio">
+<body>
   <!-- Onboarding First-Run Wizard -->
   <div class="onboarding-overlay" id="onboarding" style="display:none">
     <div class="onboarding-container">
@@ -240,8 +239,7 @@
              translate(467): its 11-wide halo then clears the U stem (x 524)
              by 5.5 units, and the LIGHTS|OUT word space stays the wider gap. -->
         <div class="app-title">
-          <span class="studio-wordmark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15.2A8.4 8.4 0 0 1 8.8 4 8.4 8.4 0 1 0 20 15.2Z"/><path d="M18 3v4M16 5h4"/></svg>Lights Out</span>
-          <span class="brand-wordmark" id="brand-wordmark" aria-hidden="true">
+          <span class="brand-wordmark" id="brand-wordmark" role="img" aria-label="Lights Out">
             <svg class="wm-static" viewBox="44 88 556 116" aria-hidden="true" focusable="false">
               <defs>
                 <linearGradient id="wm-lamp" x1="0" y1="0" x2="1" y2="1">
@@ -367,7 +365,6 @@
 
       <!-- LIB: Tonight / main lobby panel (default screen) -->
       <div class="ns-main-panel" id="ns-panel-lib">
-      <header class="studio-tonight-head"><div><div class="page-eyebrow">TONIGHT <span class="studio-device-tag"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3" width="15" height="10" rx="2"/><path d="M7 17h6M10 13v4"/></svg>This PC</span></div><h1 id="studio-tonight-title">Leave the day behind.</h1><p id="studio-tonight-copy">A little more time. Then a softer landing.</p></div></header>
 
       <!-- Armed Night Mode banner (shown when Use Tonight loads a mode into the lobby) -->
       <div class="armed-mode-banner" id="armed-mode-banner" style="display:none" role="status" aria-live="polite">
@@ -397,8 +394,8 @@
              last 16 h; never for Test Mode or a failed run. -->
         <p class="morning-note" id="morning-note" hidden><button type="button" class="device-link morning-note-link" id="morning-note-link"><svg class="chip-glyph" viewBox="0 0 18 18" aria-hidden="true" focusable="false"><path d="M3.5 15.5h7M7 15.5l-1.5-5 4.5-4"/><path d="M9.2 3.6l5 2.1-1.5 3.4-5-2.1z"/><path d="M13 10.2l1.2 1.6"/></svg><em class="morning-note-text" id="morning-note-text"></em><span aria-hidden="true">&rsaquo;</span></button></p>
         <dl class="plan-facts">
-          <div class="plan-fact"><dt>Runs</dt><dd id="ns-preview-time">28:00</dd></div>
-          <div class="plan-fact"><dt id="plan-out-at-label" title="if started now">Ends at</dt><dd id="plan-out-at">--:--</dd></div>
+          <div class="plan-fact"><dt>Duration</dt><dd id="ns-preview-time">28 min</dd></div>
+          <div class="plan-fact"><dt id="plan-out-at-label">If started now</dt><dd id="plan-out-at">--:--</dd></div>
           <div class="plan-fact plan-fact-ending"><dt>Ends with</dt><dd id="ns-meta-ending"></dd></div>
         </dl>
         <p class="plan-reach">Controls: <span id="ns-meta-reach">This PC</span></p>
@@ -421,8 +418,8 @@
             <p class="tonight-target-note" id="tonight-target-note" hidden><svg class="chip-glyph" viewBox="0 0 18 18" aria-hidden="true" focusable="false"><circle cx="9" cy="9" r="6.5"/><path d="M9 5.5V9l2.5 1.6"/></svg><span>Ends at <strong id="tonight-target-when"></strong> (set on Schedule)</span><button type="button" class="link-btn tonight-target-clear" id="btn-tonight-target-clear">Clear</button></p>
           </div>
           <!-- Quick start: each chip starts that many minutes at once (one tap). -->
-          <details class="plan-field studio-quick-start">
-            <summary class="plan-field-label" id="plan-quick-label">Quick start <span>Starts immediately</span></summary>
+          <div class="plan-field" id="plan-quick-start">
+            <span class="plan-field-label" id="plan-quick-label">Quick start</span>
             <div class="chips-row" role="group" aria-labelledby="plan-quick-label">
               <button class="chip" data-min="5" aria-label="5 minutes">5m</button>
               <button class="chip" data-min="15" aria-label="15 minutes">15m</button>
@@ -431,7 +428,7 @@
               <button class="chip" data-min="60" aria-label="1 hour">1h</button>
               <button class="chip" data-min="120" aria-label="2 hours">2h</button>
             </div>
-          </details>
+          </div>
           <div class="plan-field">
             <span class="plan-field-label">Ending</span>
             <!-- v11.2 Tonight's Plan: explicit manual action selection. Writes
@@ -480,7 +477,6 @@
 
       <!-- Timer Ring Section: the instrument -->
       <section class="timer-section">
-        <div class="studio-horizon" aria-hidden="true"><svg viewBox="0 0 800 300" fill="none" preserveAspectRatio="none"><defs><linearGradient id="horizon-line"><stop stop-color="#e6ab7b" stop-opacity="0"/><stop offset=".48" stop-color="#e6ab7b" stop-opacity=".6"/><stop offset="1" stop-color="#aba1e9" stop-opacity="0"/></linearGradient></defs><path d="M-60 195Q340 70 860 195" stroke="url(#horizon-line)"/><path d="M-60 223Q340 98 860 223" stroke="url(#horizon-line)" opacity=".28"/><path d="M-60 259Q340 134 860 259" stroke="url(#horizon-line)" opacity=".12"/></svg></div>
         <div class="ring-container">
           <!-- UI-R3 Fire 04: the instrument. Decorative (#timer-main carries
                role=timer). The mask holds three 7-unit cuts at the centres of
@@ -508,7 +504,7 @@
           </svg>
           <div class="timer-display">
             <div class="timer-name" id="timer-name" contenteditable="true" spellcheck="false" data-placeholder="Name this session" title="Name this session">Last Call</div>
-            <div class="timer-readout-label" id="timer-readout-label">Clock</div>
+            <div class="timer-readout-label" id="timer-readout-label">Ready · not started</div>
             <svg class="analog-clock" id="analog-clock" viewBox="0 0 100 100" style="display:none" aria-hidden="true">
               <circle class="analog-rim" cx="50" cy="50" r="46.5"/>
               <g class="analog-ticks" id="analog-ticks"></g>
@@ -521,8 +517,9 @@
               <text class="analog-digital" id="analog-digital" x="50" y="68" text-anchor="middle"></text>
               <text class="analog-date" id="analog-date" x="50" y="78" text-anchor="middle"></text>
             </svg>
-            <div class="time-main" id="timer-main" role="timer" aria-atomic="true">28:20</div>
-            <div class="time-label" id="timer-label">until shutdown</div>
+            <div class="time-main" id="timer-main" role="timer" aria-atomic="true">--:--</div>
+            <div class="timer-wall-clock" id="timer-wall-clock" hidden></div>
+            <div class="time-label" id="timer-label">Local time</div>
             <div class="time-sub" id="timer-sub"></div>
           </div>
           <button class="fullscreen-clock-btn" id="btn-fullscreen-clock" title="Full screen clock" aria-label="Full screen clock" style="display:none"><svg class="chip-glyph" viewBox="0 0 18 18" aria-hidden="true" focusable="false"><path d="M3 7V3h4M11 3h4v4M15 11v4h-4M7 15H3v-4"/></svg><span>Full screen</span></button>
@@ -1101,7 +1098,7 @@
           <ol class="night-strip" id="night-strip" aria-label="Last 14 nights, oldest first"></ol>
           <p class="night-strip-empty" id="night-strip-empty" hidden>No runs recorded on this PC yet</p>
           <ul class="routine-legend">
-            <li><i class="lg" data-outcome="real" aria-hidden="true"></i>Real action sent</li>
+            <li><i class="lg" data-outcome="real" aria-hidden="true"></i>Outcome unverified</li>
             <li><i class="lg" data-outcome="test" aria-hidden="true"></i>Test Mode (not counted)</li>
             <li><i class="lg" data-outcome="cancel" aria-hidden="true"></i>Cancelled or interrupted</li>
             <li data-legend="bad" hidden><i class="lg" data-outcome="bad" aria-hidden="true"></i>Blocked or failed</li>
@@ -1109,7 +1106,7 @@
             <li><i class="lg" data-outcome="none" aria-hidden="true"></i>No run</li>
             <li data-legend="nodata" hidden><i class="lg" data-outcome="nodata" aria-hidden="true"></i>No data</li>
           </ul>
-          <p class="proof-routine-note">From local receipts on this PC. Streaks count completed real runs only, not measured sleep.</p>
+          <p class="proof-routine-note">Streaks count logged non-Test timer endings and emergency overrides; legacy entries remain. They do not verify Windows actions or measure sleep.</p>
           <details class="routine-details" id="routine-details">
           <summary>Routine details</summary>
           <div class="streaks-panel">
@@ -1117,7 +1114,7 @@
                  runs only). No ring, no trophies, no 30-day grid. Static. -->
             <div class="routine-spec" id="sleep-score-section">
               <div class="routine-cell">
-                <span class="routine-cell-label">Real streak</span>
+                <span class="routine-cell-label">Ritual streak</span>
                 <span class="routine-cell-val streak-number" id="streak-count">0</span>
               </div>
               <div class="routine-cell">
@@ -1125,11 +1122,11 @@
                 <span class="routine-cell-val" id="streak-best">0</span>
               </div>
               <div class="routine-cell">
-                <span class="routine-cell-label">Real completions</span>
+                <span class="routine-cell-label">Ritual nights</span>
                 <span class="routine-cell-val" id="streak-total">0</span>
               </div>
               <div class="routine-cell">
-                <span class="routine-cell-label">Avg lights-out</span>
+                <span class="routine-cell-label">Avg logged time</span>
                 <span class="routine-cell-val" id="streak-weekavg">--:--</span>
               </div>
               <div class="routine-cell">
@@ -1212,12 +1209,13 @@
           <label class="checkbox-label">
             <span class="set-row-text">
               <span class="set-row-title">Test Mode <span class="set-live-tag">Applies now</span></span>
-              <span class="set-row-desc" id="set-dryrun-desc">On: the timer runs, but no power action happens. Off: the action really runs.</span>
+              <span class="set-row-desc" id="set-dryrun-desc">On: rehearse the timer without automatic device or system changes. Off: the selected actions run.</span>
             </span>
             <input type="checkbox" id="chk-dryrun" data-live="1" aria-describedby="set-dryrun-desc set-testmode-scope">
           </label>
-          <!-- UI-R3 Fire 02: what Test Mode does not hold back (renderWindDownScope). -->
+          <!-- UI-R3 Fire 02: automatic effects skipped by Test Mode (renderWindDownScope). -->
           <p class="set-scope-note" id="set-testmode-scope" hidden></p>
+          <p class="help-text">Manual device controls and independent alarms or schedules remain live.</p>
         </div>
         <div class="option-group">
           <label for="sel-action">Action</label>
@@ -1283,10 +1281,9 @@
         <div class="option-group">
           <label class="checkbox-label">
             <span class="set-row-text">
-              <span class="set-row-title">Show current time when idle <span class="set-live-tag">Applies now</span></span>
-              <span class="set-row-desc">Off: Tonight shows the length of the timer you would start instead of the clock.</span>
+              <span class="set-row-title">Idle clock</span>
+              <span class="set-row-desc">The ring shows local time until you start. Duration stays in Tonight's Plan. Choose your clock face in Appearance.</span>
             </span>
-            <input type="checkbox" id="chk-clock-mode" checked data-live="1">
           </label>
         </div>
 
@@ -1671,12 +1668,12 @@
         <!-- WiFi Guard Section -->
         <div class="option-section wifi-guard-section" data-settings-category="protection">
           <details class="advanced-settings-group"><summary style="cursor:pointer;margin-bottom:8px"><h3>WiFi Guard <span class="tag-pill">Experimental</span></h3></summary>
-          <p class="help-text">Requires a compatible router or your own webhook. Windows Firewall on this PC cannot block a different phone or tablet on the LAN.</p>
+          <p class="help-text" id="wifi-blocking-hold">Wi-Fi blocking is unavailable in this candidate until crash-safe recovery is ready. Saved setup is preserved, but timers and Test Block cannot change your router or adapter. Explicit restoration remains available; existing blocks from other builds are not recovered automatically.</p>
 
           <div class="option-group">
             <label class="checkbox-label">
-              <input type="checkbox" id="chk-wifi-guard">
-              Enable WiFi Guard
+              <input type="checkbox" id="chk-wifi-guard" disabled aria-describedby="wifi-blocking-hold">
+              Saved WiFi Guard setting (blocking unavailable)
             </label>
           </div>
 
@@ -1737,15 +1734,15 @@
             <div class="option-group">
               <label class="checkbox-label">
                 <input type="checkbox" id="chk-wifi-unblock-cancel" checked>
-                Restore internet when timer is cancelled
+                Restore on cancel (completion always restores; unchecked retains only on cancel)
               </label>
             </div>
 
             <div class="option-group set-action-row" data-action-scoped="1">
-              <button type="button" id="btn-wifi-block-test" class="btn-secondary">Test Block</button>
-              <button type="button" id="btn-wifi-unblock-test" class="btn-secondary">Test Unblock</button>
+              <button type="button" id="btn-wifi-block-test" class="btn-secondary" disabled aria-describedby="wifi-blocking-hold">Test Block — unavailable</button>
+              <button type="button" id="btn-wifi-unblock-test" class="btn-secondary">Restore internet</button>
               <span id="wifi-test-result" style="font-size:11px;color:var(--text-muted)"></span>
-              <small class="help-text set-action-note">Test Block also saves this Wi-Fi Guard setup.</small>
+              <small class="help-text set-action-note">Restore internet is an explicit live provider request, not proof of end-to-end connectivity.</small>
             </div>
           </div>
           </details>
@@ -2034,7 +2031,7 @@
             </label>
           </div>
 
-          <!-- "Show current time when idle" and Time Format live in General. -->
+          <!-- Time Format lives in General; the idle clock always shows local time. -->
           <div class="option-group">
             <label for="cz-clockface">Clock Face <span class="set-live-tag">Applies now</span></label>
             <select id="cz-clockface" data-live="1">
@@ -2483,7 +2480,7 @@
     <div class="modal-content streak-celebration-content" style="text-align:center; max-width: 320px;">
       <div class="celebration-seal" aria-hidden="true"><svg viewBox="0 0 64 64" focusable="false"><circle class="seal-track" cx="32" cy="32" r="26"/><circle class="seal-arc" cx="32" cy="32" r="26" pathLength="100"/><path class="seal-check" d="M22 33l7 7 13-15"/></svg></div>
       <h3 id="streak-celebration-title" tabindex="-1" style="font-size:18px; color: var(--accent-amber); margin-bottom: 8px;">Ritual Complete!</h3>
-      <p style="font-size:13px; color: var(--text-secondary); margin-bottom: 16px;">You kept your promise tonight. Rest well.</p>
+      <p style="font-size:13px; color: var(--text-secondary); margin-bottom: 16px;">Your timer finished. Windows outcome remains unverified.</p>
       <div class="celebration-streak-number" id="celebration-streak-number" style="font-size: 64px; font-weight: 800; color: #fff; text-shadow: 0 0 20px rgba(245,166,35,0.5); line-height: 1;">0</div>
       <div style="font-size:11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 24px;">Completion Streak</div>
       <button class="btn btn-primary" id="btn-celebration-dismiss" style="width: 100%;">Good night</button>
@@ -2522,7 +2519,7 @@
           </li>
           <li>
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 3.5h12v17l-2.4-1.6-2.4 1.6-2.4-1.6-2.4 1.6L6 20.5z"/><path d="M9 8.5h6"/><path d="M9 12h6"/></svg>
-            <div><b>Every timer run leaves a receipt</b><span>Test Mode runs are labeled Test Mode.</span></div>
+            <div><b>Local receipts distinguish timer and command evidence</b><span>Test Mode is labeled. Windows outcomes remain unverified; save errors are shown.</span></div>
           </li>
         </ul>
 

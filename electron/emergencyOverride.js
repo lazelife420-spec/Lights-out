@@ -52,7 +52,7 @@ function getOverrideConsequences(timerState) {
   }
 
   // 2. Accountability partner will be notified.
-  if (accConfig.enabled && accConfig.partners?.length) {
+  if (!timerState?.dryRun && accConfig.enabled && accConfig.partners?.length) {
     consequences.push({
       type: 'accountability',
       severity: 'high',
@@ -112,7 +112,7 @@ async function executeOverride(reason, timerState) {
   // 1. Notify accountability partner.
   try {
     const accConfig = settingsStore.getSection('accountability') || {};
-    if (accConfig.enabled) {
+    if (!timerState?.dryRun && accConfig.enabled) {
       await accountability.notifyPartner('OVERRIDE', {
         config: accConfig,
         timerName: settingsStore.getSection('app')?.timerName || 'Last Call',

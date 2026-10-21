@@ -58,9 +58,13 @@ function createLedger({ read, write }) {
         const receipt = (entry.timerReceiptId ? receiptById(entry.timerReceiptId) : null) || receiptByOccurrence(entry.occurrenceKey);
         if (receipt) entry.timerReceiptId = receipt.id || entry.timerReceiptId;
         const result = receipt?.result;
-        const status = { running: 'running', dry_run_completed: 'simulated', power_executed: 'completed', cancelled: 'cancelled',
-          interrupted: 'interrupted', blocked: 'failed', error: 'failed' }[result];
+        const status = { running: 'running', dry_run_completed: 'simulated', power_executed: 'unverified', completed: 'unverified',
+          timer_elapsed: 'timer_elapsed', action_requested: 'action_requested', command_spawned: 'command_spawned',
+          command_returned_success: 'unverified', outcome_unverified: 'unverified', command_returned_failure: 'command_returned_failure',
+          spawn_failed: 'spawn_failed', cancelled: 'cancelled', interrupted: 'interrupted', blocked: 'failed', error: 'failed' }[result];
         if (status) { entry.status = status; entry.actions = entry.actions.map(a => a.type === 'timer.start' ? { ...a, status } : a); }
+        entry.receiptAvailable = Boolean(receipt);
+        if (receipt) { entry.commandStatus = result; entry.systemOutcome = 'unverified'; entry.proofSaved = receipt.persistence?.saved; }
         return entry;
       });
     }

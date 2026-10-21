@@ -1,12 +1,12 @@
 'use strict';
 const crypto=require('node:crypto'),h=require('./routineHandoff'),{createInbox}=require('./routineHandoffInbox');
-// Owns application state only. Transport must supply a real authenticated TLS
-// socket through attach(); no production listener or connection is created here.
+// Manual transport is off at startup. A short pairing window requires local
+// confirmation and an exact public peer certificate; attach still verifies TLS.
 function createController({identity,store,qr=link=>require('qrcode').toDataURL(link,{width:400,margin:3,errorCorrectionLevel:'M'})}){
- let chain=Promise.resolve(),book,inbox,currentId,invitation,opened,preview,note='Local pairing screens are ready. LAN transport is disabled in this build.';
+ let chain=Promise.resolve(),book,inbox,currentId,invitation,opened,preview,listener,note='Pairing is off. Connect devices explicitly to exchange inactive routine intent.';
  const pending=new Map(),connections=new Map(),offers=new Map();
  const queue=fn=>{const next=chain.then(fn);chain=next.catch(()=>{});return next;};
- function closeAll(){for(const c of [...pending.values(),...connections.values()]){clearTimeout(c.expiryTimer);c.socket.destroy();}pending.clear();connections.clear();offers.clear();preview=null;}
+ function closeAll(){listener?.stop();for(const c of [...pending.values(),...connections.values()]){clearTimeout(c.expiryTimer);c.socket.destroy();}pending.clear();connections.clear();offers.clear();preview=null;}
  function ready(){const state=identity.status();if(state.status!=='ready'){closeAll();throw Error(state.error||'Create a device identity first.');}if(currentId!==state.fingerprint){closeAll();currentId=state.fingerprint;book=new h.TrustBook(currentId,'windows',()=>identity.now(),identity.trustStore(currentId));inbox=createInbox(book,store);}return state;}
  function expire(){if(!book)return;const now=identity.now();if(invitation&&invitation.expiresAt<=now)invitation=null;if(opened&&opened.expiresAt<=now)opened=null;
   for(const [id,p]of pending)if(p.expiresAt<=now){p.socket.destroy();pending.delete(id);note='Pairing invitation expired. Generate a new invitation.';}
@@ -15,7 +15,7 @@ function createController({identity,store,qr=link=>require('qrcode').toDataURL(l
  }
  function connection(id){ready();const c=connections.get(id);if(!c)throw Error('This device is not securely connected. Local transport must be attached first.');book.check(c.proof);return c;}
  function snapshot(){const state=identity.status();if(state.status==='ready'){ready();expire();}else closeAll();
-  return {identity:state,transport:'isolated',invitation:invitation||null,opened:opened||null,pairings:[...pending.values()].map(p=>({id:p.id,fingerprint:p.peerId,platform:p.platform,verified:true,expiresAt:p.expiresAt})),peers:state.status==='ready'?book.listPeers().map(p=>({...p,connected:connections.has(p.id),canOffer:Boolean(connections.get(p.id)?.challenge&&connections.get(p.id).challengeExpires>identity.now())})):[],offers:[...offers.values()].map(o=>({id:o.id,peerId:o.peerId,bytes:o.bytes,sha256:o.sha256,expiresAt:o.expiresAt})),preview:preview?{id:preview.id,peerId:preview.peerId,expiresAt:preview.expiresAt,value:preview.value}:null,sources:store.list().choices,note};
+  return {identity:state,transport:'manual',connection:listener?.status(),invitation:invitation||null,opened:opened||null,pairings:[...pending.values()].map(p=>({id:p.id,fingerprint:p.peerId,platform:p.platform,verified:true,expiresAt:p.expiresAt})),peers:state.status==='ready'?book.listPeers().map(p=>({...p,connected:connections.has(p.id),canOffer:Boolean(connections.get(p.id)?.challenge&&connections.get(p.id).challengeExpires>identity.now())})):[],offers:[...offers.values()].map(o=>({id:o.id,peerId:o.peerId,bytes:o.bytes,sha256:o.sha256,expiresAt:o.expiresAt})),preview:preview?{id:preview.id,peerId:preview.peerId,expiresAt:preview.expiresAt,value:preview.value}:null,sources:store.list().choices,note};
  }
  function disconnect(c){clearTimeout(c.expiryTimer);let active=false;for(const [id,p]of pending)if(p===c){pending.delete(id);active=true;}if(connections.get(c.peerId)===c){connections.delete(c.peerId);active=true;}for(const [id,o]of offers)if(o.peerId===c.peerId){inbox?.endpoint.cancel(id);offers.delete(id);}if(active)note='Secure connection closed. A fresh connection and transfer confirmation are required.';}
  async function readLoop(c){try{while(!c.socket.destroyed){const bytes=await h.readFrame(c.socket,125000);await queue(()=>{
@@ -26,7 +26,7 @@ function createController({identity,store,qr=link=>require('qrcode').toDataURL(l
    else {const result=inbox.receive(c.proof,bytes);preview={id:result.sessionId,peerId:c.peerId,expiresAt:f.expires,value:result.preview};offers.delete(f.id);note='Review the received routine. Saving creates inactive intent only.';}
   });}}catch{c.socket.destroy();await queue(()=>disconnect(c));}}
  function connected(c){clearTimeout(c.expiryTimer);connections.set(c.peerId,c);void readLoop(c);note='Authenticated device connected. Transfers still require recipient acceptance and local import confirmation.';}
- return {
+ const api = {
   identity,
   attach(socket,link){return queue(()=>{
    try {ready();const invite=h.parseInvitation(link,identity.now()),proof=h.authenticateSocket(socket,currentId,invite.id),state=identity.trustStore(currentId).read();
@@ -42,7 +42,9 @@ function createController({identity,store,qr=link=>require('qrcode').toDataURL(l
     if(action==='status')return {ok:true,result:snapshot()};
     if(action==='setup'||action==='replace'){closeAll();await identity.initialize({confirmed:args.confirmed===true,replace:action==='replace',expectedFingerprint:args.expectedFingerprint});currentId=null;ready();note='Device identity ready. Other devices must explicitly enroll this identity.';}
     else {ready();expire();
-     if(action==='invite'){const link=h.invitation(currentId,'windows',identity.now()),value=h.parseInvitation(link,identity.now());invitation={link,expiresAt:value.expires,qr:await qr(link)};note='Invitation expires in two minutes. It contains public identity only.';}
+     if(action==='invite'){const link=h.invitation(currentId,'windows',identity.now()),value=h.parseInvitation(link,identity.now());invitation={link,expiresAt:value.expires,qr:await qr(link),card:require('./handoffConnection').makeCard(identity,link)};note='Invitation expires in two minutes. It contains public identity only.';}
+     else if(action==='listen'){if(pending.size||connections.size)throw Error('Close the existing connection before opening another pairing window.');await listener.start(args);note='Pairing window open for one phone. Copy the PC connection details to your phone, then compare fingerprints.';}
+     else if(action==='disconnect'){closeAll();note='Pairing window and connections closed. Saved device trust is unchanged.';}
      else if(action==='open'){const p=h.parseInvitation(args.link,identity.now()),used=identity.trustStore(currentId).read().used;if(used.some(r=>r.key===p.id+':'+p.nonce&&r.expires>identity.now()))throw Error('This invitation has already been used. Generate a new one.');opened={fingerprint:p.id,platform:p.platform,expiresAt:p.expires,verified:false};note='Invitation opened. Approval remains unavailable until a secure connection proves this fingerprint.';}
      else if(action==='approve'){const p=pending.get(args.id);if(!p||p.expiresAt<=identity.now())throw Error('Pairing invitation expired or disconnected.');book.enroll(p.link,p.proof,args.fingerprint,{label:args.label,replaceId:args.replaceId||null});pending.delete(p.id);connected(p);}
      else if(action==='reject'){const p=pending.get(args.id);if(p){pending.delete(p.id);p.socket.destroy();}note='Pairing rejected. No device was enrolled.';}
@@ -60,5 +62,7 @@ function createController({identity,store,qr=link=>require('qrcode').toDataURL(l
   });},
   close(){return queue(()=>closeAll());}
  };
+ listener=require('./handoffConnection').createListener({identity,attach:(socket,link)=>api.attach(socket,link)});
+ return api;
 }
 module.exports={createController};

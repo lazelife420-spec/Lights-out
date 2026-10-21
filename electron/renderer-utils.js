@@ -143,6 +143,23 @@ function formatClock(date) {
   return formatIdleClockTime(date, false);
 }
 
+// A wall-clock target, qualified by its local calendar day (not a 24-hour
+// offset, which is wrong over DST). Countdown values never come from here.
+function formatClockTarget(date, now = new Date()) {
+  const time = formatClock(date);
+  if (!time) return '';
+  const sameDay = other => date.getFullYear() === other.getFullYear()
+    && date.getMonth() === other.getMonth() && date.getDate() === other.getDate();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const day = sameDay(now) ? 'today' : sameDay(tomorrow) ? 'tomorrow'
+    : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  // A repeated/skipped DST hour needs its target zone to remain intelligible.
+  const zone = date.getTimezoneOffset() !== now.getTimezoneOffset()
+    ? new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(date).find(part => part.type === 'timeZoneName')?.value : '';
+  return `${time}${zone ? ` ${zone}` : ''} · ${day}`;
+}
+
 // -- One name per session (UI-R3 Fire 02) --------------------------------------
 // 'Tonight's plan' is what is set up to run. A session is named by its Night
 // Mode, else its My Mode, else the name the user typed on the ring, else
@@ -184,7 +201,7 @@ function pickWindDownFacts({ app, contentBlocker, wifiGuard, lights } = {}) {
     } : null,
     contentBlocker: cb ? { enabled: Boolean(cb.enabled), blockOnDim: cb.blockOnDim !== false } : null,
     wifiGuard: wg ? {
-      enabled: Boolean(wg.enabled),
+      enabled: Boolean(wg.enabled) && wg.blockingAvailable !== false,
       blockOnDim: wg.blockOnDim !== false,
       provider: typeof wg.provider === 'string' ? wg.provider : '',
       // A selected device is stored as a MAC + IP pair: count devices, not fields.
@@ -368,4 +385,4 @@ function showContextMenu(x, y, items) {
 }
 // This script loads at the end of <body>, after every dialog container.
 initDialogLayers();
-/* exported clamp, formatTimeAgo, hexToRgba, escapeHtml, showContextMenu, LO_GLYPHS, loGlyph, ORIGIN_LABELS, nightKey, nightKeyDate, nightKeyShift, formatIdleClockTime, formatClock, DEFAULT_TIMER_NAME, sessionDisplayName, pickWindDownFacts, windDownEffects, twoStepNext */
+/* exported clamp, formatTimeAgo, hexToRgba, escapeHtml, showContextMenu, LO_GLYPHS, loGlyph, ORIGIN_LABELS, nightKey, nightKeyDate, nightKeyShift, formatIdleClockTime, formatClock, formatClockTarget, DEFAULT_TIMER_NAME, sessionDisplayName, pickWindDownFacts, windDownEffects, twoStepNext */

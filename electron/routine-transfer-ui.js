@@ -22,6 +22,7 @@
     async function showPreview(text) {
       pendingText=null;preview.replaceChildren();
       const result=await adapter.preview(text);pendingText=text;
+      status.textContent='Review the routine contents before saving inactive drafts.';
       preview.append(node('h4','Review file contents'));
       for(const r of result.routines){const row=node('article',undefined,'transfer-item');row.append(node('strong',r.name),node('p',r.actions.map(a=>actionText(a)).join(' · ')));
         for(const issue of r.issues)row.append(node('p',issue,'transfer-warning'));if(r.conflict)row.append(node('p','Routine ID already exists.','transfer-warning'));preview.append(row);}

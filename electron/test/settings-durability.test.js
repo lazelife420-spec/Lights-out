@@ -21,6 +21,7 @@ const Module = require('module');
 // Create isolated tmp dir and mock electron before requiring settings.
 let tmpDir;
 let settingsModule;
+let encryptionEnabled = false;
 const origLoad = Module._load;
 const settingsPath = path.resolve(path.join(__dirname, '..', 'settings.js'));
 
@@ -29,14 +30,15 @@ function installMock() {
     if (request === 'electron') {
       return {
         app: { getPath: () => tmpDir },
-        safeStorage: { isEncryptionAvailable: () => false }
+        safeStorage: { isEncryptionAvailable: () => encryptionEnabled, encryptString: text => Buffer.from('fixture:'+text), decryptString: data => data.toString().slice(8) }
       };
     }
     return origLoad.apply(this, arguments);
   };
 }
 
-function freshSetup() {
+function freshSetup(encrypted = false) {
+  encryptionEnabled = encrypted;
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-def006-'));
   delete require.cache[settingsPath];
   installMock();
@@ -209,16 +211,17 @@ test('stale .tmp file from interrupted save is cleaned on load', () => {
 // --- ENCRYPTION PRESERVATION ---
 
 test('secret encryption round-trip preserved through save/load', () => {
-  freshSetup();
+  freshSetup(true);
   try {
     settingsModule.updateSection('wifiGuard', { routerPass: 'mysecret' });
     // In-memory cache should have plaintext.
     const section = settingsModule.getSection('wifiGuard');
     assert.strictEqual(section.routerPass, 'mysecret');
-    // On disk, since safeStorage.isEncryptionAvailable returns false in test,
-    // the value should be stored as plaintext fallback.
+    // The fixture keystore protects the on-disk value; the old plaintext
+    // fallback is explicitly forbidden by the security closeout.
     const disk = JSON.parse(fs.readFileSync(settingsFile(), 'utf8'));
-    assert.strictEqual(disk.wifiGuard.routerPass, 'mysecret', 'plaintext fallback when encryption unavailable');
+    assert.match(disk.wifiGuard.routerPass, /^enc:v1:/);
+    assert.notStrictEqual(disk.wifiGuard.routerPass, 'mysecret');
     // Reload and verify.
     reloadSettings();
     const reloaded = settingsModule.getSection('wifiGuard');

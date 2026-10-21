@@ -305,6 +305,8 @@ body {
 .ambient-canvas {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
   z-index: 0;
   pointer-events: none;
   opacity: 0;
@@ -6787,14 +6789,15 @@ body.bezel .timer-display.clock-idle .time-label {
 .plan-field .setup-row,
 .plan-field .chips-row { justify-content: flex-start; margin: 0; }
 .plan-field .setup-row { gap: 6px; }
-.num-btn { width: 32px; height: 32px; border-radius: var(--radius-pill); font-size: 15px; }
-.num-btn:focus-visible, .unit-btn:focus-visible, .chip:focus-visible, .action-chip:focus-visible, .btn-ritual:focus-visible {
+.num-btn { width: 36px; height: 36px; border-radius: var(--radius-pill); font-size: 15px; }
+.num-btn:focus-visible, .unit-btn:focus-visible, .chip:focus-visible, .action-chip:focus-visible, .btn-ritual:focus-visible,
+.plan-field .setup-row input[type="number"]:focus-visible {
   outline: 2px solid var(--accent-cyan);
   outline-offset: 2px;
 }
 .plan-field .setup-row input[type="number"] {
   width: 64px;
-  height: 32px;
+  height: 36px;
   padding: 0 6px;
   font: 450 18px/1 var(--font-instrument);
   font-variant-numeric: tabular-nums lining-nums;
@@ -6808,7 +6811,7 @@ body.bezel .timer-display.clock-idle .time-label {
 .plan-field .unit-btn,
 .plan-field .unit-btn:first-child,
 .plan-field .unit-btn:last-child {
-  min-height: 26px;
+  min-height: 34px;
   padding: 4px 11px;
   border: 0;
   border-radius: var(--radius-pill);
@@ -9626,6 +9629,7 @@ body.is-paused .ns-nav-item[data-ns-tab="lib"] .ns-nav-icon { color: var(--accen
 .night-dust {
   position: absolute;
   inset: 0;
+  overflow: clip;
   pointer-events: none;
   opacity: var(--lights-level);
   -webkit-mask-image:
@@ -9819,6 +9823,19 @@ body[data-ring="minimal"] .ring-progress { stroke-width: 3.5; }
 .time-main { white-space: nowrap; }
 .time-label,
 .time-sub { text-wrap: balance; }
+
+/* Local clock is independent of a frozen/active countdown. No live-region
+   announcements per second; the existing session announcer retains ownership. */
+.timer-wall-clock {
+  margin: 4px auto 0;
+  font: 600 clamp(11px, 4cqw, 15px)/1.25 var(--font-instrument);
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.timer-wall-clock[hidden] { display: none; }
+.timer-display .time-label { max-width: 78cqw; margin-inline: auto; line-height: 1.35; }
+#plan-out-at { font-size: clamp(16px, 1.6vw, 24px); line-height: 1.3; text-wrap: balance; }
 
 /* Winding down dims the violet: never amber, so it never reads as paused.
    Paused (body.is-paused.is-paused, P03) still wins; render() never sets a
@@ -11306,8 +11323,8 @@ body .ns-main-panel :is(.page-title, .page-sub, .device-title, .nm-card-title, .
 body .ns-hero-card .ns-hero-title { font-family: var(--font-ui); }
 body .ns-hero-card .ns-hero-title { font-size: 27px; font-weight: 600; letter-spacing: -.035em; line-height: 1.25; }
 body .ns-hero-card { border-radius: 16px; }
-body .ns-hero-card .plan-field-label,
-body .ns-hero-card .plan-facts dt { font: 550 11px/1.5 var(--font-ui); letter-spacing: 0; text-transform: none; }
+body .ns-hero-card .plan-field-label { font: 550 13px/1.35 var(--font-ui); letter-spacing: 0; text-transform: none; }
+body .ns-hero-card .plan-facts dt { font: 550 12px/1.4 var(--font-ui); letter-spacing: 0; text-transform: none; }
 body .ns-hero-card .plan-reach { font: 400 12px/1.5 var(--font-ui); }
 body .ns-hero-card .ns-play-btn { border-radius: 10px; font-weight: 600; letter-spacing: 0; }
 body .ns-sidebar .ns-nav-item:not(.active):hover { background: rgba(var(--accent-rgb), .07); border-radius: 10px; }
@@ -11317,7 +11334,17 @@ body .nm-card-body .nm-card-subtitle, body .device-card .device-off-hint { line-
 @media (min-height: 800px) and (min-width: 1000px) {
   body .ns-hero-card { padding: 26px; gap: 14px; }
   body .ns-hero-card .plan-field { gap: 9px; padding-block: 12px; }
-  body .ns-hero-card .plan-field .chip { min-height: 36px; padding-inline: 14px; font-size: 12px; }
-  body .ns-hero-card #action-chips-row .action-chip { min-height: 34px; font-size: 12px; }
+  body .ns-hero-card .plan-field .chip { min-height: 38px; padding-inline: 14px; font-size: 13px; }
+  body .ns-hero-card #action-chips-row .action-chip { min-height: 36px; font-size: 13px; }
 }
 @media (max-height: 800px) { body .ns-hero-card .ns-hero-title { font-size: 22px; } }
+
+/* Keep the restored cockpit's controls and readiness rail above the footer
+   at the 900x640 minimum, without changing its roomy-window presentation. */
+@media (max-height: 700px) {
+  body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card { gap: 4px; }
+  body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .plan-field-label { font-size: 12px; }
+  body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .plan-field { padding-block: 4px; gap: 4px; }
+  body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .ns-play-btn { min-height: 42px; height: 42px; }
+  body:not(.mini-mode):not(.fullscreen-clock-mode) #readiness-strip .rdy-row { min-height: 52px; padding-block: 8px; }
+}

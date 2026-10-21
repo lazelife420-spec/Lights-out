@@ -17,7 +17,7 @@ if (-not (Test-Path $ExePath)) { throw "Executable not found: $ExePath" }
 if (-not $ExpectedProductVersion) {
     $ExpectedProductVersion = (Get-Content -LiteralPath (Join-Path (Split-Path -Parent $ExePath) 'resources\app\package.json') | ConvertFrom-Json).version
 }
-if (-not $ExpectedFileVersion) { $ExpectedFileVersion = $ExpectedProductVersion + '.0' }
+if (-not $ExpectedFileVersion) { $ExpectedFileVersion = $ExpectedProductVersion.Split('-')[0] + '.0' }
 
 $vi = (Get-ItemProperty $ExePath).VersionInfo
 $failures = @()

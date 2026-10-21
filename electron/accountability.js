@@ -24,7 +24,7 @@ const EVENTS = {
   TIMER_PAUSED: { icon: '\u23F8', label: 'Paused', color: COLORS.amber },
   TIMER_SNOOZED: { icon: '\u23F0', label: 'Snoozed', color: COLORS.amber },
   TIMER_CANCELLED: { icon: '\u274C', label: 'Cancelled', color: COLORS.neutral },
-  TIMER_COMPLETE: { icon: '\u2705', label: 'Completed', color: COLORS.teal },
+  TIMER_COMPLETE: { icon: '\u23F1', label: 'Timer finished; Windows outcome unverified', color: COLORS.teal },
   LAST_LIGHT: { icon: '\u{1F4A1}', label: 'Last Light ritual', color: COLORS.violet },
   UNSAVED_WORK: { icon: '\u26A0\uFE0F', label: 'Unsaved work detected', color: COLORS.amber },
   OVERRIDE: { icon: '\u{1F6AB}', label: 'Emergency override', color: COLORS.red }
@@ -52,6 +52,7 @@ function describeEvent(eventType, testMode) {
 
 async function notifyPartner(eventType, details = {}) {
   const testMode = details.testMode === true;
+  if (testMode) return []; // Rehearsals never send automatic partner traffic.
   const eventInfo = describeEvent(eventType, testMode);
   if (!eventInfo) return [];
 

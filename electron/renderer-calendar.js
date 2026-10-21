@@ -362,12 +362,16 @@ function renderRoutineOutcomes(entries) {
   const container = document.getElementById('routine-outcomes');
   if (!container) return;
   const labels = { claimed: 'Claimed; dispatch not confirmed', accepted: 'Ritual accepted; timer pending', running: 'Timer running', simulated: 'Completed in Test Mode',
-    completed: 'Completed', cancelled: 'Cancelled', interrupted: 'Interrupted', skipped: 'Skipped', failed: 'Failed', unavailable: 'Unavailable' };
+    completed: 'Legacy outcome unverified', unverified: 'Windows outcome unverified', timer_elapsed: 'Timer finished; request pending',
+    action_requested: 'Power requested; Windows outcome unverified', command_spawned: 'Command started; Windows outcome unverified',
+    command_returned_failure: 'Command returned an error; Windows outcome unverified', spawn_failed: 'Command could not start',
+    cancelled: 'Cancelled', interrupted: 'Interrupted', skipped: 'Skipped', failed: 'Failed', unavailable: 'Unavailable' };
   container.replaceChildren();
   if (!entries.length) { container.textContent = 'No calendar routine has run yet.'; return; }
   for (const entry of entries) {
     const row = document.createElement('p');
-    row.textContent = `${entry.name || 'Routine'} · ${labels[entry.status] || 'Outcome unknown'}${entry.reason ? ' · ' + entry.reason : ''}`;
+    const label = entry.status === 'running' && entry.receiptAvailable === false ? 'Timer status unverified; receipt unavailable' : labels[entry.status] || 'Outcome unknown';
+    row.textContent = `${entry.name || 'Routine'} · ${label}${entry.reason ? ' · ' + entry.reason : ''}${entry.proofSaved === false ? ' · receipt save unavailable' : ''}`;
     container.append(row);
   }
 }

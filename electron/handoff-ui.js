@@ -8,9 +8,15 @@
   const choice=text=>{const label=node('label',undefined,'handoff-choice'),input=node('input');input.type='checkbox';label.append(input,document.createTextNode(text));return {label,input};};
   const fingerprint=id=>node('code',id?.match(/.{1,8}/g)?.join(' ')||'Unavailable','handoff-fingerprint');
   const body=node('div'),status=node('p','Loading local pairing…','handoff-note'),error=node('p',undefined,'handoff-error');status.setAttribute('role','status');error.setAttribute('role','alert');
-  const selected=new Map();let state,key='',busy=false,previewId,pendingLink='';
-  container.classList.add('handoff-panel');container.append(node('h3','Pair routines. Keep control.'),node('p','Protected device identities and explicit receiving consent. LAN transfer is disabled in this build; offline routine files remain available.','handoff-note'),status,error,body);
-  async function run(fn){if(busy)return;busy=true;container.setAttribute('aria-busy','true');error.textContent='';try{await fn();}catch(e){error.textContent=e.message||'Pairing could not complete.';}finally{busy=false;container.removeAttribute('aria-busy');}}
+  const selected=new Map();let state,key='',busy=false,previewId,pendingLink='',pendingCard='',selectedAddress='',work=Promise.resolve(),pendingActions=0,destroyed=false;
+  container.classList.add('handoff-panel');container.append(node('h3','Pair routines. Keep control.'),node('p','Connect explicitly, compare device identities, then choose what to receive. Imported routines stay inactive until you adopt them.','handoff-note'),status,error,body);
+  function run(fn,passive=false){
+   if(destroyed||(passive&&(busy||pendingActions)))return Promise.resolve();
+   if(pendingActions>=4){error.textContent='Please wait for the current pairing action to finish.';return Promise.resolve();}
+   pendingActions++;
+   const next=work.then(async()=>{if(destroyed)return;busy=true;container.setAttribute('aria-busy','true');if(!passive)error.textContent='';try{await fn();}catch(e){error.textContent=e.message||'Pairing could not complete.';}finally{busy=false;container.removeAttribute('aria-busy');}});
+   work=next.finally(()=>{pendingActions--;});return work;
+  }
   async function invoke(action,args={}){const r=await adapter.invoke(action,args);if(!r.ok)throw Error(r.error||'Pairing could not complete.');render(r.result);return r.result;}
   const card=(title)=>{const c=node('article',undefined,'handoff-card');c.append(node('h4',title));return c;};
   function render(next){const nextKey=JSON.stringify(next);if(nextKey===key)return;key=nextKey;state=next;status.textContent=next.note;body.replaceChildren();
@@ -25,6 +31,17 @@
    const linkInput=node('textarea');linkInput.rows=3;linkInput.maxLength=400;linkInput.value=pendingLink;linkInput.oninput=()=>{pendingLink=linkInput.value;};linkInput.placeholder='Paste the other device’s lightsout-handoff:// invitation';linkInput.dataset.handoff='link';linkInput.setAttribute('aria-label','Other device invitation');invite.append(linkInput,button('Open invitation',()=>invoke('open',{link:linkInput.value.trim()}),'open'));
    if(adapter.scan)invite.append(button('Scan invitation',async()=>{const r=await adapter.scan();if(!r.ok)throw Error(r.error||'Scan cancelled');render(r.result);},'scan'));
    if(next.opened&&!next.pairings.some(p=>p.fingerprint===next.opened.fingerprint)){const waiting=card('Awaiting secure identity proof');waiting.append(fingerprint(next.opened.fingerprint),node('p','Invitation opened. Enrollment approval becomes available only after the local transport authenticates this exact certificate.','handoff-note'));invite.append(waiting);}body.append(invite);
+   const connect=card('Connect phone and PC'),isPC=s.platform==='windows';
+   connect.append(node('p',isPC?'1. Generate an invitation on your phone. Paste its phone pairing details here.':'1. Generate your invitation above and copy these public phone pairing details to your PC.','handoff-note'));
+   const output=text=>{const field=node('textarea');field.readOnly=true;field.rows=3;field.value=text;field.dataset.handoff='connection-details';field.setAttribute('aria-label',isPC?'PC connection details':'Phone pairing details');connect.append(field);};
+   if(!isPC&&next.invitation?.card)output(next.invitation.card);
+   const cardInput=node('textarea');cardInput.rows=3;cardInput.maxLength=8192;cardInput.value=pendingCard;cardInput.oninput=()=>{pendingCard=cardInput.value;};cardInput.dataset.handoff='connection-input';cardInput.setAttribute('aria-label',isPC?'Phone pairing details to connect':'PC connection details to connect');cardInput.placeholder=isPC?'Paste phone pairing details':'Paste PC connection details';connect.append(cardInput);
+   const confirm=choice(isPC?'Open a temporary connection window for this phone.':'Connect to this PC for routine transfer only.');confirm.input.dataset.handoff='connection-confirm';
+   if(isPC){const address=node('select');address.dataset.handoff='address';address.setAttribute('aria-label','This PC connection address');const options=next.connection?.addresses||[];if(!options.includes(selectedAddress))selectedAddress=options.find(a=>a!=='127.0.0.1')||options[0]||'';for(const value of options){const item=node('option',value==='127.0.0.1'?'USB bridge (loopback)':value);item.value=value;item.selected=value===selectedAddress;address.append(item);}address.onchange=()=>{selectedAddress=address.value;};connect.append(address);
+    const start=button('Open pairing window',()=>invoke('listen',{peerCard:cardInput.value.trim(),host:selectedAddress,confirmed:confirm.input.checked}),'listen');start.disabled=true;confirm.input.onchange=()=>{start.disabled=!confirm.input.checked;};connect.append(confirm.label,start);
+    if(next.connection?.card){connect.append(node('p','2. Paste these PC connection details on your phone. This window expires automatically.','handoff-note'));output(next.connection.card);}
+   }else{connect.append(node('p','2. Open the pairing window on your PC, then paste its connection details here.','handoff-note'));const start=button('Connect to PC',()=>invoke('connect',{card:cardInput.value.trim(),confirmed:confirm.input.checked}),'connect');start.disabled=true;confirm.input.onchange=()=>{start.disabled=!confirm.input.checked;};connect.append(confirm.label,start);}
+   if(next.connection?.state==='LISTENING'||next.pairings.length||next.peers.some(p=>p.connected))connect.append(button('Close connection',()=>invoke('disconnect'),'disconnect'));body.append(connect);
    for(const p of next.pairings){const c=card('Verify '+(p.platform==='android'?'Android phone':'Windows PC'));c.dataset.pairingId=p.id;c.append(node('p','TLS certificate verified. Compare this full fingerprint on the other device.'),fingerprint(p.fingerprint));const label=node('input');label.maxLength=60;label.value=p.platform==='android'?'Android phone':'Windows PC';label.setAttribute('aria-label','Local name for this device');label.dataset.handoff='label';
     const replacement=node('select');replacement.setAttribute('aria-label','Previous device identity to replace');const fresh=node('option','Enroll as a new device');fresh.value='';replacement.append(fresh);for(const old of next.peers.filter(old=>old.id!==p.fingerprint)){const o=node('option','Replace '+old.label+' · '+old.id.slice(0,8));o.value=old.id;replacement.append(o);}
     const ack=choice('I compared the full fingerprint and approve this device for routine transfer only.');ack.input.dataset.handoff='pair-confirm';const approve=button('Approve enrollment',()=>invoke('approve',{id:p.id,fingerprint:p.fingerprint,label:label.value,replaceId:replacement.value}),'approve');approve.disabled=true;ack.input.onchange=()=>{approve.disabled=!ack.input.checked;};c.append(label,replacement,ack.label,approve,button('Reject',()=>invoke('reject',{id:p.id}),'reject'));body.append(c);}
@@ -44,8 +61,8 @@
    }
   }
   async function refresh(){return invoke('status');}
-  void run(refresh);const timer=setInterval(()=>{if(!document.hidden&&container.getClientRects().length&&(!container.closest('details')||container.closest('details').open))void run(refresh);},2000);
-  return {refresh:()=>run(refresh),prefill(link){pendingLink=link;key='';if(state)render(state);},destroy(){clearInterval(timer);},state:()=>state};
+  void run(refresh,true);const timer=setInterval(()=>{if(!document.hidden&&container.getClientRects().length&&(!container.closest('details')||container.closest('details').open))void run(refresh,true);},2000);
+  return {refresh:()=>run(refresh,true),prefill(link){pendingLink=link;key='';if(state)render(state);},destroy(){destroyed=true;clearInterval(timer);},state:()=>state};
  }
  root.HandoffUI={mount};
 })(globalThis);

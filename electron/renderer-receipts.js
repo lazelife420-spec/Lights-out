@@ -22,8 +22,15 @@
 // Proof clipboard text so "proof" never reads as a raw internal enum value.
 function humanizeReceiptResult(result) {
   const labels = {
-    power_executed: 'Completed',
-    completed: 'Completed',
+    power_executed: 'Legacy · unverified',
+    completed: 'Legacy · unverified',
+    timer_elapsed: 'Timer finished',
+    action_requested: 'Requested · unverified',
+    command_spawned: 'Started · unverified',
+    command_returned_success: 'Returned 0 · unverified',
+    command_returned_failure: 'Command error · outcome unknown',
+    spawn_failed: 'Command launch failed',
+    outcome_unverified: 'Outcome unknown',
     dry_run_completed: 'Test Mode Completed',
     cancelled: 'Cancelled',
     running: 'Running',
@@ -57,8 +64,15 @@ function getReceiptNightModeLabel(receipt) {
 // 'running' / 'completing' while the app is idle mean "not finished" (a run
 // waiting to be resumed, or an action main never confirmed): never success.
 const RECEIPT_TONE = Object.freeze({
-  power_executed:    Object.freeze({ tone: 'done',    glyph: 'check', title: 'Run complete' }),
-  completed:         Object.freeze({ tone: 'done',    glyph: 'check', title: 'Run complete' }),
+  power_executed:    Object.freeze({ tone: 'warn', glyph: 'warn', title: 'Legacy outcome unverified' }),
+  completed:         Object.freeze({ tone: 'warn', glyph: 'warn', title: 'Legacy outcome unverified' }),
+  timer_elapsed:     Object.freeze({ tone: 'running', glyph: 'clock', title: 'Timer finished; action pending' }),
+  action_requested:  Object.freeze({ tone: 'running', glyph: 'clock', title: 'Power request recorded' }),
+  command_spawned:   Object.freeze({ tone: 'warn', glyph: 'warn', title: 'Command started; outcome unverified' }),
+  command_returned_success: Object.freeze({ tone: 'warn', glyph: 'warn', title: 'Command returned 0; outcome unverified' }),
+  command_returned_failure: Object.freeze({ tone: 'bad', glyph: 'warn', title: 'Command returned an error' }),
+  spawn_failed:      Object.freeze({ tone: 'bad', glyph: 'warn', title: 'Command could not start' }),
+  outcome_unverified: Object.freeze({ tone: 'warn', glyph: 'warn', title: 'Windows outcome unknown' }),
   dry_run_completed: Object.freeze({ tone: 'test',    glyph: 'test',  title: 'Test run complete' }),
   cancelled:         Object.freeze({ tone: 'cancel',  glyph: 'cross', title: 'Run cancelled' }),
   interrupted:       Object.freeze({ tone: 'warn',    glyph: 'warn',  title: 'Run interrupted' }),
@@ -71,6 +85,22 @@ const RECEIPT_TONE = Object.freeze({
 function receiptToneOf(result) {
   if (typeof result === 'string' && Object.prototype.hasOwnProperty.call(RECEIPT_TONE, result)) return RECEIPT_TONE[result];
   return { tone: 'neutral', glyph: 'ring', title: humanizeReceiptResult(result) };
+}
+
+function receiptDisplayTone(receipt) {
+  if (receipt?.persistence?.saved === false) return { tone: 'warn', glyph: 'warn', title: 'Receipt save unavailable' };
+  if (receipt?.dryRun === true && ['completed', 'power_executed', 'command_returned_success'].includes(receipt.result)) return RECEIPT_TONE.dry_run_completed;
+  return receiptToneOf(receipt?.result);
+}
+
+function receiptResultLabel(receipt) {
+  if (receipt?.powerEvidence?.events?.some(e => e.api === 'SetSuspendState') && receipt?.dryRun !== true) {
+    const nativeLabels = { command_returned_success: 'API accepted · unverified', command_returned_failure: 'API request failed · outcome unknown' };
+    if (nativeLabels[receipt.result]) return nativeLabels[receipt.result] + (receipt?.persistence?.saved === false ? ' · unsaved' : '');
+  }
+  const label = receipt?.dryRun === true && ['completed', 'power_executed'].includes(receipt.result)
+    ? 'Test Mode Completed' : humanizeReceiptResult(receipt?.result);
+  return label + (receipt?.persistence?.saved === false ? ' · unsaved' : '');
 }
 
 // The hero's result stamp: a short word, never a power claim on its own (the
@@ -106,7 +136,8 @@ function receiptActionName(action) {
 // durationSeconds stays planned), a finite 0 <= remaining <= planned, and a
 // result that really ended the countdown. Anything else is not known, and
 // callers say 'planned' instead of inventing a number.
-const RUN_SPAN_RESULTS = Object.freeze(['cancelled', 'power_executed', 'completed', 'dry_run_completed']);
+const RUN_SPAN_RESULTS = Object.freeze(['cancelled', 'power_executed', 'completed', 'dry_run_completed',
+  'timer_elapsed', 'action_requested', 'command_spawned', 'command_returned_success', 'command_returned_failure', 'spawn_failed', 'outcome_unverified']);
 function receiptRunSpan(r) {
   const planned = r ? r.durationSeconds : null;
   const plannedSec = typeof planned === 'number' && Number.isFinite(planned) && planned >= 0 ? planned : null;
@@ -160,17 +191,38 @@ function receiptOriginLabel(receipt) {
   return Object.prototype.hasOwnProperty.call(ORIGIN_LABELS, origin) ? ORIGIN_LABELS[origin] : '';
 }
 
-// The Test Mode / REAL line for a receipt. Always present, never animated.
-// 'command sent' only for power_executed: main writes it right after it
-// spawned the command, so it is the one result that proves an action ran.
+// The evidence line never infers a Windows outcome from command events.
+// Legacy dispatch markers remain readable, explicitly unverified.
 function receiptTruth(receipt) {
   const action = receiptActionName(receipt && receipt.action);
   const result = receipt && receipt.result;
-  if (receipt && receipt.dryRun) return { text: 'TEST MODE · nothing ran', kind: 'test' };
-  if (result === 'power_executed') return { text: `REAL ACTION · ${action} command sent`, kind: 'real' };
-  if (result === 'completed') return { text: `REAL ACTION · ${action} completed`, kind: 'real' };
-  if (result === 'running' || result === 'completing') return { text: 'REAL ACTION · not finished', kind: 'real-open' };
-  return { text: `REAL ACTION · ${action} did not run`, kind: 'real-none' };
+  const suffix = receipt?.persistence?.saved === false ? ' · receipt save unavailable' : '';
+  let truth;
+  if (receipt?.dryRun === true) truth = { text: 'TEST MODE · PC power action skipped', kind: 'test' };
+  else if (receipt?.dryRun !== false) truth = { text: `MODE UNKNOWN · ${action} outcome unverified`, kind: 'real-open' };
+  else if (result === 'power_executed' || result === 'completed') truth = { text: `LEGACY · ${action} outcome unverified`, kind: 'real-open' };
+  else {
+    const facts = {
+      timer_elapsed: 'timer finished; power request pending',
+      action_requested: 'request recorded; Windows outcome unverified',
+      command_spawned: 'command started; Windows outcome unverified',
+      command_returned_success: 'command returned 0; Windows outcome unverified',
+      command_returned_failure: 'command returned an error; Windows outcome unverified',
+      spawn_failed: 'command could not start; Windows outcome unverified',
+      outcome_unverified: 'Windows outcome unknown',
+      running: 'timer running; no power request recorded',
+      completing: 'legacy action pending; Windows outcome unverified',
+      cancelled: 'cancelled; no power command recorded',
+      blocked: 'blocked; no power command dispatched',
+      interrupted: receipt?.timerElapsedAt ? 'timer finished; execution interrupted; Windows outcome unknown' : 'run interrupted; Windows outcome unknown',
+      error: 'recorded error; Windows outcome unverified'
+    };
+    const native = receipt?.powerEvidence?.events?.some(e => e.api === 'SetSuspendState');
+    const fact = native && result === 'command_returned_success' ? 'Windows accepted API request; physical power state unverified'
+      : native && result === 'command_returned_failure' ? 'API request failed; Windows outcome unverified' : facts[result];
+    truth = { text: `REAL MODE · ${action}: ${fact || 'Windows outcome unverified'}`, kind: 'real-open' };
+  }
+  return { ...truth, text: truth.text + suffix };
 }
 
 // When a moment sits relative to now, by the SAME night rule as the strip,
@@ -210,12 +262,12 @@ function proofEyebrowFor(value, now = new Date()) {
 }
 
 // Tonight's morning note: only for a REAL Sleep, Hibernate or Shutdown whose
-// command main confirmed (power_executed), ended in the last 16 hours. Test
+// command evidence (including legacy/unverified markers), within 16 hours. Test
 // Mode, blocked, failed, interrupted and cancelled runs never get one.
 const MORNING_NOTE_ACTIONS = Object.freeze(['sleep', 'hibernate', 'shutdown']);
 const MORNING_NOTE_MAX_AGE_MS = 16 * 3600 * 1000;
 function morningNoteFor(receipt, nowMs = Date.now()) {
-  if (!receipt || receipt.result !== 'power_executed' || receipt.dryRun === true) return null;
+  if (!receipt || !['power_executed', 'completed', 'command_returned_success', 'outcome_unverified'].includes(receipt.result) || receipt.dryRun === true) return null;
   if (!MORNING_NOTE_ACTIONS.includes(receipt.action)) return null;
   const ended = receipt.endedAt ? new Date(receipt.endedAt).getTime() : NaN;
   if (!Number.isFinite(ended)) return null;
@@ -228,7 +280,8 @@ function morningNoteFor(receipt, nowMs = Date.now()) {
   // 'Earlier today').
   const leads = { tonight: 'Earlier tonight', 'last-night': 'Last night', today: 'Earlier today', yesterday: 'Yesterday' };
   const lead = leads[receiptWhenFor(new Date(ended), new Date(nowMs))] || 'Latest';
-  return { id, endedAt: new Date(ended), action: receiptActionName(receipt.action), shortId: shortReceiptId(id), lead };
+  return { id, endedAt: new Date(ended), action: receiptActionName(receipt.action), shortId: shortReceiptId(id), lead,
+    outcomeLabel: receipt.result === 'power_executed' || receipt.result === 'completed' ? 'legacy outcome unverified' : 'Windows outcome unverified' };
 }
 
 // UI-R3 Fire 10: an honest first page. #proof-empty ('No runs yet') shows
@@ -284,7 +337,7 @@ async function renderMorningProof(receipt) {
   const active = typeof state !== 'undefined' && (state.running || state.paused);
   els.morningProofSection.style.display = active ? 'none' : '';
 
-  const meta = receiptToneOf(receipt.result);
+  const meta = receiptDisplayTone(receipt);
   const action = receiptActionName(receipt.action);
   // Colour comes only from data-tone (CSS); no inline colour writes.
   if (els.proofCard) els.proofCard.dataset.tone = meta.tone;
@@ -292,7 +345,7 @@ async function renderMorningProof(receipt) {
   // A constant from the static glyph set, never receipt data.
   if (sealGlyph) sealGlyph.innerHTML = LO_GLYPHS[meta.glyph] || LO_GLYPHS.ring;
 
-  if (els.proofBadge) els.proofBadge.textContent = receiptBadgeText(receipt.result);
+  if (els.proofBadge) els.proofBadge.textContent = receipt.persistence?.saved === false ? 'Unsaved' : receiptBadgeText(receipt.result);
 
   const proofTitle = document.getElementById('ns-proof-title');
   if (proofTitle) proofTitle.textContent = meta.title;
@@ -438,7 +491,7 @@ function receiptStatsMarkup(stats) {
   const known = n('completed') + n('dryRun') + n('cancelled') + n('interrupted') + n('blocked');
   const other = Number.isFinite(Number(stats.other)) ? n('other') : Math.max(0, total - known);
   const segments = [
-    ['done', n('completed'), 'real completed', 'Real completed'],
+    ['warn', n('completed'), 'outcome unverified', 'Unverified endings'],
     ['test', n('dryRun'), 'Test Mode completed', 'Test completed'],
     ['cancel', n('cancelled'), 'cancelled', 'Cancelled'],
     ['warn', n('interrupted'), 'interrupted', 'Interrupted'],
@@ -454,7 +507,7 @@ function receiptStatsMarkup(stats) {
     ? `${realRuns} real and ${testRuns} Test Mode run${testRuns === 1 ? '' : 's'} on this PC${unknownRuns > 0 ? `, ${unknownRuns} mode unknown` : ''}`
     : '';
   const modeLine = showMode
-    ? `<p class="receipt-mode-line" aria-label="${escapeHtml(modeAria)}"><b data-truth="real"${realRuns > 0 ? '' : ' data-zero'}>${realRuns}</b> real · <b data-truth="test">${testRuns}</b> Test Mode · ${total} on this PC${unknownRuns > 0 ? ` · <span class="receipt-mode-unknown">${unknownRuns} mode unknown</span>` : ''}</p>`
+    ? `<p class="receipt-mode-line" aria-label="${escapeHtml(modeAria)}"><b data-truth="real"${realRuns > 0 ? '' : ' data-zero'}>${realRuns}</b> real mode · <b data-truth="test">${testRuns}</b> Test Mode · ${total} on this PC${unknownRuns > 0 ? ` · <span class="receipt-mode-unknown">${unknownRuns} mode unknown</span>` : ''}${stats.persistence?.saved === false ? ' · receipt save unavailable' : ''}</p>`
     : '';
   const legendTotal = showMode ? '' : `<li class="receipt-legend-total"><b>${total}</b>on this PC</li>`;
   return `${modeLine}<div class="receipt-ratio" role="img" aria-label="${escapeHtml(label)}">${segments.map(s => `<span data-tone="${s[0]}" style="flex-grow:${s[1]}"></span>`).join('')}</div>
@@ -481,7 +534,7 @@ function renderReceiptsModal(receipts, stats) {
   }
   let lastNight;
   els.receiptsList.innerHTML = receipts.map(r => {
-    const meta = receiptToneOf(r.result);
+    const meta = receiptDisplayTone(r);
     const startDate = new Date(r.startedAt);
     const validStart = !Number.isNaN(startDate.getTime());
     // Time only (the night header names the date), in the 12h/24h setting.
@@ -519,13 +572,13 @@ function renderReceiptsModal(receipts, stats) {
       r.snoozeCount ? `${r.snoozeCount} snooze${r.snoozeCount === 1 ? '' : 's'}` : null
     ].filter(Boolean).map(c => (c.startsWith('<span') ? c : `<span class="receipt-meta-chip">${c}</span>`));
 
-    return `${header}<div class="receipt-row" data-tone="${meta.tone}"${id ? ` data-receipt-id="${escapeHtml(id)}"` : ''}>
+    return `${header}<div class="receipt-row" data-tone="${meta.tone}" aria-label="${escapeHtml(receiptTruth(r).text).replace(/"/g, '&quot;')}"${id ? ` data-receipt-id="${escapeHtml(id)}"` : ''}>
       <span class="receipt-row-icon" aria-hidden="true">${loGlyph(meta.glyph)}</span>
       <div class="receipt-row-main">
         <div class="receipt-row-top">
           <span class="receipt-row-date">${escapeHtml(start)}${afterMidnight}</span>
           ${shortId ? `<span class="receipt-id">${escapeHtml(shortId)}</span>` : ''}
-          <span class="receipt-row-result">${escapeHtml(humanizeReceiptResult(r.result))}</span>
+          <span class="receipt-row-result">${escapeHtml(receiptResultLabel(r))}</span>
         </div>
         <div class="receipt-row-meta">${chips.join('')}</div>
       </div>
@@ -614,10 +667,10 @@ const NIGHT_OUTCOME_ORDER = Object.freeze(['real', 'test', 'cancel', 'bad', 'act
 function nightOutcomeOf(receipt) {
   const result = receipt && receipt.result;
   if (result === 'dry_run_completed') return 'test';
-  if ((result === 'power_executed' || result === 'completed') && receipt.dryRun !== true) return 'real';
+  if (['power_executed', 'completed', 'command_returned_success', 'outcome_unverified'].includes(result) && receipt.dryRun !== true) return 'real';
   if (result === 'cancelled' || result === 'interrupted') return 'cancel';
-  if (result === 'blocked' || result === 'error') return 'bad';
-  if (result === 'running' || result === 'completing') return 'active';
+  if (['blocked', 'error', 'spawn_failed', 'command_returned_failure'].includes(result)) return 'bad';
+  if (['running', 'completing', 'timer_elapsed', 'action_requested', 'command_spawned'].includes(result)) return 'active';
   return null;
 }
 
@@ -653,7 +706,7 @@ function nightCellDescription(cell) {
   if (!c) return `${date}: no run`;
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
   const parts = [
-    c.real ? plural(c.real, 'real action sent', 'real actions sent') : '',
+    c.real ? plural(c.real, 'unverified ending', 'unverified endings') : '',
     c.test ? plural(c.test, 'Test Mode run', 'Test Mode runs') : '',
     c.cancel ? plural(c.cancel, 'cancelled or interrupted run', 'cancelled or interrupted runs') : '',
     c.bad ? plural(c.bad, 'blocked or failed run', 'blocked or failed runs') : '',
@@ -715,13 +768,13 @@ async function renderNightStrip() {
         const num = document.createElement('b');
         num.className = 'routine-streak-n';
         num.textContent = String(streak);
-        streakEl.append('Real streak · ', num, ` night${streak === 1 ? '' : 's'} · best ${best}`);
+        streakEl.append('Ritual streak · ', num, ` night${streak === 1 ? '' : 's'} · best ${best}`);
         streakEl.dataset.state = 'live';
       } else if (best || total) {
-        streakEl.textContent = `Real streak · 0 nights · best ${best}`;
+        streakEl.textContent = `Ritual streak · 0 nights · best ${best}`;
         streakEl.dataset.state = 'broken';
       } else {
-        streakEl.textContent = 'No real completions yet · Test Mode runs don\'t count';
+        streakEl.textContent = 'No ritual endings yet · Test Mode runs don\'t count';
         streakEl.dataset.state = 'empty';
       }
     } catch {
@@ -743,7 +796,7 @@ function buildProofText(receipt) {
   lines.push(shortId ? `Lights Out receipt ${shortId}` : 'Lights Out receipt');
   lines.push(receiptTruth(receipt).text);
   const finished = receipt.result === 'power_executed' || receipt.result === 'completed';
-  const result = receipt.dryRun === true && finished ? RECEIPT_TONE.dry_run_completed.title : receiptToneOf(receipt.result).title;
+  const result = receipt.dryRun === true && finished ? RECEIPT_TONE.dry_run_completed.title : receiptDisplayTone(receipt).title;
   lines.push(`Result: ${result}`);
   lines.push(`Action: ${receiptActionName(receipt.action)}${receipt.forceShutdown ? ' (forced)' : ''}`);
   const len = receiptRunLength(receipt);
@@ -758,6 +811,11 @@ function buildProofText(receipt) {
   const ended = when(receipt.endedAt);
   if (started) lines.push(`Started: ${started}`);
   if (ended) lines.push(`Ended: ${ended}`);
+  if (receipt.timerElapsedAt) lines.push(`Timer finished: ${when(receipt.timerElapsedAt)}`);
+  for (const event of receipt.powerEvidence?.events || []) {
+    lines.push(`Command evidence: ${humanizeReceiptResult(event.state)} at ${when(event.at)}${Number.isInteger(event.exitCode) ? ` · exit ${event.exitCode}` : ''}${event.signal ? ` · signal ${event.signal}` : ''}`);
+  }
+  lines.push(`Receipt persistence: ${receipt.persistence?.saved === false ? `save unavailable (${receipt.persistence.errorCode || 'UNKNOWN'}); changes may be in memory only` : receipt.persistence?.saved === true ? 'saved locally' : 'not recorded by this build'}`);
   const pauses = Math.max(0, Math.floor(Number(receipt.pauseCount) || 0));
   const snoozes = Math.max(0, Math.floor(Number(receipt.snoozeCount) || 0));
   if (pauses > 0) lines.push(`Pauses: ${pauses}`);
@@ -771,4 +829,4 @@ function buildProofText(receipt) {
   lines.push('Stored locally on this PC. No account, no cloud.');
   return lines.join('\n');
 }
-/* exported loadMorningProof, renderReceiptsModal, getReceiptProfileLabel, RECEIPT_TONE, receiptToneOf, morningNoteFor, renderNightStrip, buildNightStrip, resetReceiptsClearConfirm, openReceiptsClearConfirm, confirmClearReceipts, receiptRunSpan, formatRunLength, receiptRunDetail, focusLedgerReceipt, buildProofText */
+/* exported loadMorningProof, renderReceiptsModal, getReceiptProfileLabel, RECEIPT_TONE, receiptToneOf, receiptDisplayTone, receiptResultLabel, morningNoteFor, renderNightStrip, buildNightStrip, resetReceiptsClearConfirm, openReceiptsClearConfirm, confirmClearReceipts, receiptRunSpan, formatRunLength, receiptRunDetail, focusLedgerReceipt, buildProofText */

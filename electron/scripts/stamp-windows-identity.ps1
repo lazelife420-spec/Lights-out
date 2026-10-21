@@ -10,7 +10,7 @@ param(
     [string]$FileDescription = 'Lights Out',
     [string]$InternalName = 'Lights Out',
     [string]$OriginalFilename = 'Lights Out.exe',
-    [string]$FileVersion = ((Get-Content -LiteralPath (Join-Path $SourceRoot 'package.json') | ConvertFrom-Json).version + '.0'),
+    [string]$FileVersion = (((Get-Content -LiteralPath (Join-Path $SourceRoot 'package.json') | ConvertFrom-Json).version.Split('-')[0]) + '.0'),
     [string]$ProductVersion = (Get-Content -LiteralPath (Join-Path $SourceRoot 'package.json') | ConvertFrom-Json).version,
     [string]$Copyright = 'Copyright (C) 2026 The Proof Foundry. All rights reserved.',
     [string]$RceditPath
@@ -60,7 +60,8 @@ $arguments = @(
     '--set-version-string', 'OriginalFilename', $OriginalFilename,
     '--set-version-string', 'LegalCopyright', $Copyright,
     '--set-file-version', $FileVersion,
-    '--set-product-version', $ProductVersion,
+    '--set-product-version', $FileVersion,
+    '--set-version-string', 'ProductVersion', $ProductVersion,
     '--set-icon', $IconPath
 )
 

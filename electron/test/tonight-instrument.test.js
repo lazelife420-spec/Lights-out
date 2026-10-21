@@ -117,7 +117,7 @@ function createInstrument({ now = at(23, 40), state: stateOverrides = {} } = {})
     extractLine(rendererSource, /let bezelPlan = [^\n]*/),
     extractLine(rendererSource, /const SESSION_PHASE_LABELS = [^\n]*/),
     // One clock (UI-R3 Fire 02): the formatters live in renderer-utils.js.
-    ...['formatIdleClockTime', 'formatClock'].map(n => extractFunction(utilsSource, n)),
+    ...['formatIdleClockTime', 'formatClock', 'formatClockTarget'].map(n => extractFunction(utilsSource, n)),
     ...['actionLabel', 'formatEndTime', 'inputValue', 'inputSeconds', 'planSecondsNow',
       'updateIdleBezel', 'clearIdleBezel', 'idleBezelLabel', 'planEndsPastBedtime', 'setTextIfChanged',
       'updatePlanFacts', 'updateSessionHead', 'countdownRingLabel', 'planReachText'].map(n => extractFunction(rendererSource, n))
@@ -202,15 +202,15 @@ test('leaving the bezel clears its classes and key and holds ring transitions fo
 
 test('the bezel label is truthful by mode and follows the user clock format', () => {
   const test24 = createInstrument({ state: { dryRun: true } });
-  assert.equal(test24.idleBezelLabel(28 * 60), 'Test · would end 00:08');
+  assert.equal(test24.idleBezelLabel(28 * 60), 'If started now · 00:08 · tomorrow');
   const real = createInstrument({ state: { dryRun: false } });
-  assert.equal(real.idleBezelLabel(28 * 60), 'Shutdown at 00:08 if started now');
+  assert.equal(real.idleBezelLabel(28 * 60), 'If started now · 00:08 · tomorrow');
   const real12 = createInstrument({ state: { dryRun: false, clockFormat: '12h', action: 'sleep' } });
-  assert.equal(real12.idleBezelLabel(28 * 60), 'Sleep at 12:08a if started now');
+  assert.equal(real12.idleBezelLabel(28 * 60), 'If started now · 12:08 AM · tomorrow');
   const armed = createInstrument({ state: { dryRun: false, armedNightMode: { action: 'hibernate', durationSeconds: 5400 } } });
-  assert.equal(armed.idleBezelLabel(5400), 'Hibernate at 01:10 if started now');
+  assert.equal(armed.idleBezelLabel(5400), 'If started now · 01:10 · tomorrow');
   const checking = createInstrument({ state: { settingsLoaded: false, dryRun: false } });
-  assert.equal(checking.idleBezelLabel(28 * 60), 'Would end 00:08', 'no power claim before the mode is known');
+  assert.equal(checking.idleBezelLabel(28 * 60), 'If started now · 00:08 · tomorrow', 'no power claim before the mode is known');
   assert.doesNotMatch(test24.idleBezelLabel(28 * 60), /Shutdown|Sleep|Restart|Hibernate|Lock/);
 });
 
@@ -227,14 +227,14 @@ test('past bedtime compares only with the most recent bedtime within 12 h (midni
 test('plan facts: Ends at from the same plan Start reads, a mode-aware dt, and a time-of-day eyebrow', () => {
   const t = createInstrument();
   t.updatePlanFacts();
-  assert.equal(t.elements['plan-out-at'].textContent, '~00:08');
-  assert.equal(t.elements['plan-out-at-label'].textContent, 'Test ends');
+  assert.equal(t.elements['plan-out-at'].textContent, '00:08 · tomorrow');
+  assert.equal(t.elements['plan-out-at-label'].textContent, 'If started now');
   assert.equal(t.elements['ns-hero-label'].textContent, "TONIGHT'S PLAN");
 
   const real = createInstrument({ now: at(10, 0), state: { dryRun: false, armedNightMode: { action: 'sleep', durationSeconds: 5400 } } });
   real.updatePlanFacts();
-  assert.equal(real.elements['plan-out-at'].textContent, '~11:30', 'an armed Night Mode uses its own duration');
-  assert.equal(real.elements['plan-out-at-label'].textContent, 'Ends at');
+  assert.equal(real.elements['plan-out-at'].textContent, '11:30 · today', 'an armed Night Mode uses its own duration');
+  assert.equal(real.elements['plan-out-at-label'].textContent, 'If started now');
   assert.equal(real.elements['ns-hero-label'].textContent, 'NEXT RUN');
 
   // textContent only, and only when it changes.
@@ -259,17 +259,17 @@ test('formatEndTime follows the 12h/24h setting and keeps its Idle sentinel (Fir
   assert.equal(h12.formatEndTime('not a date'), 'Idle');
   const run = createInstrument({ state: { running: true, phase: 'focus', dryRun: true, clockFormat: '12h', endsAt: ends } });
   run.updateSessionHead();
-  assert.equal(run.elements['session-ends'].textContent, 'Test ends 1:08 AM');
+  assert.equal(run.elements['session-ends'].textContent, 'Test ends 1:08 AM · tomorrow');
 });
 
 test('countdown ring states the actual end in the chosen time format without promising power actions in Test Mode', () => {
   const endsAt = new Date(at(22, 45)).toISOString();
   const t = createInstrument({ state: { running: true, dryRun: true, action: 'sleep', endsAt } });
-  assert.equal(t.countdownRingLabel(), 'Test ends 22:45');
+  assert.equal(t.countdownRingLabel(), 'Test ends 22:45 · today');
   t.state.clockFormat = '12h';
-  assert.equal(t.countdownRingLabel(), 'Test ends 10:45 PM');
+  assert.equal(t.countdownRingLabel(), 'Test ends 10:45 PM · today');
   t.state.dryRun = false;
-  assert.equal(t.countdownRingLabel(), 'Sleep at 10:45 PM');
+  assert.equal(t.countdownRingLabel(), 'Sleep at 10:45 PM · today');
   t.state.endsAt = null;
   assert.equal(t.countdownRingLabel(), 'Sleep when timer ends');
   t.state.dryRun = true;
@@ -290,12 +290,12 @@ test('session head: phase, origin only from the frozen map, and the real end', (
   const run = createInstrument({ state: { running: true, phase: 'focus', origin: 'phone', dryRun: true, endsAt: ends } });
   run.updateSessionHead();
   assert.equal(run.elements['session-phase'].textContent, 'Running · from your phone');
-  assert.equal(run.elements['session-ends'].textContent, `Test ends ${run.formatEndTime(ends)}`);
+  assert.equal(run.elements['session-ends'].textContent, `Test ends ${run.formatEndTime(ends)} · tomorrow`);
 
   const real = createInstrument({ state: { running: true, phase: 'dim', origin: 'this-pc', dryRun: false, endsAt: ends } });
   real.updateSessionHead();
   assert.equal(real.elements['session-phase'].textContent, 'Winding down');
-  assert.equal(real.elements['session-ends'].textContent, `Shutdown at ${real.formatEndTime(ends)}`);
+  assert.equal(real.elements['session-ends'].textContent, `Shutdown at ${real.formatEndTime(ends)} · tomorrow`);
 
   const paused = createInstrument({ state: { paused: true, phase: 'focus', origin: 'schedule', endsAt: ends } });
   paused.updateSessionHead();
