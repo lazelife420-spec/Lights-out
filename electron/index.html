@@ -387,23 +387,23 @@
            is static status. -->
       <section class="ns-hero-card" id="ns-hero-card" style="display:none" aria-label="Tonight's plan">
         <div class="ns-hero-label" id="ns-hero-label">TONIGHT'S PLAN</div>
-        <div class="ns-hero-title" id="ns-hero-title">Countdown &middot; 28 min</div>
+        <div class="ns-hero-title" id="ns-hero-title">Countdown</div>
         <div class="ns-hero-source" id="ns-hero-source" style="display:none">From: <span class="ns-meta-accent" id="ns-hero-source-name"></span></div>
         <!-- UI-R3 P11: the morning after. Shown by refreshMorningNote() only
              for a REAL Sleep / Hibernate / Shutdown main confirmed in the
              last 16 h; never for Test Mode or a failed run. -->
         <p class="morning-note" id="morning-note" hidden><button type="button" class="device-link morning-note-link" id="morning-note-link"><svg class="chip-glyph" viewBox="0 0 18 18" aria-hidden="true" focusable="false"><path d="M3.5 15.5h7M7 15.5l-1.5-5 4.5-4"/><path d="M9.2 3.6l5 2.1-1.5 3.4-5-2.1z"/><path d="M13 10.2l1.2 1.6"/></svg><em class="morning-note-text" id="morning-note-text"></em><span aria-hidden="true">&rsaquo;</span></button></p>
         <dl class="plan-facts">
-          <div class="plan-fact"><dt>Duration</dt><dd id="ns-preview-time">28 min</dd></div>
           <div class="plan-fact"><dt id="plan-out-at-label">If started now</dt><dd id="plan-out-at">--:--</dd></div>
           <div class="plan-fact plan-fact-ending"><dt>Ends with</dt><dd id="ns-meta-ending"></dd></div>
+          <div class="plan-fact plan-reach"><dt>Controls</dt><dd id="ns-meta-reach">This PC</dd></div>
         </dl>
-        <p class="plan-reach">Controls: <span id="ns-meta-reach">This PC</span></p>
+        <p class="plan-finale" id="plan-finale" hidden></p>
         <p class="plan-scope-note" id="plan-scope-note" hidden></p>
         <!-- Setup controls (shown when timer is idle) -->
         <div class="setup-controls" id="setup-controls">
           <div class="plan-field">
-            <span class="plan-field-label">Duration</span>
+            <label class="plan-field-label" for="timer-input">Duration <span class="plan-duration" id="ns-preview-time">28 min</span></label>
             <div class="setup-row">
               <button class="num-btn" id="btn-minus" aria-label="Decrease duration">&#x2212;</button>
               <input type="number" id="timer-input" value="28" min="1" max="480" aria-label="Timer duration">
@@ -416,18 +416,6 @@
             <!-- Schedule › One night only overrides the duration above; render()
                  says so here (violet: you set it), with a one-tap Clear. -->
             <p class="tonight-target-note" id="tonight-target-note" hidden><svg class="chip-glyph" viewBox="0 0 18 18" aria-hidden="true" focusable="false"><circle cx="9" cy="9" r="6.5"/><path d="M9 5.5V9l2.5 1.6"/></svg><span>Ends at <strong id="tonight-target-when"></strong> (set on Schedule)</span><button type="button" class="link-btn tonight-target-clear" id="btn-tonight-target-clear">Clear</button></p>
-          </div>
-          <!-- Quick start: each chip starts that many minutes at once (one tap). -->
-          <div class="plan-field" id="plan-quick-start">
-            <span class="plan-field-label" id="plan-quick-label">Quick start</span>
-            <div class="chips-row" role="group" aria-labelledby="plan-quick-label">
-              <button class="chip" data-min="5" aria-label="5 minutes">5m</button>
-              <button class="chip" data-min="15" aria-label="15 minutes">15m</button>
-              <button class="chip" data-min="30" aria-label="30 minutes">30m</button>
-              <button class="chip" data-min="45" aria-label="45 minutes">45m</button>
-              <button class="chip" data-min="60" aria-label="1 hour">1h</button>
-              <button class="chip" data-min="120" aria-label="2 hours">2h</button>
-            </div>
           </div>
           <div class="plan-field">
             <span class="plan-field-label">Ending</span>
@@ -445,12 +433,28 @@
               <button class="action-chip" data-action="lock" aria-pressed="false">Lock</button>
             </div>
           </div>
-          <button class="btn-secondary btn-ritual" id="btn-ritual" title="Bedtime routine: block → dim → timer → lights"><svg class="chip-glyph" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 2.5c.6 2.4 2.1 3.9 4.5 4.5-2.4.6-3.9 2.1-4.5 4.5-.6-2.4-2.1-3.9-4.5-4.5 2.4-.6 3.9-2.1 4.5-4.5z"/><path d="M14 11.5c.3 1 .9 1.6 1.9 1.9-1 .3-1.6.9-1.9 1.9-.3-1-.9-1.6-1.9-1.9 1-.3 1.6-.9 1.9-1.9z"/></svg>Begin Ritual</button>
+          <button class="ns-play-btn" id="ns-play-btn" aria-label="Start prepared timer" aria-describedby="testmode-pill">
+            <svg class="glyph-solid" viewBox="0 0 18 18" aria-hidden="true" focusable="false"><path d="M5.6 3.6v10.8L14.4 9z"/></svg>
+            <span class="ns-play-label" id="ns-play-label">Start timer</span>
+          </button>
+          <!-- Quick start: each chip starts that many minutes at once (one tap). -->
+          <div class="plan-field" id="plan-quick-start">
+            <span class="plan-field-label" id="plan-quick-label">Quick start <span class="plan-field-hint">Starts immediately</span></span>
+            <div class="chips-row" role="group" aria-labelledby="plan-quick-label" aria-describedby="plan-quick-note">
+              <button class="chip" data-min="5" aria-label="Start 5-minute timer immediately">5m</button>
+              <button class="chip" data-min="15" aria-label="Start 15-minute timer immediately">15m</button>
+              <button class="chip" data-min="30" aria-label="Start 30-minute timer immediately">30m</button>
+              <button class="chip" data-min="45" aria-label="Start 45-minute timer immediately">45m</button>
+              <button class="chip" data-min="60" aria-label="Start 1-hour timer immediately">1h</button>
+              <button class="chip" data-min="120" aria-label="Start 2-hour timer immediately">2h</button>
+            </div>
+            <p class="plan-help" id="plan-quick-note">Uses the ending above; replaces the selected mode.</p>
+          </div>
+          <div class="plan-ritual-entry">
+            <button class="btn-secondary btn-ritual" id="btn-ritual" aria-describedby="plan-ritual-note"><svg class="chip-glyph" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 2.5c.6 2.4 2.1 3.9 4.5 4.5-2.4.6-3.9 2.1-4.5 4.5-.6-2.4-2.1-3.9-4.5-4.5 2.4-.6 3.9-2.1 4.5-4.5z"/><path d="M14 11.5c.3 1 .9 1.6 1.9 1.9-1 .3-1.6.9-1.9 1.9-.3-1-.9-1.6-1.9-1.9 1-.3 1.6-.9 1.9-1.9z"/></svg>Begin Ritual</button>
+            <p class="plan-help" id="plan-ritual-note">Guided wind-down using your ritual settings.</p>
+          </div>
         </div>
-        <button class="ns-play-btn" id="ns-play-btn" aria-label="Start tonight's timer">
-          <svg class="glyph-solid" viewBox="0 0 18 18" aria-hidden="true" focusable="false"><path d="M5.6 3.6v10.8L14.4 9z"/></svg>
-          <span class="ns-play-label" id="ns-play-label">START TONIGHT</span>
-        </button>
       </section>
 
       <!-- Session console (shown while a timer runs or is paused): its phase,

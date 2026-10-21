@@ -6576,7 +6576,7 @@ body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib {
   --tonight-gap: 14px;
   display: grid;
   flex: 1 0 auto;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 1.05fr);
+  grid-template-columns: minmax(0, 0.85fr) minmax(340px, 1.15fr);
   grid-template-rows: auto minmax(0, 1fr) auto auto minmax(var(--tonight-gap), 1fr) auto;
   grid-template-areas: 'banner banner' '. .' 'ring truth' 'ring plan' '. .' 'ready ready';
   column-gap: 24px;
@@ -6589,6 +6589,31 @@ body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib > #ns-hero-card,
 body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib > #action-bar-running { grid-area: plan; align-self: start; min-width: 0; }
 body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib > .timer-section { grid-area: ring; align-self: center; justify-self: center; padding: 0; }
 body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib > #readiness-strip { grid-area: ready; align-self: end; margin-top: auto; }
+
+/* Long saved names and Last Light may exceed the idle plan's available height.
+   Keep readiness in view and scroll only the plan; preserve full text, control
+   sizes, the instrument and the existing active/mini/fullscreen layouts. */
+@media (min-width: 761px) {
+  body.ns-lobby:not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib:has(#plan-finale:not([hidden])) {
+    flex: 1 1 0;
+    min-height: 0;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-areas: 'banner banner' 'ring truth' 'ring plan' 'ready ready';
+  }
+  body.ns-lobby:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card:has(#plan-finale:not([hidden])) {
+    min-height: 0;
+    max-height: 100%;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scroll-padding-block: 12px;
+  }
+  body.ns-lobby:not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib:has(#plan-finale:not([hidden])) > #readiness-strip {
+    margin-top: var(--tonight-gap);
+  }
+}
+@media (min-width: 761px) and (min-height: 801px) {
+  body.ns-lobby:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card:has(#plan-finale:not([hidden])) { gap: 8px; }
+}
 
 /* The instrument: one size rule at every window height (the old 214px
    max-height:880 override is gone). Mini mode (176px) and the fullscreen
@@ -6888,6 +6913,72 @@ body.bezel .timer-display.clock-idle .time-label {
   font-weight: 500;   /* a quiet text link, not a Fire 01 pill */
 }
 .setup-controls .btn-ritual:hover { background: none; color: var(--accent-cyan); }
+
+/* Tonight preparation: one duration beside its editor, then a deliberate
+   Start. Immediate timers and the guided ritual are separate entry points.
+   These controls never restyle Settings, mini mode or the fullscreen clock. */
+body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .plan-facts {
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 14px;
+}
+body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .plan-reach { margin: 0; }
+body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .plan-reach dd {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .plan-field-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--text-secondary);
+}
+body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .plan-duration {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card :is(.plan-help, .plan-finale) {
+  margin: 0;
+  color: var(--text-secondary);
+  font: 400 12px/1.45 var(--font-ui);
+  overflow-wrap: anywhere;
+}
+body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .plan-field-hint {
+  color: var(--text-secondary);
+  font: 400 12px/1.4 var(--font-ui);
+}
+body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card :is(.num-btn, .setup-row input[type="number"]) {
+  min-height: 40px;
+  height: 40px;
+}
+body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .num-btn { min-width: 40px; }
+body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card :is(.unit-btn, .chip, .action-chip) {
+  min-height: 36px;
+  font-size: 13px;
+}
+body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .action-chip { padding-inline: 10px; }
+body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .ns-play-btn { margin: 4px 0 12px; }
+body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .plan-ritual-entry {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 10px;
+}
+body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .btn-ritual {
+  flex: none;
+  align-self: center;
+  min-height: 40px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+body:not(.mini-mode):not(.fullscreen-clock-mode) #action-bar-running :is(#btn-snooze, .snooze-chip) { min-height: 38px; }
+body:not(.mini-mode):not(.fullscreen-clock-mode) #action-bar-running #btn-stop { min-height: 44px; }
 
 /* REAL consequence where you act: a red hairline on the chosen ending and the
    CTA. Static: no transition on box-shadow; the violet CTA fill stays. */
@@ -11339,12 +11430,26 @@ body .nm-card-body .nm-card-subtitle, body .device-card .device-off-hint { line-
 }
 @media (max-height: 800px) { body .ns-hero-card .ns-hero-title { font-size: 22px; } }
 
-/* Keep the restored cockpit's controls and readiness rail above the footer
-   at the 900x640 minimum, without changing its roomy-window presentation. */
-@media (max-height: 700px) {
+/* Keep preparation and the readiness rail visible in compact/medium windows.
+   Put labels beside controls instead of shrinking the controls themselves. */
+@media (max-height: 800px) {
   body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card { gap: 4px; }
-  body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .plan-field-label { font-size: 12px; }
+  body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .plan-field-label { font-size: 13px; }
   body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .plan-field { padding-block: 4px; gap: 4px; }
-  body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .ns-play-btn { min-height: 42px; height: 42px; }
+  body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .ns-play-btn { min-height: 44px; height: 44px; margin-block: 2px 4px; }
+  body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .plan-field:first-child,
+  body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .plan-field:has(#action-chips-row) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 4px 12px;
+  }
+  body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .plan-field:first-child > .plan-field-label {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+  body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .tonight-target-note { grid-column: 1 / -1; }
+  body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .plan-ritual-entry { padding-top: 6px; }
   body:not(.mini-mode):not(.fullscreen-clock-mode) #readiness-strip .rdy-row { min-height: 52px; padding-block: 8px; }
 }

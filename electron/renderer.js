@@ -3531,9 +3531,9 @@ function armNightMode(mode) { // eslint-disable-line no-unused-vars -- called fr
 //
 // v11.2 Tonight's Plan: this is now the single authoritative "this is what
 // will happen" surface regardless of source -- manual setup, a saved
-// profile, or a Night Mode. A loaded profile credits itself in both the
-// title (e.g. "Hard Stop · 15 min · Shutdown", the same pattern Night Modes
-// already used) and the separate ns-hero-source line ("From: Hard Stop"),
+// profile, or a Night Mode. Duration belongs beside its editor; the title
+// names the prepared plan. A loaded profile credits itself in the title
+// and the separate ns-hero-source line ("From: Hard Stop"),
 // so the source is never ambiguous. checkProfileMatch() (below) is what
 // keeps that credit honest: the moment the lobby no longer matches the
 // loaded profile's saved values, the profile identity is cleared before
@@ -3554,20 +3554,28 @@ function renderTonightHero() {
   const durationSeconds = armed ? armed.durationSeconds : inputSeconds();
   const effectiveAction = armed ? armed.action : state.action;
 
-  if (titleEl) titleEl.textContent = `${planTitle} · ${formatDuration(durationSeconds)}`;
+  if (titleEl) titleEl.textContent = planTitle;
   if (previewEl) previewEl.textContent = formatDuration(durationSeconds);
-  if (playLabelEl) playLabelEl.textContent = planTitle === 'Countdown' ? 'Start countdown' : `Start ${planTitle}`;
+  if (playLabelEl) playLabelEl.textContent = 'Start timer';
   const playButton = document.getElementById('ns-play-btn');
-  if (playButton) playButton.setAttribute('aria-label', `${planTitle === 'Countdown' ? 'Start countdown' : `Start ${planTitle}`}, ${formatDuration(durationSeconds)}`);
-  // "Ends with": the action this plan really runs, plus the Last Light finale
-  // only when one is enabled. Mode (Test/REAL) is stated by the truth pill.
+  const modeLabel = !state.settingsLoaded ? 'checking mode' : (state.dryRun ? 'Test Mode, no PC power action' : 'REAL action');
+  if (playButton) playButton.setAttribute('aria-label', `Start ${planTitle}, ${formatDuration(durationSeconds)}, ${actionLabel(effectiveAction)}, ${modeLabel}`);
+  // Quick starts use state.action and clear the saved identity, unlike Start.
+  // Only describe that existing behavior here; their handlers stay unchanged.
+  document.querySelectorAll('#plan-quick-start .chip[data-min]').forEach(chip => {
+    chip.setAttribute('aria-label', `Start ${formatDuration(Number(chip.dataset.min) * 60)} immediately, ${actionLabel(state.action)}, ${modeLabel}; replaces selected mode`);
+  });
+  // Keep the power ending separate from the selected Last Light setting.
+  // A configured finale is not a promise that every run will execute it.
   const endingEl = document.getElementById('ns-meta-ending');
-  if (endingEl) {
+  if (endingEl) endingEl.textContent = actionLabel(effectiveAction);
+  const finaleEl = document.getElementById('plan-finale');
+  if (finaleEl) {
     const seqSel = document.getElementById('sel-lastlight-sequence');
     const seqOption = seqSel && seqSel.options ? seqSel.options[seqSel.selectedIndex] : null;
     const finaleName = seqOption && seqOption.textContent ? seqOption.textContent.replace(/\s*\*$/, '').trim() : '';
-    const finaleSuffix = state.lastLight?.enabled && finaleName ? ' · ' + finaleName : '';
-    endingEl.textContent = actionLabel(effectiveAction) + finaleSuffix;
+    finaleEl.hidden = !(state.lastLight?.enabled && finaleName);
+    finaleEl.textContent = finaleEl.hidden ? '' : `Last Light setting: ${finaleName}`;
   }
   if (sourceEl) {
     if (profile) {
