@@ -17,7 +17,9 @@ function runProcess(command, args, { spawnProcess = spawn, timeoutMs = TIMEOUT_M
   return new Promise((resolve, reject) => {
     let output = '';
     let settled = false;
-    const child = spawnProcess(command, args, { windowsHide: true });
+    const env = { ...process.env };
+    delete env.ELECTRON_RUN_AS_NODE;
+    const child = spawnProcess(command, args, { windowsHide: true, env });
     const finish = (callback, value) => {
       if (settled) return;
       settled = true;

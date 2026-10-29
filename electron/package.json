@@ -138,10 +138,10 @@
     "sharp": "^0.35.5"
   },
   "devDependencies": {
-    "electron": "^43.5.0",
-    "eslint": "10.7.0",
-    "png-to-ico": "^3.0.1",
+    "electron": "^43.8.4",
+    "eslint": "10.13.0",
+    "png-to-ico": "^3.0.2",
     "rcedit": "5.0.2",
-    "ws": "^8.21.0"
+    "ws": "^8.22.0"
   }
 }

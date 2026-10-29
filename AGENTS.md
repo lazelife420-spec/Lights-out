@@ -70,7 +70,7 @@ The important behavior is:
 - unit tests cover the network trust boundaries: remote-command validation, the
   companion WebSocket handshake + frame codec, the family LAN discovery parser,
   and the wifiGuard input sanitizers
-- Electron has a `^43.5.0` minimum and is locked/provisioned at `43.7.11`;
+- Electron has a `^43.8.4` minimum and is locked/provisioned at `43.8.4`;
   `sharp` has a `^0.35.5` minimum. The October 14 qualification also updates
   vulnerable transitive brace-expansion and undici resolutions. Native Windows
   packaging uses the provisioned Electron runtime and rcedit, rather than
