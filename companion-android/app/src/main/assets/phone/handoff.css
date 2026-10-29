@@ -1,0 +1,12 @@
+.handoff-panel{padding:18px 0;line-height:1.55;max-width:880px;margin:auto}
+.handoff-panel h3{font-size:1.35rem;margin:0 0 10px}.handoff-panel h4{font-size:1.08rem;margin:0 0 12px}
+.handoff-card{padding:20px;margin:16px 0;border:1px solid rgba(180,190,220,.18);border-radius:18px;background:rgba(150,160,200,.025)}
+.handoff-card .handoff-card{padding:16px;margin-bottom:0}.handoff-note{color:#aab1c3;font-size:.94em;line-height:1.65}
+.handoff-error{color:#ffc8bd;overflow-wrap:anywhere}.handoff-error:empty{display:none}
+.handoff-fingerprint{display:block;white-space:normal;overflow-wrap:anywhere;letter-spacing:.08em;font-size:.9em;line-height:1.9;padding:12px;background:rgba(130,140,180,.07);border-radius:10px;margin:10px 0;user-select:all}
+.handoff-panel textarea,.handoff-panel input:not([type=checkbox]),.handoff-panel select{display:block;width:100%;box-sizing:border-box;max-width:100%;margin:12px 0;padding:12px;border-radius:10px;border:1px solid rgba(180,190,220,.25);background:#171b25;color:#eef0ff;font:inherit}
+.handoff-panel textarea{resize:vertical;font-size:.9em;line-height:1.6}.handoff-panel button{margin:6px 8px 6px 0;min-height:44px;white-space:normal}
+.handoff-choice{display:flex;align-items:flex-start;gap:12px;margin:14px 0;font-weight:400;line-height:1.6}.handoff-choice input[type=checkbox]{flex:none;width:19px;height:19px;margin:4px 0 0;accent-color:#b6a6ff}
+.handoff-qr{display:block;width:min(280px,100%);height:auto;margin:18px auto;background:white;border:12px solid white;border-radius:12px;box-sizing:border-box;image-rendering:pixelated}
+.handoff-panel details>summary{cursor:pointer;padding:12px 0}.handoff-sources{margin:12px 0}.handoff-panel [hidden]{display:none!important}
+@media(max-width:560px){.handoff-card{padding:16px}.handoff-fingerprint{font-size:.8em;letter-spacing:.04em}.handoff-panel button{width:100%;margin-right:0}}

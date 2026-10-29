@@ -3,6 +3,7 @@
   const $ = id => document.getElementById(id);
   let config = { lights: [], routines: [], rules: [] }, configKey = '', upcoming = [], nextKey = '';
   let routineId = '', ruleId = '', view = 'timer';
+  let editingActionIds = {};
   let month = new Date(); month = new Date(month.getFullYear(), month.getMonth(), 1);
   const error = text => window.phoneUI.error(text);
   const send = (action, data = {}) => {
@@ -26,12 +27,25 @@
   }
   document.querySelectorAll('[data-tab]').forEach(node => { node.onclick = () => tab(node.dataset.tab); });
   function resetRoutine(p = {}) {
+    editingActionIds = p.actionIds || {};
     routineId = p.id || ''; $('routine-editor-title').textContent = p.id ? 'Edit routine' : 'New routine';
     $('routine-name').value = p.name || ''; $('routine-minutes').value = p.seconds ? p.seconds / 60 : 30;
     $('routine-warm').checked = Boolean(p.brightness); $('routine-off').checked = Boolean(p.offAtEnd); $('routine-brightness').value = p.brightness || 30;
-    choices('routine-light-options', config.lights.map(ip => [ip, ip]), p.targets || []);
+    choices('routine-light-options', config.lights.map(ip => [ip, ip]), p.warmTargets ?? p.targets ?? []);
+    choices('routine-off-light-options', config.lights.map(ip => [ip, ip]), p.offTargets ?? p.targets ?? []);
+    actionFields();
   }
-  function fields() { const kind = $('rule-kind').value; $('week-field').hidden = kind !== 'weekly'; $('month-field').hidden = kind !== 'monthly'; $('date-field').hidden = kind !== 'once'; $('rule-date').required = kind === 'once'; }
+  function actionFields() {
+    $('routine-warm-fields').hidden = !$('routine-warm').checked;
+    $('routine-off-fields').hidden = !$('routine-off').checked;
+    $('routine-brightness').disabled = !$('routine-warm').checked;
+    const actions = [`${$('routine-minutes').value || 30} min phone reminder`];
+    if ($('routine-warm').checked) actions.push(`warm ${checked('routine-light-options').length} light(s) to ${$('routine-brightness').value}% at the start`);
+    if ($('routine-off').checked) actions.push(`switch ${checked('routine-off-light-options').length} light(s) off at the finish`);
+    $('routine-action-preview').textContent = 'On this phone: ' + actions.join(' · ') + '. ' + (config.lights.length ? '' : 'Save lights in Lighting to add WiZ actions.');
+  }
+  $('routine-form').addEventListener('input', actionFields);
+  function fields() { const kind = $('rule-kind').value; $('week-field').hidden = kind !== 'weekly'; $('month-field').hidden = kind !== 'monthly'; $('months-field').hidden = kind === 'once'; $('date-field').hidden = kind !== 'once'; $('rule-date').required = kind === 'once'; }
   function resetRule(p = {}) {
     ruleId = p.id || ''; $('rule-editor-title').textContent = p.id ? 'Edit calendar rule' : 'New calendar rule';
     $('rule-routine').value = p.routineId || config.routines[0]?.id || ''; $('rule-kind').value = p.kind || 'weekly'; $('rule-time').value = p.time || '22:00';
@@ -60,7 +74,7 @@
   function matches(r, d) {
     if (r.enabled === false) return false;
     if (r.kind === 'once') return r.date === dateKey(d);
-    if (r.kind === 'weekly') return (r.weekdays || []).includes(d.getDay() || 7);
+    if (r.kind === 'weekly') return (!r.months || r.months.includes(d.getMonth() + 1)) && (r.weekdays || []).includes(d.getDay() || 7);
     return (r.months || []).includes(d.getMonth() + 1) && ((r.monthDays || []).includes(d.getDate()) || ((r.monthDays || []).includes(-1) && new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() === d.getDate()));
   }
   function calendar() {
@@ -82,8 +96,10 @@
   $('routine-form').onsubmit = event => {
     event.preventDefault(); const minutes = Number($('routine-minutes').value);
     if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) return error('Choose 1 minute to 24 hours.');
-    const useLights = $('routine-warm').checked || $('routine-off').checked;
-    send('saveRoutine', { routine: { id: routineId, name: $('routine-name').value.trim(), seconds: minutes * 60, targets: useLights ? checked('routine-light-options') : [], brightness: $('routine-warm').checked ? Number($('routine-brightness').value) : 0, offAtEnd: $('routine-off').checked } });
+    const warmTargets = checked('routine-light-options'), offTargets = checked('routine-off-light-options');
+    const routine = { id: routineId || crypto.randomUUID(), name: $('routine-name').value.trim(), seconds: minutes * 60, targets: [...new Set([...warmTargets, ...offTargets])].sort(), warmTargets, offTargets, actionIds:editingActionIds, brightness: $('routine-warm').checked ? Number($('routine-brightness').value) : 0, offAtEnd: $('routine-off').checked };
+    try { routine.plan = window.RoutineModel.fromPhoneRoutine(routine); } catch (e) { return error(e.message); }
+    send('saveRoutine', { routine });
   };
   $('rule-form').onsubmit = event => {
     event.preventDefault(); const tokens = $('rule-days').value.split(',').map(s => s.trim().toLowerCase());
@@ -93,13 +109,29 @@
   window.phoneHome = {
     saved(action) { if (action === 'saveRoutine' || action === 'deleteRoutine') resetRoutine(); if (action === 'saveRule' || action === 'deleteRule') resetRule(); },
     update(state) {
+      const outcomes = $('routine-outcomes');
+      const outcomeLabel = { claimed: 'Claimed; start not confirmed', running: 'Timer running', completed: 'Completed',
+        cancelled: 'Cancelled', skipped: 'Skipped', failed: 'Failed', unavailable: 'History unavailable', 'partial-failure': 'Some actions failed', 'waiting-for-actions': 'Timer finished; waiting for lights' };
+      const actionLabel = { 'timer.start': 'Phone reminder', 'wiz.warm': 'Warm lights', 'wiz.off': 'Lights off' };
+      outcomes.replaceChildren(...(state.routineOutcomes || []).slice(-12).reverse().map(entry => {
+        const row = el('p', `${entry.name} · ${outcomeLabel[entry.status] || 'Outcome unknown'}${entry.reason === 'timer-active' ? ' · Another phone timer was active' : ''}`);
+        const statusLabel = { pending: 'Waiting', started: 'Started', paused: 'Paused', completed: 'Completed', acknowledged: 'Acknowledged', cancelled: 'Cancelled', skipped: 'Skipped', failed: 'Failed' };
+        for (const action of entry.actions || []) row.append(el('small', ` · ${actionLabel[action.type] || 'Action'}: ${statusLabel[action.status] || 'Unknown'}`));
+        return row;
+      }));
+      if (!outcomes.children.length) outcomes.textContent = 'No calendar routine has run yet.';
       const key = JSON.stringify(state.home || {}), nk = JSON.stringify(state.upcoming || []);
       upcoming = state.upcoming || [];
       if (key !== configKey) {
         configKey = key; config = { lights: [], routines: [], rules: [], ...state.home };
         $('light-ips').value = config.lights.join('\n'); $('light-count').textContent = config.lights.length ? `${config.lights.length} saved light(s) · commands apply to all` : 'No saved lights yet.';
-        const previous = checked('routine-light-options'); choices('routine-light-options', config.lights.map(ip => [ip, ip]), previous);
+        const connection = document.querySelector('.phone-light-connection');
+        if (connection) connection.open = config.lights.length === 0;
+        for (const id of ['routine-light-options', 'routine-off-light-options']) { const previous = checked(id); choices(id, config.lights.map(ip => [ip, ip]), previous); }
+        actionFields();
         cards(); calendar();
+        void window.phoneTransfer?.refresh();
+        void window.phoneLightUI?.refresh();
       } else if (nk !== nextKey) cards();
       nextKey = nk;
       $('calendar-readiness').textContent = state.exact ? "Ready to run on this phone, even with the PC off. Lights need the same Wi-Fi. Keep the phone powered on." : 'Saved routines are paused. Allow precise alerts below so Android can start them with the screen off.';
@@ -107,5 +139,19 @@
       $('light-result').textContent = state.event || '';
     }
   };
+  const transfers = new Map();
+  function transfer(action,data={}) { return new Promise((resolve,reject)=>{
+    const requestId=crypto.randomUUID(),timer=setTimeout(()=>{transfers.delete(requestId);reject(Error('The file operation timed out. Reopen it when ready.'));},120000);
+    transfers.set(requestId,{resolve,reject,timer});window.phoneNative.postMessage(JSON.stringify({action,requestId,...data}));
+  }); }
+  window.phoneTransferReply = (id,reply)=>{const request=transfers.get(id);if(!request)return;transfers.delete(id);clearTimeout(request.timer);reply.ok?request.resolve(reply.result):request.reject(Error(reply.error || 'File operation failed.'));};
+  window.phoneTransfer = RoutineTransferUI.mount($('routine-transfer-body'),{
+    platform:'android',list:()=>transfer('routineFileList'),exportFile:selection=>transfer('routineFileExport',{selection}),
+    openFile:()=>transfer('routineFileOpen'),preview:text=>transfer('routineFilePreview',{text}),
+    commitImport:(text,policy)=>transfer('routineFileImport',{text,policy}),adopt:options=>transfer('routineFileAdopt',{options}),
+    start:id=>send('startRoutine',{id})
+  });
+  window.handoffUI=HandoffUI.mount($('handoff-body'),{platform:'android',invoke:(operation,options)=>transfer('handoff',{operation,options}),scan:()=>transfer('handoff',{operation:'scan',options:{}}),onImported:()=>void window.phoneTransfer.refresh()});
+  window.phoneLightUI=PhoneLightUI.mount($('light-experience-body'),(operation,data={})=>transfer('lightExperience',{operation,...data}));
   resetRoutine(); resetRule(); calendar(); tab(view);
 })();

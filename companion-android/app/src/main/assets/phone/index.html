@@ -3,19 +3,27 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Lights Out · Phone</title>
   <link rel="stylesheet" href="phone.css">
+  <link rel="stylesheet" href="handoff.css">
+  <link rel="stylesheet" href="light-experience.css">
+  <link rel="stylesheet" href="studio.css">
   <script src="phone.js" defer></script>
+  <script src="routine-model.js" defer></script>
+  <script src="routine-transfer-ui.js" defer></script>
+  <script src="handoff-ui.js" defer></script>
+  <script src="light-experience.js" defer></script>
+  <script src="light-experience-ui.js" defer></script>
   <script src="home.js" defer></script>
 </head>
 <body>
   <main>
     <header><button class="brand" id="brand" aria-label="Lights Out">Lights Out<span class="brand-star" aria-hidden="true">✦</span></button><span class="pill">ON THIS PHONE</span></header>
     <nav class="targets" aria-label="Timer device"><span aria-current="page">This phone</span><button id="pc-top">PC controls <span aria-hidden="true">↗</span></button></nav>
-    <nav class="home-tabs" aria-label="Phone controls"><button data-tab="timer" aria-current="page">Timer</button><button data-tab="lighting">Lighting</button><button data-tab="routines">Routines</button><button data-tab="calendar">Calendar</button></nav>
+    <nav class="home-tabs" aria-label="Phone controls"><button data-tab="timer" aria-current="page"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 5.5V10l3 2"/></svg><span>Timer</span></button><button data-tab="lighting"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 13c-5-4-2-11 3-11s8 7 3 11l-1 3H8ZM8 19h4"/></svg><span>Lighting</span></button><button data-tab="routines"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 4 4 8-9M4 18h12"/></svg><span>Routines</span></button><button data-tab="calendar"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="14" rx="2"/><path d="M3 8h14M7 2v4M13 2v4M7 12h.01M13 12h.01"/></svg><span>Calendar</span></button></nav>
     <div id="view-timer">
-    <div class="intro"><p class="eyebrow">YOUR TIME TO SWITCH OFF</p><h1>A little less screen.<br>A little more night.</h1></div>
+    <div class="intro"><p class="eyebrow">TONIGHT, ON YOUR TERMS</p><h1>Make room for rest.</h1></div>
     <section class="timer-panel" aria-label="Phone timer">
       <div class="dial" id="dial">
         <svg viewBox="0 0 300 300" aria-hidden="true"><circle class="ring-track" cx="150" cy="150" r="132"/><circle id="arc" cx="150" cy="150" r="132" pathLength="100"/></svg>
@@ -37,24 +45,32 @@
     <section id="view-lighting" class="home-view" hidden aria-label="WiZ lighting">
       <p class="eyebrow">DIRECT FROM YOUR PHONE</p><h1>Set the night.</h1>
       <p class="view-copy">Control WiZ lights on the same Wi-Fi, even with your PC off. Enable Local communication in the WiZ app.</p>
-      <div class="control-card"><h2>Your WiZ lights</h2><button class="secondary" id="discover-lights">Find lights on Wi-Fi</button>
+      <details class="control-card phone-light-connection" open><summary><span>Your WiZ lights</span><small>Connection &amp; addresses</small></summary><button class="secondary" id="discover-lights">Find lights on Wi-Fi</button>
         <label for="light-ips">Light IP addresses</label><textarea id="light-ips" rows="3" placeholder="192.168.0.18" spellcheck="false" autocapitalize="off"></textarea><small>Up to 8 local IPv4 addresses, separated by commas or new lines. Manual entry also works when discovery is blocked.</small>
         <button class="primary" id="save-lights">Save lights on this phone</button>
-      </div>
-      <div class="control-card"><h2>Room controls</h2><p class="view-copy" id="light-count">No saved lights yet.</p><p class="view-copy" id="light-result" role="status"></p><div class="button-row"><button class="secondary" id="light-status">Check</button><button class="secondary" id="light-on">On</button><button class="secondary" id="light-off">Off</button></div>
+      </details>
+      <details class="control-card phone-room-controls"><summary><span>Room controls</span><small>On, off &amp; brightness</small></summary><p class="view-copy" id="light-count">No saved lights yet.</p><p class="view-copy" id="light-result" role="status"></p><div class="button-row"><button class="secondary" id="light-status">Check</button><button class="secondary" id="light-on">On</button><button class="secondary" id="light-off">Off</button></div>
         <label for="light-brightness">Warm light brightness <output id="brightness-value">30%</output></label><input id="light-brightness" type="range" min="10" max="100" value="30"><button class="secondary" id="light-warm">Set warm light · 2700K</button>
-      </div>
+      </details>
+      <div class="phone-light-builder"><div class="phone-light-heading"><p class="eyebrow">MAKE TIME VISIBLE</p><h2>A different kind of countdown.</h2><p class="view-copy">Choose the mood. Pick the lights. Make it yours.</p></div><div id="light-experience-body"></div></div>
     </section>
     <section id="view-routines" class="home-view" hidden aria-label="Phone routines">
       <p class="eyebrow">MAKE IT YOUR RITUAL</p><h1>A routine to switch off.</h1><p class="view-copy">Saved and run on this phone. Add a calendar rule to start automatically.</p>
+      <details class="control-card routine-transfer"><summary>Import &amp; export routine files</summary><div id="routine-transfer-body"></div></details>
+      <details class="control-card" id="handoff-pairing"><summary>Secure routine pairing</summary><div id="handoff-body"></div></details>
       <div id="routine-list" class="item-list"></div>
       <form id="routine-form" class="control-card"><h2 id="routine-editor-title">New routine</h2>
         <label for="routine-name">Name</label><input id="routine-name" maxlength="60" required placeholder="Weeknight wind-down">
-        <label for="routine-minutes">Timer duration · minutes</label><input id="routine-minutes" type="number" min="1" max="1440" value="30" required>
-        <fieldset id="routine-targets"><legend>WiZ lights</legend><div id="routine-light-options"></div></fieldset>
-        <label class="check"><input type="checkbox" id="routine-warm"> Set warm lighting when the routine starts</label>
-        <label for="routine-brightness">Starting brightness · percent</label><input id="routine-brightness" type="number" min="10" max="100" value="30">
-        <label class="check"><input type="checkbox" id="routine-off"> Switch selected lights off when the timer finishes</label>
+        <fieldset><legend>1 · Phone reminder</legend><label for="routine-minutes">Timer duration · minutes</label><input id="routine-minutes" type="number" min="1" max="1440" value="30" required><small>Runs on this phone. Finishes with a reminder.</small></fieldset>
+        <fieldset id="routine-targets"><legend>2 · At the start</legend>
+          <label class="check"><input type="checkbox" id="routine-warm"> Set warm WiZ lighting</label>
+          <div id="routine-warm-fields" hidden><label for="routine-brightness">Brightness · percent</label><input id="routine-brightness" type="number" min="10" max="100" value="30"><p class="view-copy">Lights for this action</p><div id="routine-light-options"></div></div>
+        </fieldset>
+        <fieldset><legend>3 · When the timer finishes</legend>
+          <label class="check"><input type="checkbox" id="routine-off"> Switch WiZ lights off</label>
+          <div id="routine-off-fields" hidden><p class="view-copy">Lights for this action</p><div id="routine-off-light-options"></div></div>
+        </fieldset>
+        <p id="routine-action-preview" class="view-copy" role="status"></p>
         <small>Pause holds the timer. Cancel leaves lights as they are and cancels the finish action. Edits apply to the next run.</small>
         <div class="button-row"><button class="primary" type="submit">Save routine</button><button class="secondary" type="button" id="new-routine">New</button></div>
       </form>
@@ -63,12 +79,14 @@
       <p class="eyebrow">YOUR NIGHTS, PLANNED</p><h1>Make room for rest.</h1><p class="view-copy" id="calendar-readiness">Calendar routines run on this phone, with the PC off.</p>
       <div class="control-card"><div class="month-header"><button id="month-prev" aria-label="Previous month">‹</button><h2 id="calendar-month"></h2><button id="month-next" aria-label="Next month">›</button></div><div class="weekday-head" aria-hidden="true"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div><div id="month-grid" class="month-grid"></div><small>Tap a date to create a rule. A star marks a scheduled routine.</small></div>
       <div id="rule-list" class="item-list"></div>
+      <details class="control-card"><summary>Recent routine outcomes</summary><div id="routine-outcomes" role="status">No calendar routine has run yet.</div></details>
       <form id="rule-form" class="control-card"><h2 id="rule-editor-title">New calendar rule</h2>
         <label for="rule-routine">Routine</label><select id="rule-routine" required></select>
         <label for="rule-kind">Repeat</label><select id="rule-kind"><option value="weekly">Weekly</option><option value="monthly">Monthly · selected months</option><option value="once">Individual date</option></select>
         <label for="rule-time">Start time · phone's local time</label><input id="rule-time" type="time" value="22:00" required>
         <fieldset id="week-field"><legend>Weekdays</legend><div id="weekday-options" class="chip-options"></div></fieldset>
-        <div id="month-field" hidden><label for="rule-days">Days of the month</label><input id="rule-days" value="1" placeholder="1, 15, last"><small>Use 1–31 or “last”, separated by commas. Shorter months skip days that don't exist.</small><fieldset><legend>Months</legend><div id="month-options" class="chip-options"></div></fieldset></div>
+        <div id="month-field" hidden><label for="rule-days">Days of the month</label><input id="rule-days" value="1" placeholder="1, 15, last"><small>Use 1–31 or “last”, separated by commas. Shorter months skip days that don't exist.</small></div>
+        <fieldset id="months-field"><legend>Active months</legend><div id="month-options" class="chip-options"></div></fieldset>
         <div id="date-field" hidden><label for="rule-date">Date</label><input id="rule-date" type="date" min="2000-01-01" max="2199-12-31"></div>
         <label class="check"><input type="checkbox" id="rule-enabled" checked> Enabled</label>
         <small>Android shows scheduled routines as alarms. If another phone timer is active, the routine is skipped. After a force-stop, reopen Lights Out to restore alarms.</small>

@@ -36,6 +36,8 @@ object PhoneTimerStore {
             .put("label", t.label).put("lightTargets", org.json.JSONArray(t.lightTargets)).put("offAtEnd", t.offAtEnd)
         check(prefs(c).edit().putString("state", j.toString()).commit()) { "Could not save the phone timer." }
         schedule(c, t)
+        val outcome = when (t.phase) { "finished" -> "completed"; "idle" -> "cancelled"; "paused" -> "paused"; else -> "started" }
+        PhoneRoutineOutcomes.timer(c, t.runId, outcome)
     }
     fun exact(c: Context): Boolean = Build.VERSION.SDK_INT < 31 || c.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
     private fun pending(c: Context): PendingIntent = PendingIntent.getBroadcast(c, 1,
@@ -87,6 +89,7 @@ object PhoneTimerStore {
             .setContentTitle("Lights out. Stars up.").setContentText("Your phone timer has finished.")
             .setContentIntent(open(c)).setAutoCancel(true).build()
         try { NotificationManagerCompat.from(c).notify(COMPLETE, notification) } catch (_: SecurityException) {}
+        PhoneLightExperience.finished(c,allowBeacon=!t.offAtEnd)
         if (t.offAtEnd && t.lightTargets.isNotEmpty()) {
             PhoneHomeStore.event(c, "Timer finished. Waiting for WiZ acknowledgement…")
             PhoneLights.perform(c, t.lightTargets, "off", runId = t.runId, done = done)
