@@ -51,6 +51,30 @@ Command: `node electron/scripts/android-standalone-lifecycle-proof.js` (standard
 
 **Verdict: M2 PASS — EMULATOR_TESTED on `62edc05`/`d0a74cc`-era source.** Still not physical-device proof: OEM battery managers, real broadcast/WiZ UDP and force-stop remain `ANDROID_FIELD_QA.md` items.
 
+## M3 — expanded emulator-only qualification EXECUTED (2026-10-29)
+
+Environment: owned AVDs in the isolated SDK — `LightsOut_QA_API35` (API 35, `emulator-5582`) plus newly provisioned `LightsOut_QA_API36` (API 36, `system-images;android-36;default;x86_64`, `emulator-5592`). APK `Lights-Out-Android-v11.2.0-debug.apk` SHA-256 `8478e949…` rebuilt from canonical `9c6dcb1` (adds the 44px touch-target fix), bound by `android-qualification.json` (79/79 sources re-verified; unit tests and lint green; no production signing). Evidence root: `F:\LightsOutQA\M3-EmulatorMax-20261029\`.
+
+| Lane | API 35 | API 36 |
+| --- | --- | --- |
+| Lifecycle | **6/6 PASS** | **6/6 PASS** |
+| Calendar | **6/6 PASS** | **6/6 PASS** |
+
+Deep lanes (driven on API 35):
+
+- **WiZ UDP simulation — 13/13 PASS** (`wiz-sim.js`, `wiz-sim-report.json`): good bulb status/on/warm with real `setPilot` params (`state`, `dimming`, `temp` 2700K); malformed, error, wrong-method, silent-drop and >1200ms-delayed replies all produce honest failures, never fake success; stale IP fails honestly; mixed targets return per-target results; a public IP is rejected before any packet leaves (fail closed); **discovery broadcast via emulator NAT reached the fixture — end-to-end `getPilot` + MAC validation proven** (physical broadcast reachability still unproven). Rapid manual taps are legitimately swallowed by the app's `active ≥ 2` anti-hammer guard — correct behavior, surfaced by harness pacing.
+- **Routine interchange security — 15/15 PASS** (`import-security.js`, `import-security-report.json`): garbage, wrong format, schemaVersion 99, JSON depth >16, duplicate keys, >256KiB, >32 routines, unknown fields and out-of-range timer seconds are all refused; Windows `endAction` imports only as an inert draft and preview flags the phone-reminder adaptation (consent-gated by design); a valid file imports and persists; `reject` policy refuses conflicts without clobbering; `copy` policy lands a renamed copy; preview annotates conflicts without committing.
+- **UI audit** (`ui-audit.js`, 8 screenshots): timer idle/running/paused/finished, lighting, routines, calendar, PC-controls entry. Accessibility findings adjudicated live: several controls measured under the 44px tap minimum → narrow CSS floor committed as `9c6dcb1` and re-measured on-device (days 45×44, month nav 44×44, clock/countdown 44px, PC entry 177×44).
+- **Advanced lifecycle** (manual/stepped, evidence partial): cold-boot restores the running monotonic timer; `dumpsys deviceidle force-idle` Doze preserves it; app-standby bucket preserves it; force-stop + relaunch restores the same runId/deadline; exact-alarm revocation shows the permission disclosure path.
+
+## Findings queued for M1.5 modernization
+
+- **16KB page-size audit — REAL blocker**: `libimage_processing_util_jni.so` (CameraX image-processing JNI) has LOAD segments at 4096-byte alignment on **every ABI including arm64-v8a and x86_64** — not installable on 16KB devices. `libbarhopper_v3.so` is already 16384-aligned on both 64-bit ABIs. Requires a CameraX/ML Kit dependency bump or rebuild — belongs to the M1.5 tranche, not this baseline.
+- APK is not bitwise reproducible (dex serialization ordering only — see below).
+- targetSdk remains 34; API-36 lanes above are compat evidence on the newer platform, not Play-readiness.
+
+**Verdict: M3 PASS — EMULATOR-MAXIMIZED on `9c6dcb1`.** Still no physical-device, OEM-battery, real-router or real-WiZ claims; those remain `ANDROID_FIELD_QA.md` items.
+
 ## APK byte-level reproducibility investigation (audit requirement)
 
 Fresh merged-tree build vs candidate `0b0b698` artifact:

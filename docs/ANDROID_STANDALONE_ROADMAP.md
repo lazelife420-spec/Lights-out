@@ -43,7 +43,22 @@ upgrade, `compileSdk`/`targetSdk` 36, API 36 behavior changes (foreground
 services, exact alarms, notification permissions), AndroidX/CameraX/ML Kit
 compatibility, and **16 KB native-library page-size alignment** inside the
 packaged APK (inspect the real `.so` set — ML Kit ships native code). Baseline
-evidence remains the fallback reference.
+evidence remains the fallback reference. The M3-max audit now has a concrete
+result for this item: `libimage_processing_util_jni.so` is 4096-aligned on
+every ABI including arm64-v8a/x86_64 — dependency modernization required.
+
+### M2.5 — Expanded emulator-only qualification — **DONE 2026-10-29** (EMULATOR_MAXIMIZED)
+
+Second emulator `LightsOut_QA_API36` provisioned in the isolated SDK; both
+lifecycle+calendar lanes rerun green on API 35 **and** API 36 with the same
+`9c6dcb1`-bound debug APK (targetSdk 34 compat on the newer platform — not
+Play-readiness). Deep lanes on API 35: isolated WiZ UDP simulation 13/13
+(success/failure/timeout/discovery/mixed-targets/public-IP fail-closed),
+routine-interchange security 15/15 (malformed/oversized/dup/future-version/
+conflict policies/inert-import gating), UI audit with a verified 44px
+touch-target fix (`9c6dcb1`), and advanced lifecycle evidence (cold boot,
+Doze, app standby, force-stop, exact-alarm revocation). Full evidence in
+`ANDROID_STANDALONE_QUALIFICATION.md` §M3.
 
 ### M2 — Emulator lifecycle — **DONE 2026-10-29** (EMULATOR_TESTED)
 
