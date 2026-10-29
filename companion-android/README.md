@@ -105,8 +105,8 @@ routines, calendar rules, occurrence ledger and companion URL/token locally.
 2. **Run** (▶) onto your device, or **Build → Build APK(s)**.
 
 ### Option B — command line
-The Gradle 8.7 wrapper is included, with a pinned distribution checksum. Build a
-debug APK with:
+The Gradle 9.8.2 wrapper is included, with a pinned distribution checksum. Build
+a debug APK with:
 
 ```bash
 cd companion-android
