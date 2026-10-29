@@ -30,3 +30,7 @@ Thumbs.db
 
 # IDE / tool snapshots
 .snapshots/
+
+# Local governed-work and connector state (never commit)
+.hardline/
+.wrangler/
