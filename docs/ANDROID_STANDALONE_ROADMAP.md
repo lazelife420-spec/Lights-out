@@ -26,12 +26,24 @@ claim may exceed its evidence class.
 
 ## Milestones
 
-### M1 — Re-qualify on `main` (next tranche, blocked on Android SDK)
+### M1 — Re-qualify on `main` — **DONE 2026-10-29** (AUTOMATED_TESTED)
 
-The local Android SDK was removed; all Gradle execution is deferred to CI or
-an SDK-equipped lane. Acceptance gate: `:app:testDebugUnitTest :app:lintDebug
-:app:assembleDebug` green on the integrated tree, plus CI artifact upload.
-Classification target: AUTOMATED_TESTED on the merge state.
+`:app:testDebugUnitTest :app:lintDebug :app:assembleDebug` green at `62edc05`
+in an isolated provisioned SDK (see `ANDROID_STANDALONE_QUALIFICATION.md`).
+100/100 JUnit, 0 lint errors, debug APK produced.
+
+### M1.5 — Play-target modernization (separate tranche — do NOT mix with baseline)
+
+The recovered baseline (Gradle 8.7 / AGP 8.5.2 / Kotlin 1.9.24 / API 34) is the
+qualified configuration but is **not Google Play release-ready**: Play requires
+API 36+ for ordinary new apps and updates (extensions aside), and AGP 8.5
+officially supports max API 34. Direct APK distribution has different rules.
+A modernization tranche must re-verify independently: AGP + Gradle + Kotlin
+upgrade, `compileSdk`/`targetSdk` 36, API 36 behavior changes (foreground
+services, exact alarms, notification permissions), AndroidX/CameraX/ML Kit
+compatibility, and **16 KB native-library page-size alignment** inside the
+packaged APK (inspect the real `.so` set — ML Kit ships native code). Baseline
+evidence remains the fallback reference.
 
 ### M2 — Emulator lifecycle re-run (needs SDK + owned AVD)
 
@@ -76,8 +88,13 @@ Publication is never agent-performed.
 
 ## Dependencies and risks
 
-- **Android SDK absent locally** — the single largest qualification blocker;
-  CI lane exists but cannot cover emulator/physical runs.
+- **Android SDK provisioned at `F:\LightsOutQA\M1-Integrated-20261029\sdk`**
+  (isolated; M1 green). Emulator lanes (M2) additionally need a system image +
+  owned AVD. The registered checkout's ~868 untracked historical evidence
+  files are preserved — no cleanup.
+- **Remote CI cannot qualify local commits** — it checks out what is on
+  `origin`. Local SDK lanes or a separately authorized candidate-branch push
+  are the only paths; not an unrestricted production push.
 - **Worktree B dirty state** — Oct 18–20 desktop tranche is uncommitted and
   unqualified; it must not be cleaned or silently promoted.
 - **Toolchain regression risk** — candidate built on Gradle 8.7/AGP 8.5.2/
