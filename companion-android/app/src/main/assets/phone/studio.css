@@ -24,13 +24,13 @@ header { padding: 0 2px; }
 #time { font-size: 58px; font-weight: 500; letter-spacing: -3.5px; }
 .end-label { font-size: 10px; }
 .clock-choice { margin-bottom: 22px; }
-.clock-choice button { border-radius: 7px; font-size: 10px; padding: 9px 10px; }
+.clock-choice button { border-radius: 7px; font-size: 10px; padding: 9px 10px; min-height: 48px; }
 .clock-choice button.selected { background: #c3b4fa17; }
 .duration-label { font-size: 12px; font-weight: 500; }
 .duration-row input, .duration-row button { background: #12131d; border-color: #353444; border-radius: 9px; }
 .duration-row { margin: 10px 0 12px; }
 .presets { gap: 6px; margin-bottom: 18px; }
-.presets button { font-size: 11px; border-radius: 8px; min-height: 38px; padding: 8px 0; }
+.presets button { font-size: 11px; border-radius: 8px; min-height: 48px; padding: 8px 0; }
 .presets .selected { background: #c3b4fa14; border-color: #9b8bca; }
 .primary { border-radius: 10px; min-height: 48px; font-size: 13px; font-weight: 650; }
 .secondary { border-radius: 9px; background: #2b2938; }

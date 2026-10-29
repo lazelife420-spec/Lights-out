@@ -69,7 +69,7 @@ Deep lanes (driven on API 35):
 
 ## Findings queued for M1.5 modernization
 
-- **16KB page-size audit — REAL blocker**: `libimage_processing_util_jni.so` (CameraX image-processing JNI) has LOAD segments at 4096-byte alignment on **every ABI including arm64-v8a and x86_64** — not installable on 16KB devices. `libbarhopper_v3.so` is already 16384-aligned on both 64-bit ABIs. Requires a CameraX/ML Kit dependency bump or rebuild — belongs to the M1.5 tranche, not this baseline.
+- **16KB page-size audit — REAL compatibility risk**: `libimage_processing_util_jni.so` (from `androidx.camera:camera-core:1.3.4` — verified by transform-cache provenance) has LOAD segments at 4096-byte alignment on **every ABI including arm64-v8a and x86_64**. Android's 16KB compatibility mode still installs and runs it: verified on a dedicated `google_apis_ps16k` API-36 emulator (`PAGE_SIZE=16384`) — the APK installs, HomeActivity launches, and the camera-path MainActivity becomes top-resumed without `UnsatisfiedLinkError`. The residual risk is OEM/kernel-level strict 16KB enforcement when the ML Kit analyzer actually binds (not reachable without a live QR frame loop). **Verified fix path**: `camera-core` ≥1.4.2 ships the same library at 16384 alignment on arm64-v8a AND x86_64 (checked artifacts 1.4.2/1.5.3/1.6.2); the other camera modules ship no natives. `libbarhopper_v3.so` (ML Kit barcode-scanning) is already 16384-aligned on both 64-bit ABIs. Belongs to the M1.5 tranche, not this baseline.
 - APK is not bitwise reproducible (dex serialization ordering only — see below).
 - targetSdk remains 34; API-36 lanes above are compat evidence on the newer platform, not Play-readiness.
 
@@ -99,13 +99,14 @@ The APKs are **not bitwise reproducible**; the variance is confined to dex seria
 
 | Subsystem | Class | Confidence |
 | --- | --- | --- |
-| Phone timer/service | EMULATOR_TESTED (M1+M2 on merged tree; lifecycle 6/6) | SUPPORTED |
-| Phone calendar incl. leap-day | EMULATOR_TESTED (M1+M2; calendar 6/6 incl. leap-day unit tests) | SUPPORTED |
-| Routines + interchange | AUTOMATED_TESTED (M1) | SUPPORTED |
+| Phone timer/service | EMULATOR_TESTED (M1 merged-tree unit tests; M2 lifecycle 6/6; M3 lifecycle 6/6 on API 35 **and** API 36) | SUPPORTED |
+| Phone calendar incl. leap-day | EMULATOR_TESTED (M1+M2; M3 calendar 6/6 on API 35 **and** API 36) | SUPPORTED |
+| Routines + interchange | EMULATOR_TESTED (M3 interchange security 15/15 on-device via bridge) | SUPPORTED |
 | Handoff foundations (phone half) | AUTOMATED_TESTED (M1) | SUPPORTED |
 | Light experiences + beacons | AUTOMATED_TESTED (M1) | SUPPORTED |
-| WiZ direct control | AUTOMATED_TESTED (M1) | SUPPORTED (UDP fixture only — physical bulb UNKNOWN) |
-| Studio phone UI | LOCAL_COMMITTED | SUPPORTED (screenshots exist for candidate; post-merge pixels not re-captured) |
+| WiZ direct control | EMULATOR_TESTED (M3 isolated UDP simulation 13/13 incl. discovery) | SUPPORTED (simulated fixture only — physical bulb UNKNOWN) |
+| Studio phone UI | EMULATOR_TESTED (M3 audit: 8 screenshots, 48dp-effective bounds inventoried) | SUPPORTED |
+| 16KB page-size compatibility | COMPAT_MODE (install+launch verified on `PAGE_SIZE=16384`; one latent native risk) | KNOWN RISK — `libimage_processing_util_jni.so` 4KB-aligned until CameraX ≥1.4.2 |
 | mTLS client (`HandoffConnection`/`Certificate`) | SOURCE_PRESENT in worktree B only — uncommitted, unqualified | PROVEN-ABSENT from main by design |
 | PC-side handoff/Studio | candidate-side only | BLOCKED pending Phase E owner gate |
 | First Light (phone-owned) | DESIGN_ONLY | PROVEN-ABSENT — not found on any line |
@@ -114,10 +115,15 @@ The APKs are **not bitwise reproducible**; the variance is confined to dex seria
 
 ## Honest limits
 
-- Integration commits source verbatim; it does not re-create the candidate's
-  test environment. Every qualification above predates the merge — treat
-  classes as "source proven qualified", not "merged tree proven".
-- The debug APK on F: predates integration; it is evidence for `0b0b698`,
-  not for `main`.
-- No real-bulb, physical-phone, Doze, OEM-battery or force-stop evidence
-  exists anywhere on record.
+- All M1/M2/M3 qualification is against the merged `main` tree (source
+  hashed into every lane's inventory); the historical `0b0b698` candidate
+  records remain as provenance, not the current claim.
+- Emulator evidence is not physical-device proof: OEM battery managers,
+  real broadcast/WiZ UDP, real-camera QR scanning and physical-phone
+  behavior remain `ANDROID_FIELD_QA.md` items.
+- Doze/force-stop evidence exists only at emulator fidelity
+  (`deviceidle force-idle`, app-standby buckets, force-stop/reopen);
+  OEM-specific behaviors are not covered.
+- On 16KB pages the app runs under Android's compatibility mode today;
+  strict-enforcement environments remain a known risk until the CameraX
+  bump lands (M1.5).
