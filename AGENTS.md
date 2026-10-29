@@ -127,6 +127,14 @@ These are intentional product constraints. Do not casually remove them.
 ## Known Architecture Notes
 
 - `main.js` owns timer state, tray behavior, login-item behavior, and final Windows power actions
+- `autopilot.js` persists the armed fire time (`app.autopilotNextFireAt`) so the
+  next launch can turn a fire missed while the app was not running into an
+  honest `missed` run receipt instead of silence; `watchdog.js` keeps a Windows
+  Scheduled Task (`LightsOut-AutopilotWatchdog`, daily at armed time − 15 min)
+  that relaunches the packaged app minimized so its own countdown can fire. The
+  task never performs a power action, only ever registers when the app is
+  packaged (dev runs can only disarm), and its relaunch arg keeps the
+  single-instance handler from popping the window
 - `renderer.js` owns view state, browser-preview fallback behavior, and UI interactions
 - `preload.js` is the IPC bridge (contextIsolation on, nodeIntegration off)
 - the companion phone PWA and family LAN control bind over plaintext LAN behind a
