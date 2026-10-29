@@ -7,6 +7,7 @@ const http = require('http');
 const https = require('https');
 const net = require('net');
 const { spawn } = require('child_process');
+const { isPrivateOrLocal } = require('./capabilityTruth');
 
 // Only ever interpolate strictly-validated values into PowerShell command
 // strings. Device IPs and MACs may originate from imported/shared config, so a
@@ -30,6 +31,18 @@ function xmlEscape(value) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Router API providers
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Router-provider calls send real credentials over plaintext HTTP. The
+// save/import sanitizers run at persistence time, but a stored config can also
+// reach here via a bulk settings import or a hand-edited settings.json — so the
+// request path re-validates the destination itself and refuses anything that is
+// not a private/local IP literal (the same rule sanitizeWifiGuard enforces).
+function safeRouterTarget(routerIp) {
+  const ip = String(routerIp || '').trim();
+  return (net.isIP(ip) !== 0 && isPrivateOrLocal(ip)) ? ip : null;
+}
+
+const ROUTER_PROVIDERS = new Set(['tplink', 'asus', 'netgear']);
 
 // TP-Link routers (common modern models: Archer, Deco).
 async function tplinkBlock(routerIp, username, password, deviceMacs) {
@@ -211,13 +224,16 @@ async function enableWiFiAdapter() {
 
 async function blockInternet(config) {
   const { provider, routerIp, routerUser, routerPass, deviceMacs, webhookUrl, webhookHeaders } = config;
+  if (ROUTER_PROVIDERS.has(provider)) {
+    const target = safeRouterTarget(routerIp);
+    if (!target) {
+      return { success: false, provider, error: 'Router address refused: must be a private/local IP (e.g. 192.168.x.x). Credentials are never sent to other hosts.' };
+    }
+    if (provider === 'tplink') return tplinkBlock(target, routerUser, routerPass, deviceMacs || []);
+    if (provider === 'asus') return asusBlock(target, routerUser, routerPass, deviceMacs || []);
+    return netgearBlock(target, routerUser, routerPass, deviceMacs || []);
+  }
   switch (provider) {
-    case 'tplink':
-      return tplinkBlock(routerIp, routerUser, routerPass, deviceMacs || []);
-    case 'asus':
-      return asusBlock(routerIp, routerUser, routerPass, deviceMacs || []);
-    case 'netgear':
-      return netgearBlock(routerIp, routerUser, routerPass, deviceMacs || []);
     case 'webhook':
       return webhookBlock(webhookUrl, deviceMacs || [], webhookHeaders || {});
     case 'firewall':
@@ -231,13 +247,16 @@ async function blockInternet(config) {
 
 async function unblockInternet(config) {
   const { provider, routerIp, routerUser, routerPass, deviceMacs, webhookUrl, webhookHeaders } = config;
+  if (ROUTER_PROVIDERS.has(provider)) {
+    const target = safeRouterTarget(routerIp);
+    if (!target) {
+      return { success: false, provider, error: 'Router address refused: must be a private/local IP (e.g. 192.168.x.x). Credentials are never sent to other hosts.' };
+    }
+    if (provider === 'tplink') return tplinkUnblock(target, routerUser, routerPass, deviceMacs || []);
+    if (provider === 'asus') return asusUnblock(target, routerUser, routerPass, deviceMacs || []);
+    return netgearUnblock(target, routerUser, routerPass, deviceMacs || []);
+  }
   switch (provider) {
-    case 'tplink':
-      return tplinkUnblock(routerIp, routerUser, routerPass, deviceMacs || []);
-    case 'asus':
-      return asusUnblock(routerIp, routerUser, routerPass, deviceMacs || []);
-    case 'netgear':
-      return netgearUnblock(routerIp, routerUser, routerPass, deviceMacs || []);
     case 'webhook':
       return webhookUnblock(webhookUrl, deviceMacs || [], webhookHeaders || {});
     case 'firewall':
@@ -335,7 +354,9 @@ module.exports = {
   disableWiFiAdapter,
   enableWiFiAdapter,
   // Exposed for unit testing the input sanitizers that guard PowerShell
-  // firewall-rule interpolation and SOAP/XML router request bodies.
+  // firewall-rule interpolation and SOAP/XML router request bodies, and the
+  // request-path router destination check.
   validIps,
-  xmlEscape
+  xmlEscape,
+  safeRouterTarget
 };
