@@ -60,9 +60,10 @@ function schedule(startTimerFn, win) {
   const appSettings = settingsStore.getSection('app') || {};
   if (!appSettings.autopilotEnabled) return null;
 
-  // Use user-configured bedtime or learned one.
+  // Explicit autopilot override wins, then the learned pattern, then the
+  // generic configured bedtime (settings.js documents this same order).
   const learned = learnBedtime();
-  const targetBedtime = appSettings.autopilotBedtime || appSettings.bedtime || learned?.bedtime || '22:30';
+  const targetBedtime = appSettings.autopilotBedtime || learned?.bedtime || appSettings.bedtime || '22:30';
   const [th, tm] = targetBedtime.split(':').map(Number);
 
   // Calculate ms until target time today.
@@ -114,6 +115,9 @@ function schedule(startTimerFn, win) {
         duration
       });
     }
+    // Re-arm for the next night. Without this the first fire (or a refused
+    // start) leaves autopilot permanently spent while the app keeps running.
+    schedule(startTimerFn, mainWindowRef);
   }, msUntilTarget);
 
   return {
@@ -131,10 +135,11 @@ function cancel() {
 
 function getStatus() {
   const appSettings = settingsStore.getSection('app') || {};
+  const learned = learnBedtime();
   return {
     enabled: Boolean(appSettings.autopilotEnabled),
-    bedtime: appSettings.autopilotBedtime || appSettings.bedtime || null,
-    learned: learnBedtime(),
+    bedtime: appSettings.autopilotBedtime || learned?.bedtime || appSettings.bedtime || null,
+    learned,
     scheduled: autopilotTimeout !== null
   };
 }

@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Fixed
+- Autopilot Bedtime now actually uses the learned bedtime: the configured
+  reminder bedtime shadowed it, so autopilot always aimed at the generic
+  setting instead of the pattern it learned. Order is now explicit override,
+  learned, configured, then the 22:30 default — matching the documented intent.
+- Autopilot re-arms for the next night after firing. Previously one fire (or a
+  refused start while another run was active) left the feature spent until the
+  app restarted, silently disabling it on machines that stayed up.
+- Autopilot status reports the same effective bedtime the schedule will use.
+
+### Changed
+- Electron bumped to ^43.8.4 (provisioned at 43.8.4); eslint 10.13.0,
+  ws 8.22.0, png-to-ico 3.0.2. Provisioning checks strip ELECTRON_RUN_AS_NODE
+  so the spawned Electron binary reports its real version.
+- Android toolchain: Gradle 9.8.2 wrapper (pinned checksum), Android Gradle
+  Plugin 9.5.0 with built-in Kotlin (the standalone Kotlin plugin is no longer
+  applied), compileSdk 36, and current AndroidX/ML Kit libraries. CI uses
+  platform android-36 and build-tools 36.0.0.
+
 ## v11.2.0 — 2026-10-16
 
 ### Release qualification
