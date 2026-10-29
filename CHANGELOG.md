@@ -11,6 +11,18 @@
   refused start while another run was active) left the feature spent until the
   app restarted, silently disabling it on machines that stayed up.
 - Autopilot status reports the same effective bedtime the schedule will use.
+- An armed autopilot bedtime can no longer fail silently when the app is not
+  running. The armed fire time is persisted; the next launch turns a stale arm
+  into an honest `missed` receipt instead of a PC-left-on mystery, and a
+  Windows Scheduled Task (`LightsOut-AutopilotWatchdog`, daily at
+  bedtime − 15 min) relaunches the app minimized in time for its own
+  countdown. The task never performs a power action itself.
+- Router-provider WiFi Guard calls re-validate `routerIp` at request time and
+  refuse anything that is not a private/local IP literal — closing the DEF-002
+  path where a crafted value reaching settings (bulk import, hand-edited file)
+  could send plaintext router credentials to an arbitrary host.
+- A clean quit is now recorded in `startup.log`, so a missing shutdown can be
+  told apart from "the app was never running".
 
 ### Changed
 - Electron bumped to ^43.8.4 (provisioned at 43.8.4); eslint 10.13.0,

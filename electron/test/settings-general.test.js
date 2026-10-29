@@ -113,7 +113,7 @@ test('the startup note is true to the launch, login, schedule and autopilot code
   assert.deepEqual([...mainJs.matchAll(/arguments: '(--[^']+)'/g)].map(m => m[1]), ['--timer=5', '--timer=15', '--timer=30']);
   // Schedule auto-start and Autopilot are opt-in and default off.
   assert.match(mainJs, /if \(!calSettings\.enabled \|\| !calSettings\.autoStartFromEvents\) return;/);
-  assert.match(fs.readFileSync(path.join(root, 'autopilot.js'), 'utf8'), /if \(!appSettings\.autopilotEnabled\) return null;/);
+  assert.match(fs.readFileSync(path.join(root, 'autopilot.js'), 'utf8'), /if \(!appSettings\.autopilotEnabled\) return \{ missedReceiptId \};/);
   const defaults = fs.readFileSync(path.join(root, 'settings.js'), 'utf8');
   assert.match(defaults, /autopilotEnabled: false,/);
   assert.match(defaults, /autoStartFromEvents: false,/);

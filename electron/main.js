@@ -33,6 +33,7 @@ const idleDetection = require('./idleDetection');
 const bedtimeReminder = require('./bedtimeReminder');
 const overrideTax = require('./overrideTax');
 const autopilot = require('./autopilot');
+const watchdog = require('./watchdog');
 const ritualMode = require('./ritualMode');
 const profileRitualContext = require('./profileRitualContext');
 const statsDashboard = require('./statsDashboard');
@@ -67,6 +68,8 @@ function writeStartupLog(message, extra) {
     // Best effort only; startup diagnostics should never block launch.
   }
 }
+
+watchdog.setLogger(writeStartupLog);
 
 // Without these, an uncaught exception or unhandled promise rejection anywhere
 // in the main process (a timer callback, a fire-and-forget network call, a
@@ -2326,6 +2329,9 @@ ipcMain.handle('import-all-data', async (event, jsonData) => {
       ]);
       for (const [section, value] of Object.entries(parsed.settings)) {
         if (section === 'activeTimer') settingsStore.setActiveTimer(value || null);
+        // wifiGuard holds a credential-bearing destination: run it through the
+        // same sanitizer as the save/import paths instead of trusting the file.
+        else if (section === 'wifiGuard') settingsStore.updateSection(section, capabilityTruth.sanitizeWifiGuard(value));
         else if (value !== undefined && ALLOWED_SECTIONS.has(section)) settingsStore.updateSection(section, value);
       }
     }
@@ -3143,15 +3149,20 @@ const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (event, argv) => {
+    // A watchdog relaunch exists only to keep the process alive for autopilot;
+    // it must not pop the window over whatever the user is doing.
+    const quietRelaunch = Array.isArray(argv) && argv.includes(watchdog.RELAUNCH_ARG);
     if (!mainWindow || mainWindow.isDestroyed()) {
       writeStartupLog('Second instance requested window recreation');
       createWindow();
       return;
     }
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
+    if (!quietRelaunch) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
     refreshTrayMenu();
   });
 }
@@ -3398,6 +3409,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  writeStartupLog('App quitting');
   app.isQuitting = true;
   if (tray && !tray.isDestroyed()) tray.destroy();
   tray = null;

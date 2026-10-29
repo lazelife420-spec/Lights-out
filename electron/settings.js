@@ -109,6 +109,9 @@ const DEFAULTS = {
     // Autopilot Bedtime: learns your pattern and auto-starts the timer. OFF by default.
     autopilotEnabled: false,
     autopilotBedtime: null,   // null = use learned bedtime or configured bedtime
+    // Persisted arm: lets the next launch detect a fire missed while the app
+    // was not running. Internal bookkeeping, not user-facing.
+    autopilotNextFireAt: null,
     // Wind-down system actions. Default OFF so the app never touches the OS unasked.
     nightLightOnDim: false,
     pauseMediaOnDim: false,

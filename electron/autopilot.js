@@ -5,6 +5,8 @@
 
 const settingsStore = require('./settings');
 const streaks = require('./streaks');
+const runReceipts = require('./runReceipts');
+const watchdog = require('./watchdog');
 
 let autopilotTimeout = null;
 let warningTimeout = null;
@@ -53,12 +55,44 @@ function learnBedtime() {
 // Schedule: sets a timeout for tonight's auto-start
 // ─────────────────────────────────────────────────────────────────────────────
 
+// The armed fire time is persisted so the NEXT launch can tell whether an
+// armed bedtime passed while the app was not running. Without this the miss
+// is silent — the user finds the PC still on in the morning with no record.
+// An honest 'missed' receipt is recorded once, then the slot is re-armed.
+function recordMissedFireIfAny(appSettings) {
+  const priorFireAt = appSettings.autopilotNextFireAt;
+  if (!priorFireAt) return null;
+  const priorMs = new Date(priorFireAt).getTime();
+  if (!Number.isFinite(priorMs) || priorMs >= Date.now()) return null;
+  try {
+    const receipt = runReceipts.createRunReceipt({
+      action: appSettings.action || 'shutdown',
+      totalSeconds: appSettings.durationSeconds || 0,
+      origin: 'autopilot',
+      dryRun: Boolean(appSettings.dryRun)
+    });
+    runReceipts.updateRunReceipt(receipt.id, {
+      result: 'missed',
+      startedAt: priorFireAt,
+      endedAt: priorFireAt,
+      notes: 'Autopilot bedtime was armed but the app was not running at fire time; nothing happened.'
+    });
+    return receipt.id;
+  } catch {
+    return null; // missed-fire bookkeeping must never break scheduling
+  }
+}
+
 function schedule(startTimerFn, win) {
-  cancel(); // clear any existing schedule
+  // Read settings first: the missed-fire check needs the persisted arm before
+  // cancel() clears it.
+  const appSettings = settingsStore.getSection('app') || {};
+  const missedReceiptId = recordMissedFireIfAny(appSettings);
+
+  cancel(); // clear any existing schedule (also clears the persisted arm)
   mainWindowRef = win;
 
-  const appSettings = settingsStore.getSection('app') || {};
-  if (!appSettings.autopilotEnabled) return null;
+  if (!appSettings.autopilotEnabled) return { missedReceiptId };
 
   // Explicit autopilot override wins, then the learned pattern, then the
   // generic configured bedtime (settings.js documents this same order).
@@ -79,6 +113,13 @@ function schedule(startTimerFn, win) {
   const msUntilTarget = target - now;
   const warningMs = Math.max(0, msUntilTarget - 5 * 60 * 1000); // 5 min before
 
+  // Persist the arm so a future launch can detect a missed fire, and arm the
+  // scheduled-task watchdog that relaunches the app if it is not running.
+  try {
+    settingsStore.updateSection('app', { autopilotNextFireAt: target.toISOString() });
+  } catch { /* best effort: persistence failure must not break the arm */ }
+  watchdog.sync(target);
+
   // Warning notification.
   warningTimeout = setTimeout(() => {
     if (mainWindowRef && !mainWindowRef.isDestroyed()) {
@@ -92,6 +133,12 @@ function schedule(startTimerFn, win) {
 
   // Auto-start timer.
   autopilotTimeout = setTimeout(() => {
+    // The arm for tonight is consumed — clear the persisted slot BEFORE
+    // re-arming, or schedule()'s missed-fire check would see tonight's
+    // (now past) arm as a miss.
+    try {
+      settingsStore.updateSection('app', { autopilotNextFireAt: null });
+    } catch { /* best effort */ }
     // Read the settings at fire time, hours after scheduling: Test Mode,
     // action, duration and grace must be what the user has set NOW.
     const fireSettings = settingsStore.getSection('app') || {};
@@ -124,6 +171,7 @@ function schedule(startTimerFn, win) {
     targetBedtime,
     msUntilTarget,
     learned,
+    missedReceiptId,
     scheduledAt: now.toISOString()
   };
 }
@@ -131,6 +179,10 @@ function schedule(startTimerFn, win) {
 function cancel() {
   if (autopilotTimeout) { clearTimeout(autopilotTimeout); autopilotTimeout = null; }
   if (warningTimeout) { clearTimeout(warningTimeout); warningTimeout = null; }
+  try {
+    settingsStore.updateSection('app', { autopilotNextFireAt: null });
+  } catch { /* best effort */ }
+  watchdog.sync(null);
 }
 
 function getStatus() {
@@ -139,6 +191,7 @@ function getStatus() {
   return {
     enabled: Boolean(appSettings.autopilotEnabled),
     bedtime: appSettings.autopilotBedtime || learned?.bedtime || appSettings.bedtime || null,
+    nextFireAt: appSettings.autopilotNextFireAt || null,
     learned,
     scheduled: autopilotTimeout !== null
   };

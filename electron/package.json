@@ -81,6 +81,7 @@
       "unsavedGuard.js",
       "family.js",
       "remoteControl.js",
+      "watchdog.js",
       "wifiGuard.js",
       "contentBlocker.js",
       "accountability.js",
