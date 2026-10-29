@@ -45,12 +45,13 @@ compatibility, and **16 KB native-library page-size alignment** inside the
 packaged APK (inspect the real `.so` set — ML Kit ships native code). Baseline
 evidence remains the fallback reference.
 
-### M2 — Emulator lifecycle re-run (needs SDK + owned AVD)
+### M2 — Emulator lifecycle — **DONE 2026-10-29** (EMULATOR_TESTED)
 
-Re-run `android-standalone-lifecycle-proof.js` lanes (notification/exact-access
-denial+grant, offline controls, monotonic countdown across timezone change,
-stale service commands, process restart, screen-off completion, calendar
-lane). Target: EMULATOR_TESTED on the integrated tree.
+Both `android-standalone-lifecycle-proof.js` lanes green on owned
+`LightsOut_QA_API35` (API 35): lifecycle 6/6, calendar 6/6, source inputs
+re-verified, emulator state restored. Evidence and limits in
+`ANDROID_STANDALONE_QUALIFICATION.md` (incl. byte-level APK reproducibility
+finding: not bitwise reproducible; D8 ordering variance only).
 
 ### M3 — Handoff client completion (candidate worktree B)
 

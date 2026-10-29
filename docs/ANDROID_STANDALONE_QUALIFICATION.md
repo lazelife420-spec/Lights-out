@@ -37,6 +37,32 @@ Command: `gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembl
 
 **Verdict: M1 PASS — the integrated tree at `62edc05` is AUTOMATED_TESTED.** Evidence at `F:\LightsOutQA\M1-Integrated-20261029\` (project copy, reports, APK, SDK).
 
+## M2 — emulator lifecycle qualification EXECUTED (2026-10-29)
+
+Environment: owned AVD `LightsOut_QA_API35` (API 35, `system-images;android-35;default;x86_64`, `emulator-5582`, swiftshader) in the provisioned isolated SDK; isolated `ANDROID_AVD_HOME`/`ANDROID_USER_HOME`. APK: source-bound QA build `Lights-Out-Android-v11.2.0-debug.apk`, SHA-256 `c7e8f59f…` bound by `android-qualification.json` (79 source inputs re-verified byte-for-byte against the checkout by the proof script itself).
+
+Command: `node electron/scripts/android-standalone-lifecycle-proof.js` (standard + `--calendar-only --allow-emulator-clock-change` modes).
+
+| Lane | Result |
+| --- | --- |
+| Lifecycle | **6/6 PASS** — offline controls under denied permissions, granted-permission notification registration, timezone preserves monotonic countdown, stale service command rejected, process restart restores one timer, screen-off completion posts finish notification |
+| Calendar | **6/6 PASS** — denial preserves rule unarmed, grant restores PendingIntent, early delivery doesn't start/consume, timezone recompute, real+duplicate delivery = one occurrence, late delivery skipped without consuming a running timer |
+| Emission | `android-lifecycle-report.json` ×2, `emulator-final.png`, state restored (wifi on, timezone `America/Los_Angeles`) |
+
+**Verdict: M2 PASS — EMULATOR_TESTED on `62edc05`/`d0a74cc`-era source.** Still not physical-device proof: OEM battery managers, real broadcast/WiZ UDP and force-stop remain `ANDROID_FIELD_QA.md` items.
+
+## APK byte-level reproducibility investigation (audit requirement)
+
+Fresh merged-tree build vs candidate `0b0b698` artifact:
+
+- 533/533 zip members present both sides; **zero added, zero missing**
+- All non-dex members **byte-identical** (manifest, `resources.arsc`, res/, assets/, every `.so` native library)
+- `classes.dex` / `classes3.dex`: ~11% scattered byte variance, **identical sizes** (11,250,364 / 376,200 B) — same content, different serialization order
+- Controlled line-ending test (CRLF checkout build vs LF git-archive build) reproduced the scatter → **D8 output ordering nondeterminism**, not a timestamp field and not a source difference
+- Semantic equivalence SUPPORTED: identical source (79/79 blob-verified), identical tests (100/100), identical lint (0/26)
+
+The APKs are **not bitwise reproducible**; the variance is confined to dex serialization ordering. Byte-reproducible builds would need deterministic-dex post-processing — a release-engineering tranche item, not a correctness defect.
+
 ## Integration-day verification on `main` (2026-10-29) — superseded by M1 above
 
 | Check | Result |
@@ -49,8 +75,8 @@ Command: `gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembl
 
 | Subsystem | Class | Confidence |
 | --- | --- | --- |
-| Phone timer/service | AUTOMATED_TESTED (M1, `62edc05`) | SUPPORTED |
-| Phone calendar incl. leap-day | AUTOMATED_TESTED (M1) | SUPPORTED |
+| Phone timer/service | EMULATOR_TESTED (M1+M2 on merged tree; lifecycle 6/6) | SUPPORTED |
+| Phone calendar incl. leap-day | EMULATOR_TESTED (M1+M2; calendar 6/6 incl. leap-day unit tests) | SUPPORTED |
 | Routines + interchange | AUTOMATED_TESTED (M1) | SUPPORTED |
 | Handoff foundations (phone half) | AUTOMATED_TESTED (M1) | SUPPORTED |
 | Light experiences + beacons | AUTOMATED_TESTED (M1) | SUPPORTED |

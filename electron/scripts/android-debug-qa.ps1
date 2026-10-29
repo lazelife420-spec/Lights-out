@@ -1,4 +1,9 @@
-param([string]$ProofRoot = (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'review\RELEASE-11.2.0-20261016'))
+param(
+    [string]$ProofRoot = (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'review\RELEASE-11.2.0-20261016'),
+    # SDK location is injectable so an isolated/provisioned SDK works when the
+    # developer-profile SDK is absent. Default preserves the original behavior.
+    [string]$SdkRoot = (Join-Path $env:LOCALAPPDATA 'Android\Sdk')
+)
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $source = Join-Path $repo 'companion-android'
@@ -22,7 +27,7 @@ foreach ($name in $names) {
     Set-Content -LiteralPath (Join-Path $project 'gradle.properties') -Encoding ascii
 if (Test-Path -LiteralPath (Join-Path $project 'keystore.properties')) { throw 'Signing properties must be absent from QA.' }
 $env:JAVA_HOME = 'C:\Program Files\Eclipse Adoptium\jdk-17.0.19.10-hotspot'
-$env:ANDROID_HOME = Join-Path $env:LOCALAPPDATA 'Android\Sdk'
+$env:ANDROID_HOME = $SdkRoot
 $env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
 $env:ANDROID_USER_HOME = Join-Path $qaRoot 'android-user'
 $env:GRADLE_USER_HOME = Join-Path $qaRoot 'gradle-user'
