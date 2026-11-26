@@ -38,6 +38,12 @@ test('the kit fills the product page from the release manifest and links GitHub 
   for (const rel of ['assets/icon-512.png', 'assets/product/tonight.webp', 'assets/product/proof.png']) {
     assert.ok(fs.existsSync(path.join(result.kit, 'site', 'lights-out', rel)), `${rel} is in the kit`);
   }
+  // Every srcset candidate the page can pick is uploaded with it.
+  const candidates = [...page.matchAll(/srcset="([^"]+)"/g)].flatMap(m => m[1].split(',').map(part => part.trim().split(/\s+/)[0]));
+  assert.ok(candidates.includes('assets/product/tonight-800.webp'), 'the LCP image has a small variant');
+  for (const rel of candidates.filter(url => url.startsWith('assets/'))) {
+    assert.ok(fs.existsSync(path.join(result.kit, 'site', 'lights-out', rel)), `srcset candidate ${rel} is in the kit`);
+  }
   assert.ok(!fs.existsSync(path.join(result.kit, 'downloads')), 'binaries only with --with-binaries');
   const upload = fs.readFileSync(path.join(result.kit, 'UPLOAD.md'), 'utf8');
   assert.match(upload, /site\/truth\/products\/lights-out\.json/);

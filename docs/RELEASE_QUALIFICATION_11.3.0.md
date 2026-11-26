@@ -52,6 +52,79 @@ provenance on the tagged commit before it publishes anything.
 - The interactive Windows desktop gate (`npm run test:e2e:desktop`) needs an
   unlocked, hands-off desktop session and is run by the owner.
 
+## Owner host acceptance (interactive desktop gate)
+
+Status: **HOLD** until the owner runs the gate below on this PC. This is not a
+failure: the gate needs an unlocked desktop and the real mouse and keyboard,
+which no unattended lane can use.
+
+### What each lane proves
+
+| Lane | Proves | Does not prove |
+| --- | --- | --- |
+| Installer QA (`verify-windows-release.ps1`, `LIGHTS_OUT_INSTALLER_QA=1`) | Install into an isolated folder, file layout, per-user uninstall entry, clean uninstall, no watchdog task or login item created | Upgrading the owner's installed copy or real profile |
+| `npm run test:packaged-local` | Packaged IPC, navigation, Test Mode timer controls, occupied-port recovery on loopback, existing firewall rules unchanged | Same-Wi-Fi mode and firewall rule creation (the full lane, run in CI) |
+| `node scripts/night-modes-electron-proof.js` | Night Modes run to a Dry Run receipt in an in-process isolated profile, with an accelerated proof clock | Real-time or overnight behaviour |
+| `packaged-truth-smoke` (full, CI on the tag) | Same-Wi-Fi endpoint, owned firewall rules created and removed, other rules unchanged | Real desktop input |
+| `npm run test:e2e:desktop` (owner) | Real foreground custody, native input reaching the real window, top menus, shared Start, two Night Modes with restart, active-run focus, Test Mode visible, zero real power requests | Physical power, real lights or router, overnight runs |
+
+### Safety barrier during the gate
+
+`--desktop-ux-proof` turns on the QA power lock: every power request is
+recorded and blocked with a `blocked` receipt, and the watchdog task and
+login item are never created or deleted. It also suppresses the tray. The gate
+fails if any real power request is recorded.
+
+The lock is inside the app, not an OS-level barrier, and it covers power, the
+watchdog task and the login item only. Night Light, media pause, focus mode,
+Wi-Fi Guard, the content blocker, smart lights and the phone connection are
+inert because the gate starts from a fresh profile that contains only
+`app: { dryRun: true, onboarded: true }`, and all of those default to off.
+
+### Owner checklist
+
+Before:
+
+1. Use the build being released: its ZIP and installer hashes match
+   `SHA256SUMS.txt`, and `BUILD-MANIFEST.json` names the release commit with a
+   clean tree.
+2. No real run is armed on the installed copy, and no autopilot fire is due
+   within the next hour. The installed copy may stay open: the gate uses its own
+   profile and its own single-instance lock.
+3. The desktop is unlocked and awake, with no full-screen app or remote session,
+   and nobody touches the mouse or keyboard for the whole run.
+4. Record file metadata (not contents) of the real profile:
+
+   ```powershell
+   Get-ChildItem "$env:APPDATA\lights-out-electron" -File | Select-Object Name, Length, LastWriteTimeUtc
+   ```
+
+Run, from `electron\`:
+
+5. Source runtime: `npm run test:e2e:desktop`
+6. Packaged build:
+
+   ```powershell
+   $env:LIGHTS_OUT_DESKTOP_EXE = (Resolve-Path '..\dist-native\win-unpacked\Lights Out.exe').Path; npm run test:e2e:desktop
+   ```
+
+After:
+
+7. Each run exits 0 and prints its root folder
+   (`%TEMP%\lightsout-desktop-ux-gate-*`). Keep its `report.json`,
+   `screenshot-manifest.json` and screenshots as the receipt.
+8. In `report.json`: no real power requests, every receipt has `dryRun: true`
+   and `powerActionAttempted: false`, and owned cleanup is verified.
+9. The profile metadata from step 4 is unchanged, the
+   `LightsOut-AutopilotWatchdog` task (`schtasks /Query /TN LightsOut-AutopilotWatchdog`)
+   and the Run-at-login value are as they were, and no gate process is left.
+
+Stop and record `HOLD` if: a real run is armed, the hashes or commit do not
+match, the gate reports `INTERACTIVE_DESKTOP_REQUIRED`, any real power request
+or real-profile change appears, or cleanup is not verified. A green gate does
+not qualify physical power actions, real lights or routers, overnight
+reliability, signing or publication.
+
 ## Known limits carried into this release
 
 - Moving back to v11.2.0 cannot decrypt the newly protected integration

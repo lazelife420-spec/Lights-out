@@ -24,16 +24,29 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const policy = require('../updaterPolicy');
+const { VARIANT_WIDTHS, variantName } = require('./product-image-variants');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const DOCS = path.join(ROOT, 'docs');
 const REPO_URL = 'https://github.com/lazelife420-spec/Lights-out';
-const SITE_ASSETS = ['icon-512.png', 'lights-out-keyart-hero-ui.png'];
+// Everything under docs/assets the page uses (og:image is an absolute URL, so the
+// social card is listed explicitly; src/href assets are also checked below).
+const SITE_ASSETS = ['icon-512.png', 'brand/lights-out-wordmark.svg', 'brand/lights-out-icon.svg', 'brand/lights-out-social-card.png'];
 const PRODUCT_SHOTS = ['tonight', 'running', 'night-modes', 'schedule', 'proof'];
 
 function arg(name, fallback = null) {
   const at = process.argv.indexOf(name);
   return at > 0 && process.argv[at + 1] && !process.argv[at + 1].startsWith('--') ? process.argv[at + 1] : fallback;
+}
+
+// Every relative assets/ path in src, href and each srcset candidate.
+function referencedAssets(page) {
+  const refs = [];
+  for (const m of page.matchAll(/\b(src|href|srcset)="([^"]+)"/g)) {
+    const urls = m[1] === 'srcset' ? m[2].split(',').map(part => part.trim().split(/\s+/)[0]) : [m[2]];
+    refs.push(...urls.filter(url => url.startsWith('assets/')));
+  }
+  return [...new Set(refs)];
 }
 
 function sha256File(file) {
@@ -168,9 +181,10 @@ function build({ releaseDir, outRoot, downloadOption, publishedAt, withBinaries,
   fs.writeFileSync(path.join(kit, 'site', 'lights-out', 'index.html'), page);
   for (const asset of SITE_ASSETS) copy(path.join(DOCS, 'assets', asset), path.join(kit, 'site', 'lights-out', 'assets', asset));
   for (const shot of PRODUCT_SHOTS) {
-    for (const ext of ['webp', 'png']) copy(path.join(DOCS, 'assets', 'product', `${shot}.${ext}`), path.join(kit, 'site', 'lights-out', 'assets', 'product', `${shot}.${ext}`));
+    const files = [`${shot}.webp`, `${shot}.png`, ...VARIANT_WIDTHS.map(width => variantName(shot, width))];
+    for (const file of files) copy(path.join(DOCS, 'assets', 'product', file), path.join(kit, 'site', 'lights-out', 'assets', 'product', file));
   }
-  const missing = [...page.matchAll(/(?:src|srcset|href)="(assets\/[^"]+)"/g)].map(m => m[1]).filter(rel => !fs.existsSync(path.join(kit, 'site', 'lights-out', rel)));
+  const missing = referencedAssets(page).filter(rel => !fs.existsSync(path.join(kit, 'site', 'lights-out', rel)));
   if (missing.length) throw new Error(`Page references missing assets: ${missing.join(', ')}`);
 
   // 2. Binaries for the download host (optional).
@@ -277,4 +291,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { build, fillPage, truthRecord, readRelease, downloadBase };
+module.exports = { build, fillPage, truthRecord, readRelease, downloadBase, referencedAssets };

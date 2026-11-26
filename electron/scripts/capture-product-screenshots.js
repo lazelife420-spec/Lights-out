@@ -8,7 +8,8 @@
 // starts is a Test Mode countdown that it cancels a second later. Input events
 // are ignored so the owner's mouse/keyboard never drives the QA window.
 //
-// Output: docs/assets/product/<name>.png and .webp (resized with sharp).
+// Output: docs/assets/product/<name>.png and .webp (resized with sharp), plus
+// the <name>-800.webp / <name>-1200.webp srcset variants.
 // Usage: node scripts/capture-product-screenshots.js [--source] [--out <dir>]
 
 const fs = require('node:fs');
@@ -17,6 +18,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const WebSocket = require('ws');
+const { writeVariants } = require('./product-image-variants');
 
 const source = process.argv.includes('--source');
 const outIndex = process.argv.indexOf('--out');
@@ -149,6 +151,7 @@ async function main() {
       const resized = sharp(raw).resize({ width: OUTPUT_WIDTH });
       await resized.clone().png({ compressionLevel: 9, palette: false }).toFile(path.join(outDir, `${name}.png`));
       await resized.clone().webp({ quality: 84 }).toFile(path.join(outDir, `${name}.webp`));
+      await writeVariants(sharp, path.join(outDir, `${name}.png`), outDir, name);
       const meta = await sharp(path.join(outDir, `${name}.png`)).metadata();
       console.log(`  ${name}: ${meta.width}x${meta.height}`);
       return meta;
