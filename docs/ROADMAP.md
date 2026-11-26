@@ -4,6 +4,10 @@
 
 ## Current Truth
 
+**v11.3.0** is a production-audit release candidate in source (see
+[RELEASE_QUALIFICATION_11.3.0.md](RELEASE_QUALIFICATION_11.3.0.md)); it is public only
+once its GitHub release is published.
+
 The **v11.2.0 release scope is qualified**. The five original product
 pillars are implemented. This release closes the October desktop/settings/WiZ
 work and reconciles the existing Android source; parked features remain outside
@@ -44,6 +48,25 @@ everything ever done. Keep it that way:
 - If you're an agent picking up this file cold: the archive is provenance,
   not instructions. Don't re-verify things it already verified unless the
   code has changed since.
+
+## Open Qualification
+
+Current source implements these, but none is qualified on real hardware. Keep
+them out of release claims until each has its own evidence:
+
+- Sleep/Hibernate through `native/WindowsSuspend.exe` on physical PCs. Hibernate
+  needs S4 and a full hibernation file; otherwise the request is blocked.
+- Wi-Fi Guard durable recovery (recovery record, restore on quit, restore at the
+  next launch) against real routers and adapters. It is unit-tested only, and
+  Wi-Fi Guard stays opt-in and experimental.
+- Overnight unattended runs, including the `missed` path after a real sleep or
+  hibernate through the deadline.
+- Phone First Light wake and WiZ sunrise on physical phones and bulbs; Android
+  production signing and physical-device QA.
+
+Next UX candidate: warn before Start when this PC cannot Sleep or Hibernate. The
+helper's read-only `--probe` is not exposed to the UI yet, so today an
+unsupported choice is only reported as blocked when the timer ends.
 
 ## Product Pillars
 

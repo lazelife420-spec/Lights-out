@@ -3,6 +3,17 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const dgram=require('node:dgram');
 const wiz=require('../wizLights');
+const experiences=require('../lightExperience');
+
+test('Timer light frames use the real UDP adapter and yield after a manual off',async t=>{
+ let on=true;const writes=[];
+ const port=await bulb(t,(command,send)=>{if(command.method==='getPilot')send({method:command.method,result:{state:on,dimming:50,r:255,g:100,b:40}});else{writes.push(command.params);send({method:command.method,result:{success:true}});}});
+ const snapshot=await wiz.readStates(['127.0.0.1'],{port});
+ const frame=(index,count)=>experiences.frame('orbit',{progress:.4,elapsedSeconds:8,index,count,brightness:40});
+ await wiz.dimStates(snapshot,.4,false,{port},{frame});assert.equal(writes.length,1);assert.equal(writes[0].state,undefined);assert.equal(writes[0].r,frame(0,1).r);
+ on=false;await wiz.dimStates(snapshot,.5,false,{port},{frame});on=true;await wiz.dimStates(snapshot,.6,false,{port},{frame});await wiz.restoreStates(snapshot,{port});
+ assert.equal(snapshot[0].released,true);assert.equal(writes.length,1);
+});
 
 async function bulb(t, respond) {
   const server=dgram.createSocket('udp4');
@@ -180,6 +191,14 @@ test('WiZ timer completion leaves released lights under manual control', async t
   smart.loadConfig({ provider: 'wiz', enabled: true, mode: 'gradual_dim', wizAddresses: ['192.168.0.2'], verifiedConfigKey: 'wiz:192.168.0.2' });
   smart.startSmartLightDim(300); await new Promise(resolve => setImmediate(resolve));
   assert.equal((await smart.invokeSmartLightOff()).success, true); assert.deepEqual(writes, []);
+});
+
+test('Timer experiences start at the beginning and are unavailable to other providers',t=>{
+ const smart=require('../smartLights');t.after(()=>smart.loadConfig({enabled:false}));
+ smart.loadConfig({provider:'wiz',enabled:true,mode:'hourglass',dimMinutes:1,wizAddresses:['127.0.0.1'],verifiedConfigKey:'wiz:127.0.0.1',timerBeacon:true});
+ assert.equal(smart.shouldStartDim(600),true);assert.equal(smart.getPublicConfig().timerBeacon,true);
+ smart.loadConfig({provider:'wiz',enabled:true,mode:'gradual_dim',verifiedConfigKey:'wiz:127.0.0.1'});assert.equal(smart.shouldStartDim(600),false);assert.equal(smart.shouldStartDim(30),true);
+ smart.loadConfig({provider:'none',mode:'orbit'});assert.equal(smart.getConfig().mode,'gradual_dim');assert.equal(smart.shouldStartDim(600),false);
 });
 
 test('WiZ sunrise yields to phone off after its initial wake action', async t => {

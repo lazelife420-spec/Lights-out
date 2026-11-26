@@ -5,6 +5,7 @@ const https = require('https');
 const http = require('http');
 const icsParser = require('./calendar');
 const recurrence = require('./calendarRecurrence');
+const routineModel = require('./routineModel');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Provider registry
@@ -60,6 +61,8 @@ function getDefaultCalendarEvents(schedule, from, withinDays) {
   cutoff.setDate(cutoff.getDate() + Math.max(0, Math.min(366, Number(withinDays) || 0)));
 
   for (const rule of rules) {
+    let routinePlan;
+    try { routinePlan = routineModel.fromWindowsRule(rule); } catch { continue; }
     const [h, m] = String(rule.time || '22:30').split(':').map(Number);
     if (!Number.isInteger(h) || h < 0 || h > 23 || !Number.isInteger(m) || m < 0 || m > 59) continue;
     const durationMs = Math.max(1, Number(rule.durationMinutes) || 60) * 60000;
@@ -81,6 +84,8 @@ function getDefaultCalendarEvents(schedule, from, withinDays) {
         source: 'builtin',
         repeat: rule.repeat || 'weekly',
         profileId: typeof rule.profileId === 'string' ? rule.profileId : null,
+        routinePlan,
+        testMode: Boolean(rule.testMode),
         action
       });
     }
@@ -110,7 +115,9 @@ function fetchFailureReason(err) {
   // fetchWithTimeout says 'HTTP 404'; calendar.js says 'HTTP 404: Failed to fetch calendar'.
   const http = /^HTTP (\d{3})(?::|$)/.exec(msg);
   if (http) return `http-${http[1]}`;
-  if (msg === 'Response too large') return 'too-large';
+  // fetchWithTimeout says 'Response too large'; calendar.js (ICS) says
+  // 'Calendar feed exceeds 5 MB limit'. Both carry the same code.
+  if ((err && err.code === 'CALENDAR_FEED_TOO_LARGE') || msg === 'Response too large' || msg.startsWith('Calendar feed exceeds')) return 'too-large';
   if (msg.startsWith('Calendar feed must be an https URL')) return 'not-https';
   if (err instanceof SyntaxError || msg.startsWith('Invalid iCalendar file') || msg === 'Downloaded feed is not a valid iCalendar file') return 'parse';
   return 'network';
@@ -150,7 +157,7 @@ async function fetchGoogleEvents(apiKey, calendarId, from, withinDays, maxResult
   const note = statusNote(report);
   const timeMin = from.toISOString();
   const timeMax = new Date(from.getTime() + withinDays * 86400000).toISOString();
-  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?key=${apiKey}&timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&maxResults=${maxResults}`;
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?key=${encodeURIComponent(apiKey)}&timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&maxResults=${maxResults}`;
 
   try {
     const response = await fetchWithTimeout(url, 10000);
@@ -163,7 +170,7 @@ async function fetchGoogleEvents(apiKey, calendarId, from, withinDays, maxResult
       end: parseGoogleDate(item.end),
       location: item.location || '',
       source: 'google'
-    })).filter(e => e.start);
+    })).filter(e => e.start && !isNaN(e.start.getTime()));
     note({ ok: true });
     return events;
   } catch (err) {
@@ -188,6 +195,16 @@ function parseGoogleDate(dateObj) {
 // Outlook / Microsoft Graph API
 // ─────────────────────────────────────────────────────────────────────────────
 
+function parseOutlookDate(dateObj) {
+  if (!dateObj || typeof dateObj.dateTime !== 'string' || !dateObj.dateTime.trim()) return null;
+  const raw = dateObj.dateTime.trim();
+  const hasExplicitOffset = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
+  const tz = typeof dateObj.timeZone === 'string' ? dateObj.timeZone.trim().toUpperCase() : '';
+  const suffix = (!hasExplicitOffset && (!tz || tz === 'UTC' || tz === 'ETC/UTC' || tz === 'GMT')) ? 'Z' : '';
+  const d = new Date(raw + suffix);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 async function fetchOutlookEvents(accessToken, from, withinDays, maxResults = 50, report) {
   if (!accessToken) return [];
   const note = statusNote(report);
@@ -197,15 +214,16 @@ async function fetchOutlookEvents(accessToken, from, withinDays, maxResults = 50
 
   try {
     const response = await fetchWithTimeout(url, 10000, {
-      Authorization: `Bearer ${accessToken}`
+      Authorization: `Bearer ${accessToken}`,
+      Prefer: 'outlook.timezone="UTC"'
     });
     const data = JSON.parse(response);
     if (!data.value) { note({ ok: false, reason: 'unexpected-response' }); return []; }
     const events = data.value.map(item => ({
       uid: item.id,
       summary: item.subject || 'Event',
-      start: new Date(item.start.dateTime + (item.start.timeZone ? '' : 'Z')),
-      end: new Date(item.end.dateTime + (item.end.timeZone ? '' : 'Z')),
+      start: parseOutlookDate(item.start),
+      end: parseOutlookDate(item.end),
       location: item.location?.displayName || '',
       source: 'outlook'
     })).filter(e => e.start && !isNaN(e.start.getTime()));
@@ -345,7 +363,12 @@ function fetchEvents(config, withinDays = 14, from = new Date()) {
 // HTTP helper
 // ─────────────────────────────────────────────────────────────────────────────
 
-function fetchWithTimeout(url, timeoutMs, headers = {}) {
+// timeoutMs is the socket idle timeout. deadlineMs bounds the whole request,
+// so the promise ALWAYS settles: a peer that closes mid-body (graceful FIN, a
+// proxy or HTTPS scanner) rejects through the response's 'error'/'close', and
+// one that trickles bytes forever hits the deadline. A promise that never
+// settled would hold main's calendar auto-start busy flag for the session.
+function fetchWithTimeout(url, timeoutMs, headers = {}, deadlineMs = 2 * timeoutMs) {
   return new Promise((resolve, reject) => {
     const urlObj = new URL(url);
     const client = urlObj.protocol === 'https:' ? https : http;
@@ -356,34 +379,62 @@ function fetchWithTimeout(url, timeoutMs, headers = {}) {
       method: 'GET',
       timeout: timeoutMs,
       headers: {
-        'User-Agent': 'LightsOut/7 CalendarSync',
+        'User-Agent': icsParser.CALENDAR_USER_AGENT,
         ...headers
       }
     };
     const MAX_BYTES = 5 * 1024 * 1024; // cap response to guard against a hostile/huge feed
+    let settled = false;
+    let deadline = null;
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadline);
+      if (error) reject(error); else resolve(value);
+    };
     const req = client.request(options, (res) => {
       if (res.statusCode !== 200) {
-        reject(new Error(`HTTP ${res.statusCode}`));
+        finish(new Error(`HTTP ${res.statusCode}`));
         res.resume(); // drain so the socket can be freed
         return;
       }
-      let data = '';
+      // Bytes are joined before decoding, so a UTF-8 character split across
+      // two chunks is never garbled.
+      const chunks = [];
       let size = 0;
       res.on('data', chunk => {
-        size += chunk.length;
+        const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+        size += bytes.length;
         if (size > MAX_BYTES) {
           req.destroy();
-          reject(new Error('Response too large'));
+          finish(Object.assign(new Error('Response too large'), { code: 'CALENDAR_FEED_TOO_LARGE' }));
           return;
         }
-        data += chunk;
+        chunks.push(bytes);
       });
-      res.on('end', () => resolve(data));
+      res.on('error', finish);
+      res.on('close', () => { if (res.complete === false) finish(new Error('Response closed early')); });
+      res.on('end', () => finish(null, Buffer.concat(chunks).toString('utf8')));
     });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
+    req.on('error', finish);
+    req.on('timeout', () => { req.destroy(); finish(new Error('Timeout')); });
+    deadline = setTimeout(() => {
+      if (typeof req.destroy === 'function') req.destroy();
+      finish(new Error('Timeout'));
+    }, Math.max(1, Number(deadlineMs) || 2 * timeoutMs));
     req.end();
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Calendar auto-start helpers (main.js checkCalendarAutoStart)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// False for an imported event whose TZID could not be resolved: it is listed
+// at this PC's wall time, but its real instant is unknown, so it must never
+// start a countdown by itself (safe direction).
+function eventTimeIsTrusted(event) {
+  return Boolean(event) && event.timeZoneUnresolved !== true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -400,5 +451,9 @@ module.exports = {
   fetchIcsEvents,
   fetchAllEvents,
   fetchEvents,
-  getLastFetchStatus
+  getLastFetchStatus,
+  eventTimeIsTrusted,
+  // Internal helpers (exposed for testing)
+  fetchWithTimeout,
+  fetchFailureReason
 };

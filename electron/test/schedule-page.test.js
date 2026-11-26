@@ -47,7 +47,7 @@ function localInput(date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-const CAL_HELPERS = ['calendarArmed', 'isAutoStartEligible', 'eventEnd', 'schClockParts', 'schClock', 'addMinutes', 'ruleEventMinutes', 'ruleCountdownMinutes', 'schClockFromHHMM', 'schDayLabel', 'schDuration', 'setCalText', 'scheduleSpanAction', 'renderScheduleNext', 'renderArmState', 'rulesActionPhrase', 'ruleTruthLine', 'ruleClock', 'ruleDeleteClick', 'calStatusLine', 'calEmptyCopy', 'initialProviderPanel', 'showProviderPanel', 'loadCalendarConfig', 'renderSchedulePage'];
+const CAL_HELPERS = ['renderRoutineOutcomes', 'calendarArmed', 'isAutoStartEligible', 'eventEnd', 'schClockParts', 'schClock', 'addMinutes', 'ruleEventMinutes', 'ruleCountdownMinutes', 'schClockFromHHMM', 'schDayLabel', 'schDuration', 'setCalText', 'scheduleSpanAction', 'renderScheduleNext', 'renderArmState', 'rulesActionPhrase', 'ruleTruthLine', 'ruleClock', 'ruleDeleteClick', 'calStatusLine', 'calEmptyCopy', 'initialProviderPanel', 'showProviderPanel', 'loadCalendarConfig', 'renderSchedulePage'];
 
 function calendarSandbox({ events = [], armed = false, dryRun = true, running = false, paused = false, settingsLoaded = true } = {}) {
   const ids = ['sch-next', 'sch-next-eyebrow', 'sch-next-when', 'sch-next-ampm', 'sch-next-day', 'sch-next-span', 'sch-next-detail', 'sch-next-consequence', 'sch-next-in', 'sch-next-arc', 'sch-arm-hint', 'sch-arm-mode',
@@ -536,4 +536,36 @@ test('rule delete (Fire 09): one press never deletes or saves; the timeout disar
   assert.equal(toasts.length, 0, 'no success toast before persistence confirms');
   await Promise.resolve();
   assert.deepEqual(toasts, [['Deleted "Late & loud"', 'info']], 'the raw label, info tone');
+});
+
+test('individual-date recurrence labels distinguish past, today, future, and invalid dates', () => {
+  // A fixed local "now" (noon on 2026-11-22) keeps the past/today/future
+  // assertions deterministic no matter what day the suite runs on.
+  const FIXED_NOW = new Date(2026, 10, 22, 12, 0, 0).getTime();
+  class FixedDate extends Date {
+    constructor(...args) { super(...(args.length ? args : [FIXED_NOW])); }
+    static now() { return FIXED_NOW; }
+  }
+  const sandbox = {
+    CalendarRecurrence: require('../calendarRecurrence'),
+    Date: FixedDate,
+    String,
+    formatRuleDays: () => 'Mon',
+    SCHEDULE_DAY_LABELS: { sun: 'Sun', mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat' }
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(`const nativeDate = Date; ${calendarSource.slice(calendarSource.indexOf('function ruleRecurrenceLabel'), calendarSource.indexOf('function renderMonthPlanner'))}`, sandbox);
+  const actual = sandbox.ruleRecurrenceLabel;
+  const past = actual({ repeat: 'once', date: '2020-11-01' });
+  const yesterday = actual({ repeat: 'once', date: '2026-11-21' });
+  const today = actual({ repeat: 'once', date: '2026-11-22' });
+  const future = actual({ repeat: 'once', date: '2027-01-15' });
+  assert.match(yesterday, /^Individual date · .*2026.* · Past$/);
+  const invalid = actual({ repeat: 'once', date: '2027-02-29' });
+  assert.match(past, /^Individual date · .*2020.* · Past$/);
+  assert.match(today, /^Individual date · .*2026/);
+  assert.doesNotMatch(today, /Past$/);
+  assert.match(future, /^Individual date · .*2027/);
+  assert.doesNotMatch(future, /Past$/);
+  assert.equal(invalid, 'Individual date · Invalid date');
 });

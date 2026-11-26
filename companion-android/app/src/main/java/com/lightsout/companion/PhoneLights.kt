@@ -83,7 +83,13 @@ object PhoneLights {
                         else PhoneLightResult(ip, "acknowledged", "$ip: acknowledged")
                     } catch (_: Exception) { PhoneLightResult(ip, "failed", "$ip: no acknowledgement — check Wi-Fi and WiZ Local communication") }
                 } } }
-                results = futures.map { it.get(3, TimeUnit.SECONDS) }
+                val deadlineNs = System.nanoTime() + TimeUnit.SECONDS.toNanos(4)
+                results = futures.mapIndexed { idx, future ->
+                    val ip = targets[idx]
+                    val remainingMs = TimeUnit.NANOSECONDS.toMillis(deadlineNs - System.nanoTime()).coerceAtLeast(1)
+                    try { future.get(remainingMs, TimeUnit.MILLISECONDS) }
+                    catch (_: Exception) { PhoneLightResult(ip, "failed", "$ip: timed out — check Wi-Fi and WiZ Local communication") }
+                }
                 summary = results.joinToString("\n") { it.message }
             } catch (_: Exception) { summary = "WiZ check timed out. Check the phone's Wi-Fi and WiZ Local communication." }
             finally {
@@ -110,7 +116,8 @@ object PhoneLights {
                 DatagramSocket().use { socket ->
                     socket.broadcast = true
                     val body = "{\"method\":\"getPilot\",\"params\":{}}".toByteArray()
-                    val broadcasts = NetworkInterface.getNetworkInterfaces().toList().filter { it.isUp && !it.isLoopback }
+                    val ifaces = NetworkInterface.getNetworkInterfaces()?.toList().orEmpty()
+                    val broadcasts = ifaces.filter { it.isUp && !it.isLoopback }
                         .flatMap { it.interfaceAddresses }.mapNotNull { it.broadcast }.toSet() + InetAddress.getByName("255.255.255.255")
                     broadcasts.forEach { address -> try { socket.send(DatagramPacket(body, body.size, address, PORT)) } catch (_: Exception) {} }
                     val until = System.nanoTime() + TimeUnit.SECONDS.toNanos(2)
@@ -129,10 +136,17 @@ object PhoneLights {
             } catch (_: Exception) { /* Manual IP entry remains available. */ }
             finally {
                 main.post {
-                    val targets = (PhoneHomeStore.lights(app) + found.sorted()).distinct().take(8)
+                    val existing = PhoneHomeStore.lights(app)
+                    val targets = (existing + found.sorted()).distinct().take(8)
+                    val added = targets.count { it !in existing }
                     val config = PhoneHomeStore.config(app).put("lights", org.json.JSONArray(targets))
                     PhoneHomeStore.save(app, config)
-                    PhoneHomeStore.event(app, if (found.isEmpty()) "No WiZ lights found. Use the same Wi-Fi, enable WiZ Local communication, or enter an IP address." else "Found ${found.size} WiZ light(s). Saved on this phone.")
+                    val msg = when {
+                        found.isEmpty() -> "No WiZ lights found. Use the same Wi-Fi, enable WiZ Local communication, or enter an IP address."
+                        added == 0 -> "Found ${found.size} WiZ light(s) (all already saved or at 8-light limit)."
+                        else -> "Found ${found.size} WiZ light(s); added $added new (${targets.size} saved)."
+                    }
+                    PhoneHomeStore.event(app, msg)
                 }
                 active.decrementAndGet()
             }

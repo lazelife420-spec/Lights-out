@@ -94,12 +94,16 @@ const NM_RING_TRACK = 136; // of C = 2*pi*24 = 150.8, leaving the broken-O gap
 // ─────────────────────────────────────────────────────────────────────────────
 
 function formatDuration(seconds) {
-  if (seconds >= 3600) {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    return m > 0 ? `${h}h ${m}m` : `${h}h`;
-  }
-  return `${Math.round(seconds / 60)} min`;
+  const value = Number(seconds);
+  const total = Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const remainder = total % 60;
+  const parts = [];
+  if (hours) parts.push(`${hours} h`);
+  if (minutes) parts.push(`${minutes} min`);
+  if (remainder) parts.push(`${remainder} sec`);
+  return parts.length ? parts.join(' ') : '0 sec';
 }
 
 function formatAction(action) {
@@ -384,8 +388,8 @@ function renderDetailTruth() {
     if (nodeTruth.hidden !== !truth) nodeTruth.hidden = !truth;
   }
 
-  // UI-R3 Fire 08: Test Mode holds back only the power action. In loaded Test
-  // Mode, a ready mode also states the wind-down effects that still run, from
+  // UI-R3 Fire 08: Test Mode skips automatic external effects. In loaded Test
+  // Mode, a ready mode also states the wind-down effects that will be skipped, from
   // Fire 02's one helper (main's own conditions). Static amber, written on
   // change, hidden otherwise; never animated.
   const scope = document.getElementById('nm-detail-scope');
@@ -395,7 +399,7 @@ function renderDetailTruth() {
       && state.settingsLoaded === true && state.dryRun === true) {
       const facts = typeof getWindDownFacts === 'function' ? getWindDownFacts() : null;
       const effects = facts && typeof windDownEffects === 'function' ? windDownEffects(facts).effects : [];
-      if (effects.length > 0) text = `Wind-down still runs in Test Mode: ${effects.map(e => e.label).join(', ')}.`;
+      if (effects.length > 0) text = `Skipped in Test Mode: ${effects.map(e => e.label).join(', ')}.`;
     }
     if (scope.textContent !== text) scope.textContent = text;
     if (scope.hidden !== !text) scope.hidden = !text;
@@ -641,10 +645,12 @@ async function useTonight() {
     return;
   }
 
-  // Load resolved values into Tonight lobby (timer input and action selector)
-  const durationMinutes = Math.round(result.durationSeconds / 60);
-  const timerInput = document.getElementById('timer-input');
-  if (timerInput) timerInput.value = String(durationMinutes);
+  // Keep the resolved duration exact in the existing input's current units.
+  // A sub-minute remainder needs seconds; no timer state or engine is created.
+  if (state.unit !== 'sec' && result.durationSeconds % 60 !== 0) {
+    document.querySelector('.unit-btn[data-unit="sec"]')?.click();
+  }
+  setInputFromSeconds(result.durationSeconds);
 
   // Set action via the renderer's canonical setAction (avoids simulated click)
   if (typeof setAction === 'function') {

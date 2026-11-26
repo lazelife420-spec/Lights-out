@@ -266,8 +266,9 @@ function renderProfiles() {
     const chips = chipList.map(chip =>
       `<span class="profile-chip ${chip.cls}"${chip.title ? ` title="${escapeHtml(chip.title)}"` : ''}>${chip.text}</span>`).join('');
     const badge = typeof loGlyph === 'function' ? loGlyph(profileActionGlyphName(profile.action), 'chip-glyph profile-badge-glyph') : '';
+    const safeProfileId = profileAttr(profile.id);
     return `
-      <div class="profile-card ${isActive ? 'active' : ''} ${profile.pinned ? 'pinned' : ''}" data-profile-id="${profile.id}" role="button" tabindex="0"${cardTitle ? ` title="${profileAttr(cardTitle)}"` : ''}${key ? ` aria-keyshortcuts="Control+${key}"` : ''}>
+      <div class="profile-card ${isActive ? 'active' : ''} ${profile.pinned ? 'pinned' : ''}" data-profile-id="${safeProfileId}" role="button" tabindex="0"${cardTitle ? ` title="${profileAttr(cardTitle)}"` : ''}${key ? ` aria-keyshortcuts="Control+${key}"` : ''}>
         <span class="profile-mono" aria-hidden="true">${escapeHtml(mono)}<span class="profile-badge">${badge}</span></span>
         <div class="profile-main">
           <div class="profile-name">
@@ -315,7 +316,8 @@ async function restoreSelectedProfile(profileId) {
     ? profileId
     : null;
   state.currentProfileId = selected;
-  if (profileId && !selected) await persistSelectedProfile(null);
+  if (typeof checkProfileMatch === 'function') checkProfileMatch(false);
+  if (profileId && !state.currentProfileId) await persistSelectedProfile(null);
   renderProfiles();
 }
 
@@ -373,11 +375,7 @@ async function applyProfile(profileId, opts = {}) {
       if (idx >= 0) state.profiles[idx] = result.profile;
     }
 
-    // Dismiss clock mode so the user sees the loaded timer value, not the clock face.
-    if (state.clockMode) {
-      state.clockMode = false;
-      state._clockDismissedByProfile = true;
-    }
+    // Loading changes Tonight's Plan, not the idle wall clock or chosen face.
 
     // Apply timer options from profile
     const testModeOn = state.dryRun === true;
@@ -388,7 +386,7 @@ async function applyProfile(profileId, opts = {}) {
       state.dryRun = testModeOn ? true : Boolean(result.timerOptions.dryRun);
       state.forceShutdown = result.timerOptions.forceShutdown || false;
       state.muteSystem = result.timerOptions.muteSystem || false;
-      state.graceMinutes = result.timerOptions.gracePeriod || 2;
+      state.graceMinutes = result.timerOptions.gracePeriod ?? 2;
 
       // Apply Last Light from profile
       if (result.timerOptions.lastLightEnabled !== undefined) {
@@ -410,7 +408,6 @@ async function applyProfile(profileId, opts = {}) {
 
     // Selection is always inert. Only an explicit "start" action may run it.
     if (shouldStartOnProfileSelection(opts) && !state.running && !state.paused) {
-      state._clockDismissedByProfile = false; // timer starting, no restore needed
       startTimer(result.timerOptions?.durationSeconds, 'profile-start');
     }
     // UI-R3 Fire 08: a card click / Enter lands on Tonight with the loaded
@@ -574,19 +571,21 @@ function renderProfilesList() {
 
   els.profilesList.innerHTML = filtered.map((profile, idx) => {
     const hint = getProfileHint(profile);
-    const lastUsedHint = profile.lastUsedAt ? ` · Last used ${formatTimeAgo(new Date(profile.lastUsedAt))}` : '';
+    const lastUsedDate = profile.lastUsedAt ? new Date(profile.lastUsedAt) : null;
+    const lastUsedHint = lastUsedDate && !Number.isNaN(lastUsedDate.getTime()) ? ` · Last used ${formatTimeAgo(lastUsedDate)}` : '';
+    const safeId = profileAttr(profile.id);
     return `
-      <div class="profile-item" data-profile-id="${profile.id}">
+      <div class="profile-item" data-profile-id="${safeId}">
         <div class="profile-item-info">
-          <input type="text" class="profile-item-name-input" value="${profileAttr(profile.name)}" data-profile-id="${profile.id}" maxlength="32" spellcheck="false" aria-label="Name of ${profileAttr(profile.name)}">
+          <input type="text" class="profile-item-name-input" value="${profileAttr(profile.name)}" data-profile-id="${safeId}" maxlength="32" spellcheck="false" aria-label="Name of ${profileAttr(profile.name)}">
           <div class="profile-item-hint">${escapeHtml(hint)}${escapeHtml(lastUsedHint)}</div>
           <div class="profile-identity-fields">
-            <select class="profile-item-kind-input" data-profile-id="${profile.id}" aria-label="Kind">
+            <select class="profile-item-kind-input" data-profile-id="${safeId}" aria-label="Kind">
               <option value="timer" ${profile.kind !== 'family' ? 'selected' : ''}>Routine</option>
               <option value="family" ${profile.kind === 'family' ? 'selected' : ''}>Family member</option>
             </select>
-            <input type="text" class="profile-item-avatar-input" value="${profileAttr(profile.avatar || '')}" data-profile-id="${profile.id}" maxlength="4" spellcheck="false" aria-label="Profile avatar" placeholder="Avatar">
-            <select class="profile-item-accent-input" data-profile-id="${profile.id}" aria-label="Profile accent">
+            <input type="text" class="profile-item-avatar-input" value="${profileAttr(profile.avatar || '')}" data-profile-id="${safeId}" maxlength="4" spellcheck="false" aria-label="Profile avatar" placeholder="Avatar">
+            <select class="profile-item-accent-input" data-profile-id="${safeId}" aria-label="Profile accent">
               <option value="" ${!profile.accent ? 'selected' : ''}>App default</option>
               <option value="#5b8cff" ${profile.accent === '#5b8cff' ? 'selected' : ''}>Blue</option>
               <option value="#a855f7" ${profile.accent === '#a855f7' ? 'selected' : ''}>Purple</option>
@@ -596,7 +595,7 @@ function renderProfilesList() {
               <option value="#fb7185" ${profile.accent === '#fb7185' ? 'selected' : ''}>Rose</option>
             </select>
           </div>
-          <input type="text" class="profile-item-notes-input" value="${profileAttr(profile.notes || '')}" data-profile-id="${profile.id}" maxlength="280" spellcheck="false" placeholder="Add a note...">
+          <input type="text" class="profile-item-notes-input" value="${profileAttr(profile.notes || '')}" data-profile-id="${safeId}" maxlength="280" spellcheck="false" placeholder="Add a note...">
         </div>
         <div class="profile-item-actions">
           <button type="button" class="profile-item-btn pin-btn btn-quiet${profile.pinned ? ' is-pinned' : ''}" data-action="pin" title="${profile.pinned ? 'Unpin' : 'Pin'}" aria-pressed="${profile.pinned ? 'true' : 'false'}">

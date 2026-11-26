@@ -112,6 +112,26 @@ function createSandbox({ api = {}, state = { running: false, paused: false }, wi
 
 const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2300}-\u{27BF}\u{2B00}-\u{2BFF}]/u;
 
+test('power-truth vocabulary agrees across hero, ledger, copied proof and counters for every subprocess state', async () => {
+  for (const result of ['power_executed', 'completed', 'action_requested', 'command_spawned', 'command_returned_success', 'command_returned_failure', 'spawn_failed', 'outcome_unverified']) {
+    const s = createSandbox();
+    const r = { id: 'r_1_abcdef', result, action: 'shutdown', dryRun: false,
+      startedAt: new Date().toISOString(), endedAt: new Date().toISOString(), persistence: { saved: true } };
+    await s.renderMorningProof(r);
+    const truth = s.receiptTruth(r).text;
+    assert.match(truth, /unverified|unknown|could not start/);
+    assert.equal(s.document.getElementById('ns-proof-truth').textContent, truth);
+    assert(s.buildProofText(r).includes(truth));
+    assert.doesNotMatch(s.buildProofText(r), /Run complete|REAL ACTION.*completed|system outcome observed/i);
+    s.renderReceiptsModal([r], null);
+    assert(s.els.receiptsList.innerHTML.includes(escapeHtml(truth)), 'ledger contains the same evidence line');
+    const unsaved = { ...r, persistence: { saved: false } };
+    await s.renderMorningProof(unsaved);
+    assert.equal(s.els.proofBadge.textContent, 'Unsaved');
+    assert.match(s.buildProofText(unsaved), /save unavailable/);
+  }
+});
+
 test('nightKey: local start date minus 6 h; invalid dates are null', () => {
   const s = createSandbox();
   assert.equal(s.nightKey(new Date(2026, 9, 5, 0, 30)), '2026-10-04', 'a 00:30 run belongs to the evening before');
@@ -128,8 +148,8 @@ test('nightKey: local start date minus 6 h; invalid dates are null', () => {
 test('RECEIPT_TONE: one vocabulary; Test Mode never reads as done; unknown is neutral', () => {
   const s = createSandbox();
   const tone = r => s.receiptToneOf(r).tone;
-  assert.equal(tone('power_executed'), 'done');
-  assert.equal(tone('completed'), 'done');
+  assert.equal(tone('power_executed'), 'warn');
+  assert.equal(tone('completed'), 'warn');
   assert.equal(tone('dry_run_completed'), 'test');
   assert.equal(tone('cancelled'), 'cancel');
   assert.equal(tone('interrupted'), 'warn');
@@ -144,16 +164,16 @@ test('RECEIPT_TONE: one vocabulary; Test Mode never reads as done; unknown is ne
   assert.equal(s.receiptToneOf('__proto__').tone, 'neutral', 'prototype keys are not results');
 });
 
-test('receiptTruth: TEST MODE whenever dryRun; "command sent" only for power_executed', () => {
+test('receiptTruth: Test Mode and legacy records never claim a verified Windows outcome', () => {
   const s = createSandbox();
-  assert.equal(s.receiptTruth({ dryRun: true, result: 'cancelled', action: 'shutdown' }).text, 'TEST MODE · nothing ran');
-  assert.equal(s.receiptTruth({ dryRun: true, result: 'dry_run_completed', action: 'sleep' }).text, 'TEST MODE · nothing ran');
-  assert.equal(s.receiptTruth({ dryRun: false, result: 'power_executed', action: 'hibernate' }).text, 'REAL ACTION · Hibernate command sent');
-  assert.equal(s.receiptTruth({ dryRun: false, result: 'blocked', action: 'shutdown' }).text, 'REAL ACTION · Shutdown did not run');
-  assert.equal(s.receiptTruth({ dryRun: false, result: 'cancelled', action: 'restart' }).text, 'REAL ACTION · Restart did not run');
-  assert.equal(s.receiptTruth({ dryRun: false, result: 'interrupted', action: 'sleep' }).text, 'REAL ACTION · Sleep did not run');
-  assert.equal(s.receiptTruth({ dryRun: false, result: 'running', action: 'sleep' }).text, 'REAL ACTION · not finished');
-  assert.equal(s.receiptTruth({ dryRun: false, result: 'completing', action: 'sleep' }).text, 'REAL ACTION · not finished');
+  assert.equal(s.receiptTruth({ dryRun: true, result: 'cancelled', action: 'shutdown' }).text, 'TEST MODE · PC power action skipped');
+  assert.equal(s.receiptTruth({ dryRun: true, result: 'dry_run_completed', action: 'sleep' }).text, 'TEST MODE · PC power action skipped');
+  assert.equal(s.receiptTruth({ dryRun: false, result: 'power_executed', action: 'hibernate' }).text, 'LEGACY · Hibernate outcome unverified');
+  assert.equal(s.receiptTruth({ dryRun: false, result: 'blocked', action: 'shutdown' }).text, 'REAL MODE · Shutdown: blocked; no power command dispatched');
+  assert.equal(s.receiptTruth({ dryRun: false, result: 'cancelled', action: 'restart' }).text, 'REAL MODE · Restart: cancelled; no power command recorded');
+  assert.equal(s.receiptTruth({ dryRun: false, result: 'interrupted', action: 'sleep' }).text, 'REAL MODE · Sleep: run interrupted; Windows outcome unknown');
+  assert.equal(s.receiptTruth({ dryRun: false, result: 'running', action: 'sleep' }).text, 'REAL MODE · Sleep: timer running; no power request recorded');
+  assert.equal(s.receiptTruth({ dryRun: false, result: 'completing', action: 'sleep' }).text, 'REAL MODE · Sleep: legacy action pending; Windows outcome unverified');
 });
 
 test('proofEyebrowFor: TONIGHT / LAST NIGHT by the shared nightKey rule, otherwise the date', () => {
@@ -264,7 +284,7 @@ test('renderNightStrip reads listReceipts(100) and the real streak; empty state'
   assert.equal(s.document.getElementById('night-strip').children.length, 14);
   assert.equal(s.document.getElementById('night-strip-empty').hidden, false);
   assert.equal(s.document.getElementById('night-strip-empty').textContent, 'No runs recorded on this PC yet');
-  assert.equal(s.document.getElementById('routine-streak').textContent, "No real completions yet · Test Mode runs don't count");
+  assert.equal(s.document.getElementById('routine-streak').textContent, "No ritual endings yet · Test Mode runs don't count");
 
   const s2 = createSandbox({
     api: {
@@ -274,9 +294,9 @@ test('renderNightStrip reads listReceipts(100) and the real streak; empty state'
   });
   await s2.renderNightStrip();
   assert.equal(s2.document.getElementById('night-strip-empty').hidden, true);
-  assert.equal(s2.document.getElementById('routine-streak').textContent, 'Real streak · 2 nights · best 5');
+  assert.equal(s2.document.getElementById('routine-streak').textContent, 'Ritual streak · 2 nights · best 5');
   const cell = s2.document.getElementById('night-strip').children[13];
-  assert.match(cell.attrs['aria-label'], /1 real action sent/);
+  assert.match(cell.attrs['aria-label'], /1 unverified ending/);
   // Only one receipt (tonight): the 13 older nights are 'no data', so only
   // that optional legend entry appears; 'bad' / 'active' stay hidden.
   assert.deepEqual(s2.document.legendItems.map(i => i.hidden), [true, true, false]);
@@ -299,7 +319,7 @@ test('ledger stats: one ratio bar whose segments omit zeros; nothing at total 0'
   assert.equal(s.receiptStatsMarkup({ total: 0 }), '');
   assert.equal(s.receiptStatsMarkup(null), '');
   const html = s.receiptStatsMarkup({ total: 7, completed: 1, dryRun: 3, cancelled: 2, blocked: 0, interrupted: 1, other: 0 });
-  assert.match(html, /role="img" aria-label="7 runs: 1 real completed, 3 Test Mode completed, 2 cancelled, 1 interrupted"/);
+  assert.match(html, /role="img" aria-label="7 runs: 1 outcome unverified, 3 Test Mode completed, 2 cancelled, 1 interrupted"/);
   assert.match(html, /<li data-tone="test"><b>3<\/b>Test completed<\/li>/, "the Test segment's legend reads 'Test completed'");
   assert.equal((html.match(/<span data-tone=/g) || []).length, 4, 'zero segments are omitted');
   assert.ok(!/data-tone="bad"|data-tone="running"/.test(html));
@@ -315,11 +335,11 @@ test('ledger stats: one ratio bar whose segments omit zeros; nothing at total 0'
 test('Fire 10 ledger: the mode line separates Real / Test Mode from the outcome, colour by data-truth only', () => {
   const s = createSandbox();
   const html = s.receiptStatsMarkup({ total: 59, completed: 0, dryRun: 10, cancelled: 48, blocked: 0, interrupted: 1, other: 0, testRuns: 59, realRuns: 0, unknownModeRuns: 0 });
-  assert.match(html, /^<p class="receipt-mode-line" aria-label="0 real and 59 Test Mode runs on this PC"><b data-truth="real" data-zero>0<\/b> real · <b data-truth="test">59<\/b> Test Mode · 59 on this PC<\/p><div class="receipt-ratio"/, 'the mode line sits above the outcome bar');
+  assert.match(html, /^<p class="receipt-mode-line" aria-label="0 real and 59 Test Mode runs on this PC"><b data-truth="real" data-zero>0<\/b> real mode · <b data-truth="test">59<\/b> Test Mode · 59 on this PC<\/p><div class="receipt-ratio"/, 'the mode line sits above the outcome bar');
   assert.ok(!/receipt-legend-total/.test(html), 'the total is printed once (the mode line), not again in the legend');
   assert.ok(!/style="color/.test(html), 'no inline colour');
   const real = s.receiptStatsMarkup({ total: 5, completed: 2, dryRun: 1, cancelled: 2, blocked: 0, interrupted: 0, other: 0, testRuns: 2, realRuns: 2, unknownModeRuns: 1 });
-  assert.match(real, /<b data-truth="real">2<\/b> real · <b data-truth="test">2<\/b> Test Mode · 5 on this PC · <span class="receipt-mode-unknown">1 mode unknown<\/span>/, 'a real count above 0 is not muted; unknown modes are muted, never folded into real');
+  assert.match(real, /<b data-truth="real">2<\/b> real mode · <b data-truth="test">2<\/b> Test Mode · 5 on this PC · <span class="receipt-mode-unknown">1 mode unknown<\/span>/, 'a real count above 0 is not muted; unknown modes are muted, never folded into real');
   assert.match(real, /aria-label="2 real and 2 Test Mode runs on this PC, 1 mode unknown"/);
   // Non-numbers never render as a count.
   for (const bad of [{ testRuns: '5', realRuns: 0 }, { testRuns: NaN, realRuns: 0 }, { testRuns: 1 }, { realRuns: 1 }]) {
@@ -425,7 +445,7 @@ test('renderMorningProof: tone, seal glyph, truth line, sub line, no inline colo
   assert.equal(s.els.morningProofSection.style.display, '');
   assert.equal(s.els.proofCard.dataset.tone, 'cancel');
   assert.equal(s.document.getElementById('proof-seal-glyph').innerHTML, s.LO_GLYPHS.cross);
-  assert.equal(s.document.getElementById('ns-proof-truth').textContent, 'TEST MODE · nothing ran');
+  assert.equal(s.document.getElementById('ns-proof-truth').textContent, 'TEST MODE · PC power action skipped');
   assert.equal(s.document.getElementById('ns-proof-truth').dataset.truth, 'test');
   assert.equal(s.document.getElementById('ns-proof-sub').textContent, 'Countdown · Shutdown · R-q1w2e3 · from your phone');
   assert.equal(s.document.getElementById('ns-proof-title').textContent, 'Run cancelled');
@@ -450,8 +470,8 @@ test('renderMorningProof: tone, seal glyph, truth line, sub line, no inline colo
 
   const real = { ...receipt, result: 'power_executed', dryRun: false, forceShutdown: true, origin: undefined, id: 42 };
   await s.renderMorningProof(real);
-  assert.equal(s.els.proofCard.dataset.tone, 'done');
-  assert.equal(s.document.getElementById('ns-proof-truth').textContent, 'REAL ACTION · Shutdown command sent');
+  assert.equal(s.els.proofCard.dataset.tone, 'warn');
+  assert.equal(s.document.getElementById('ns-proof-truth').textContent, 'LEGACY · Shutdown outcome unverified');
   assert.equal(s.document.getElementById('ns-proof-sub').textContent, 'Countdown · Shutdown', 'a non-string id and a missing origin add nothing');
   assert.equal(s.document.getElementById('ns-pill-action-val').textContent, 'ShutdownForced');
   assert.equal(s.document.getElementById('btn-proof-details').dataset.receiptId, '', 'a malformed id never becomes a target');
@@ -544,7 +564,7 @@ test('Fire 10 hero: RAN <1m of 25m for a Test Mode run cancelled after 10 s; PLA
   assert.equal(el('ns-pill-duration').dataset.known, 'true');
   assert.equal(el('ns-pill-action-note').textContent, '', 'no pauses and no snoozes: no note');
   assert.equal(el('ns-pill-action-note').hidden, true);
-  assert.equal(el('ns-proof-truth').textContent, 'TEST MODE · nothing ran', 'the truth mark is unchanged beside the ran value');
+  assert.equal(el('ns-proof-truth').textContent, 'TEST MODE · PC power action skipped', 'the truth mark is unchanged beside the ran value');
   assert.equal(el('proof-page-meta').textContent, '2 receipts · this PC');
 
   await s.renderMorningProof({ ...receipt, remainingSeconds: 0, result: 'dry_run_completed' });
@@ -572,22 +592,22 @@ test('Fire 10 Routine: the streak line is muted until live; the live count is it
   };
   const empty = await run({ streak: 0, bestStreak: 0, totalNights: 0 });
   assert.equal(empty.dataset.state, 'empty');
-  assert.equal(empty.textContent, "No real completions yet · Test Mode runs don't count");
+  assert.equal(empty.textContent, "No ritual endings yet · Test Mode runs don't count");
   assert.equal(empty.children.length, 0, 'no numeral in the empty state');
 
   const broken = await run({ streak: 0, bestStreak: 5, totalNights: 9 });
   assert.equal(broken.dataset.state, 'broken');
-  assert.equal(broken.textContent, 'Real streak · 0 nights · best 5');
+  assert.equal(broken.textContent, 'Ritual streak · 0 nights · best 5');
   assert.equal(broken.children.length, 0, 'a zero never gets the big numeral');
 
   const live = await run({ streak: 2, bestStreak: 5, totalNights: 9 });
   assert.equal(live.dataset.state, 'live');
-  assert.equal(live.textContent, 'Real streak · 2 nights · best 5');
+  assert.equal(live.textContent, 'Ritual streak · 2 nights · best 5');
   const num = live.children.find(c => typeof c === 'object');
   assert.ok(num && num.className === 'routine-streak-n' && num.textContent === '2', 'the current count is wrapped in b.routine-streak-n');
 
   const one = await run({ streak: 1, bestStreak: 1, totalNights: 1 });
-  assert.equal(one.textContent, 'Real streak · 1 night · best 1');
+  assert.equal(one.textContent, 'Ritual streak · 1 night · best 1');
 
   const failed = await run(new Error('x'));
   assert.equal(failed.textContent, '');
@@ -600,7 +620,7 @@ test('Fire 10 buildProofText: a complete receipt, the truth first, never a bare 
   const cancelled = s.buildProofText({ ...base, result: 'cancelled', dryRun: true, remainingSeconds: 1490 });
   const lines = cancelled.split('\n');
   assert.equal(lines[0], 'Lights Out receipt R-q1w2e3');
-  assert.equal(lines[1], 'TEST MODE · nothing ran', 'the truth line is the first fact');
+  assert.equal(lines[1], 'TEST MODE · PC power action skipped', 'the truth line is the first fact');
   assert.equal(lines[2], 'Result: Run cancelled');
   assert.equal(lines[3], 'Action: Shutdown');
   assert.ok(lines.includes('Planned: 25m') && lines.includes('Ran: <1m'));
@@ -615,7 +635,7 @@ test('Fire 10 buildProofText: a complete receipt, the truth first, never a bare 
   const dry = s.buildProofText({ ...base, result: 'dry_run_completed', dryRun: true, remainingSeconds: 0, snoozeCount: 1, pauseCount: 2, forceShutdown: true });
   assert.doesNotMatch(dry, /\bCompleted\b/, 'dry_run_completed never reads Completed');
   assert.match(dry, /^Result: Test run complete$/m);
-  assert.match(dry, /TEST MODE · nothing ran/);
+  assert.match(dry, /TEST MODE · PC power action skipped/);
   assert.match(dry, /^Action: Shutdown \(forced\)$/m);
   assert.ok(!/^Ran:/m.test(dry), 'a snoozed run omits Ran');
   assert.match(dry, /^Pauses: 2$/m);
@@ -623,11 +643,11 @@ test('Fire 10 buildProofText: a complete receipt, the truth first, never a bare 
 
   const testCompleted = s.buildProofText({ ...base, result: 'completed', dryRun: true, remainingSeconds: 0 });
   assert.doesNotMatch(testCompleted, /\bCompleted\b|Run complete/, 'a Test Mode receipt with a completed result is still a test');
-  assert.match(testCompleted, /TEST MODE · nothing ran/);
+  assert.match(testCompleted, /TEST MODE · PC power action skipped/);
 
   const real = s.buildProofText({ ...base, result: 'power_executed', dryRun: false, remainingSeconds: 0, id: 'bad"id', startedAt: 'garbage', endedAt: null });
   assert.equal(real.split('\n')[0], 'Lights Out receipt', 'a malformed id is omitted');
-  assert.match(real, /REAL ACTION · Shutdown command sent/);
+  assert.match(real, /LEGACY · Shutdown outcome unverified/);
   assert.ok(!/Invalid Date|Started:|Ended:/.test(real), 'invalid dates are omitted');
   const interrupted = s.buildProofText({ ...base, result: 'interrupted', dryRun: false });
   assert.ok(!/^Ran:/m.test(interrupted) && /^Planned: 25m$/m.test(interrupted), 'unknown spans print only Planned');

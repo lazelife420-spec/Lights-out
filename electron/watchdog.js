@@ -13,10 +13,20 @@
 // stored daily time always reflects the most recently armed fire.
 
 const { execFile } = require('child_process');
+const os = require('os');
+const path = require('path');
 
 const TASK_NAME = 'LightsOut-AutopilotWatchdog';
 const RELAUNCH_ARG = '--watchdog-relaunch';
 const LEAD_MINUTES = 15;
+const SCHTASKS_TIMEOUT_MS = 15000;
+
+function isTempPortableExe(exePath) {
+  if (!exePath || typeof exePath !== 'string') return false;
+  const norm = path.resolve(exePath).toLowerCase();
+  const tmp = path.resolve(os.tmpdir()).toLowerCase();
+  return norm.startsWith(tmp + path.sep);
+}
 
 // Wired once from main.js to writeStartupLog so task arm/disarm evidence lands
 // in startup.log next to the rest of the launch diagnostics.
@@ -49,7 +59,7 @@ function run(args, runner) {
   const exec = runner || execFile;
   return new Promise((resolve) => {
     try {
-      exec('schtasks.exe', args, { windowsHide: true }, (err, stdout, stderr) => {
+      exec('schtasks.exe', args, { windowsHide: true, timeout: SCHTASKS_TIMEOUT_MS }, (err, stdout, stderr) => {
         resolve({ ok: !err, code: err && typeof err.code === 'number' ? err.code : (err ? -1 : 0), stdout: String(stdout || ''), stderr: String(stderr || '') });
       });
     } catch (e) {
@@ -58,10 +68,61 @@ function run(args, runner) {
   });
 }
 
+function allowRunOnBatteries() {
+  return new Promise((resolve) => {
+    const cmd = `$s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries; Set-ScheduledTask -TaskName '${TASK_NAME}' -Settings $s | Out-Null`;
+    try {
+      execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', cmd], {
+        windowsHide: true,
+        timeout: SCHTASKS_TIMEOUT_MS
+      }, () => resolve());
+    } catch {
+      resolve();
+    }
+  });
+}
+
+// The task name is per Windows user, not per installation or profile. A
+// disarm from a dev run, a portable/QA build or another installation must not
+// delete the task an installed app armed, so a delete happens only when the
+// registered task launches this same executable. A missing or unreadable task
+// is left alone: the task can only relaunch the app minimized, never act.
+function decodeXmlText(text) {
+  return text.replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+}
+
+async function registeredCommand(io) {
+  const r = await run(['/Query', '/TN', TASK_NAME, '/XML'], io.runner);
+  if (!r.ok) return null;
+  const match = /<Command>([^<]*)<\/Command>/i.exec(r.stdout);
+  if (!match) return null;
+  return decodeXmlText(match[1]).trim().replace(/^"(.*)"$/, '$1');
+}
+
+function sameExecutable(a, b) {
+  return typeof a === 'string' && typeof b === 'string' && a && b &&
+    path.win32.resolve(a).toLowerCase() === path.win32.resolve(b).toLowerCase();
+}
+
 async function deleteTask(io) {
+  if (io.platform !== 'win32' || !io.exePath) return false;
+  const command = await registeredCommand(io);
+  if (!command) return false;
+  if (!sameExecutable(command, io.exePath)) {
+    io.log('Autopilot watchdog task left in place: it belongs to another Lights Out installation');
+    return false;
+  }
   const r = await run(['/Delete', '/TN', TASK_NAME, '/F'], io.runner);
   if (r.ok) io.log('Autopilot watchdog task removed');
   return r.ok;
+}
+
+// QA, proof and installer-verification launches use isolated profiles; their
+// autopilot state says nothing about the owner's real schedule, so they never
+// create or delete the scheduled task (main.js sets this at startup).
+let enabled = true;
+function setEnabled(value) {
+  enabled = value !== false;
 }
 
 // Every sync is serialized through this queue: schedule() runs cancel() (a
@@ -78,6 +139,7 @@ function sync(target, deps = {}) {
 }
 
 async function syncNow(target, deps = {}) {
+  if (!enabled) return { armed: false, skipped: true };
   const io = {
     platform: process.platform,
     isPackaged: defaultIsPackaged(),
@@ -88,7 +150,7 @@ async function syncNow(target, deps = {}) {
   };
 
   const fire = target ? new Date(target) : null;
-  const arm = fire && Number.isFinite(fire.getTime()) && io.platform === 'win32' && io.isPackaged && !!io.exePath;
+  const arm = fire && Number.isFinite(fire.getTime()) && io.platform === 'win32' && io.isPackaged && !!io.exePath && !isTempPortableExe(io.exePath);
 
   if (!arm) {
     await deleteTask(io);
@@ -100,6 +162,8 @@ async function syncNow(target, deps = {}) {
   const tr = `"${io.exePath}" --minimized --no-auto-start ${RELAUNCH_ARG}`;
   const r = await run(['/Create', '/TN', TASK_NAME, '/TR', tr, '/SC', 'DAILY', '/ST', at, '/F'], io.runner);
   if (r.ok) {
+    // Allow the task to fire on laptop battery power (schtasks defaults to AC-only).
+    if (!io.runner) await allowRunOnBatteries();
     io.log('Autopilot watchdog task armed', { at, task: TASK_NAME });
     return { armed: true, at };
   }
@@ -107,4 +171,4 @@ async function syncNow(target, deps = {}) {
   return { armed: false };
 }
 
-module.exports = { sync, setLogger, TASK_NAME, RELAUNCH_ARG, LEAD_MINUTES };
+module.exports = { sync, setLogger, setEnabled, TASK_NAME, RELAUNCH_ARG, LEAD_MINUTES };

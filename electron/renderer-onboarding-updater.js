@@ -161,12 +161,15 @@ function hideOnboarding() {
 }
 
 // What the REAL choice really does, in words that match the configured action.
+// Sleep and Hibernate go through native/WindowsSuspend.exe, which asks Windows
+// first and runs nothing when the state is unavailable (Hibernate needs
+// hibernation turned on), so those two sentences state the condition.
 function onboardRealActionSentence(action = state.action) {
   return {
     shutdown: 'This PC really shuts down.',
     restart: 'This PC really restarts.',
-    sleep: 'This PC really goes to sleep.',
-    hibernate: 'This PC really hibernates.',
+    sleep: 'This PC really goes to sleep, if Windows offers Sleep here; otherwise nothing runs.',
+    hibernate: 'This PC really hibernates, if hibernation is turned on in Windows; otherwise nothing runs.',
     lock: 'This PC really locks.',
     logout: 'This PC really logs you out.'
   }[action] || `This PC really runs ${actionLabel(action)}.`;

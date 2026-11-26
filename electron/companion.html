@@ -288,18 +288,18 @@
          Bahnschrift on Windows, DIN on Apple, Roboto Condensed on Android). */
       --font-instrument: 'Bahnschrift', 'DIN Alternate', 'DIN Condensed', sans-serif-condensed, 'Roboto Condensed', 'Segoe UI Variable Display', system-ui, sans-serif;
     }
-    /* Safe areas (notched phones): after the UI-R1 shorthand. */
+    /* Safe areas (notched phones & Android edge-to-edge): additive inset + breathing room. */
     .pwa {
-      padding-top: max(18px, env(safe-area-inset-top));
-      padding-right: max(clamp(14px, 5vw, 22px), env(safe-area-inset-right));
-      padding-bottom: max(32px, env(safe-area-inset-bottom));
-      padding-left: max(clamp(14px, 5vw, 22px), env(safe-area-inset-left));
+      padding-top: calc(18px + env(safe-area-inset-top, 0px));
+      padding-right: calc(clamp(14px, 5vw, 22px) + env(safe-area-inset-right, 0px));
+      padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+      padding-left: calc(clamp(14px, 5vw, 22px) + env(safe-area-inset-left, 0px));
     }
     .night-mode-backdrop, .confirm-backdrop {
-      padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+      padding: calc(18px + env(safe-area-inset-top, 0px)) calc(18px + env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) calc(18px + env(safe-area-inset-left, 0px));
     }
     .night-mode-detail, .confirm-card {
-      max-height: calc(100dvh - max(18px, env(safe-area-inset-top)) - max(18px, env(safe-area-inset-bottom)));
+      max-height: calc(100dvh - 36px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
     }
 
     /* Lamp beam: lives on body::before so it can follow the real
@@ -414,11 +414,11 @@
     .night-mode-backdrop.show .night-mode-detail, .confirm-backdrop.show .confirm-card { animation: p09SheetIn var(--dur-slow) var(--ease-out) both; }
 
     @media (max-width: 340px) {
-      .pwa { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
+      .pwa { padding-left: calc(12px + env(safe-area-inset-left, 0px)); padding-right: calc(12px + env(safe-area-inset-right, 0px)); }
       .link-bar .pc-name { flex-basis: 100%; order: 2; }
     }
     @media (max-width: 220px) {
-      .pwa { padding-left: max(6px, env(safe-area-inset-left)); padding-right: max(6px, env(safe-area-inset-right)); }
+      .pwa { padding-left: calc(6px + env(safe-area-inset-left, 0px)); padding-right: calc(6px + env(safe-area-inset-right, 0px)); }
     }
     /* Short phones: keep Stop in the first frame (320x700). Not below
        300px wide, where the existing compact ring sizes already apply. */
@@ -502,7 +502,7 @@
        short phones and squeeze the ring and dock (FIRE05 review round 3). */
     body.has-run .pwa { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; flex-shrink: 0; }
     body.has-run .ring-wrap { margin-top: auto; margin-bottom: 0; }
-    body.has-run #active-controls { margin-top: auto; padding: 12px 0 max(12px, env(safe-area-inset-bottom)); }
+    body.has-run #active-controls { margin-top: auto; padding: 12px 0; }
 
     /* Add time is one joined instrument. Focus rings sit inside the bar
        so its clipping never hides them. */
@@ -538,7 +538,7 @@
     .outcome-dismiss svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 
     /* On-brand toast: the card, a hairline and a teal dot. */
-    .feedback-toast { display: inline-flex; align-items: center; gap: 9px; width: max-content; max-width: calc(100vw - 32px); bottom: max(24px, calc(env(safe-area-inset-bottom) + 16px)); padding: 11px 18px 11px 14px; border-radius: 14px; background: #151f28; border: 1px solid var(--card-border); color: var(--text); font-size: 14px; font-weight: 600; line-height: 1.35; box-shadow: 0 12px 40px rgba(0,0,0,.5); }
+    .feedback-toast { display: inline-flex; align-items: center; gap: 9px; width: max-content; max-width: calc(100vw - 32px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)); bottom: calc(24px + env(safe-area-inset-bottom, 0px)); padding: 11px 18px 11px 14px; border-radius: 14px; background: #151f28; border: 1px solid var(--card-border); color: var(--text); font-size: 14px; font-weight: 600; line-height: 1.35; box-shadow: 0 12px 40px rgba(0,0,0,.5); }
     .feedback-toast::before { content: ''; flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: var(--teal); }
 
     /* ── UI-R3 · Fire 06: phone at rest ─────────────────────────────────
@@ -1076,8 +1076,8 @@
     const PHASE_COLORS = { focus: '#9b93d6', dim: 'rgba(155,147,214,0.62)', lastlight: '#ff5c7a', 'lastlight-test': '#f5b83d', paused: '#f5b83d', idle: '#9b93d6' };
     // One vocabulary for the run's own ending. The action is LAN data, so
     // only own keys of these maps are words (never a prototype property).
-    const ACTION_NOUN = { shutdown: 'shutdown', sleep: 'sleep', restart: 'restart', hibernate: 'hibernate', lock: 'lock', logout: 'log out' };
-    const ACTION_VERB = { shutdown: 'shut down', sleep: 'sleep', restart: 'restart', hibernate: 'hibernate', lock: 'lock', logout: 'log out' };
+    const ACTION_NOUN = Object.assign(Object.create(null), { shutdown: 'shutdown', sleep: 'sleep', restart: 'restart', hibernate: 'hibernate', lock: 'lock', logout: 'log out' });
+    const ACTION_VERB = Object.assign(Object.create(null), { shutdown: 'shut down', sleep: 'sleep', restart: 'restart', hibernate: 'hibernate', lock: 'lock', logout: 'log out' });
     const DEFAULT_TIMER_NAME = 'Last Call';
     const OUTCOME_MAX_MS = 10 * 60 * 1000;
     const COMMAND_TIMEOUT_MS = 5000;
@@ -1104,8 +1104,61 @@
     // When the Fire 05 outcome strip was shown (0 = hidden).
     let outcomeShownAt = 0;
     let lastCommandResult = null;
+    let lastCommandAck = null;
+    let lastStateRevision = 0;
+    let protocolIncompatible = false;
     let pendingTimeout = null;
     let pendingErrorTimeout = null;
+    const MUTATING_ACTIONS = new Set(['start', 'startNightMode', 'pause', 'resume', 'togglePause', 'snooze', 'cancel']);
+    const REJECTION_MESSAGES = Object.assign(Object.create(null), {
+      not_idle: 'A Lights Out run is already active on this PC',
+      ritual_active: 'A wind-down ritual is already active on this PC',
+      no_active_timer: 'No active timer on this PC',
+      already_paused: 'Timer is already paused',
+      already_running: 'Timer is already running',
+      mode_unknown: 'That Night Mode was not found on this PC',
+      mode_unavailable: 'That Night Mode is unavailable on this PC',
+      request_id_conflict: 'Request conflict — please try again',
+      idempotency_capacity: 'PC is busy processing requests — try again shortly',
+      upgrade_required: 'Incompatible protocol — reload companion to reconnect',
+      unsupported_protocol_version: 'Incompatible protocol version with this PC',
+      invalid_protocol_version: 'Incompatible protocol version',
+      invalid_request_id: 'Invalid command request — please try again',
+      unsupported_action: 'This PC does not support that action',
+      invalid_payload: 'PC rejected the command parameters',
+      not_authenticated: 'Not paired with this PC',
+      stale_state: 'State was out of date — try again',
+      internal_error: 'PC could not complete the request'
+    });
+
+    function createClientRequestId() {
+      const c = typeof globalThis !== 'undefined' ? globalThis.crypto : undefined;
+      if (c && typeof c.randomUUID === 'function') return c.randomUUID().toLowerCase();
+      if (c && typeof c.getRandomValues === 'function') {
+        const bytes = new Uint8Array(16);
+        c.getRandomValues(bytes);
+        bytes[6] = (bytes[6] & 0x0f) | 0x40;
+        bytes[8] = (bytes[8] & 0x3f) | 0x80;
+        const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+        return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+      }
+      throw new Error('No secure crypto source available');
+    }
+
+    function supportsProtocolV3() {
+      return typeof desktopHello !== 'undefined' && Boolean(desktopHello && desktopHello.protocol === 3);
+    }
+
+    function isIncompatibleProtocol() {
+      return typeof desktopHello !== 'undefined' && Boolean(desktopHello && desktopHello.protocol > 3);
+    }
+
+    function formatRejectionReason(reason) {
+      if (typeof reason === 'string' && Object.prototype.hasOwnProperty.call(REJECTION_MESSAGES, reason)) {
+        return REJECTION_MESSAGES[reason];
+      }
+      return 'The PC rejected the request';
+    }
     let nmCatalogue = [];
     let nmCatalogueRefreshing = false;
     let nmSelectedId = null;
@@ -1114,14 +1167,14 @@
     let catalogueRequestedGeneration = null;
     let catalogueAcceptedGeneration = null;
 
-    const NM_ARTWORK = {
+    const NM_ARTWORK = Object.assign(Object.create(null), {
       'quick-sleep': `<svg class="nm-glyph" viewBox="0 0 28 28" aria-hidden="true"><path d="M21.5 16.6A8.6 8.6 0 0 1 11.4 6.5a8.6 8.6 0 1 0 10.1 10.1z"/><path d="M18.6 4.4l-2 3.6h3l-2 3.6"/></svg>`,
       'lights-down': `<svg class="nm-glyph" viewBox="0 0 28 28" aria-hidden="true"><path d="M10.6 18.6c0-2.2-3-3.6-3-7.4a6.4 6.4 0 0 1 12.8 0c0 3.8-3 5.2-3 7.4z"/><path d="M11 21.6h6M12.2 24.4h3.6"/><path d="M10.4 11.4a3.6 3.6 0 0 1 3.6-3.6"/></svg>`,
       'movie-wind-down': `<svg class="nm-glyph" viewBox="0 0 28 28" aria-hidden="true"><rect x="3.6" y="5.6" width="20.8" height="13.6" rx="2"/><path d="M12 9.4v6l5-3z"/><path d="M10 23.2h8"/></svg>`,
       'full-shutdown': `<svg class="nm-glyph" viewBox="0 0 28 28" aria-hidden="true"><path d="M14 3.8v9.4"/><path d="M8.2 7.6a8.8 8.8 0 1 0 11.6 0"/></svg>`,
       'quiet-house': `<svg class="nm-glyph" viewBox="0 0 28 28" aria-hidden="true"><path d="M4.4 13.2 14 5l9.6 8.2"/><path d="M7 11.4v11.4h14V11.4"/><path d="M12 22.8v-5.4h4v5.4"/></svg>`,
       'school-night': `<svg class="nm-glyph" viewBox="0 0 28 28" aria-hidden="true"><path d="M4.6 7.4c3.2-1 6.4-.8 9.4.8v15c-3-1.6-6.2-1.8-9.4-.8z"/><path d="M14 8.2c3-1.6 6.2-1.8 9.4-.8v15c-3.2-1-6.4-.8-9.4.8"/><path d="M20.4 3.4a2.6 2.6 0 0 0 2.8 3.4 3.2 3.2 0 1 1-2.8-3.4z"/></svg>`
-    };
+    });
 
     // Which PHASE_COLORS key paints the ring. Pure: paused wins; Last Light
     // is 'lastlight' (red) only when this run's dryRun is exactly false.
@@ -1181,7 +1234,8 @@
       ringProgress.style.strokeDashoffset = String(RING_C * (1 - f));
       if (ringHead) ringHead.style.transform = `rotate(${(f * 360).toFixed(2)}deg)`;
       document.body.classList.toggle('ring-live', f > 0 && f < 1);
-      document.documentElement.style.setProperty('--ring', PHASE_COLORS[phase] || PHASE_COLORS.idle);
+      const ringColor = Object.prototype.hasOwnProperty.call(PHASE_COLORS, phase) ? PHASE_COLORS[phase] : PHASE_COLORS.idle;
+      document.documentElement.style.setProperty('--ring', ringColor);
     }
 
     // Body classes mirror the desktop's real run state (is-running,
@@ -1214,8 +1268,8 @@
     }
 
     function formatNmAction(action) {
-      const map = { shutdown: 'Shutdown', sleep: 'Sleep', restart: 'Restart', hibernate: 'Hibernate', lock: 'Lock', logout: 'Log out' };
-      return map[action] || action;
+      const map = Object.assign(Object.create(null), { shutdown: 'Shutdown', sleep: 'Sleep', restart: 'Restart', hibernate: 'Hibernate', lock: 'Lock', logout: 'Log out' });
+      return map[action] || String(action || '');
     }
 
     // One vocabulary with the desktop (renderer-night-modes.js). The reason
@@ -1734,10 +1788,11 @@
     }
 
     function syncMutationControls() {
-      const available = stateIsAuthoritative() && !pendingOperation;
+      const compatible = !(typeof protocolIncompatible !== 'undefined' && protocolIncompatible) && !isIncompatibleProtocol();
+      const available = stateIsAuthoritative() && !pendingOperation && compatible;
       document.querySelectorAll('.timer-mutation').forEach(btn => { btn.disabled = !available; });
       document.querySelectorAll('#idle-controls .btn, #idle-controls .seg-btn').forEach(btn => { btn.disabled = !available; });
-      if (nmDetailStart) nmDetailStart.disabled = !available;
+      if (nmDetailStart) nmDetailStart.disabled = !(available && planPolicyKnown());
       if (startGo) startGo.disabled = !(available && planPolicyKnown());
     }
 
@@ -1762,9 +1817,18 @@
     }
 
     function beginPending(operation) {
-      if (pendingOperation || !stateIsAuthoritative()) return false;
+      const compatible = !(typeof protocolIncompatible !== 'undefined' && protocolIncompatible) && !isIncompatibleProtocol();
+      if (pendingOperation || !stateIsAuthoritative() || !compatible) return false;
       if (pendingErrorTimeout) clearTimeout(pendingErrorTimeout);
       pendingErrorTimeout = null;
+      if (supportsProtocolV3()) {
+        operation = {
+          ...operation,
+          requestId: operation.requestId || createClientRequestId(),
+          awaitingAck: true,
+          ackStatus: null
+        };
+      }
       pendingOperation = operation;
       if (operation.kind === 'start' || operation.kind === 'startNightMode') hideOutcome();
       setPendingMessage('Waiting for PC…');
@@ -1774,11 +1838,54 @@
     }
 
     function confirmPendingFromState(state) {
-      if (!pendingOperation || !pendingOperation.matches(state)) return;
+      if (!pendingOperation || pendingOperation.awaitingAck || !pendingOperation.matches(state)) return;
       // Read the kind and the Stop snapshot BEFORE clearPending nulls them.
       const { kind, success, snapshot } = pendingOperation;
       clearPending({ success });
       if (outcomeEligible(kind, snapshot)) showOutcome(snapshot);
+    }
+
+    function handleCommandAck(ack) {
+      if (!ack || typeof ack !== 'object') return;
+      lastCommandAck = ack;
+      if (Number.isInteger(ack.stateRevision) && ack.stateRevision > lastStateRevision) {
+        lastStateRevision = ack.stateRevision;
+      }
+      if (ack.status === 'rejected' && (
+        ack.reason === 'upgrade_required'
+        || ack.reason === 'unsupported_protocol_version'
+        || ack.reason === 'invalid_protocol_version'
+      )) {
+        protocolIncompatible = true;
+        refreshPcLabel();
+        if (typeof syncMutationControls === 'function') syncMutationControls();
+      }
+      if (!pendingOperation || !pendingOperation.requestId || ack.requestId !== pendingOperation.requestId) return;
+      if (ack.status === 'accepted') {
+        pendingOperation.ackStatus = 'accepted';
+        setPendingMessage('Applying on PC…');
+        return;
+      }
+      if (ack.status === 'completed') {
+        const { kind, success, snapshot } = pendingOperation;
+        clearPending({ success });
+        if (outcomeEligible(kind, snapshot)) showOutcome(snapshot);
+        return;
+      }
+      if (ack.status === 'rejected') {
+        const rejectedKind = pendingOperation.kind;
+        clearPending();
+        if (rejectedKind === 'startNightMode'
+          && typeof nightModeBackdrop !== 'undefined'
+          && nightModeBackdrop
+          && nightModeBackdrop.classList.contains('show')
+          && typeof closeNightModeDetail === 'function') {
+          closeNightModeDetail();
+        }
+        setPendingMessage(formatRejectionReason(ack.reason), true);
+        if (pendingErrorTimeout) clearTimeout(pendingErrorTimeout);
+        pendingErrorTimeout = setTimeout(() => setPendingMessage(''), 3500);
+      }
     }
 
     // ── Fire 05: an honest receipt after a stop ──
@@ -1923,6 +2030,9 @@
       lastSeenAt = 0;
       // The previous PC's hello/version is not this pairing's truth.
       desktopHello = null;
+      protocolIncompatible = false;
+      lastCommandAck = null;
+      lastStateRevision = 0;
       if (pcVersionEl) { pcVersionEl.textContent = ''; pcVersionEl.hidden = true; }
       timerName.textContent = '';
       timerMain.textContent = '—';
@@ -1962,9 +2072,9 @@
       setPairingVisible(false);
     }
     function applyPairToken() {
-      const host = (hostInput.value || '').trim();
+      const host = location.host ? location.host : (hostInput.value || '').trim();
       const entered = (pairInput.value || '').trim();
-      if (!host || !entered) { pairError.style.display = ''; try { (host ? pairInput : hostInput).focus(); } catch {} return; }
+      if (!host || !isValidHost(host) || !entered) { pairError.style.display = ''; try { (host && isValidHost(host) ? pairInput : hostInput).focus(); } catch {} return; }
       try { localStorage.setItem(HOST_KEY, host); } catch {}
       try { localStorage.setItem(TOKEN_KEY, entered); } catch {}
       pairHost = host;
@@ -2004,7 +2114,7 @@
           });
           if (attempt !== connectionAttempt || generation !== socketGeneration) return;
           if (response.status === 401 || response.status === 403) {
-            localStorage.removeItem(TOKEN_KEY);
+            try { localStorage.removeItem(TOKEN_KEY); } catch {}
             pairToken = '';
             forgetLastKnownState();
             setConnectionState('expired', 'Pairing expired');
@@ -2020,8 +2130,19 @@
         }
       }
 
+      if (!host || !isValidHost(host)) {
+        showPairing('Enter a valid PC address (host:port) and pairing code.');
+        return;
+      }
+
       const previous = ws;
-      const socket = new WebSocket(`${proto}//${host}/?t=${encodeURIComponent(pairToken)}`);
+      let socket;
+      try {
+        socket = new WebSocket(`${proto}//${host}/?t=${encodeURIComponent(pairToken)}`);
+      } catch {
+        showPairing('Invalid PC address. Enter host:port and pairing code.');
+        return;
+      }
       ws = socket;
       if (previous && previous.readyState < WebSocket.CLOSING) {
         try { previous.close(); } catch {}
@@ -2033,6 +2154,7 @@
         reconnectTimer = null;
         // Reset hello expectation; if none arrives, mark the desktop as legacy.
         desktopHello = null;
+        protocolIncompatible = false;
         if (helloWatchdog) clearTimeout(helloWatchdog);
         helloWatchdog = setTimeout(() => { helloWatchdog = null; if (!desktopHello) refreshPcLabel(); }, 3000);
         setConnectionState('connected', 'Connected — waiting for current PC state…');
@@ -2054,7 +2176,7 @@
         if (ws !== socket || generation !== socketGeneration) return;
         // 1008 = policy violation / bad token, 1011 = server error, 1006 = abnormal close.
         if (e.code === 1008) {
-          localStorage.removeItem(TOKEN_KEY);
+          try { localStorage.removeItem(TOKEN_KEY); } catch {}
           pairToken = '';
           forgetLastKnownState();
           setConnectionState('expired', 'Pairing expired');
@@ -2081,7 +2203,32 @@
     }
     function send(data) {
       if (!ws || ws.readyState !== WebSocket.OPEN) return false;
-      ws.send(JSON.stringify(data));
+      let outbound = data;
+      if (data && typeof data === 'object') {
+        const incompatible = (typeof protocolIncompatible !== 'undefined' && protocolIncompatible) || isIncompatibleProtocol();
+        if (incompatible && MUTATING_ACTIONS.has(data.action)) {
+          return false;
+        }
+        if (supportsProtocolV3()) {
+          if (MUTATING_ACTIONS.has(data.action)) {
+            outbound = {
+              ...data,
+              protocolVersion: 3,
+              requestId: data.requestId || (pendingOperation && pendingOperation.requestId) || createClientRequestId()
+            };
+          } else if (data.action === 'getNightModes') {
+            outbound = {
+              ...data,
+              protocolVersion: 3,
+              correlationId: data.correlationId || createClientRequestId()
+            };
+          }
+        } else if (data.action === 'pause' || data.action === 'resume') {
+          // Backward compatibility with legacy V2 desktops that only accept togglePause.
+          outbound = { action: 'togglePause' };
+        }
+      }
+      ws.send(JSON.stringify(outbound));
       return true;
     }
 
@@ -2107,9 +2254,11 @@
     function refreshPcLabel() {
       const pcEl = document.getElementById('pc-name');
       if (!pcEl) return;
-      const caveat = desktopHello
-        ? (desktopHello.protocol >= 2 ? '' : ' · older protocol')
-        : ' · older desktop';
+      const caveat = (protocolIncompatible || isIncompatibleProtocol())
+        ? ' · incompatible protocol'
+        : desktopHello
+          ? (desktopHello.protocol >= 2 ? '' : ' · older protocol')
+          : ' · older desktop';
       // The PC name is the hero: with a name, 'Target PC: ' stays for screen
       // readers only; without one, 'Target PC connected' stays visible.
       const label = document.createElement('span');
@@ -2139,15 +2288,20 @@
     function handleUpdate(data, generation = socketGeneration) {
       if (generation !== socketGeneration) return;
       if (data.type === 'hello') {
-        // Consume the advertised protocol/version — a too-old desktop is
-        // surfaced, not silently assumed compatible.
+        // Consume the advertised protocol/version — a too-old or incompatible
+        // desktop is surfaced, not silently assumed compatible.
         desktopHello = {
           protocol: Number(data.protocol) || 0,
           desktopVersion: String(data.desktopVersion || ''),
           capabilities: Array.isArray(data.capabilities) ? data.capabilities : []
         };
+        protocolIncompatible = desktopHello.protocol > 3;
         if (helloWatchdog) { clearTimeout(helloWatchdog); helloWatchdog = null; }
         refreshPcLabel();
+        syncMutationControls();
+        if (protocolIncompatible) {
+          setPendingMessage(formatRejectionReason('unsupported_protocol_version'), true);
+        }
         return;
       }
       if (data.type === 'pairing-revoked') {
@@ -2158,9 +2312,13 @@
         showPairing('Pairing changed on the desktop. Scan the new QR or enter the current code.');
         return;
       }
+      if (data.type === 'commandAck') {
+        handleCommandAck(data);
+        return;
+      }
       if (data.type === 'commandResult') {
         lastCommandResult = data;
-        if (data.success === false && pendingOperation?.kind === data.action) {
+        if (!pendingOperation?.awaitingAck && data.success === false && pendingOperation?.kind === data.action) {
           clearPending();
           setPendingMessage(data.message || 'The PC rejected the request', true);
           if (pendingErrorTimeout) clearTimeout(pendingErrorTimeout);
@@ -2170,6 +2328,9 @@
       }
       if (data.type === 'state') {
         if (connectionState !== 'connected' || !ws || ws.readyState !== WebSocket.OPEN) return;
+        if (Number.isInteger(data.stateRevision) && data.stateRevision > lastStateRevision) {
+          lastStateRevision = data.stateRevision;
+        }
         const running = Boolean(data.running);
         const paused = Boolean(data.paused);
         const active = running || paused;
@@ -2423,7 +2584,7 @@
     nightModeToggle.addEventListener('click', toggleNightModeGrid);
     nmDetailClose.addEventListener('click', closeNightModeDetail);
     nmDetailStart.addEventListener('click', () => {
-      if (!stateIsAuthoritative() || !nmSelectedId) return;
+      if (!stateIsAuthoritative() || !planPolicyKnown() || !nmSelectedId) return;
       // Snapshot the id now: the very next state update (active:true) closes
       // the detail sheet via closeNightModeDetail(), which resets the live
       // nmSelectedId to null BEFORE confirmPendingFromState() runs in that
@@ -2461,12 +2622,13 @@
     document.getElementById('btn-pause')?.addEventListener('click', () => {
       if (!stateIsAuthoritative()) return;
       const wantsPause = !Boolean(latestState?.paused);
+      const action = wantsPause ? 'pause' : 'resume';
       if (!beginPending({
-        kind: wantsPause ? 'pause' : 'resume',
+        kind: action,
         success: wantsPause ? 'Paused' : 'Resumed',
         matches: state => Boolean(state.paused) === wantsPause
       })) return;
-      if (!send({ action: 'togglePause' })) clearPending({ timeout: true });
+      if (!send({ action })) clearPending({ timeout: true });
     });
 
     // What stopping does, exactly: this run's action will not happen. The
@@ -2566,7 +2728,7 @@
       hideOutcome();
       if (appShell) appShell.focus({ preventScroll: true });
     });
-    // Test-only hook for verifying generation-aware catalogue refresh without altering behavior.
+    // Test-only hook for verifying generation-aware catalogue refresh and C3-B protocol state without altering behavior.
     window.__nightModeTest = {
       getState: () => ({
         socketGeneration,
@@ -2577,7 +2739,12 @@
         nmSelectedId,
         nmSelectedVersion,
         nmGridVisible,
-        nmCatalogueRefreshing
+        nmCatalogueRefreshing,
+        desktopHello,
+        supportsProtocolV3: supportsProtocolV3(),
+        protocolIncompatible,
+        lastCommandAck,
+        lastStateRevision
       }),
       injectCatalogueReply: (modes, generation) => handleUpdate({ type: 'nightModes', modes }, generation)
     };

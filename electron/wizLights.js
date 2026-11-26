@@ -33,6 +33,7 @@ function request(ip, method, params = {}, { port = PORT, timeoutMs = 1500 } = {}
       resolve(value);
     };
     const timer = setTimeout(() => finish({ success: false, code: 'TIMEOUT', message: 'WiZ did not answer. Check Wi-Fi and Allow local communication in the WiZ app.' }), timeoutMs);
+    timer.unref?.();
     socket.on('error', () => finish({ success: false, code: 'NETWORK_ERROR', message: 'Could not reach WiZ on the local network.' }));
     socket.on('message', (data, remote) => {
       if (remote.address !== ip || remote.port !== port || data.length > 8192) return;
@@ -47,9 +48,13 @@ function request(ip, method, params = {}, { port = PORT, timeoutMs = 1500 } = {}
     });
     socket.bind(0, () => {
       if (done) return;
-      socket.send(Buffer.from(JSON.stringify({ method, params })), port, ip, error => {
-        if (error) finish({ success: false, code: 'NETWORK_ERROR', message: 'Could not send the WiZ request.' });
-      });
+      try {
+        socket.send(Buffer.from(JSON.stringify({ method, params })), port, ip, error => {
+          if (error) finish({ success: false, code: 'NETWORK_ERROR', message: 'Could not send the WiZ request.' });
+        });
+      } catch {
+        finish({ success: false, code: 'NETWORK_ERROR', message: 'Could not send the WiZ request.' });
+      }
     });
   });
 }
@@ -74,6 +79,7 @@ function discover({ timeoutMs = 2200, broadcasts = broadcastAddresses(), port = 
       resolve([...found.values()].sort((a, b) => a.ip.localeCompare(b.ip)));
     };
     const timer = setTimeout(finish, timeoutMs);
+    timer.unref?.();
     socket.on('error', finish);
     socket.on('message', (data, remote) => {
       if (data.length > 8192 || remote.port !== port || !isLocalAddress(remote.address)) return;
@@ -87,7 +93,9 @@ function discover({ timeoutMs = 2200, broadcasts = broadcastAddresses(), port = 
       if (done) return;
       try { socket.setBroadcast(true); } catch { return finish(); }
       const packet = Buffer.from(JSON.stringify({ method: 'getPilot', params: {} }));
-      for (const host of broadcasts) socket.send(packet, port, host, () => {});
+      for (const host of broadcasts) {
+        try { socket.send(packet, port, host, () => {}); } catch { /* ignore per-interface send failure */ }
+      }
     });
   });
 }
@@ -177,7 +185,7 @@ function restorePilot(pilot) {
   return result;
 }
 
-async function dimStates(snapshot,progress,warm,requestOptions, { look, isCurrent = () => true } = {}) {
+async function dimStates(snapshot,progress,warm,requestOptions, { look, frame, isCurrent = () => true } = {}) {
   progress=Math.max(0,Math.min(1,Number(progress)||0));
   const chosen = normalizeLook(look);
   const replies=await Promise.all(snapshot.filter(item=>item.pilot.state===true && !item.released && !item.finished).map(async item=>{
@@ -193,7 +201,8 @@ async function dimStates(snapshot,progress,warm,requestOptions, { look, isCurren
     // Brightness/mode changes are separate from power in the WiZ local API.
     // Never include state:true in an automatic dim, even between read/write.
     const params=progress>=1?{state:false}:{dimming:Math.max(10,Math.round(baseline*(1-progress)))};
-    if (progress < 1 && !item.lookApplied) Object.assign(params, lookPilot(chosen));
+    if (progress < 1 && frame) Object.assign(params, frame(snapshot.indexOf(item),snapshot.length));
+    else if (progress < 1 && !item.lookApplied) Object.assign(params, lookPilot(chosen));
     if(warm&&progress<1)params.temp=Math.max(2200,Math.round((chosen.mode === 'white' ? chosen.temperature : Number(item.pilot.temp)||2700)*(1-progress)+2200*progress));
     if (warm) { delete params.sceneId; delete params.r; delete params.g; delete params.b; }
     const reply = await request(item.ip,'setPilot',params,requestOptions);

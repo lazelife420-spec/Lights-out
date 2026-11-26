@@ -29,22 +29,21 @@
             android:name=".HomeActivity"
             android:launchMode="singleTask"
             android:exported="true"
-            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="lightsout-handoff" android:host="enroll" android:path="/v1" />
-            </intent-filter>
+            <!-- LO-SDH-1 secured routine pairing is gated off (ReleaseGates.HANDOFF_PAIRING):
+                 no lightsout-handoff:// BROWSABLE deep link ships until it is qualified. -->
         </activity>
 
+        <!-- targetSdk 36 ignores the portrait lock on >=600dp displays: handle rotation/resize
+             in place so the paired PC page and its connection are not reloaded. -->
         <activity android:name=".MainActivity" android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
             android:screenOrientation="portrait" android:windowSoftInputMode="adjustResize" />
         <service android:name=".LightNotificationService" android:exported="true" android:label="Lights Out · selected-app light beacons" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter><action android:name="android.service.notification.NotificationListenerService"/></intent-filter>

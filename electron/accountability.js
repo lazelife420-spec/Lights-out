@@ -24,7 +24,7 @@ const EVENTS = {
   TIMER_PAUSED: { icon: '\u23F8', label: 'Paused', color: COLORS.amber },
   TIMER_SNOOZED: { icon: '\u23F0', label: 'Snoozed', color: COLORS.amber },
   TIMER_CANCELLED: { icon: '\u274C', label: 'Cancelled', color: COLORS.neutral },
-  TIMER_COMPLETE: { icon: '\u2705', label: 'Completed', color: COLORS.teal },
+  TIMER_COMPLETE: { icon: '\u23F1', label: 'Timer finished; Windows outcome unverified', color: COLORS.teal },
   LAST_LIGHT: { icon: '\u{1F4A1}', label: 'Last Light ritual', color: COLORS.violet },
   UNSAVED_WORK: { icon: '\u26A0\uFE0F', label: 'Unsaved work detected', color: COLORS.amber },
   OVERRIDE: { icon: '\u{1F6AB}', label: 'Emergency override', color: COLORS.red }
@@ -52,6 +52,7 @@ function describeEvent(eventType, testMode) {
 
 async function notifyPartner(eventType, details = {}) {
   const testMode = details.testMode === true;
+  if (testMode) return []; // Rehearsals never send automatic partner traffic.
   const eventInfo = describeEvent(eventType, testMode);
   if (!eventInfo) return [];
 
@@ -121,27 +122,59 @@ async function notifyPartner(eventType, details = {}) {
 // Webhook sender (generic JSON POST)
 // ─────────────────────────────────────────────────────────────────────────────
 
+const MAX_WEBHOOK_RESPONSE_BYTES = 64 * 1024;
+const BLOCKED_METADATA_HOSTS = new Set([
+  '169.254.169.254',
+  '169.254.170.2',
+  'metadata.google.internal',
+  'metadata.goog'
+]);
+
 function sendWebhook(url, payload) {
   return new Promise((resolve, reject) => {
-    const urlObj = new URL(url);
+    let urlObj;
+    try { urlObj = new URL(url); } catch { reject(new Error('Invalid webhook URL')); return; }
+    if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
+      reject(new Error('Webhook URL must use http:// or https://'));
+      return;
+    }
+    const cleanHost = urlObj.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    if (!cleanHost || BLOCKED_METADATA_HOSTS.has(cleanHost)) {
+      reject(new Error('Refused webhook target host'));
+      return;
+    }
     const isHttps = urlObj.protocol === 'https:';
     const mod = isHttps ? https : http;
     const data = JSON.stringify(payload);
     const options = {
-      hostname: urlObj.hostname,
+      hostname: cleanHost,
       port: urlObj.port || (isHttps ? 443 : 80),
       path: urlObj.pathname + urlObj.search,
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
       timeout: 8000
     };
+    let settled = false;
+    const finish = (err, val) => {
+      if (settled) return;
+      settled = true;
+      if (err) reject(err);
+      else resolve(val);
+    };
     const req = mod.request(options, (res) => {
-      let body = '';
-      res.on('data', chunk => body += chunk);
-      res.on('end', () => resolve({ success: res.statusCode < 300, status: res.statusCode }));
+      let bytes = 0;
+      res.on('data', chunk => {
+        bytes += chunk.length;
+        if (bytes > MAX_WEBHOOK_RESPONSE_BYTES) {
+          res.resume();
+          req.destroy();
+          finish(new Error('Webhook response too large'));
+        }
+      });
+      res.on('end', () => finish(null, { success: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode }));
     });
-    req.on('error', reject);
-    req.setTimeout(8000, () => { req.destroy(); reject(new Error('Timeout')); });
+    req.on('error', err => finish(err));
+    req.setTimeout(8000, () => { req.destroy(); finish(new Error('Timeout')); });
     req.write(data);
     req.end();
   });
@@ -152,7 +185,12 @@ function sendWebhook(url, payload) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function sendDiscord(webhookId, webhookToken, payload) {
-  const url = `https://discord.com/api/webhooks/${webhookId}/${webhookToken}`;
+  const id = String(webhookId || '').trim();
+  const token = String(webhookToken || '').trim();
+  if (!/^\d{10,32}$/.test(id) || !/^[A-Za-z0-9._-]{16,128}$/.test(token)) {
+    return Promise.reject(new Error('Invalid Discord webhook ID or token'));
+  }
+  const url = `https://discord.com/api/webhooks/${id}/${token}`;
   return sendWebhook(url, payload);
 }
 

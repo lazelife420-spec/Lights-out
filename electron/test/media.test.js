@@ -78,16 +78,15 @@ test('pauseAllMedia sends VK_MEDIA_PLAY_PAUSE ([char]179) and not [char]174', as
 });
 
 test('resumeAllMedia sends VK_MEDIA_PLAY_PAUSE ([char]179) and not [char]174', async () => {
+  // The resume key is gated on the paused session's app id
+  // (docs-hardening-media.test.js); with no id it spawns nothing.
+  const { RESUME_PAUSED_MEDIA_COMMAND: command } = require('../media');
+  assert.match(command, /\[char\]179/, 'resume command must contain [char]179');
+  assert.doesNotMatch(command, /\[char\]174/, 'resume command must not contain [char]174');
+
   const commands = [];
   await withStubbedChildProcess(commands, async ({ resumeAllMedia }) => {
     await resumeAllMedia();
   });
-
-  assert.equal(commands.length, 1);
-  assert.equal(commands[0].cmd, 'powershell.exe');
-  assert.equal(commands[0].args[3], '-Command');
-  const command = commands[0].args[4];
-  assert.ok(command, 'spawn must receive a PowerShell command');
-  assert.match(command, /\[char\]179/, 'resume command must contain [char]179');
-  assert.doesNotMatch(command, /\[char\]174/, 'resume command must not contain [char]174');
+  assert.equal(commands.length, 0, 'no recorded app id: no PowerShell and no key');
 });

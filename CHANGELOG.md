@@ -1,37 +1,195 @@
 # Changelog
 
-## Unreleased
+## v11.3.0 — 2026-11-26
 
-### Fixed
-- Autopilot Bedtime now actually uses the learned bedtime: the configured
-  reminder bedtime shadowed it, so autopilot always aimed at the generic
-  setting instead of the pattern it learned. Order is now explicit override,
-  learned, configured, then the 22:30 default — matching the documented intent.
-- Autopilot re-arms for the next night after firing. Previously one fire (or a
-  refused start while another run was active) left the feature spent until the
-  app restarted, silently disabling it on machines that stayed up.
-- Autopilot status reports the same effective bedtime the schedule will use.
-- An armed autopilot bedtime can no longer fail silently when the app is not
-  running. The armed fire time is persisted; the next launch turns a stale arm
-  into an honest `missed` receipt instead of a PC-left-on mystery, and a
-  Windows Scheduled Task (`LightsOut-AutopilotWatchdog`, daily at
-  bedtime − 15 min) relaunches the app minimized in time for its own
-  countdown. The task never performs a power action itself.
-- Router-provider WiFi Guard calls re-validate `routerIp` at request time and
-  refuse anything that is not a private/local IP literal — closing the DEF-002
-  path where a crafted value reaching settings (bulk import, hand-edited file)
-  could send plaintext router credentials to an arbitrary host.
-- A clean quit is now recorded in `startup.log`, so a missing shutdown can be
-  told apart from "the app was never running".
+A production audit release. Every change below came out of an adversarially
+verified audit of the Windows app, its packaging and the Android source: no
+surprise power actions, nothing left behind on the PC, no credentials in files
+that leave it.
 
-### Changed
-- Electron bumped to ^43.8.4 (provisioned at 43.8.4); eslint 10.13.0,
-  ws 8.22.0, png-to-ico 3.0.2. Provisioning checks strip ELECTRON_RUN_AS_NODE
-  so the spawned Electron binary reports its real version.
-- Android toolchain: Gradle 9.8.2 wrapper (pinned checksum), Android Gradle
-  Plugin 9.5.0 with built-in Kotlin (the standalone Kotlin plugin is no longer
-  applied), compileSdk 36, and current AndroidX/ML Kit libraries. CI uses
-  platform android-36 and build-tools 36.0.0.
+### Safety: power actions
+- A real shutdown, restart, sleep or log-off timer whose deadline passed while
+  the PC was asleep or hibernated (lid closed, idle sleep, Modern Standby) now
+  ends as **missed** instead of firing seconds after the PC wakes. The bound is
+  the 5 minutes autopilot already uses, checked on the first tick after wake and
+  again right before the power request. Nothing powers off, Wi-Fi Guard and
+  lights are restored, the receipt reads "Missed · nothing ran", and partners
+  are not told the run was cancelled. Test Mode rehearsals still complete.
+- Cancel works until the power request is sent. During Last Light, the
+  unsaved-work save delay and the Sleep/Hibernate pre-commit, the tray (new
+  "Cancel pending power action"), Ctrl+Shift+X, the phone and family controls
+  now cancel, as the notifications promised. A quick start can no longer
+  replace a power action that is still being prepared.
+- Emergency Override stops the timer before contacting accountability partners;
+  slow partner webhooks could previously delay the cancel past the deadline.
+- Sleep and Hibernate go through a small bundled native helper
+  (`WindowsSuspend.exe`, documented `SetSuspendState`) instead of `rundll32`.
+  It reads the PC's power capabilities before and right before the request;
+  Hibernate needs S4 and a full hibernation file. An unavailable state is
+  recorded as blocked with a notification — never a fallback to Sleep or
+  Shutdown. Settings and onboarding say Sleep/Hibernate run only if Windows
+  offers them. Windows accepting the request is reported as just that:
+  physical power state unverified.
+- Fail-closed blocks: if the unsaved-work scan fails or times out, or Wi-Fi
+  Guard cannot confirm its restore, the real power action is blocked and
+  recorded. The scan now allows 15 s (was 5 s) so slower PCs do not silently
+  skip bedtime; a found "Save changes?" dialog still gets a 10 s delay.
+- A phone-started Night Mode can only shut down, sleep or restart — never
+  hibernate, lock or log off — whatever the catalogue says.
+- The global quick-start shortcuts Ctrl+Shift+L and Ctrl+Shift+1–4 are **off by
+  default**: they started real timers from inside any app and swallowed those
+  keys from Excel and others. Cancel, pause, snooze, show/hide and Last Light
+  preview shortcuts are unchanged (advanced: `app.globalQuickStartShortcuts`).
+- Jump-list "Start 5/15/30 min timer" now works while the app is running
+  (idle only, Test Mode from settings, never forced).
+- The grace warning fires when the countdown crosses the threshold, so a
+  skipped tick or fractional grace value can no longer drop it.
+
+### Test Mode and receipts
+- Test Mode now skips every automatic effect, not just the power action:
+  lights dim/off/restore, Night Light, closing apps, media pause, Wi-Fi Guard,
+  the Content Blocker, window lockout and partner messages. Rehearsals neither
+  create nor consume snooze debt. Manual device controls stay live, and the
+  Devices cards say "Skipped in Test Mode". (This supersedes the v11.2.0 note
+  that Test Mode held back only the power action.)
+- Receipts record what was actually observed — timer elapsed, action requested,
+  command started, Windows' return — and never claim the PC really powered off
+  ("Windows outcome unverified"). New `blocked` and `missed` results; older
+  receipts are labelled unverified. Receipts are written through a pending file,
+  atomic rename and backup.
+- Media auto-pause sends the play/pause key only when Windows reports a session
+  that is actually playing, and a cancel resumes only the app that wind-down
+  paused, if its current session is still paused (a browser counts as one
+  app, whichever tab is current). Completion never restarts music
+  before Sleep or Lock.
+
+### Wi-Fi Guard (opt-in, experimental)
+- A durable, credential-free recovery record (provider and the Wi-Fi adapter's
+  GUID only) is written before any network change and cleared only after a
+  confirmed restore. If the app crashes, is force-quit or loses power while
+  blocking, the next launch restores internet — or, if you chose to keep
+  blocking, says so. Quitting restores first (up to 8 s). If the record cannot
+  be written, no network change is made. Adapter restore targets only the GUID
+  captured before disabling. Unit-tested only; real router/adapter behaviour is
+  not qualified.
+- Block and restore are serialized per run, completion always restores, and the
+  Restore internet button retries the captured transaction.
+
+### Security and privacy
+- "Export all data" no longer writes credentials to the backup file: router,
+  webhook, calendar and Hue secrets, the phone pairing token, the smart-lights
+  verification and any in-flight timer are left out. Importing a backup —
+  including an older plaintext one — never overwrites or redirects this PC's
+  credentials or their router/bridge destinations, never imports a pairing
+  token, never turns the phone Companion on, and never restores a timer.
+- More fields are encrypted at rest with Windows safeStorage: router
+  credentials, webhook URLs/headers/bodies, private calendar URLs and partner
+  webhooks. Saving fails rather than writing plaintext if encryption is
+  unavailable, and credentials this PC cannot decrypt (for example after a
+  profile move) are no longer erased by an ordinary save or import.
+- The smart-lights verification no longer contains the Hue key, webhook URL or
+  body template; existing verifications carry over, and the old plaintext form
+  is removed from settings.json and its backup.
+- The main window and desktop widget only ever load their own bundled page.
+  Dropping a file onto the window is ignored; a dropped HTML page could
+  previously replace the app with the full app bridge.
+- `startup.log` rotates at 1 MiB; refused phone connections can no longer grow
+  it without bound.
+- The updater contacts only `theprooffoundry.com` (at launch and every 4 hours)
+  and downloads from `downloads.theprooffoundry.com` only when you choose
+  Download, verifying size and SHA-256; redirects are validated by hand.
+
+### Reliability
+- Calendar auto-start looks back to its last completed check (1–5 minutes), so a
+  slow provider fetch or skipped poll no longer drops an event; a slept-through
+  event stays missed. Provider fetches always finish (mid-download resets and
+  stalls end with an error), oversize feeds say "too large", and iCal events
+  with a time zone start at the right instant (IANA and common Windows names,
+  across DST). An event whose time zone cannot be recognised — including bare
+  abbreviations like "BST" — is listed but never auto-starts.
+- Upgrading from a pre-v11 single bedtime schedule keeps that schedule (time,
+  days, action) instead of replacing it with the default nightly 22:30 shutdown.
+- A custom smart-light webhook body that is valid JSON, or a password that looks
+  like JSON, survives a restart unchanged.
+- Settings are flushed to disk before replacing the previous file, an antivirus
+  lock is retried, and a failed Test Mode / Force write is reported and the
+  toggle shows what is really in force.
+- Autopilot uses the learned bedtime, re-arms nightly, persists its armed time
+  (a stale arm becomes an honest `missed` receipt), and a Windows Scheduled Task
+  (`LightsOut-AutopilotWatchdog`, bedtime − 15 min) relaunches the app minimized
+  in time. The task never performs a power action. QA and proof launches never
+  touch it, and a disarm only deletes the task when it launches this same
+  executable.
+- Profiles with ids an older build accepted keep a stable id, and schedule rules
+  that use them keep working. Custom Last Light finales are capped at 32 with a
+  clear message. The first night after upgrading no longer overwrites the
+  previous bedtime-deficit entry.
+- Router-provider Wi-Fi Guard calls re-validate `routerIp` at request time and
+  refuse anything that is not a private/local IP literal.
+- A clean quit is recorded in `startup.log`.
+
+### Windows packaging and release
+- Pinned official NSIS 3.11 (SHA-256 verified; a preconfigured NSIS root is
+  trusted only if it matches the pinned archive) with build-generated exact-file
+  uninstall manifests, safe install-directory validation and active-process
+  checks. Upgrading over an earlier install first removes that build's
+  app-owned runtime folders (only after a lock check confirms the app is not
+  running), so a later uninstall leaves nothing behind.
+- Uninstall removes the real Run-at-login entry and the watchdog / First Light
+  scheduled tasks only when they launch the copy being uninstalled; another
+  Lights Out copy keeps its own. QA launches never change the owner's login
+  item or scheduled tasks.
+- Release provenance marks a build as not clean when any packaged app file or
+  packaging input (including scripts they load) is untracked, ignored, staged
+  only or edited; strict release verification refuses it.
+- Electron ^43.8.4 (provisioned at 43.8.4); eslint 10.15.0 (0 npm audit
+  vulnerabilities); ws 8.22.0; png-to-ico 3.0.2. Pre-rendered tray icons moved
+  `sharp` to devDependencies. CI actions are pinned to commit SHAs, runtime
+  dependencies are audited and the release-notes file is required.
+- The root launchers "Windows Force Shutdown in 1 Hour.bat" and "Cancel Windows
+  Force Shutdown.bat" were removed: force shutdown is only ever an explicit
+  in-app choice.
+
+### Desktop UI
+- The idle clock always shows local time ("Ready · not started"; "If started now
+  … today/tomorrow"), with a live "Now" line during a run.
+- Calendar Routine v1: per-rule "Always use Test Mode", "Actions on this PC",
+  and a recent routine outcomes list. Routine files (`lights-out.routines` v1)
+  import and export; imported rules stay disabled and in Test Mode.
+- WiZ timer experiences (Room Hourglass, Orbit, Ember) with a screen-only preview
+  and a soft finish beacon.
+- Phone Companion protocol v3: request IDs, acknowledgements and idempotent
+  retries, including starting a Night Mode from the phone.
+
+### Android (standalone app; debug-qualified only)
+- Phone First Light (off by default): a wake reminder plus optional WiZ
+  sunrise. The reminder has its own exact alarm and alerts once per morning,
+  the ramp holds one bounded wake lock so it keeps stepping with the screen
+  off, Stop sunrise keeps the reminder, and a kill or app update mid-sunrise
+  never loses the morning (after a reboot, First Light is re-armed once the
+  phone is first unlocked). Without Alarms & reminders access the reminder
+  arrives "around" the wake time.
+- Light experiences and beacons, routine import/export and outcome history, a
+  redesigned Tonight / Lights / Routines / Schedule layout with 48 dp targets.
+- Android 15+ edge-to-edge insets on the PC controls and scanner screens;
+  large screens rotate without reloading the paired PC page.
+- Toolchain: Gradle 8.14.6 (pinned SHA-256), AGP 8.13.2, Kotlin 2.3.21,
+  compileSdk/targetSdk 36, CameraX 1.6.2.
+
+### Not in this release / not qualified
+- Secure device pairing (handoff) ships in source but is gated off on both
+  platforms.
+- Physical sleep/hibernate/shutdown outcomes, First Light wake, overnight runs,
+  real router/adapter behaviour (including the new Wi-Fi recovery), real WiZ,
+  phone and OEM battery behaviour, and Android 16 KB page-size compliance are
+  not established by automated tests.
+- The Android app has debug/emulator qualification only; no production-signed
+  APK ships with this Windows release.
+- Moving back to v11.2.0 after running this version cannot decrypt the newly
+  protected integration credentials (re-enter them there).
+- The suspend helper is compiled at build time without a deterministic
+  compiler, so installer and ZIP hashes differ between builds of the same
+  commit (each build's own manifest and checksums remain exact).
 
 ## v11.2.0 — 2026-10-16
 

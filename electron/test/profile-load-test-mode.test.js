@@ -92,6 +92,18 @@ test('Test Mode off + a mode saved in Test Mode turns Test Mode on', async () =>
   assert.equal(s.calls.notify.at(-1).message, 'Hard Stop loaded');
 });
 
+test('loading a 22-minute mode never hides the wall clock or changes an explicit face', async () => {
+  for (const clockMode of [true, false]) {
+    const s = createSandbox({ state: { clockMode, clockFace: 'analog' }, timerOptions: { durationSeconds: 1320 } });
+    assert.equal(await s.applyProfile('p1'), true);
+    assert.equal(s.state.clockMode, clockMode, 'legacy preference remains intact');
+    assert.equal(s.state.clockFace, 'analog');
+    assert.notEqual(s.state._clockDismissedByProfile, true);
+    assert.equal(s.calls.startTimer.length, 0);
+    assert.equal(s.calls.setInput.at(-1), 1320);
+  }
+});
+
 test('Test Mode off + a REAL mode stays REAL (no change in behaviour)', async () => {
   const s = createSandbox({ state: { dryRun: false }, timerOptions: { dryRun: false } });
   assert.equal(await s.applyProfile('p1'), true);

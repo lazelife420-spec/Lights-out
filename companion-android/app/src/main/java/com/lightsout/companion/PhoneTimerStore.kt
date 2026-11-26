@@ -101,16 +101,51 @@ object PhoneTimerStore {
 
 class PhoneTimerReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == PhoneFirstLight.REMINDER_ACTION) {
+            // Independent First Light wake-time reminder (explicit, non-exported receiver).
+            try {
+                PhoneFirstLight.handleReminderAlarm(
+                    context,
+                    intent.getStringExtra("occurrenceKey") ?: "",
+                    intent.getLongExtra("wakeWall", 0L)
+                )
+            } catch (_: Exception) {
+                PhoneHomeStore.event(context, "Could not post the First Light wake reminder. Reopen Lights Out to check First Light.")
+            }
+            return
+        }
         val pending = goAsync()
         val finished = java.util.concurrent.atomic.AtomicBoolean(false)
         fun finish() { if (finished.compareAndSet(false, true)) pending.finish() }
+        val syncDone = java.util.concurrent.atomic.AtomicBoolean(false)
+        val asyncDone = java.util.concurrent.atomic.AtomicBoolean(false)
+        fun maybeFinish() { if (syncDone.get() && asyncDone.get()) finish() }
         try {
             PhoneTimerStore.restore(context)
-            PhoneTimerStore.finishIfDue(context) { finish() }
-            if (intent.action != "com.lightsout.TIMER_END") {
-                PhoneTimerStore.schedule(context, PhoneTimerStore.read(context))
-                PhoneCalendar.schedule(context)
+            PhoneTimerStore.finishIfDue(context) {
+                asyncDone.set(true)
+                maybeFinish()
             }
+            if (intent.action != "com.lightsout.TIMER_END") {
+                val state = PhoneTimerStore.read(context)
+                PhoneTimerStore.schedule(context, state)
+                PhoneCalendar.schedule(context)
+                PhoneFirstLight.schedule(context)
+                // Reboot or app update kills an in-memory sunrise without a sticky restart:
+                // record it once; the independent wake reminder is already re-armed above.
+                // This receiver is not direct-boot aware, so after a reboot BOOT_COMPLETED
+                // (and this re-arm) arrives only once the phone is first unlocked.
+                try { PhoneFirstLight.noteInterruptedRamp(context) } catch (_: Exception) {}
+                // Re-sync ongoing notification chronometer after wall-clock or timezone shifts.
+                if (state.phase in setOf("running", "paused") &&
+                    (intent.action == Intent.ACTION_TIME_CHANGED || intent.action == Intent.ACTION_TIMEZONE_CHANGED)
+                ) {
+                    try { NotificationManagerCompat.from(context).notify(PhoneTimerStore.ONGOING, PhoneTimerStore.ongoing(context, state)) }
+                    catch (_: SecurityException) {}
+                }
+            }
+            syncDone.set(true)
+            maybeFinish()
         } catch (_: Exception) {
             PhoneHomeStore.event(context, "Could not restore phone alarms. Reopen Lights Out to check your routines.")
             finish()

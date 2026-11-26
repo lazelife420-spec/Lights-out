@@ -61,6 +61,8 @@ class HandoffIdentity(context:Context,private val clock:HandoffTrust.Clock=Hando
     fun status():JSONObject = try {
         val (m,r)=load();val key=keys.getKey(m.getString("identityAlias"),null) as PrivateKey
         val info=KeyFactory.getInstance(key.algorithm,"AndroidKeyStore").getKeySpec(key,KeyInfo::class.java)
+        val certificate=keys.getCertificate(m.getString("identityAlias")) as X509Certificate
+        check(KeyProperties.DIGEST_NONE in info.digests&&certificate.basicConstraints==0&&certificate.keyUsage?.getOrNull(5)==true) { "Device identity needs explicit replacement for TLS pairing compatibility. Replace it and re-enroll paired devices." }
         @Suppress("DEPRECATION") val hardware=if(Build.VERSION.SDK_INT>=31)info.securityLevel in setOf(KeyProperties.SECURITY_LEVEL_TRUSTED_ENVIRONMENT,KeyProperties.SECURITY_LEVEL_STRONGBOX) else info.isInsideSecureHardware
         JSONObject().put("status","ready").put("platform","android").put("fingerprint",r.getString("fingerprint")).put("createdAt",r.getLong("createdAt")).put("protection",if(hardware)"Android Keystore · hardware protected" else "Android Keystore · software protected").put("nonExportable",true)
     }catch(e:Exception){val state=if(!anchor.exists()&&!sealed.exists()&&!keys.containsAlias(firstIdentity)&&!keys.containsAlias(firstSeal))"uninitialized" else "blocked";val result=JSONObject().put("status",state).put("platform","android").put("error",e.message);try{val fp=JSONObject(String(bounded(anchor,1024),Charsets.UTF_8)).getString("fingerprint");if(fp.matches(Regex("[a-f0-9]{64}")))result.put("previousFingerprint",fp)}catch(_:Exception){};result}
@@ -71,7 +73,16 @@ class HandoffIdentity(context:Context,private val clock:HandoffTrust.Clock=Hando
         val previous=try { marker() }catch(_:Exception){null}
         val generation=UUID.randomUUID().toString();val identityAlias=if(replace)"lightsout.handoff.identity.$generation" else firstIdentity;val sealAlias=if(replace)"lightsout.handoff.registry.$generation" else firstSeal;val now=clock.now()
         val generator=KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC,"AndroidKeyStore")
-        generator.initialize(KeyGenParameterSpec.Builder(identityAlias,KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY).setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1")).setDigests(KeyProperties.DIGEST_SHA256).setUserAuthenticationRequired(false).setCertificateSubject(X500Principal("CN=Lights Out routine handoff")).setCertificateSerialNumber(BigInteger(128,SecureRandom()).add(BigInteger.ONE)).setCertificateNotBefore(Date(now-60000)).setCertificateNotAfter(Date(now+365L*86400000)).build());generator.generateKeyPair()
+        // Conscrypt hashes TLS handshake data before asking Keystore to sign it.
+        // Authorize that prehashed operation as well as SHA-256 certificate signing.
+        // Existing keys cannot gain this authorization; status requires explicit replacement.
+        val serial=BigInteger(127,SecureRandom()).add(BigInteger.ONE)
+        generator.initialize(KeyGenParameterSpec.Builder(identityAlias,KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY).setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1")).setDigests(KeyProperties.DIGEST_NONE,KeyProperties.DIGEST_SHA256).setUserAuthenticationRequired(false).setCertificateSubject(X500Principal("CN=Lights Out routine handoff")).setCertificateSerialNumber(serial).setCertificateNotBefore(Date(now-60000)).setCertificateNotAfter(Date(now+365L*86400000)).build());val pair=generator.generateKeyPair()
+        // Update only the new app-owned alias's public certificate. AndroidKeyStore
+        // retains the same non-exportable key handle and its original authorizations.
+        val certificate=HandoffCertificate.create(pair.public,pair.private,serial,now)
+        keys.setKeyEntry(identityAlias,pair.private,null,arrayOf(certificate))
+        check((keys.getKey(identityAlias,null) as PrivateKey).encoded==null)
         val sealGenerator=KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES,"AndroidKeyStore");sealGenerator.init(KeyGenParameterSpec.Builder(sealAlias,KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT).setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).setKeySize(256).build());sealGenerator.generateKey()
         val fp=RoutineHandoff.fingerprint(keys.getCertificate(identityAlias).encoded);val m=JSONObject().put("version",1).put("installId",generation).put("fingerprint",fp).put("identityAlias",identityAlias).put("sealAlias",sealAlias)
         val r=JSONObject().put("version",1).put("installId",generation).put("fingerprint",fp).put("createdAt",now).put("lastWall",now).put("trust",HandoffTrust.empty(fp));write(m,r);atomic(anchor,m.toString().toByteArray()){require(JSONObject(String(it)).getString("fingerprint")==fp)}

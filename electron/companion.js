@@ -8,6 +8,7 @@ const path = require('path');
 const fs = require('fs');
 
 const remoteControl = require('./remoteControl');
+const IdempotencyRegistry = require('./idempotencyRegistry');
 
 const PWA_PORT = 58732;
 const MAX_CLIENTS = 8;              // companion is a personal LAN tool; cap connections
@@ -20,6 +21,8 @@ let clients = new Set();
 let heartbeatTimer = null;
 const emitter = new EventEmitter();
 let startGeneration = 0;
+let idempotencyRegistry = new IdempotencyRegistry();
+let currentStateRevision = 0;
 
 // Pairing token required from every client. Empty = no listener may bind.
 let expectedToken = '';
@@ -52,6 +55,9 @@ let status = {
 // regenerating) if it's unexpected.
 let failedAttempts = 0;
 let lastFailedIp = '';
+let failedEmitTimer = null;
+let lastFailedEmitAt = 0;
+const FAILED_ATTEMPT_EMIT_THROTTLE_MS = 500;
 
 // Computes the RFC 6455 Sec-WebSocket-Accept value for a client key. The magic
 // GUID must be exactly this string — a wrong GUID produces an accept that every
@@ -101,15 +107,34 @@ function writeHttpResponse(socket, status, headers = {}, body = '') {
     socket.write(`HTTP/1.1 ${status}\r\n${prefix}Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
   } catch { /* socket may already be gone */ }
   try { socket.end(); } catch {}
+  setTimeout(() => { try { socket.destroy?.(); } catch {} }, 1000).unref?.();
 }
 
 function recordFailedAttempt(socket) {
   failedAttempts++;
   lastFailedIp = (socket.remoteAddress || '').replace(/^::ffff:/, '');
-  updateStatus({ failedAttempts, lastFailedIp });
+  status = computeStatus({ failedAttempts, lastFailedIp });
+  const now = Date.now();
+  if (now - lastFailedEmitAt >= FAILED_ATTEMPT_EMIT_THROTTLE_MS) {
+    lastFailedEmitAt = now;
+    if (failedEmitTimer) { clearTimeout(failedEmitTimer); failedEmitTimer = null; }
+    emitter.emit('status', status);
+  } else if (!failedEmitTimer) {
+    failedEmitTimer = setTimeout(() => {
+      failedEmitTimer = null;
+      lastFailedEmitAt = Date.now();
+      emitter.emit('status', status);
+    }, FAILED_ATTEMPT_EMIT_THROTTLE_MS - (now - lastFailedEmitAt));
+    failedEmitTimer.unref?.();
+  }
 }
 
 function upgradeHandler(req, socket, head) {
+  // Node hands upgrade sockets over without an 'error' listener. A LAN peer
+  // that resets after a refused handshake would otherwise raise an uncaught
+  // exception (and a crash-log line) per attempt. Paired clients add their own
+  // handler below; this one only keeps refused/probe sockets from escaping.
+  socket.on('error', () => { try { socket.destroy(); } catch {} });
   if (req.headers.upgrade?.toLowerCase() !== 'websocket') { socket.destroy(); return; }
 
   const key = req.headers['sec-websocket-key'];
@@ -122,8 +147,9 @@ function upgradeHandler(req, socket, head) {
   const origin = req.headers.origin;
   if (origin) {
     let originHost = '';
-    try { originHost = new URL(origin).host; } catch { originHost = ''; }
-    if (!originHost || originHost !== req.headers.host) {
+    try { originHost = new URL(origin).host.toLowerCase(); } catch { originHost = ''; }
+    const reqHost = String(req.headers.host || '').toLowerCase();
+    if (!originHost || !reqHost || originHost !== reqHost) {
       recordFailedAttempt(socket);
       writeHttpResponse(socket, '403 Forbidden', {}, 'Forbidden');
       return;
@@ -177,7 +203,8 @@ function upgradeHandler(req, socket, head) {
     `Sec-WebSocket-Accept: ${accept}\r\n\r\n`
   );
 
-  const client = { socket, alive: true, awaitingPong: false, buf: Buffer.alloc(0) };
+  const initialBuf = head && head.length ? Buffer.from(head) : Buffer.alloc(0);
+  const client = { socket, alive: true, awaitingPong: false, buf: initialBuf, token, waiterCleanups: new Set() };
   clients.add(client);
 
   // Protocol hello: lets the phone detect a too-old desktop instead of
@@ -186,14 +213,18 @@ function upgradeHandler(req, socket, head) {
   try {
     sendToClient(client, {
       type: 'hello',
-      protocol: 2,
+      protocol: 3,
       desktopVersion: APP_VERSION,
       capabilities: [
         'command-result',
         'run-active-rejection',
         'night-modes',
         'test-mode-authority',
-        'origin-check'
+        'origin-check',
+        'protocol-v3',
+        'command-ack',
+        'idempotency',
+        'pause-resume'
       ]
     });
   } catch { /* hello is best-effort */ }
@@ -206,11 +237,16 @@ function upgradeHandler(req, socket, head) {
     consumeFrames(client);
   });
 
-  socket.on('close', () => { client.alive = false; clients.delete(client); updateStatus(); });
-  socket.on('error', () => { client.alive = false; clients.delete(client); updateStatus(); });
+  socket.on('close', () => { cleanupClientWaiters(client); client.alive = false; clients.delete(client); updateStatus(); });
+  socket.on('error', () => { cleanupClientWaiters(client); client.alive = false; clients.delete(client); updateStatus(); });
 
   updateStatus();
   emitter.emit('connect', client);
+  if (client.buf.length > MAX_BUFFER) {
+    closeClient(client, 1009);
+  } else if (client.buf.length > 0) {
+    consumeFrames(client);
+  }
 }
 
 // Minimal RFC 6455 frame reader. Consumes every complete frame currently held in
@@ -241,6 +277,7 @@ function consumeFrames(client) {
     }
     if (len > MAX_MESSAGE) { closeClient(client, 1009); return; }
     if (!masked) { closeClient(client, 1002); return; } // unmasked client frame is a protocol error
+    if ((opcode & 0x08) !== 0 && (!fin || len > 125)) { closeClient(client, 1002); return; } // RFC 6455 §5.5 control frame limit
     if (buf.length < offset + 4 + len) break;            // wait for the rest of the frame
 
     const mask = buf.slice(offset, offset + 4);
@@ -254,13 +291,201 @@ function consumeFrames(client) {
   client.buf = buf;
 }
 
+function cleanupClientWaiters(client) {
+  if (!client || !client.waiterCleanups) return;
+  for (const unregister of client.waiterCleanups) {
+    try { unregister(); } catch {}
+  }
+  client.waiterCleanups.clear();
+}
+
+function setStateRevision(rev) {
+  if (Number.isInteger(rev) && rev > currentStateRevision) {
+    currentStateRevision = rev;
+  }
+  return currentStateRevision;
+}
+
+function getStateRevision() {
+  return currentStateRevision;
+}
+
+function getIdempotencyRegistry() {
+  return idempotencyRegistry;
+}
+
+function resetIdempotencyRegistry(options) {
+  idempotencyRegistry = new IdempotencyRegistry(options);
+  return idempotencyRegistry;
+}
+
+function isProtocolV3Message(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+  return Object.prototype.hasOwnProperty.call(raw, 'protocolVersion')
+    || Object.prototype.hasOwnProperty.call(raw, 'requestId')
+    || raw.action === 'pause'
+    || raw.action === 'resume';
+}
+
+function emitClientFrame(client, data) {
+  return module.exports.sendToClient(client, data);
+}
+
+function sendV3ValidationRejection(client, raw, reason) {
+  const reqId = raw && typeof raw.requestId === 'string' ? raw.requestId : null;
+  const action = raw && typeof raw.action === 'string' ? raw.action : null;
+  if (reqId && remoteControl.REQUEST_ID_REGEX.test(reqId) && action && remoteControl.COMPANION_ACTIONS.includes(action)) {
+    emitClientFrame(client, remoteControl.createCommandAck({
+      requestId: reqId,
+      action,
+      status: remoteControl.ACK_STATUSES.REJECTED,
+      duplicate: false,
+      reason,
+      stateRevision: currentStateRevision
+    }));
+    return;
+  }
+  emitClientFrame(client, {
+    type: 'commandAck',
+    protocolVersion: 3,
+    requestId: reqId,
+    action,
+    status: remoteControl.ACK_STATUSES.REJECTED,
+    duplicate: false,
+    reason,
+    stateRevision: currentStateRevision
+  });
+}
+
+function handleV3Message(client, raw) {
+  const v3 = remoteControl.validateCompanionV3Message(raw, { enabledActions: remoteControl.COMPANION_ACTIONS });
+  if (!v3.ok) {
+    sendV3ValidationRejection(client, raw, v3.reason);
+    return;
+  }
+
+  // Read-only query: never stored in the mutating IdempotencyRegistry.
+  if (v3.command.action === 'getNightModes') {
+    emitter.emit('message', v3.command, client);
+    return;
+  }
+
+  const clientToken = (client && typeof client.token === 'string' && client.token) ? client.token : expectedToken;
+  const reg = idempotencyRegistry.register(clientToken, v3.command.requestId, v3.command.action, v3.canonicalPayload);
+
+  if (reg.state === 'invalid') {
+    sendV3ValidationRejection(client, raw, remoteControl.REJECTION_REASONS.INVALID_REQUEST_ID);
+    return;
+  }
+
+  if (reg.state === 'conflict') {
+    emitClientFrame(client, {
+      ...reg.ack,
+      stateRevision: reg.ack.stateRevision !== null ? reg.ack.stateRevision : currentStateRevision
+    });
+    return;
+  }
+
+  if (reg.state === 'capacity_exceeded') {
+    emitClientFrame(client, {
+      ...reg.ack,
+      stateRevision: currentStateRevision
+    });
+    return;
+  }
+
+  if (reg.state === 'completed_duplicate') {
+    emitClientFrame(client, reg.ack);
+    return;
+  }
+
+  if (reg.state === 'in_progress_duplicate') {
+    emitClientFrame(client, {
+      ...reg.ack,
+      stateRevision: currentStateRevision
+    });
+    if (!client.waiterCleanups) client.waiterCleanups = new Set();
+    let unregister = () => {};
+    const cleanup = () => {
+      client.waiterCleanups?.delete(cleanup);
+      unregister();
+    };
+    unregister = idempotencyRegistry.addWaiter(reg.record, (duplicateTerminalAck) => {
+      client.waiterCleanups?.delete(cleanup);
+      emitClientFrame(client, duplicateTerminalAck);
+    });
+    if (reg.record.status === 'in_progress') {
+      client.waiterCleanups.add(cleanup);
+    }
+    return;
+  }
+
+  // New mutating command: emit immediate accepted ACK and dispatch with a single-use terminal resolver.
+  emitClientFrame(client, {
+    ...reg.ack,
+    stateRevision: currentStateRevision
+  });
+
+  let settled = false;
+  const v3Context = {
+    protocolVersion: 3,
+    requestId: v3.command.requestId,
+    action: v3.command.action,
+    isSettled: () => settled,
+    resolve: ({ status: termStatus, reason = null, stateRevision = currentStateRevision } = {}) => {
+      if (settled) return false;
+      settled = true;
+      const rev = Number.isInteger(stateRevision) && stateRevision >= 0 ? stateRevision : currentStateRevision;
+      if (rev > currentStateRevision) currentStateRevision = rev;
+      const primaryAck = remoteControl.createCommandAck({
+        requestId: v3.command.requestId,
+        action: v3.command.action,
+        status: termStatus,
+        duplicate: false,
+        reason: termStatus === remoteControl.ACK_STATUSES.REJECTED ? reason : null,
+        stateRevision: rev
+      });
+      idempotencyRegistry.resolve(clientToken, v3.command.requestId, primaryAck);
+      emitClientFrame(client, primaryAck);
+      return true;
+    }
+  };
+
+  if (emitter.listenerCount('message') === 0) {
+    v3Context.resolve({
+      status: remoteControl.ACK_STATUSES.REJECTED,
+      reason: remoteControl.REJECTION_REASONS.INTERNAL_ERROR,
+      stateRevision: currentStateRevision
+    });
+    return;
+  }
+
+  try {
+    emitter.emit('message', v3.command, client, v3Context);
+  } catch (err) {
+    if (!settled) {
+      v3Context.resolve({
+        status: remoteControl.ACK_STATUSES.REJECTED,
+        reason: remoteControl.REJECTION_REASONS.INTERNAL_ERROR,
+        stateRevision: currentStateRevision
+      });
+    }
+    throw err;
+  }
+}
+
 function dispatchFrame(client, opcode, fin, payload) {
   switch (opcode) {
     case 0x1: // text — the only message type the companion sends
       if (!fin) return; // fragmented messages are not used; ignore safely
       try {
-        const result = remoteControl.validateCompanionMessage(JSON.parse(payload.toString('utf8')));
-        if (result.ok) emitter.emit('message', result.message, client);
+        const raw = JSON.parse(payload.toString('utf8'));
+        if (isProtocolV3Message(raw)) {
+          handleV3Message(client, raw);
+        } else {
+          const result = remoteControl.validateCompanionMessage(raw);
+          if (result.ok) emitter.emit('message', result.message, client);
+        }
       } catch { /* ignore malformed */ }
       break;
     case 0x8: // close — echo and tear down
@@ -274,6 +499,7 @@ function dispatchFrame(client, opcode, fin, payload) {
 }
 
 function closeClient(client, code) {
+  cleanupClientWaiters(client);
   try {
     const body = Buffer.alloc(2);
     body.writeUInt16BE(code || 1000, 0);
@@ -282,6 +508,7 @@ function closeClient(client, code) {
   client.alive = false;
   clients.delete(client);
   try { client.socket.end(); } catch {}
+  setTimeout(() => { try { client.socket.destroy?.(); } catch {} }, 1000).unref?.();
   updateStatus();
 }
 
@@ -332,15 +559,21 @@ function encodeWS(data) {
 }
 
 function broadcast(data) {
+  if (data && data.type === 'state' && Number.isInteger(data.stateRevision) && data.stateRevision > currentStateRevision) {
+    currentStateRevision = data.stateRevision;
+  }
   const msg = encodeWS(JSON.stringify(data));
+  let dropped = false;
   for (const client of clients) {
     if (client.alive) {
-      try { client.socket.write(msg); } catch { client.alive = false; clients.delete(client); }
+      try { client.socket.write(msg); } catch { cleanupClientWaiters(client); client.alive = false; clients.delete(client); dropped = true; }
     }
   }
+  if (dropped) updateStatus();
 }
 
 async function revokeClients() {
+  idempotencyRegistry.clear();
   const targets = [...clients].filter(client => client.alive);
   const notice = encodeWS(JSON.stringify({ type: 'pairing-revoked' }));
   await Promise.all(targets.map(client => new Promise(resolve => {
@@ -366,8 +599,10 @@ function sendToClient(client, data) {
     client.socket.write(encodeWS(JSON.stringify(data)));
     return true;
   } catch {
+    cleanupClientWaiters(client);
     client.alive = false;
     clients.delete(client);
+    updateStatus();
     return false;
   }
 }
@@ -400,18 +635,21 @@ function requestHandler(req, res) {
     try {
       const html = fs.readFileSync(htmlPath, 'utf8');
       res.writeHead(200, {
-        'Content-Type': 'text/html',
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'X-Frame-Options': 'DENY',
+        'Referrer-Policy': 'no-referrer',
         // The page is fully inline (script + style), so inline is allowed.
         // Server-provided data is rendered via textContent / createElement.
         // The value of this CSP is locking down where the page may connect/load from.
-        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data:; base-uri 'none'; form-action 'none'; object-src 'none'"
+        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data:; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'"
       });
       res.end(html);
     } catch {
       res.writeHead(404);
       res.end('Companion page not found');
     }
-  } else if (req.url === '/manifest.json') {
+  } else if (pathOnly === '/manifest.json') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       id: '/',
@@ -433,7 +671,7 @@ function requestHandler(req, res) {
         { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
       ]
     }));
-  } else if (req.url === '/icon-512.png') {
+  } else if (pathOnly === '/icon-512.png') {
     const iconPath = path.join(__dirname, 'assets', 'icon-512.png');
     try {
       const icon = fs.readFileSync(iconPath);
@@ -443,7 +681,7 @@ function requestHandler(req, res) {
       res.writeHead(404);
       res.end();
     }
-  } else if (req.url === '/icon') {
+  } else if (pathOnly === '/icon') {
     // Legacy icon route kept for backward compatibility.
     const iconPath = path.join(__dirname, 'assets', 'icon.ico');
     try {
@@ -619,6 +857,7 @@ function stop() {
   expectedToken = '';
   stopHeartbeat();
   for (const client of clients) {
+    cleanupClientWaiters(client);
     try { client.socket.destroy(); } catch {}
   }
   clients.clear();
@@ -665,6 +904,10 @@ module.exports = {
   revokeClients,
   sendToClient,
   getStatus,
+  setStateRevision,
+  getStateRevision,
+  getIdempotencyRegistry,
+  resetIdempotencyRegistry,
   onMessage,
   offMessage,
   onConnect,

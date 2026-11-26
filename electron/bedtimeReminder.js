@@ -1,12 +1,23 @@
 // Bedtime Reminder: gentle nudge 15 minutes before your configured bedtime.
 // Not a timer, just a notification. The #1 feature of every sleep app.
 
-const { spawn } = require('child_process');
-
 let reminderInterval = null;
 let lastReminderDate = null;
 let reminderMinutesBefore = 15;
 let onReminderCallback = null;
+
+function localDateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function minutesUntilBedtime(bedtime, now = new Date()) {
+  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(bedtime || '').trim());
+  if (!match) return null;
+  const bedtimeMin = Number(match[1]) * 60 + Number(match[2]);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  // Wrap across midnight so e.g. bedtime 00:00 at 23:45 yields 15 minutes.
+  return ((bedtimeMin - nowMin) + 1440) % 1440;
+}
 
 function normalizeReminderMinutes(value, fallback = 15) {
   const num = Number(value);
@@ -34,31 +45,29 @@ function stopReminder() {
   if (reminderInterval) { clearInterval(reminderInterval); reminderInterval = null; }
 }
 
-function checkBedtime() {
+function checkBedtime(now = new Date()) {
   const bedtime = getBedtimeFromSettings();
   if (!bedtime) return;
   if (reminderMinutesBefore <= 0) return;
 
-  const now = new Date();
-  const [bh, bm] = bedtime.split(':').map(Number);
-  const bedtimeMin = bh * 60 + bm;
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  const minutesUntil = bedtimeMin - nowMin;
+  const minutesUntil = minutesUntilBedtime(bedtime, now);
+  if (minutesUntil === null) return;
 
-  // Only remind once per day.
-  const today = now.toISOString().slice(0, 10);
-  if (lastReminderDate === today) return;
+  // Key on the target bedtime's local date so a 23:50 reminder for 00:00 does
+  // not collide with the previous night or use UTC date rollovers.
+  const targetAt = new Date(now.getTime() + minutesUntil * 60000);
+  const targetKey = `${localDateKey(targetAt)}@${bedtime}`;
+  if (lastReminderDate === targetKey) return;
 
   if (minutesUntil > 0 && minutesUntil <= reminderMinutesBefore) {
-    lastReminderDate = today;
+    lastReminderDate = targetKey;
     const message = `Your bedtime is in ${minutesUntil} minute${minutesUntil !== 1 ? 's' : ''}. Start winding down?`;
 
-    // Show native notification.
+    // Show native notification via Electron (never spawning PowerShell WinForms).
     showNativeNotification('Lights Out', message);
 
     // Fire callback for renderer.
     if (onReminderCallback) onReminderCallback({ minutesUntil, bedtime, message });
-
   }
 }
 
@@ -80,21 +89,13 @@ function getAppSettings() {
 }
 
 function showNativeNotification(title, body) {
-  const escapedTitle = String(title).replace(/'/g, "''");
-  const escapedBody = String(body).replace(/'/g, "''");
-  const cmd = `
-    [System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null
-    Start-Sleep -Milliseconds 100
-    $notify = New-Object System.Windows.Forms.NotifyIcon
-    $notify.Icon = [System.Drawing.SystemIcons]::Information
-    $notify.BalloonTipTitle = '${escapedTitle}'
-    $notify.BalloonTipText = '${escapedBody}'
-    $notify.Visible = $true
-    $notify.ShowBalloonTip(5000)
-    Start-Sleep -Milliseconds 5500
-    $notify.Dispose()
-  `;
-  spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', cmd], { detached: true, stdio: 'ignore' }).unref();
+  try {
+    const { Notification } = require('electron');
+    if (Notification && Notification.isSupported()) {
+      const n = new Notification({ title: String(title || 'Lights Out'), body: String(body || ''), silent: true });
+      n.show();
+    }
+  } catch { /* non-Electron test environment */ }
 }
 
 function setMinutesBefore(min) {
@@ -109,5 +110,6 @@ module.exports = {
   startReminder,
   stopReminder,
   setMinutesBefore,
-  getMinutesBefore
+  getMinutesBefore,
+  __minutesUntilBedtime: minutesUntilBedtime
 };

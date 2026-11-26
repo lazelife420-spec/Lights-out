@@ -66,8 +66,13 @@ function fetchJson(url) {
 
 async function firewallSnapshot() {
   if (process.platform !== 'win32') return [];
-  const command = `$rules = @(Get-NetFirewallRule -Group 'Lights Out Companion' -ErrorAction SilentlyContinue); @($rules | ForEach-Object { $app = $_ | Get-NetFirewallApplicationFilter; $port = $_ | Get-NetFirewallPortFilter; [pscustomobject]@{ Name = $_.Name; Profile = [string]$_.Profile; Direction = [string]$_.Direction; Action = [string]$_.Action; Program = $app.Program; Protocol = [string]$port.Protocol; LocalPort = [string]$port.LocalPort } }) | ConvertTo-Json -Compress`;
-  const result = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { windowsHide: true, timeout: 15000 });
+  const command = require('../companionFirewall').snapshotOwnedRulesCommand();
+  const encodedCommand = Buffer.from(command, 'utf16le').toString('base64');
+  const result = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encodedCommand], {
+    windowsHide: true,
+    timeout: 15000,
+    env: { ...process.env, PSModulePath: '' }
+  });
   const parsed = JSON.parse(result.stdout.trim() || '[]');
   return (Array.isArray(parsed) ? parsed : [parsed]).sort((a, b) => a.Name.localeCompare(b.Name));
 }
@@ -91,7 +96,8 @@ async function removeFirewallRules(ruleNames) {
   const encodedCommand = Buffer.from(command, 'utf16le').toString('base64');
   await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encodedCommand], {
     windowsHide: true,
-    timeout: 15000
+    timeout: 15000,
+    env: { ...process.env, PSModulePath: '' }
   });
 }
 
@@ -102,7 +108,8 @@ async function countFirewallRules(ruleNames) {
   const encodedCommand = Buffer.from(command, 'utf16le').toString('base64');
   const result = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encodedCommand], {
     windowsHide: true,
-    timeout: 15000
+    timeout: 15000,
+    env: { ...process.env, PSModulePath: '' }
   });
   return Number.parseInt(result.stdout.trim(), 10) || 0;
 }

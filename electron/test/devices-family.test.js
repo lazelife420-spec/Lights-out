@@ -458,7 +458,8 @@ test('Fire 07: the Test Mode scope notes show only in loaded Test Mode, when the
   const { els, run } = scopeSandbox({ facts: on });
   assert.equal(els.deviceLightsScope.hidden, false);
   assert.equal(els.deviceWifiScope.hidden, false);
-  assert.equal(els.deviceWifiScope.textContent, 'Runs in Test Mode too. Chosen devices still lose internet at wind-down.');
+  // v11.3: Test Mode now skips Wi-Fi Guard (main.js), so the note says so.
+  assert.equal(els.deviceWifiScope.textContent, 'Skipped in Test Mode. No device loses internet at wind-down.');
   run(on, { dryRun: false });
   assert.equal(els.deviceLightsScope.hidden, true, 'hidden outside Test Mode');
   assert.equal(els.deviceWifiScope.hidden, true);
@@ -471,7 +472,7 @@ test('Fire 07: the Test Mode scope notes show only in loaded Test Mode, when the
   assert.equal(els.deviceWifiScope.hidden, true, 'a router with nothing listed blocks nothing');
   run({ wifiGuard: { enabled: true, provider: 'adapter' } });
   assert.equal(els.deviceWifiScope.hidden, false);
-  assert.equal(els.deviceWifiScope.textContent, "Runs in Test Mode too. This PC's Wi-Fi still turns off at wind-down.");
+  assert.equal(els.deviceWifiScope.textContent, "Skipped in Test Mode. This PC's Wi-Fi stays on during the run.");
   assert.equal(els.deviceLightsScope.hidden, true, 'an unread lights section claims nothing');
   run(null);
   assert.equal(els.deviceWifiScope.hidden, true, 'no facts: no claim');

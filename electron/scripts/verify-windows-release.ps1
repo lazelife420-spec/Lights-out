@@ -26,19 +26,38 @@ if (-not $qaRoot.StartsWith($OutputRoot + '\', [StringComparison]::OrdinalIgnore
 New-Item -ItemType Directory -Path $qaRoot | Out-Null
 $installRoot = Join-Path $qaRoot 'app'
 $oldQa = $env:LIGHTS_OUT_INSTALLER_QA
+$oldPowerLock = $env:LIGHTS_OUT_QA_POWER_LOCK
 $oldExe = $env:LIGHTS_OUT_PACKAGED_EXE
+# The QA installer registers nothing, and the installed app the runtime proof launches inherits
+# both flags: no real power action and no change to the owner's per-user scheduled tasks.
 $env:LIGHTS_OUT_INSTALLER_QA = '1'
+$env:LIGHTS_OUT_QA_POWER_LOCK = '1'
+$layoutSummary = 'settings layout checks passed'
 try {
     $setup = Join-Path $OutputRoot "Lights-Out-Setup-v$($manifest.version).exe"
     $installed = Start-Process -FilePath $setup -ArgumentList @('/S',"/D=$installRoot") -WindowStyle Hidden -Wait -PassThru
     if ($installed.ExitCode -ne 0) { throw "Installer failed: $($installed.ExitCode)" }
     foreach ($file in $manifest.runtime) {
-        $actual = (Get-FileHash -LiteralPath (Join-Path $installRoot $file.path) -Algorithm SHA256).Hash.ToLowerInvariant()
+        $stream = [IO.File]::OpenRead((Join-Path $installRoot $file.path))
+        $hasher = [Security.Cryptography.SHA256]::Create()
+        try { $actual = [BitConverter]::ToString($hasher.ComputeHash($stream)).Replace('-','').ToLowerInvariant() } finally { $stream.Dispose(); $hasher.Dispose() }
         if ($actual -ne $file.sha256) { throw "Installed file differs: $($file.path)" }
     }
     $env:LIGHTS_OUT_PACKAGED_EXE = Join-Path $installRoot 'Lights Out.exe'
-    & node (Join-Path $PSScriptRoot 'settings-layout-runtime-proof.js')
-    if ($LASTEXITCODE -ne 0) { throw 'Installed application runtime proof failed.' }
+    # Capture stdout only; the proof's stderr goes straight to the console. Under
+    # $ErrorActionPreference = 'Stop', Windows PowerShell 5.1 (what CI runs) turns every
+    # redirected native stderr line into a terminating NativeCommandError, so 2>&1 here would
+    # fail the gate on a benign Node warning and, on a real failure, hide the stack and the
+    # PASS lines printed before it. The exit code alone decides the result.
+    # Stream each stdout line as it arrives (diagnostics survive a hung proof)
+    # and keep it for the summary; stderr stays unredirected (PS 5.1 + Stop).
+    $proofOutput = @(& node (Join-Path $PSScriptRoot 'settings-layout-runtime-proof.js') | ForEach-Object { Write-Host $_; $_ })
+    $proofExit = $LASTEXITCODE
+    if ($proofExit -ne 0) { throw 'Installed application runtime proof failed.' }
+    $countMatch = [regex]::Match(($proofOutput -join "`n"), 'PASS\s+(\d+)\s+category/theme/viewport layouts')
+    if ($countMatch.Success) {
+        $layoutSummary = "$($countMatch.Groups[1].Value) settings layout checks"
+    }
     $removed = Start-Process -FilePath (Join-Path $installRoot 'Uninstall.exe') -ArgumentList @('/S') -WindowStyle Hidden -Wait -PassThru
     if ($removed.ExitCode -ne 0) { throw 'QA uninstall failed.' }
     $deadline = [DateTime]::UtcNow.AddSeconds(10)
@@ -46,8 +65,13 @@ try {
     if (Test-Path -LiteralPath $installRoot) { throw 'QA uninstall left installation files.' }
 } finally {
     $env:LIGHTS_OUT_INSTALLER_QA = $oldQa
+    $env:LIGHTS_OUT_QA_POWER_LOCK = $oldPowerLock
     $env:LIGHTS_OUT_PACKAGED_EXE = $oldExe
+    if (Test-Path -LiteralPath $qaRoot) {
+        Remove-Item -LiteralPath $qaRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
-$report = @{ status='passed'; version=$manifest.version; portableEntries=$manifest.runtime.Count; installerFilesMatched=$manifest.runtime.Count; installedRuntime='60 settings layout checks'; qaUninstalled=$true; productionRegistrationTouched=$false }
-$report | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $OutputRoot 'WINDOWS-VERIFICATION.json') -Encoding utf8
-$report | ConvertTo-Json
+$report = @{ status='passed'; version=$manifest.version; portableEntries=$manifest.runtime.Count; installerFilesMatched=$manifest.runtime.Count; installedRuntime=$layoutSummary; qaUninstalled=$true; productionRegistrationTouched=$false }
+$json = ($report | ConvertTo-Json) + "`n"
+[IO.File]::WriteAllText((Join-Path $OutputRoot 'WINDOWS-VERIFICATION.json'), $json, [Text.UTF8Encoding]::new($false))
+Write-Output $json.TrimEnd()

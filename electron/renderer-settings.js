@@ -285,12 +285,14 @@ function collectAppSettings() {
   };
 }
 
-async function applyAppSettings(app, { skipNavigation = false } = {}) {
+async function applyAppSettings(app, { skipNavigation = false, preserveTonightPlan = false } = {}) {
   if (!app) return;
   const restoredArmedMode = app.armedNightMode && typeof app.armedNightMode === 'object'
-    ? app.armedNightMode
-    : null;
-  if (app.armedNightMode !== undefined) state.armedNightMode = restoredArmedMode;
+    ? (preserveTonightPlan ? state.armedNightMode : app.armedNightMode)
+    : (preserveTonightPlan ? state.armedNightMode : null);
+  if (!preserveTonightPlan && app.armedNightMode !== undefined) {
+    state.armedNightMode = restoredArmedMode;
+  }
   if (restoredArmedMode) {
     // The selected plan is authoritative over stale custom controls. Main
     // still canonicalizes nightModeId plus execution values before starting.
@@ -298,7 +300,7 @@ async function applyAppSettings(app, { skipNavigation = false } = {}) {
     state.unit = 'min';
   } else {
     if (app.action) state.action = app.action;
-    if (app.unit) state.unit = app.unit;
+    if (!preserveTonightPlan && app.unit) state.unit = app.unit;
   }
   if (typeof app.sound === 'boolean') { state.sound = app.sound; SoundSystem.enabled = app.sound; }
   if (typeof app.gracefulClose === 'boolean') state.gracefulClose = app.gracefulClose;
@@ -310,7 +312,7 @@ async function applyAppSettings(app, { skipNavigation = false } = {}) {
     if (els.focusBlocklist) els.focusBlocklist.value = app.focusBlocklist.join(',');
   }
   const restoredDuration = restoredArmedMode?.durationSeconds ?? app.durationSeconds;
-  if (Number.isFinite(Number(restoredDuration)) && Number(restoredDuration) > 0 && !state.running) {
+  if (!preserveTonightPlan && Number.isFinite(Number(restoredDuration)) && Number(restoredDuration) > 0 && !state.running) {
     state.remainingSeconds = Number(restoredDuration);
     setInputFromSeconds(state.remainingSeconds);
   }
@@ -359,7 +361,7 @@ async function applyAppSettings(app, { skipNavigation = false } = {}) {
   updateClockStyleVisibility();
   state.bedtime = app.bedtime || '';
   // Restore timer name.
-  if (app.timerName && els.timerName) {
+  if (!preserveTonightPlan && app.timerName && els.timerName) {
     els.timerName.textContent = app.timerName;
     state.timerName = app.timerName;
   }
@@ -416,6 +418,9 @@ function updateClockStyleVisibility() {
   els.clockStyleGroup.style.display = showsAnalog ? '' : 'none';
 }
 
+let loadedWifiWebhookHeaders = {};
+let loadedExtraAccountabilityPartners = [];
+
 function collectWifiGuardSettings() {
   const provider = els.selWifiProvider?.value || 'webhook';
   return {
@@ -427,7 +432,7 @@ function collectWifiGuardSettings() {
     deviceMacs: [...wifiSelectedDevices.macs],
     deviceIps: [...wifiSelectedDevices.ips],
     webhookUrl: els.wifiWebhookUrl?.value || '',
-    webhookHeaders: {},
+    webhookHeaders: { ...loadedWifiWebhookHeaders },
     blockOnDim: els.chkWifiBlockDim?.checked ?? true,
     unblockOnCancel: els.chkWifiUnblockCancel?.checked ?? true
   };
@@ -448,7 +453,8 @@ function collectContentBlockerSettings() {
 function collectAccountabilitySettings() {
   const url = els.accWebhookUrl?.value?.trim() || '';
   const name = els.accPartnerName?.value?.trim() || 'Partner';
-  const partners = url ? [{ type: 'webhook', url, name }] : [];
+  const primary = url ? [{ type: 'webhook', url, name }] : [];
+  const partners = [...primary, ...loadedExtraAccountabilityPartners.map(p => ({ ...p }))];
   return {
     enabled: els.chkAccountability?.checked || false,
     notifyOnStart: els.chkAccNotifyStart?.checked ?? true,
@@ -461,6 +467,9 @@ function collectAccountabilitySettings() {
 
 function applyWifiGuardSettings(wifi) {
   if (!wifi) return;
+  loadedWifiWebhookHeaders = (wifi.webhookHeaders && typeof wifi.webhookHeaders === 'object' && !Array.isArray(wifi.webhookHeaders))
+    ? { ...wifi.webhookHeaders }
+    : {};
   const supportedProvider = wifi.provider !== 'firewall';
   if (els.chkWifiGuard) els.chkWifiGuard.checked = supportedProvider && !!wifi.enabled;
   if (els.wifiGuardConfig) els.wifiGuardConfig.style.display = supportedProvider && wifi.enabled ? '' : 'none';
@@ -627,10 +636,14 @@ function applyAccountabilitySettings(acc) {
   if (els.chkAccNotifySnooze) els.chkAccNotifySnooze.checked = acc.notifyOnSnooze !== false;
   if (els.chkAccNotifyCancel) els.chkAccNotifyCancel.checked = acc.notifyOnCancel !== false;
   if (els.chkAccNotifyComplete) els.chkAccNotifyComplete.checked = !!acc.notifyOnComplete;
-  if (acc.partners?.[0]) {
-    if (els.accWebhookUrl) els.accWebhookUrl.value = acc.partners[0].url || '';
-    if (els.accPartnerName) els.accPartnerName.value = acc.partners[0].name || 'Partner';
-  }
+  const partners = Array.isArray(acc.partners) ? acc.partners : [];
+  const firstWebhookIdx = partners.findIndex(p => p && p.type === 'webhook');
+  const primary = firstWebhookIdx >= 0 ? partners[firstWebhookIdx] : null;
+  loadedExtraAccountabilityPartners = partners
+    .filter((p, idx) => p && idx !== firstWebhookIdx)
+    .map(p => ({ ...p }));
+  if (els.accWebhookUrl) els.accWebhookUrl.value = primary?.url || '';
+  if (els.accPartnerName) els.accPartnerName.value = primary?.name || 'Partner';
   if (els.accTestResult && acc.setupError) {
     els.accTestResult.textContent = acc.setupError;
     els.accTestResult.style.color = '#ff9800';

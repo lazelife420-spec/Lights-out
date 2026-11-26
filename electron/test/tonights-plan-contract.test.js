@@ -18,6 +18,7 @@ const rendererPath = path.join(__dirname, '..', 'renderer.js');
 const rendererSource = fs.readFileSync(rendererPath, 'utf8');
 const indexHtmlSource = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const utilsSource = fs.readFileSync(path.join(__dirname, '..', 'renderer-utils.js'), 'utf8');
+const nightModesSource = fs.readFileSync(path.join(__dirname, '..', 'renderer-night-modes.js'), 'utf8');
 
 // The canonical action vocabulary, per profiles.js's validActions / nightModes.js
 // -- not every action main.js's executePowerAction currently implements (lock
@@ -90,23 +91,27 @@ function createElement(overrides = {}) {
 // persistArmedNightMode, renderArmedModeBanner, clamp) is a tracked no-op
 // stub, so assertions can confirm they were (or weren't) called without
 // depending on their real implementations.
-function createTonightsPlanSandbox({ state, elsOverrides = {}, actionButtons = [] } = {}) {
+function createTonightsPlanSandbox({ state, elsOverrides = {}, actionButtons = [], quickChips = [] } = {}) {
   const calls = { render: 0, persistSelectedProfile: [], renderProfiles: 0, persistArmedNightMode: 0, renderArmedModeBanner: 0 };
 
   const elements = {
     'ns-hero-title': createElement(),
     'ns-preview-time': createElement(),
     'ns-play-label': createElement(),
+    'ns-play-btn': createElement(),
     'ns-hero-source': createElement({ display: 'none' }),
     'ns-hero-source-name': createElement(),
     'ns-meta-ending': createElement(),
+    'plan-finale': createElement(),
     ...(elsOverrides.elements || {})
   };
+  elements['plan-finale'].hidden = true;
 
   const document = {
     getElementById: id => elements[id] || null,
     querySelectorAll: selector => {
       if (selector === '[data-action]' || selector === '#action-chips-row [data-action]') return actionButtons;
+      if (selector === '#plan-quick-start .chip[data-min]') return quickChips;
       return [];
     }
   };
@@ -137,6 +142,7 @@ function createTonightsPlanSandbox({ state, elsOverrides = {}, actionButtons = [
     // One name per session (UI-R3 Fire 02): the vocabulary lives in renderer-utils.js.
     (utilsSource.match(/const DEFAULT_TIMER_NAME = [^\n]*/) || [''])[0],
     extractFunction(utilsSource, 'sessionDisplayName'),
+    extractFunction(nightModesSource, 'formatDuration'),
     extractFunction(rendererSource, 'formatTime'),
     extractFunction(rendererSource, 'inputValue'),
     extractFunction(rendererSource, 'inputSeconds'),
@@ -186,40 +192,64 @@ test('manual action selection updates the canonical action state (not a parallel
 });
 
 test('Tonight\'s Plan summary reflects a manual timer\'s duration and action', () => {
-  const state = baseState({ action: 'sleep', unit: 'min' });
+  const state = baseState({ action: 'sleep', unit: 'min', settingsLoaded: true, dryRun: true });
   const { elements, els, renderTonightHero } = createTonightsPlanSandbox({ state });
   els.timerInput.value = '45';
 
   renderTonightHero();
 
-  assert.equal(elements['ns-hero-title'].textContent, 'Countdown · 45 min');
-  assert.equal(elements['ns-preview-time'].textContent, '45:00');
-  assert.equal(elements['ns-play-label'].textContent, 'Start countdown');
+  assert.equal(elements['ns-hero-title'].textContent, 'Countdown');
+  assert.equal(elements['ns-preview-time'].textContent, '45 min');
+  assert.equal(elements['ns-play-label'].textContent, 'Start timer');
+  assert.equal(elements['ns-play-btn'].getAttribute('aria-label'), 'Start Countdown, 45 min, Sleep, Test Mode, no PC power action');
   assert.equal(elements['ns-hero-source'].style.display, 'none');
 });
 
+for (const [seconds, label] of [
+  [20, '20 sec', '0:20'], [59, '59 sec', '0:59'], [60, '1 min', '1:00'],
+  [61, '1 min 1 sec', '1:01'], [90, '1 min 30 sec', '1:30'],
+  [1680, '28 min', '28:00'], [5400, '1 h 30 min', '1:30:00'],
+  [5405, '1 h 30 min 5 sec', '1:30:05'], [28800, '8 h', '8:00:00']
+]) {
+  test(`Tonight duration is exact in duration label and Start accessibility: ${seconds}s`, () => {
+    const state = baseState({ unit: 'sec', action: 'sleep', settingsLoaded: true, dryRun: true });
+    const { elements, els, renderTonightHero } = createTonightsPlanSandbox({ state });
+    els.timerInput.value = String(seconds);
+    const before = JSON.stringify(state);
+    renderTonightHero();
+    assert.equal(elements['ns-hero-title'].textContent, 'Countdown');
+    assert.equal(elements['ns-preview-time'].textContent, label);
+    assert.equal(elements['ns-play-btn'].getAttribute('aria-label'), `Start Countdown, ${label}, Sleep, Test Mode, no PC power action`);
+    assert.equal(JSON.stringify(state), before, 'Presentation must not mutate timer or plan state');
+  });
+}
+
 test('one name per session: a typed ring name names the plan; the stored default or nothing reads Countdown (Fire 02)', () => {
-  const typed = createTonightsPlanSandbox({ state: baseState({ action: 'sleep', timerName: 'Reading' }) });
+  const typed = createTonightsPlanSandbox({ state: baseState({ action: 'sleep', timerName: 'Reading', settingsLoaded: true, dryRun: true }) });
   typed.renderTonightHero();
-  assert.equal(typed.elements['ns-hero-title'].textContent, 'Reading · 28 min');
-  assert.equal(typed.elements['ns-play-label'].textContent, 'Start Reading');
+  assert.equal(typed.elements['ns-hero-title'].textContent, 'Reading');
+  assert.equal(typed.elements['ns-play-label'].textContent, 'Start timer');
+  assert.equal(typed.elements['ns-play-btn'].getAttribute('aria-label'), 'Start Reading, 28 min, Sleep, Test Mode, no PC power action');
   for (const timerName of ['Last Call', '', '   ', undefined]) {
-    const plain = createTonightsPlanSandbox({ state: baseState({ action: 'sleep', timerName }) });
+    const plain = createTonightsPlanSandbox({ state: baseState({ action: 'sleep', timerName, settingsLoaded: true, dryRun: true }) });
     plain.renderTonightHero();
-    assert.equal(plain.elements['ns-hero-title'].textContent, 'Countdown · 28 min', String(timerName));
-    assert.equal(plain.elements['ns-play-label'].textContent, 'Start countdown', String(timerName));
+    assert.equal(plain.elements['ns-hero-title'].textContent, 'Countdown', String(timerName));
+    assert.equal(plain.elements['ns-play-label'].textContent, 'Start timer', String(timerName));
   }
   // An armed Night Mode or a loaded My Mode still wins over a typed name.
-  const armed = createTonightsPlanSandbox({ state: baseState({ action: 'shutdown', timerName: 'Reading', armedNightMode: { nightModeId: 'wind', nightModeTitle: 'Wind Down', durationSeconds: 5400, action: 'shutdown' } }) });
+  const armed = createTonightsPlanSandbox({ state: baseState({ action: 'shutdown', timerName: 'Reading', settingsLoaded: true, dryRun: false, armedNightMode: { nightModeId: 'wind', nightModeTitle: 'Wind Down', durationSeconds: 5400, action: 'shutdown' } }) });
   armed.renderTonightHero();
-  assert.equal(armed.elements['ns-hero-title'].textContent, 'Wind Down · 90 min');
-  assert.equal(armed.elements['ns-play-label'].textContent, 'Start Wind Down');
+  assert.equal(armed.elements['ns-hero-title'].textContent, 'Wind Down');
+  assert.equal(armed.elements['ns-preview-time'].textContent, '1 h 30 min');
+  assert.equal(armed.elements['ns-play-label'].textContent, 'Start timer');
+  assert.equal(armed.elements['ns-play-btn'].getAttribute('aria-label'), 'Start Wind Down, 1 h 30 min, Shutdown, REAL action');
   const profile = { id: 'p1', name: 'Hard Stop', action: 'shutdown', mode: 'duration', seconds: 900 };
   const mode = createTonightsPlanSandbox({ state: baseState({ action: 'shutdown', timerName: 'Reading', currentProfileId: 'p1', profiles: [profile] }) });
   mode.els.timerInput.value = '15';
   mode.renderTonightHero();
-  assert.equal(mode.elements['ns-hero-title'].textContent, 'Hard Stop · 15 min');
-  assert.equal(mode.elements['ns-play-label'].textContent, 'Start Hard Stop');
+  assert.equal(mode.elements['ns-hero-title'].textContent, 'Hard Stop');
+  assert.equal(mode.elements['ns-preview-time'].textContent, '15 min');
+  assert.equal(mode.elements['ns-play-label'].textContent, 'Start timer');
 });
 
 test('loading a profile shows its name as the plan source ("From: <name>")', () => {
@@ -230,7 +260,8 @@ test('loading a profile shows its name as the plan source ("From: <name>")', () 
 
   renderTonightHero();
 
-  assert.equal(elements['ns-hero-title'].textContent, 'Hard Stop · 15 min');
+  assert.equal(elements['ns-hero-title'].textContent, 'Hard Stop');
+  assert.equal(elements['ns-preview-time'].textContent, '15 min');
   assert.equal(elements['ns-hero-source'].style.display, '');
   assert.equal(elements['ns-hero-source-name'].textContent, 'Hard Stop');
 });
@@ -258,7 +289,8 @@ test('manually editing action after a profile load clears the profile identity a
   assert.equal(calls.renderProfiles, 1);
 
   renderTonightHero();
-  assert.equal(elements['ns-hero-title'].textContent, 'Countdown · 15 min');
+  assert.equal(elements['ns-hero-title'].textContent, 'Countdown');
+  assert.equal(elements['ns-preview-time'].textContent, '15 min');
   assert.equal(elements['ns-hero-source'].style.display, 'none');
 });
 
@@ -311,9 +343,9 @@ test('Night Modes continue showing their own correct plan, unaffected by profile
 
   renderTonightHero();
 
-  assert.equal(elements['ns-hero-title'].textContent, 'Movie Wind-Down · 90 min');
-  assert.equal(elements['ns-preview-time'].textContent, '1:30:00');
-  assert.equal(elements['ns-play-label'].textContent, 'Start Movie Wind-Down');
+  assert.equal(elements['ns-hero-title'].textContent, 'Movie Wind-Down');
+  assert.equal(elements['ns-preview-time'].textContent, '1 h 30 min');
+  assert.equal(elements['ns-play-label'].textContent, 'Start timer');
   // Night Modes are credited by the existing armed-mode banner, not the
   // profile-source line -- showing both would be two competing labels.
   assert.equal(elements['ns-hero-source'].style.display, 'none');
@@ -355,17 +387,34 @@ test('hero "Ends with" follows an armed Night Mode\'s own action, not state.acti
   assert.ok(!elements['ns-meta-ending'].textContent.startsWith(actionLabel('shutdown')));
 });
 
-test('hero "Ends with" adds the Last Light finale only when it is enabled', () => {
+test('hero keeps power ending separate from the Last Light setting (#plan-finale)', () => {
   const sequenceSelect = { selectedIndex: 1, options: [{ textContent: 'Classic Fade' }, { textContent: 'Exit the Grid' }] };
   const state = baseState({ action: 'shutdown', lastLight: { enabled: false, sequence: 'ExitTheGrid' } });
   const { elements, renderTonightHero } = createTonightsPlanSandbox({ state, elsOverrides: { elements: { 'sel-lastlight-sequence': sequenceSelect } } });
 
   renderTonightHero();
   assert.equal(elements['ns-meta-ending'].textContent, 'Shutdown');
+  assert.equal(elements['plan-finale'].hidden, true);
+  assert.equal(elements['plan-finale'].textContent, '');
 
   state.lastLight.enabled = true;
   renderTonightHero();
-  assert.equal(elements['ns-meta-ending'].textContent, 'Shutdown · Exit the Grid');
+  assert.equal(elements['ns-meta-ending'].textContent, 'Shutdown');
+  assert.equal(elements['plan-finale'].hidden, false);
+  assert.equal(elements['plan-finale'].textContent, 'Last Light setting: Exit the Grid');
+});
+
+test('quick-start chip aria-labels reflect state.action and mode truthfully without mutating state', () => {
+  const chip15 = createElement({ dataset: { min: '15' } });
+  const chip60 = createElement({ dataset: { min: '60' } });
+  const state = baseState({ action: 'sleep', settingsLoaded: true, dryRun: true });
+  const { renderTonightHero } = createTonightsPlanSandbox({ state, quickChips: [chip15, chip60] });
+  renderTonightHero();
+  assert.equal(chip15.getAttribute('aria-label'), 'Start 15 min immediately, Sleep, Test Mode, no PC power action; replaces selected mode');
+  assert.equal(chip60.getAttribute('aria-label'), 'Start 1 h immediately, Sleep, Test Mode, no PC power action; replaces selected mode');
+  state.dryRun = false;
+  renderTonightHero();
+  assert.equal(chip15.getAttribute('aria-label'), 'Start 15 min immediately, Sleep, REAL action; replaces selected mode');
 });
 
 test('the hero markup carries no fabricated plan facts', () => {
@@ -391,9 +440,9 @@ test('renderTonightHero stays null-safe for the P06 plan ids it does not own', (
   const state = baseState({ action: 'sleep' });
   const { elements, renderTonightHero } = createTonightsPlanSandbox({ state, elsOverrides: { elements: extra } });
   renderTonightHero();
-  assert.equal(elements['ns-hero-title'].textContent, 'Countdown · 28 min');
-  assert.equal(elements['ns-preview-time'].textContent, '28:00');
-  assert.equal(elements['ns-play-label'].textContent, 'Start countdown');
+  assert.equal(elements['ns-hero-title'].textContent, 'Countdown');
+  assert.equal(elements['ns-preview-time'].textContent, '28 min');
+  assert.equal(elements['ns-play-label'].textContent, 'Start timer');
   for (const id of Object.keys(extra)) assert.equal(elements[id].textContent, 'untouched', id);
   // ...and with none of them present (getElementById returns null) it still renders.
   const bare = createTonightsPlanSandbox({ state: baseState({ action: 'shutdown' }) });
@@ -415,14 +464,15 @@ test('editing the action while a Night Mode is armed and it no longer matches cl
   assert.equal(calls.persistArmedNightMode, 1);
 });
 
-test('no regression to Dry Run / power-safety fields: the new functions never read or write them', () => {
-  const contractSource = [
+test('no regression to Dry Run / power-safety fields: plan mutators never touch them and hero only reads dryRun for aria-label', () => {
+  const mutatorSource = [
     extractFunction(rendererSource, 'setAction'),
     extractFunction(rendererSource, 'checkProfileMatch'),
-    extractFunction(rendererSource, 'clearCurrentProfile'),
-    extractFunction(rendererSource, 'renderTonightHero')
+    extractFunction(rendererSource, 'clearCurrentProfile')
   ].join('\n');
-  assert.doesNotMatch(contractSource, /dryRun|forceShutdown|muteSystem/);
+  assert.doesNotMatch(mutatorSource, /dryRun|forceShutdown|muteSystem/);
+  const heroSource = extractFunction(rendererSource, 'renderTonightHero');
+  assert.doesNotMatch(heroSource, /dryRun\s*=|forceShutdown|muteSystem/);
 });
 
 test('Start reads exactly the same state.action / inputSeconds() the visible plan is built from -- no competing state model', () => {
@@ -485,8 +535,9 @@ test('manual Lock plan summary renders in Tonight\'s Plan exactly like any other
 
   renderTonightHero();
 
-  assert.equal(elements['ns-hero-title'].textContent, 'Countdown · 20 min');
-  assert.equal(elements['ns-play-label'].textContent, 'Start countdown');
+  assert.equal(elements['ns-hero-title'].textContent, 'Countdown');
+  assert.equal(elements['ns-preview-time'].textContent, '20 min');
+  assert.equal(elements['ns-play-label'].textContent, 'Start timer');
 });
 
 test('a Lock profile shows its source, and manually editing away from it clears to Custom -- same matching rules as any other action', () => {
@@ -501,7 +552,8 @@ test('a Lock profile shows its source, and manually editing away from it clears 
   renderTonightHero();
   assert.equal(elements['ns-hero-source'].style.display, '');
   assert.equal(elements['ns-hero-source-name'].textContent, 'Quick Lock');
-  assert.equal(elements['ns-hero-title'].textContent, 'Quick Lock · 5 min');
+  assert.equal(elements['ns-hero-title'].textContent, 'Quick Lock');
+  assert.equal(elements['ns-preview-time'].textContent, '5 min');
 
   setAction('shutdown');
 
@@ -509,7 +561,7 @@ test('a Lock profile shows its source, and manually editing away from it clears 
   assert.deepEqual(calls.persistSelectedProfile, [null]);
 
   renderTonightHero();
-  assert.equal(elements['ns-hero-title'].textContent, 'Countdown · 5 min');
+  assert.equal(elements['ns-hero-title'].textContent, 'Countdown');
   assert.equal(elements['ns-hero-source'].style.display, 'none');
 });
 
@@ -519,7 +571,8 @@ test('Start executes the same canonical action Tonight\'s Plan displays when Loc
   els.timerInput.value = '10';
 
   renderTonightHero();
-  assert.equal(elements['ns-hero-title'].textContent, 'Countdown · 10 min');
+  assert.equal(elements['ns-hero-title'].textContent, 'Countdown');
+  assert.equal(elements['ns-preview-time'].textContent, '10 min');
 
   // startTimer (Start's shared entry point, generic across every action)
   // sends `action: state.action` verbatim -- with state.action === 'lock'

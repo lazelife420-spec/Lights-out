@@ -13,7 +13,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.Future
 import javax.net.ssl.SSLSocket
 
-/** Serialized primary application authority; this class never opens a socket. */
+/** Serialized primary authority; outgoing manual TLS is explicit and bounded. */
 class HandoffController(context:Context) {
     private val context=context.applicationContext
     private val authority=Executors.newSingleThreadExecutor()
@@ -25,7 +25,7 @@ class HandoffController(context:Context) {
     private data class Preview(val id:String,val peerId:String,val expiresAt:Long,val value:JSONObject)
     private val pending=mutableMapOf<String,Connection>();private val connections=mutableMapOf<String,Connection>();private val offers=mutableMapOf<String,Incoming>()
     private var invitation:JSONObject?=null;private var opened:JSONObject?=null;private var preview:Preview?=null
-    private var note="Local pairing screens are ready. LAN transport is disabled in this build."
+    private var note="Pairing is off. Connect devices explicitly to exchange inactive routine intent."
     private fun closeAll(){(pending.values+connections.values).forEach { try{it.socket.close()}catch(_:Exception){} };pending.clear();connections.clear();offers.clear();preview=null}
     private fun ready():JSONObject {
         val state=identity.status();check(state.getString("status")=="ready") { state.optString("error","Create a device identity first.") }
@@ -40,7 +40,7 @@ class HandoffController(context:Context) {
     private fun snapshot():JSONObject {
         val state=identity.status();if(state.getString("status")=="ready"){ready();expire()}else closeAll()
         val peers=if(state.getString("status")=="ready")book!!.listPeers().map { p -> JSONObject().put("id",p.id).put("platform",p.platform).put("label",p.label).put("revoked",p.revoked).put("enrolledAt",p.enrolledAt).put("revokedAt",p.revokedAt ?: JSONObject.NULL).put("connected",connections.containsKey(p.id)).put("canOffer",connections[p.id]?.let { it.challenge!=null&&it.challengeExpires>identity.now() } ?: false) } else emptyList()
-        return JSONObject().put("identity",state).put("transport","isolated").put("invitation",invitation ?: JSONObject.NULL).put("opened",opened ?: JSONObject.NULL)
+        return JSONObject().put("identity",state).put("transport","manual").put("invitation",invitation ?: JSONObject.NULL).put("opened",opened ?: JSONObject.NULL)
             .put("pairings",JSONArray(pending.values.map { p -> JSONObject().put("id",p.id).put("fingerprint",p.peerId).put("platform",p.platform).put("verified",true).put("expiresAt",p.expiresAt) }))
             .put("peers",JSONArray(peers)).put("offers",JSONArray(offers.values.map { o -> JSONObject().put("id",o.id).put("peerId",o.peerId).put("bytes",o.bytes).put("sha256",o.sha256).put("expiresAt",o.expiresAt) }))
             .put("preview",preview?.let { JSONObject().put("id",it.id).put("peerId",it.peerId).put("expiresAt",it.expiresAt).put("value",it.value) } ?: JSONObject.NULL)
@@ -59,12 +59,13 @@ class HandoffController(context:Context) {
         }
     }
     /** Main-process transport integration only; never exposed by the WebView. */
-    fun attach(socket:SSLSocket,link:String):Future<String> = authority.submit<String> {
+    fun attach(socket:SSLSocket,link:String):Future<String> = authority.submit<String> { attachInternal(socket,link) }
+    private fun attachInternal(socket:SSLSocket,link:String):String {
         try {ready();val invite=RoutineHandoff.parseInvitation(link,identity.now());val proof=RoutineHandoff.Peer.authenticate(socket,currentId!!,invite.id);val history=identity.readTrust(currentId!!).getJSONArray("used")
             require((0 until history.length()).none { val r=history.getJSONObject(it);r.getString("key")==invite.id+":"+invite.nonce&&r.getLong("expires")>identity.now() }) { "This invitation has already been used. Generate a new one." }
             require(!connections.containsKey(invite.id)&&pending.values.none { it.peerId==invite.id }) { "A connection for this device already exists. Close it before retrying." };require(pending.size+connections.size<8)
             val c=Connection(UUID.randomUUID().toString(),invite.id,invite.platform,invite.expires,proof,socket,link)
-            if(book!!.listPeers().any { it.id==invite.id&&!it.revoked }){book!!.connect(link,proof);connected(c)}else{pending[c.id]=c;note="Peer certificate verified. Compare the full fingerprint and approve or reject enrollment."};c.id
+            if(book!!.listPeers().any { it.id==invite.id&&!it.revoked }){book!!.connect(link,proof);connected(c)}else{pending[c.id]=c;note="Peer certificate verified. Compare the full fingerprint and approve or reject enrollment."};return c.id
         }catch(e:Exception){try{socket.close()}catch(_:Exception){};throw e}
     }
     fun identityForTransport():HandoffIdentity=identity
@@ -74,7 +75,9 @@ class HandoffController(context:Context) {
         if(action!="status"){
             if(action=="setup"||action=="replace"){closeAll();identity.initialize(args.optBoolean("confirmed"),action=="replace",args.optString("expectedFingerprint").ifEmpty { null });currentId=null;ready();note="Device identity ready. Other devices must explicitly enroll this identity."}
             else {ready();expire();when(action){
-                "invite"->{val link=RoutineHandoff.invitation(currentId!!,"android",identity.now());val parsed=RoutineHandoff.parseInvitation(link,identity.now());val bits=QRCodeWriter().encode(link,BarcodeFormat.QR_CODE,480,480);val bitmap=Bitmap.createBitmap(480,480,Bitmap.Config.ARGB_8888);for(y in 0 until 480)for(x in 0 until 480)bitmap.setPixel(x,y,if(bits[x,y])android.graphics.Color.BLACK else android.graphics.Color.WHITE);val out=ByteArrayOutputStream();bitmap.compress(Bitmap.CompressFormat.PNG,100,out);bitmap.recycle();invitation=JSONObject().put("link",link).put("expiresAt",parsed.expires).put("qr","data:image/png;base64,"+Base64.encodeToString(out.toByteArray(),Base64.NO_WRAP));note="Invitation expires in two minutes. It contains public identity only."}
+                "invite"->{val link=RoutineHandoff.invitation(currentId!!,"android",identity.now());val parsed=RoutineHandoff.parseInvitation(link,identity.now());val bits=QRCodeWriter().encode(link,BarcodeFormat.QR_CODE,480,480);val bitmap=Bitmap.createBitmap(480,480,Bitmap.Config.ARGB_8888);for(y in 0 until 480)for(x in 0 until 480)bitmap.setPixel(x,y,if(bits[x,y])android.graphics.Color.BLACK else android.graphics.Color.WHITE);val out=ByteArrayOutputStream();bitmap.compress(Bitmap.CompressFormat.PNG,100,out);bitmap.recycle();invitation=JSONObject().put("link",link).put("expiresAt",parsed.expires).put("qr","data:image/png;base64,"+Base64.encodeToString(out.toByteArray(),Base64.NO_WRAP)).put("card",HandoffConnection.card(identity,link));note="Invitation expires in two minutes. It contains public identity only."}
+                "connect"->{require(pending.isEmpty()&&connections.isEmpty()) { "Close the existing connection before connecting again." };val(socket,link)=HandoffConnection.connect(identity,args.getString("card"),args.optBoolean("confirmed"));attachInternal(socket,link)}
+                "disconnect"->{closeAll();note="Pairing connections closed. Saved device trust is unchanged."}
                 "open"->{val p=RoutineHandoff.parseInvitation(args.getString("link"),identity.now());val used=identity.readTrust(currentId!!).getJSONArray("used");require((0 until used.length()).none { val r=used.getJSONObject(it);r.getString("key")==p.id+":"+p.nonce&&r.getLong("expires")>identity.now() }) { "This invitation has already been used. Generate a new one." };opened=JSONObject().put("fingerprint",p.id).put("platform",p.platform).put("expiresAt",p.expires).put("verified",false);note="Invitation opened. Approval remains unavailable until a secure connection proves this fingerprint."}
                 "approve"->{val c=pending[args.getString("id")] ?: error("Pairing invitation expired or disconnected.");require(c.expiresAt>identity.now());book!!.enroll(c.link,c.proof,args.getString("fingerprint"),args.optString("label").ifEmpty { null },args.optString("replaceId").ifEmpty { null });pending.remove(c.id);connected(c)}
                 "reject"->{pending.remove(args.getString("id"))?.socket?.close();note="Pairing rejected. No device was enrolled."}

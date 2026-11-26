@@ -294,6 +294,132 @@ function encodeTextFrame(obj) {
       result.socket.destroy();
     });
 
+    await check('companion: Protocol V3 hello, commandAck lifecycle, duplicate replay, and conflict rejection work over live WS', async () => {
+      const NodeWebSocket = globalThis.WebSocket;
+      assert(typeof NodeWebSocket === 'function', 'Node WebSocket unavailable');
+      companion.resetIdempotencyRegistry();
+
+      let dispatchCount = 0;
+      const handler = (msg, _client, v3Context) => {
+        if (!v3Context) return;
+        dispatchCount++;
+        v3Context.resolve({
+          status: remoteControl.ACK_STATUSES.COMPLETED,
+          stateRevision: companion.getStateRevision() + 1
+        });
+      };
+      companion.onMessage(handler);
+      const ws = new NodeWebSocket(`ws://127.0.0.1:${testPort}/?t=${encodeURIComponent(token)}`);
+      const frames = [];
+      try {
+        await new Promise((resolve, reject) => {
+          ws.addEventListener('open', resolve, { once: true });
+          ws.addEventListener('error', () => reject(new Error('V3 WS connect failed')), { once: true });
+          ws.addEventListener('message', e => { try { frames.push(JSON.parse(String(e.data))); } catch {} });
+        });
+        await wait(150);
+        const hello = frames.find(f => f.type === 'hello');
+        assert(hello && hello.protocol === 3, `expected protocol 3 hello, got ${JSON.stringify(hello)}`);
+        assert(Array.isArray(hello.capabilities) && hello.capabilities.includes('command-ack') && hello.capabilities.includes('pause-resume'), `missing V3 capabilities: ${JSON.stringify(hello)}`);
+
+        const reqId = remoteControl.createRequestId();
+        ws.send(JSON.stringify({ protocolVersion: 3, requestId: reqId, action: 'pause' }));
+        await wait(200);
+        assert(dispatchCount === 1, `expected 1 dispatch, got ${dispatchCount}`);
+        const acksForReq = frames.filter(f => f.type === 'commandAck' && f.requestId === reqId);
+        assert(acksForReq.some(a => a.status === 'accepted' && a.duplicate === false), `missing accepted ACK: ${JSON.stringify(acksForReq)}`);
+        assert(acksForReq.some(a => a.status === 'completed' && a.duplicate === false && Number.isInteger(a.stateRevision)), `missing completed ACK: ${JSON.stringify(acksForReq)}`);
+
+        // Identical duplicate replays terminal ACK without re-dispatching
+        ws.send(JSON.stringify({ protocolVersion: 3, requestId: reqId, action: 'pause' }));
+        await wait(200);
+        assert(dispatchCount === 1, `duplicate request re-dispatched (${dispatchCount})`);
+        const dupAcks = frames.filter(f => f.type === 'commandAck' && f.requestId === reqId && aStatusIs(f, 'completed') && f.duplicate === true);
+        assert(dupAcks.length === 1, `missing duplicate replay ACK: ${JSON.stringify(frames)}`);
+
+        // Conflicting payload on same requestId returns request_id_conflict
+        ws.send(JSON.stringify({ protocolVersion: 3, requestId: reqId, action: 'resume' }));
+        await wait(200);
+        assert(dispatchCount === 1, 'conflict should not dispatch');
+        assert(frames.some(f => f.type === 'commandAck' && f.requestId === reqId && f.status === 'rejected' && f.reason === 'request_id_conflict'), `missing conflict ACK: ${JSON.stringify(frames)}`);
+
+        // Forbidden power action under V3 is rejected and never dispatched
+        const badReqId = remoteControl.createRequestId();
+        ws.send(JSON.stringify({ protocolVersion: 3, requestId: badReqId, action: 'start', timerAction: 'hibernate', durationSeconds: 600 }));
+        await wait(200);
+        assert(dispatchCount === 1, 'forbidden V3 start should not dispatch');
+        assert(frames.some(f => f.type === 'commandAck' && f.requestId === badReqId && f.status === 'rejected' && f.reason === 'invalid_payload'), `missing forbidden-action rejection: ${JSON.stringify(frames)}`);
+      } finally {
+        companion.offMessage(handler);
+        try { ws.close(); } catch {}
+        await wait(100);
+      }
+
+      function aStatusIs(f, s) { return f && f.status === s; }
+    });
+
+    await check('companion: concurrent multi-socket V3 in-flight coalescing and abrupt waiter disconnect over real WS', async () => {
+      const NodeWebSocket = globalThis.WebSocket;
+      assert(typeof NodeWebSocket === 'function', 'Node WebSocket unavailable');
+      companion.resetIdempotencyRegistry();
+
+      let dispatchCount = 0;
+      let deferredResolve = null;
+      const handler = (_msg, _client, v3Context) => {
+        if (!v3Context) return;
+        dispatchCount++;
+        deferredResolve = () => v3Context.resolve({
+          status: remoteControl.ACK_STATUSES.COMPLETED,
+          stateRevision: companion.getStateRevision() + 1
+        });
+      };
+      companion.onMessage(handler);
+
+      const openClient = () => new Promise((resolve, reject) => {
+        const ws = new NodeWebSocket(`ws://127.0.0.1:${testPort}/?t=${encodeURIComponent(token)}`);
+        const frames = [];
+        ws.addEventListener('message', e => { try { frames.push(JSON.parse(String(e.data))); } catch {} });
+        ws.addEventListener('open', () => resolve({ ws, frames }), { once: true });
+        ws.addEventListener('error', () => reject(new Error('V3 multi-socket connect failed')), { once: true });
+      });
+
+      const c1 = await openClient();
+      const c2 = await openClient();
+      const c3 = await openClient();
+      try {
+        const reqId = remoteControl.createRequestId();
+        c1.ws.send(JSON.stringify({ protocolVersion: 3, requestId: reqId, action: 'snooze', seconds: 300 }));
+        await wait(80);
+        // Second and third real sockets send identical requestId while first is still in_progress
+        c2.ws.send(JSON.stringify({ protocolVersion: 3, requestId: reqId, action: 'snooze', seconds: 300 }));
+        c3.ws.send(JSON.stringify({ protocolVersion: 3, requestId: reqId, action: 'snooze', seconds: 300 }));
+        await wait(120);
+
+        assert(dispatchCount === 1, `expected single coalesced dispatch, got ${dispatchCount}`);
+        assert(c1.frames.some(f => f.type === 'commandAck' && f.requestId === reqId && f.status === 'accepted' && f.duplicate === false), JSON.stringify(c1.frames));
+        assert(c2.frames.some(f => f.type === 'commandAck' && f.requestId === reqId && f.status === 'accepted' && f.duplicate === true), JSON.stringify(c2.frames));
+        assert(c3.frames.some(f => f.type === 'commandAck' && f.requestId === reqId && f.status === 'accepted' && f.duplicate === true), JSON.stringify(c3.frames));
+
+        // Abruptly disconnect third waiter mid-flight before primary resolves
+        c3.ws.close();
+        await wait(120);
+
+        assert(typeof deferredResolve === 'function', 'deferred resolver missing');
+        assert(deferredResolve() === true, 'deferred resolve returned false');
+        await wait(150);
+
+        assert(c1.frames.some(f => f.type === 'commandAck' && f.requestId === reqId && f.status === 'completed' && f.duplicate === false), JSON.stringify(c1.frames));
+        assert(c2.frames.some(f => f.type === 'commandAck' && f.requestId === reqId && f.status === 'completed' && f.duplicate === true), JSON.stringify(c2.frames));
+        assert(companion.getIdempotencyRegistry().getStats().inProgress === 0, 'in-progress record leaked');
+      } finally {
+        companion.offMessage(handler);
+        try { c1.ws.close(); } catch {}
+        try { c2.ws.close(); } catch {}
+        try { c3.ws.close(); } catch {}
+        await wait(100);
+      }
+    });
+
     const newToken = remoteControl.generateToken();
     await companion.stop();
     await wait(400);

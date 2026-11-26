@@ -3,6 +3,7 @@
 // before the power action fires, and warns the user.
 
 const { spawn } = require('child_process');
+const { runBounded } = require('./boundedProcess');
 
 // Window title patterns that indicate unsaved work.
 const UNSAVED_PATTERNS = [
@@ -22,12 +23,18 @@ const UNSAVED_PATTERNS = [
   'save?'
 ];
 
-// Scan all visible windows for unsaved-work dialog titles.
-async function scanUnsavedWork() {
+// Scan all visible windows for unsaved-work dialog titles. The scan compiles a
+// small Add-Type helper on every run; on a slow or antivirus-heavy PC that
+// alone can take several seconds. A timeout fails closed (the power action is
+// blocked), so the bound matches the app's other PowerShell calls rather than
+// silently skipping bedtime on slower machines.
+const SCAN_TIMEOUT_MS = 15000;
+async function scanUnsavedWork({ signal, timeoutMs = SCAN_TIMEOUT_MS } = {}) {
   const warnings = [];
 
   // Get all windows with titles using PowerShell.
   const psCmd = `
+    $ErrorActionPreference = 'Stop'
     Add-Type @"
       using System;
       using System.Runtime.InteropServices;
@@ -38,7 +45,7 @@ async function scanUnsavedWork() {
         [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);
         [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
       }
-    "@
+"@
     $titles = [System.Collections.ArrayList]::new()
     $callback = [Win32+EnumWindowsProc]{
       param($hWnd, $lParam)
@@ -47,20 +54,19 @@ async function scanUnsavedWork() {
         [Win32]::GetWindowText($hWnd, $sb, 512) | Out-Null
         $title = $sb.ToString()
         if ($title.Length -gt 0) {
-          $pid = 0
-          [Win32]::GetWindowThreadProcessId($hWnd, [ref]$pid) | Out-Null
-          $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
-          $titles.Add("$pid|$($proc.ProcessName)|$title") | Out-Null
+          [uint32]$windowProcessId = 0
+          [Win32]::GetWindowThreadProcessId($hWnd, [ref]$windowProcessId) | Out-Null
+          $proc = Get-Process -Id $windowProcessId -ErrorAction SilentlyContinue
+          $titles.Add("$windowProcessId|$($proc.ProcessName)|$title") | Out-Null
         }
       }
       return $true
     }
-    [Win32]::EnumWindows($callback, [IntPtr]::Zero) | Out-Null
+    if (-not [Win32]::EnumWindows($callback, [IntPtr]::Zero)) { throw 'Window enumeration failed' }
     $titles -join ';'
   `;
 
-  try {
-    const raw = await executePS(psCmd);
+    const raw = await executePS(psCmd, { signal, timeoutMs });
     if (!raw) return [];
 
     for (const entry of raw.split(';').map(s => s.trim()).filter(Boolean)) {
@@ -80,7 +86,6 @@ async function scanUnsavedWork() {
         }
       }
     }
-  } catch { /* best-effort scan */ }
 
   return warnings;
 }
@@ -91,23 +96,14 @@ async function hasUnsavedWork() {
   return warnings.length > 0;
 }
 
-function executePS(command) {
-  return new Promise((resolve, reject) => {
-    const ps = spawn('powershell.exe', [
+function executePS(command, { signal, timeoutMs }) {
+  return runBounded({ spawn, file: 'powershell.exe', args: [
       '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command
-    ], { stdio: ['ignore', 'pipe', 'pipe'] });
-    let output = '';
-    ps.stdout.on('data', data => { output += data.toString(); });
-    ps.stderr.on('data', data => { output += data.toString(); });
-    ps.on('error', reject);
-    ps.on('close', code => {
-      if (code === 0) resolve(output.trim());
-      else reject(new Error(output.trim() || `PS exit ${code}`));
-    });
-  });
+    ], signal, timeoutMs, errorPrefix: 'UNSAVED_SCAN' });
 }
 
 module.exports = {
+  SCAN_TIMEOUT_MS,
   scanUnsavedWork,
   hasUnsavedWork
 };

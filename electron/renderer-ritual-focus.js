@@ -112,14 +112,17 @@ function renderSleepDebt(debt) {
     const days = debt.dailyLog || [];
     els.debtWeek.innerHTML = days.length ? days.map(d => {
       const dayLabel = new Date(d.date + 'T12:00:00').toLocaleDateString('en', { weekday: 'short' });
-      const barW = Math.min(100, Math.abs(d.debt || d.surplus || 0) / debt.targetHours * 100);
-      const isDebt = (d.debt || 0) > 0;
+      const targetHours = Number(debt.targetHours) > 0 ? Number(debt.targetHours) : 8;
+      const debtVal = Number(d.debt) || 0;
+      const surplusVal = Number(d.surplus) || 0;
+      const barW = Math.min(100, Math.abs(debtVal || surplusVal) / targetHours * 100);
+      const isDebt = debtVal > 0;
       return `<div class="debt-day" style="display:flex;align-items:center;gap:4px;font-size:10px">
-        <span style="width:28px;color:var(--text-muted)">${dayLabel}</span>
+        <span style="width:28px;color:var(--text-muted)">${escapeHtml(dayLabel)}</span>
         <div style="flex:1;height:4px;background:var(--bg-card);border-radius:2px;overflow:hidden">
-          <div style="width:${barW}%;height:100%;background:${isDebt ? 'var(--accent-amber)' : 'var(--pf-teal)'};border-radius:2px"></div>
+          <div style="width:${barW.toFixed(1)}%;height:100%;background:${isDebt ? 'var(--accent-amber)' : 'var(--pf-teal)'};border-radius:2px"></div>
         </div>
-        <span style="width:36px;color:${isDebt ? 'var(--accent-amber)' : 'var(--pf-teal)'}">${isDebt ? '-' : '+'}${isDebt ? d.debt?.toFixed(1) : d.surplus?.toFixed(1)}h</span>
+        <span style="width:36px;color:${isDebt ? 'var(--accent-amber)' : 'var(--pf-teal)'}">${isDebt ? '-' : '+'}${(isDebt ? debtVal : surplusVal).toFixed(1)}h</span>
       </div>`;
     }).join('') : '<p style="font-size:10px;color:var(--text-muted)">No data yet</p>';
   }

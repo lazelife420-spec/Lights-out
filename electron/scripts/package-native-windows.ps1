@@ -59,16 +59,65 @@ function Write-PortableZip($Root, $Destination) {
   } finally { $archive.Dispose() }
 }
 
-# 1. Clean staging
-Remove-IfExists $OutputRoot
-New-Item -ItemType Directory -Path $AppDir -Force | Out-Null
+function Escape-NsisString([string]$Value) {
+  return $Value.Replace('$', '$$').Replace('"', '$\"')
+}
 
-# 2. Read package metadata
+function Write-UninstallManifest([string]$Root, [string]$ManifestPath) {
+  $lines = [System.Collections.Generic.List[string]]::new()
+  $files = @(Get-ChildItem -LiteralPath $Root -Recurse -File -Force | Sort-Object FullName)
+  foreach ($file in $files) {
+    $rel = $file.FullName.Substring($Root.Length + 1)
+    $escaped = Escape-NsisString $rel
+    $lines.Add("Delete `"`$INSTDIR\$escaped`"")
+  }
+  $dirs = @(Get-ChildItem -LiteralPath $Root -Recurse -Directory -Force | Sort-Object { $_.FullName.Length } -Descending)
+  foreach ($dir in $dirs) {
+    $rel = $dir.FullName.Substring($Root.Length + 1)
+    $escaped = Escape-NsisString $rel
+    $lines.Add("RMDir `"`$INSTDIR\$escaped`"")
+  }
+  Set-Content -LiteralPath $ManifestPath -Value $lines -Encoding utf8
+}
+
+function Find-Makensis([string]$NsisRoot) {
+  foreach ($candidate in @((Join-Path $NsisRoot 'Bin\makensis.exe'), (Join-Path $NsisRoot 'makensis.exe'))) {
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+  }
+  return $null
+}
+
+# 1. Validate metadata, source inventory, and locked Electron provisioning BEFORE touching OutputRoot
 $package = Get-Content (Join-Path $SourceRoot 'package.json') | ConvertFrom-Json
 if ($Version -ne $package.version) { throw 'Build version must match package.json.' }
+& node (Join-Path $PSScriptRoot 'verify-electron-provisioning.js')
+if ($LASTEXITCODE -ne 0) { throw "Locked Electron provisioning verification failed: $LASTEXITCODE" }
 $fileList = & node (Join-Path $PSScriptRoot 'app-source-files.js') $SourceRoot
 if ($LASTEXITCODE -ne 0) { throw 'Application source inventory failed.' }
 $files = $fileList | ConvertFrom-Json
+$electronDist = Join-Path (Join-Path (Join-Path $SourceRoot 'node_modules') 'electron') 'dist'
+if (-not (Test-Path -LiteralPath $electronDist -PathType Container)) {
+    throw "Electron dist not found. Run 'npm run electron:provision' first."
+}
+
+if ($DryRun) {
+    $plan = [PSCustomObject]@{
+        dryRun = $true
+        version = $Version
+        sourceRoot = $SourceRoot
+        outputRoot = $OutputRoot
+        appFiles = $files.Count
+        portableZip = (-not $SkipZip)
+        nsisInstaller = (-not $SkipInstaller)
+    }
+    $plan | ConvertTo-Json
+    Write-Host "Dry run passed: validated version $Version, $($files.Count) app files, and Electron provisioning without writing to $OutputRoot." -ForegroundColor Green
+    return
+}
+
+# 2. Clean staging
+Remove-IfExists $OutputRoot
+New-Item -ItemType Directory -Path $AppDir -Force | Out-Null
 
 # 3. Copy listed application files
 foreach ($relative in $files) {
@@ -77,7 +126,9 @@ foreach ($relative in $files) {
     New-Item -ItemType Directory -Path (Split-Path -Parent $dst) -Force | Out-Null
     Copy-Item -LiteralPath $src -Destination $dst -Force
 }
+
 # 4. Copy package manifests and install production dependencies
+& (Join-Path $PSScriptRoot 'build-windows-suspend.ps1') -SourceRoot $SourceRoot -OutputDirectory (Join-Path $AppDir 'native')
 Copy-Item (Join-Path $SourceRoot 'package.json') (Join-Path $AppDir 'package.json') -Force
 Copy-Item (Join-Path $SourceRoot 'package-lock.json') (Join-Path $AppDir 'package-lock.json') -Force
 Push-Location $AppDir
@@ -100,8 +151,6 @@ if (Test-Path $nodeModulesDir) {
 }
 
 # 5. Copy provisioned Electron runtime
-$electronDist = Join-Path (Join-Path (Join-Path $SourceRoot 'node_modules') 'electron') 'dist'
-if (-not (Test-Path $electronDist)) { throw "Electron dist not found. Run 'npm run electron:provision' first." }
 Get-ChildItem -Path $electronDist -Force | Copy-Item -Destination $UnpackedDir -Recurse -Force
 
 # 6. Rename executable if safe
@@ -110,7 +159,7 @@ $newExe = Join-Path $UnpackedDir "$PackageName.exe"
 if (Test-Path $exe) {
     Move-Item -Path $exe -Destination $newExe -Force
 } else {
-    Write-Warning 'electron.exe not found; cannot rename launcher.'
+    throw 'electron.exe not found in staged runtime; cannot produce launcher.'
 }
 
 # 7. Stamp Lights Out Windows identity on the staged executable
@@ -118,7 +167,7 @@ $stampScript = Join-Path $PSScriptRoot 'stamp-windows-identity.ps1'
 if (Test-Path $stampScript) {
     & $stampScript -SourceRoot $SourceRoot -ExePath $newExe -IconPath (Join-Path $SourceRoot 'assets\icon.ico')
 } else {
-    Write-Warning 'stamp-windows-identity.ps1 not found; executable branding skipped.'
+    throw 'stamp-windows-identity.ps1 not found; refusing to package unbranded executable.'
 }
 
 # 8. Verify the executable identity
@@ -136,11 +185,22 @@ if (-not $SkipZip) {
     Write-Host "Portable ZIP: $zipPath" -ForegroundColor Cyan
 }
 if (-not $SkipInstaller) {
-    if (-not $env:LIGHTS_OUT_NSIS_ROOT) { & (Join-Path $PSScriptRoot 'provision-nsis.ps1') }
-    $compiler = Join-Path $env:LIGHTS_OUT_NSIS_ROOT 'Bin\makensis.exe'
+    & (Join-Path $PSScriptRoot 'provision-nsis.ps1')
+    $compiler = Find-Makensis $env:LIGHTS_OUT_NSIS_ROOT
+    if (-not $compiler) { throw "NSIS compiler not found under $($env:LIGHTS_OUT_NSIS_ROOT)" }
     $setup = Join-Path $OutputRoot "Lights-Out-Setup-v$Version.exe"
-    & $compiler '/V2' "/DVERSION=$Version" "/DAPP_DIR=$UnpackedDir" "/DAPP_ICON=$(Join-Path $SourceRoot 'assets\icon.ico')" "/DOUTPUT_FILE=$setup" (Join-Path $PSScriptRoot 'windows-installer.nsi')
-    if ($LASTEXITCODE -ne 0) { throw "NSIS installer build failed: $LASTEXITCODE" }
+    $totalBytes = (Get-ChildItem -LiteralPath $UnpackedDir -Recurse -File -Force | Measure-Object -Property Length -Sum).Sum
+    $estimatedSizeKb = [Math]::Max(1, [int][Math]::Ceiling($totalBytes / 1024))
+    $uninstallManifest = Join-Path ([IO.Path]::GetTempPath()) ("lightsout-uninstall-manifest-" + [Guid]::NewGuid().ToString('N') + '.nsh')
+    try {
+        Write-UninstallManifest -Root $UnpackedDir -ManifestPath $uninstallManifest
+        & $compiler '/V2' "/DVERSION=$Version" "/DAPP_DIR=$UnpackedDir" "/DAPP_ICON=$(Join-Path $SourceRoot 'assets\icon.ico')" "/DOUTPUT_FILE=$setup" "/DUNINSTALL_MANIFEST=$uninstallManifest" "/DESTIMATED_SIZE_KB=$estimatedSizeKb" (Join-Path $PSScriptRoot 'windows-installer.nsi')
+        if ($LASTEXITCODE -ne 0) { throw "NSIS installer build failed: $LASTEXITCODE" }
+    } finally {
+        if (Test-Path -LiteralPath $uninstallManifest) {
+            Remove-Item -LiteralPath $uninstallManifest -Force -ErrorAction SilentlyContinue
+        }
+    }
     Write-Host "Windows installer: $setup" -ForegroundColor Cyan
 }
 & node (Join-Path $PSScriptRoot 'release-artifacts.js') create $OutputRoot

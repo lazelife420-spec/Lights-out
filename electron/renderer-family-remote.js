@@ -462,12 +462,13 @@ function renderWifiDevices(devices) {
     el.addEventListener('click', () => {
       const mac = el.dataset.mac;
       const ip = el.dataset.ip;
-      if (wifiSelectedDevices.macs.includes(mac)) {
-        wifiSelectedDevices.macs = wifiSelectedDevices.macs.filter(m => m !== mac);
-        wifiSelectedDevices.ips = wifiSelectedDevices.ips.filter(i => i !== ip);
+      const alreadySelected = (mac && wifiSelectedDevices.macs.includes(mac)) || (ip && wifiSelectedDevices.ips.includes(ip));
+      if (alreadySelected) {
+        if (mac) wifiSelectedDevices.macs = wifiSelectedDevices.macs.filter(m => m !== mac);
+        if (ip) wifiSelectedDevices.ips = wifiSelectedDevices.ips.filter(i => i !== ip);
       } else {
-        wifiSelectedDevices.macs.push(mac);
-        wifiSelectedDevices.ips.push(ip);
+        if (mac && !wifiSelectedDevices.macs.includes(mac)) wifiSelectedDevices.macs.push(mac);
+        if (ip && !wifiSelectedDevices.ips.includes(ip)) wifiSelectedDevices.ips.push(ip);
       }
       renderWifiDevices(list);
     });

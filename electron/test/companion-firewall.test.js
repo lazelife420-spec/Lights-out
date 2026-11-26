@@ -84,3 +84,55 @@ test('firewall snapshot is limited to the app-owned group', () => {
   assert.match(command, /Get-NetFirewallRule -Group 'Lights Out Companion'/);
   assert.match(command, /Program/);
 });
+
+test('firewall snapshot handles 0, 1, and multiple rules with bulk InstanceID join in PowerShell', { skip: process.platform !== 'win32' }, () => {
+  const snapshotCmd = firewall.snapshotOwnedRulesCommand();
+  const script = `
+    $script:rules = @()
+    $script:apps = @()
+    $script:ports = @()
+    function Get-NetFirewallRule {
+      [CmdletBinding()] param([string]$Group)
+      $script:rules | Where-Object { $_.Group -eq $Group }
+    }
+    function Get-NetFirewallApplicationFilter { [CmdletBinding()] param(); $script:apps }
+    function Get-NetFirewallPortFilter { [CmdletBinding()] param(); $script:ports }
+    function Invoke-Snap { ${snapshotCmd} }
+
+    $zero = Invoke-Snap
+
+    $script:rules = @(
+      [pscustomobject]@{ Name='LightsOutCompanion-1-a-TCP'; DisplayName='Lights Out Companion TCP'; Group='Lights Out Companion'; Profile='Private'; Direction='Inbound'; Action='Allow'; Enabled='True' }
+    )
+    $script:apps = @(
+      [pscustomobject]@{ InstanceID='LightsOutCompanion-1-a-TCP'; Program='C:\\App\\Lights Out.exe' },
+      [pscustomobject]@{ InstanceID='UnrelatedRule'; Program='C:\\Other\\app.exe' }
+    )
+    $script:ports = @(
+      [pscustomobject]@{ InstanceID='LightsOutCompanion-1-a-TCP'; Protocol='TCP'; LocalPort='58732' }
+    )
+    $one = Invoke-Snap
+
+    $script:rules += [pscustomobject]@{ Name='LightsOutCompanion-1-a-UDP'; DisplayName='Lights Out Companion Discovery UDP'; Group='Lights Out Companion'; Profile='Private'; Direction='Inbound'; Action='Allow'; Enabled='True' }
+    $script:apps += [pscustomobject]@{ InstanceID='LightsOutCompanion-1-a-UDP'; Program='C:\\App\\Lights Out.exe' }
+    $script:ports += [pscustomobject]@{ InstanceID='LightsOutCompanion-1-a-UDP'; Protocol='UDP'; LocalPort=@('58733','58734') }
+    $two = Invoke-Snap
+
+    [pscustomobject]@{ zero = $zero; one = $one; two = $two } | ConvertTo-Json -Compress -Depth 4
+  `;
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const output = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], {
+    encoding: 'utf8', windowsHide: true, timeout: 15000, env: { ...process.env, PSModulePath: '' }
+  });
+  const res = JSON.parse(output.trim());
+  assert.deepEqual(JSON.parse(res.zero), []);
+  const oneParsed = JSON.parse(res.one);
+  assert.equal(oneParsed.Name, 'LightsOutCompanion-1-a-TCP');
+  assert.equal(oneParsed.Program, 'C:\\App\\Lights Out.exe');
+  assert.equal(oneParsed.Protocol, 'TCP');
+  assert.equal(oneParsed.LocalPort, '58732');
+  const twoParsed = JSON.parse(res.two);
+  assert.equal(Array.isArray(twoParsed), true);
+  assert.equal(twoParsed.length, 2);
+  assert.equal(twoParsed[1].LocalPort, '58733,58734');
+});

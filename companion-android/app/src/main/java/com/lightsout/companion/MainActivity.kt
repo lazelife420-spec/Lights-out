@@ -21,6 +21,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.view.View
+import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
@@ -119,6 +120,9 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        // Edge-to-edge (targetSdk 36): keep the PC page and setup form clear of the
+        // system bars, cutout and keyboard (adjustResize no longer resizes the window).
+        SystemBarInsets.contentRoot(this)?.let { SystemBarInsets.pad(it, includeIme = true) }
         supportActionBar?.title = "PC controls"
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
@@ -160,7 +164,40 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        with(webView.settings) {
+        // Allow inspecting the page from desktop Chrome via chrome://inspect over
+        // (wireless) adb in debug builds only.
+        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
+        configureWebView(webView)
+
+        connectBtn.setOnClickListener {
+            val url = CompanionUrlNormalizer.normalize(urlInput.text?.toString())
+            if (url == null) {
+                Toast.makeText(this, R.string.invalid_url, Toast.LENGTH_LONG).show()
+            } else {
+                showWeb(url)
+            }
+        }
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (webView.visibility == View.VISIBLE && webView.canGoBack()) {
+                    webView.goBack()
+                } else if (connecting.visibility == View.VISIBLE) {
+                    showSetup(lastRequestedUrl ?: prefs.getString(KEY_URL, null))
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
+
+        val saved = CompanionUrlNormalizer.normalize(prefs.getString(KEY_URL, null))
+        if (saved != null) showWeb(saved) else showSetup(null)
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun configureWebView(target: WebView) {
+        with(target.settings) {
             javaScriptEnabled = true
             // The companion remembers its pairing token in localStorage.
             domStorageEnabled = true
@@ -171,10 +208,14 @@ class MainActivity : AppCompatActivity() {
             javaScriptCanOpenWindowsAutomatically = false
             setSupportMultipleWindows(false)
         }
-        // Allow inspecting the page from desktop Chrome via chrome://inspect over
-        // (wireless) adb. Safe here: this is a single-purpose LAN control app.
-        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
-        webView.webViewClient = object : WebViewClient() {
+        target.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                val targetUrl = request?.url?.toString() ?: return true
+                val expected = lastRequestedUrl ?: prefs.getString(KEY_URL, null)
+                // Pin navigation strictly to the paired PC's origin; block external redirects.
+                return !CompanionUrlNormalizer.isSameOrigin(targetUrl, expected)
+            }
+
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 mainFrameLoadFailed = false
                 super.onPageStarted(view, url, favicon)
@@ -183,19 +224,20 @@ class MainActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 mainHandler.removeCallbacks(loadTimeout)
                 if (!mainFrameLoadFailed && url != null) {
-                    lastRequestedUrl = url
-                    // Failsafe: Only save to persistent preferences on successful load to prevent polluting with broken URLs
-                    if (url.startsWith("http://") || url.startsWith("https://")) {
-                        prefs.edit().putString(KEY_URL, url).apply()
-                        // Remove from failed map on successful connection
-                        val uri = try { java.net.URI(url) } catch (_: Exception) { null }
-                        uri?.host?.let { failedConnections.remove(it) }
+                    val expected = lastRequestedUrl
+                    if (expected != null && !CompanionUrlNormalizer.isSameOrigin(url, expected)) {
+                        handleLoadFailure(url, "Blocked cross-origin redirect")
+                        super.onPageFinished(view, url)
+                        return
                     }
-                    // Existing installs saved the pairing token only in the
-                    // companion page's localStorage. Mirror it into native
-                    // preferences after a successful load so those users also
-                    // gain IP-change recovery without having to pair again.
-                    capturePersistedPageToken(view, url)
+                    lastRequestedUrl = url
+                    // Failsafe: Only persist a verified same-origin URL (stripped of query token).
+                    val cleanUrl = CompanionUrlNormalizer.stripQueryAndFragment(url)
+                    if (cleanUrl != null && (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://"))) {
+                        val uri = try { java.net.URI(cleanUrl) } catch (_: Exception) { null }
+                        uri?.host?.let { failedConnections.remove(it) }
+                        verifyCompanionAndPersist(view, cleanUrl)
+                    }
                     showConnectedPage()
                 }
                 super.onPageFinished(view, url)
@@ -230,6 +272,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
+                recreateWebView()
                 handleLoadFailure(
                     lastRequestedUrl,
                     if (detail?.didCrash() == true) "WebView renderer crashed" else "WebView renderer exited"
@@ -237,39 +280,47 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
         }
-        // Forward page console output to logcat (tag "LightsOutWeb") so the
-        // companion page can be debugged over adb without chrome://inspect.
-        webView.webChromeClient = object : WebChromeClient() {
+        target.webChromeClient = object : WebChromeClient() {
             override fun onConsoleMessage(msg: ConsoleMessage): Boolean {
-                Log.d("LightsOutWeb", "${msg.message()} @${msg.sourceId()}:${msg.lineNumber()}")
+                if (BuildConfig.DEBUG) {
+                    val redacted = msg.message().replace(Regex("([?&]t=)[^&\\s]+"), "$1[redacted]")
+                    Log.d("LightsOutWeb", "$redacted @${CompanionUrlNormalizer.redactForLog(msg.sourceId())}:${msg.lineNumber()}")
+                }
                 return true
             }
         }
+    }
 
-        connectBtn.setOnClickListener {
-            val url = CompanionUrlNormalizer.normalize(urlInput.text?.toString())
-            if (url == null) {
-                Toast.makeText(this, R.string.invalid_url, Toast.LENGTH_LONG).show()
-            } else {
-                showWeb(url)
+    private fun recreateWebView() {
+        val old = webView
+        val parent = old.parent as? ViewGroup
+        val idx = parent?.indexOfChild(old) ?: -1
+        val lp = old.layoutParams
+        val visibility = old.visibility
+        try {
+            old.stopLoading()
+            parent?.removeView(old)
+            old.destroy()
+        } catch (_: Exception) {}
+        val replacement = WebView(this).apply {
+            id = R.id.webview
+            this.visibility = visibility
+            if (lp != null) layoutParams = lp
+        }
+        configureWebView(replacement)
+        if (parent != null && idx >= 0) parent.addView(replacement, idx)
+        webView = replacement
+    }
+
+    private fun verifyCompanionAndPersist(view: WebView?, cleanUrl: String) {
+        view?.evaluateJavascript(
+            "(function(){try{return Boolean(document.getElementById('pair-card')&&document.getElementById('status-pill'))}catch(e){return false}})()"
+        ) { isCompanion ->
+            if (isCompanion == "true") {
+                prefs.edit().putString(KEY_URL, cleanUrl).apply()
+                capturePersistedPageToken(view, cleanUrl)
             }
         }
-
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                if (webView.visibility == View.VISIBLE && webView.canGoBack()) {
-                    webView.goBack()
-                } else if (connecting.visibility == View.VISIBLE) {
-                    showSetup(lastRequestedUrl ?: prefs.getString(KEY_URL, null))
-                } else {
-                    isEnabled = false
-                    onBackPressedDispatcher.onBackPressed()
-                }
-            }
-        })
-
-        val saved = prefs.getString(KEY_URL, null)
-        if (saved != null) showWeb(saved) else showSetup(null)
     }
 
     private fun launchScanner() {
@@ -364,33 +415,26 @@ class MainActivity : AppCompatActivity() {
 
         webView.stopLoading()
 
-        // Most likely cause of a failed load on a previously-working pairing:
-        // the desktop's LAN IP changed (observed in practice on a machine
-        // with two Wi-Fi adapters on the same subnet). Try a unicast subnet
-        // scan for the same token before giving up to the manual setup
-        // screen -- but only once per cooldown window, so a genuinely wrong/
-        // revoked token (which will keep failing no matter what host answers)
-        // can't turn into a busy-loop of scans.
-        val token = prefs.getString(KEY_TOKEN, null)
+        // Security: never auto-transmit a stored pairing token to a newly
+        // discovered IP on the LAN (a rogue host on shared Wi-Fi could forge a
+        // discovery response to harvest the token). Treat subnet discovery as
+        // advisory: show the candidate on the setup screen for explicit user tap.
         val now = System.currentTimeMillis()
-        if (token != null && now - lastScanAttemptAt > SCAN_COOLDOWN_MS) {
+        if (now - lastScanAttemptAt > SCAN_COOLDOWN_MS) {
             lastScanAttemptAt = now
-            // Keep a truthful, cancellable reconnect surface visible while
-            // the bounded subnet recovery scan runs in the background.
             scanGeneration++
             showConnecting(R.string.reconnecting_detail)
-            // Captured after entering the reconnect surface, so any later
-            // user navigation invalidates this result.
             val myGeneration = scanGeneration
             Toast.makeText(this, R.string.reconnecting, Toast.LENGTH_SHORT).show()
             SubnetScanner.findCompanion(applicationContext) { foundHost ->
                 runOnUiThread {
                     if (CompanionUrlNormalizer.isStaleScan(myGeneration, scanGeneration)) return@runOnUiThread
-                    if (foundHost != null && foundHost != ip) {
-                        Log.i("LightsOutApp", "Subnet scan found companion at $foundHost after $ip failed to load")
-                        showWeb(CompanionUrlNormalizer.buildUrl(foundHost, token))
-                    } else {
-                        fallBackToSetup(url)
+                    fallBackToSetup(url)
+                    if (foundHost != null && foundHost != ip && CompanionUrlNormalizer.isPrivateIpv4(foundHost)) {
+                        Log.i("LightsOutApp", "Subnet scan discovered candidate companion at $foundHost (awaiting user confirmation)")
+                        lastDiscoveredIp = foundHost
+                        detectedPcName.text = "PC at $foundHost"
+                        autoDetectCard.visibility = View.VISIBLE
                     }
                 }
             }
@@ -476,33 +520,21 @@ class MainActivity : AppCompatActivity() {
 
     private fun onPcDiscovered(pcName: String, ip: String) {
         if (!isListening) return
+        if (!CompanionUrlNormalizer.isLocalOrPrivateHost(ip)) return
+        val cleanName = pcName.replace(Regex("[\\x00-\\x1f\\x7f]"), "").trim().take(64).ifEmpty { ip }
         lastDiscoveredIp = ip
 
-        // Failsafe check: if this IP recently failed, enforce 30 seconds cool-down to prevent infinite reconnection loop
+        // Failsafe check: if this IP recently failed, enforce 30 seconds cool-down.
         val lastFail = failedConnections[ip] ?: 0L
         if (System.currentTimeMillis() - lastFail < 30000L) {
             return
         }
 
-        // Auto-reconnect on IP change. Uses the token captured directly at
-        // pairing time (see showWeb/KEY_TOKEN), not one re-parsed out of the
-        // saved URL -- companion.html strips `?t=` from the address bar via
-        // history.replaceState almost immediately after load, so by the time
-        // a URL gets persisted to KEY_URL, the query string is already gone
-        // and this reconnect could never actually fire.
-        val token = prefs.getString(KEY_TOKEN, null)
-        val saved = prefs.getString(KEY_URL, null)
-        if (webView.visibility != View.VISIBLE && token != null && saved != null) {
-            val savedHost = try { java.net.URI(saved).host } catch (_: Exception) { null }
-            if (savedHost != null && savedHost != ip) {
-                Log.i("LightsOutApp", "Auto-discovered PC IP changed from $savedHost to $ip. Attempting auto-reconnect.")
-                showWeb(CompanionUrlNormalizer.buildUrl(ip, token))
-                return
-            }
-        }
-
+        // Security: UDP beacons are unauthenticated on the LAN, so never
+        // automatically transmit a stored pairing token to a discovered IP.
+        // Surface the discovered PC on the setup card for explicit user choice.
         if (setup.visibility == View.VISIBLE) {
-            detectedPcName.text = pcName
+            detectedPcName.text = "$cleanName ($ip)"
             autoDetectCard.visibility = View.VISIBLE
         }
     }

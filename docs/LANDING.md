@@ -14,15 +14,21 @@ Installer, portable build, SHA256 checksums, and proof-backed releases are all p
 
 **Download:** https://github.com/lazelife420-spec/Lights-out/releases/latest
 
-![Lights Out cockpit - analog/hybrid clock face and the new desk-lamp logo](release/screenshots/v10.0.4/01_clock_face_hybrid.png)
+![Lights Out v10.0.4 cockpit - the earlier hybrid clock face and the desk-lamp logo](release/screenshots/v10.0.4/01_clock_face_hybrid.png)
 
 ## What it does
 
 - **Nightly tray utility.** It sits in your tray and shows the current time while
-  idle (Clock Mode) - pick a digital, analog, or hybrid clock face and recolor the
-  hands. Start common timers (28 min / 1 hour), or pause / resume / snooze / cancel
-  straight from the tray. The live countdown stays in the tray tooltip.
-- **Countdown to shutdown, restart, sleep, hibernate, or log out.**
+  idle (Clock Mode) - choose the countdown ring or an analog clock face and
+  recolor the hands. Start common timers (28 min / 1 hour), or pause / resume /
+  snooze / cancel straight from the tray. The live countdown stays in the tray
+  tooltip. `Ctrl+Shift+X` cancels from anywhere; `Ctrl+Shift+S` only shows or
+  hides the window.
+- **Countdown to shutdown, restart, sleep, hibernate, lock, or log out.** Sleep and
+  Hibernate run only when Windows offers them on this PC (Hibernate needs
+  hibernation turned on); otherwise the action is blocked and nothing runs.
+- **Night Modes** - Quick Sleep, Lights Down, Movie Wind-Down and Full Shutdown
+  cards arm tonight's plan; nothing starts until you press Start.
 - **Wind-down phase** with ambient visuals (fireplace, rain, starfield, aurora),
   a warm color shift, and optional Night Light / media pause.
 - **Smart lights, saved profiles, calendar scheduling (.ics), and a Last Light
@@ -36,20 +42,27 @@ Installer, portable build, SHA256 checksums, and proof-backed releases are all p
 - "Run at login" means start minimized and idle, nothing more.
 - System actions (Night Light, media pause, window lockout during wind-down) are
   all OFF by default. The app never touches your OS unless you turn them on.
+- Test Mode rehearses the night without the power action or any automatic
+  light, network or system change.
+- Until you set up calendar feeds, smart lights, webhooks or Wi-Fi Guard, the
+  only automatic connection is an update check of Proof Foundry's public
+  release record at launch and every 4 hours. A verified ZIP downloads only
+  when you click Download.
 
 ![Settings - wind-down system actions OFF by default](release/screenshots/v10.0.2/04_settings_winddown.png)
 
 ## Proof-backed releases
 
-Every release ships an installer, a portable EXE, and a `SHA256SUMS.txt` so you can
+Every release ships an installer, a portable ZIP, and a `SHA256SUMS.txt` so you can
 verify exactly what you downloaded. Builds are produced and published by CI, and
-each release is gated on `node --check`, a smoke suite, and a successful package
+each release is gated on `node --check`, unit tests, a smoke suite, and a verified package
 step.
 
-**Latest: v11.1.0** - adds the Night Modes Library with four ready,
-main-resolved bedtime presets, safe lobby arming, canonical receipt identity,
-and real Electron Dry Run proof. Smoke suite at 239 assertions.
-Release notes: https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.1.0
+**Latest: v11.3.0** - a production-audit release: a slept-through bedtime never
+fires on wake, cancel works until the power request is sent, Test Mode skips every
+automatic effect, Wi-Fi Guard recovers after a crash, and backups never carry
+credentials ([RELEASE_QUALIFICATION_11.3.0.md](RELEASE_QUALIFICATION_11.3.0.md)).
+Release notes: https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.3.0
 
 Previously, v10.0.9 restored the Streaks tab panel and fixed a cancel-timer error where guided breathing cleanup could show a red error toast.
 

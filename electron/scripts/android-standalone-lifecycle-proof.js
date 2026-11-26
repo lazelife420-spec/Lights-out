@@ -17,12 +17,19 @@ for (const name of ['adb', 'serial', 'avd', 'apk', 'source-inventory', 'proof-ro
 assert.equal(args['allow-debug-reset'], true, 'Pass --allow-debug-reset for the owned QA debug package');
 assert.match(args.serial, /^emulator-\d+$/);
 assert.match(args.avd, /^LightsOut_QA_[A-Za-z0-9_-]+$/);
+const adbPrefix = [];
+if (args['adb-server-port'] !== undefined) {
+  assert.match(args['adb-server-port'], /^[0-9]{1,5}$/);
+  assert.ok(Number(args['adb-server-port']) >= 1 && Number(args['adb-server-port']) <= 65535);
+  adbPrefix.push('-P', args['adb-server-port']);
+}
 const pkg = 'com.lightsout.companion.debug';
 const proofRoot = path.resolve(args['proof-root']);
 fs.mkdirSync(proofRoot, { recursive: true });
 const report = { status: 'running', startedAt: new Date().toISOString(), package: pkg, serial: args.serial, avd: args.avd,
   surface: 'owned Android emulator, native offline home/service/alarms; no PC server or bulb commands', cases: [], commands: [], rendererErrors: [] };
-report.mode = args['calendar-only'] ? 'calendar-only' : 'lifecycle';
+report.mode = args['wiz-only'] ? 'wiz-only' : args['integration-only'] ? 'integration-only' : args['calendar-only'] ? 'calendar-only' : 'lifecycle';
+if (args['integration-only'] || args['wiz-only']) report.surface = 'owned debug emulator integration and guest loopback WiZ fixture; no PC server or physical lights';
 fs.writeFileSync(path.join(proofRoot, 'android-lifecycle-report.json'), JSON.stringify(report, null, 2) + '\n');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -30,8 +37,8 @@ let owned = false, port, ws, nextId = 0, oldZone, oldWifi, oldData;
 let oldAutoTime, originalWall, originalHostTime, clockChanged = false;
 const pending = new Map();
 async function adb(command) {
-  report.commands.push({ at: new Date().toISOString(), executable: 'adb', args: ['-s', args.serial, ...command] });
-  return run(args.adb, ['-s', args.serial, ...command], { windowsHide: true, timeout: 20000, maxBuffer: 8e6,
+  report.commands.push({ at: new Date().toISOString(), executable: 'adb', args: [...adbPrefix, '-s', args.serial, ...command] });
+  return run(args.adb, [...adbPrefix, '-s', args.serial, ...command], { windowsHide: true, timeout: 20000, maxBuffer: 8e6,
     encoding: command[0] === 'exec-out' ? 'buffer' : 'utf8' });
 }
 async function wait(label, fn, timeout = 20000) {
@@ -195,7 +202,17 @@ async function main() {
     assert.equal(hash(source), file.sha256, 'Android source input differs: ' + file.path);
   }
   report.sourceInputsMatched = inventory.sourceFiles.length;
-  const aapt = path.resolve(path.dirname(args.adb), '../build-tools/34.0.0/aapt.exe');
+  const buildToolsDir = path.resolve(path.dirname(args.adb), '../build-tools');
+  const preferredAapt = path.join(buildToolsDir, '34.0.0', 'aapt.exe');
+  const aapt = fs.existsSync(preferredAapt)
+    ? preferredAapt
+    : (fs.existsSync(buildToolsDir)
+      ? fs.readdirSync(buildToolsDir)
+        .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))
+        .map(v => path.join(buildToolsDir, v, 'aapt.exe'))
+        .find(p => fs.existsSync(p))
+      : null);
+  assert.ok(aapt && fs.existsSync(aapt), 'aapt.exe not found under ' + buildToolsDir);
   const badging = (await run(aapt, ['dump', 'badging', args.apk], { windowsHide: true, timeout: 20000 })).stdout;
   assert.match(badging.split(/\r?\n/)[0], /^package: name='com\.lightsout\.companion\.debug'/);
   try { await adb(['install', '-r', args.apk]); }
@@ -213,6 +230,12 @@ async function main() {
   await adb(['shell', 'svc', 'data', 'disable']);
   await launch();
   await wait('offline platform', () => evaluate('navigator.onLine === false'));
+  if (args['integration-only'] || args['wiz-only']) {
+    const cases=require('./android-integration-cases');
+    await (args['wiz-only'] ? cases.wiz : cases)({ adb, adbPrefix, args, pkg, report, prefs, state, message, launch, disconnect,
+      watchSnapshots, evaluate, wait, sleep, passed, proofRoot });
+    report.status = 'passed'; return;
+  }
   if (args['calendar-only']) { await calendarProof(); report.status = 'passed'; return; }
   await wait('denied permission disclosure', () => evaluate(`!document.getElementById('exact').hidden && !document.getElementById('alerts').hidden`));
   await start(3);

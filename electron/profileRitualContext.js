@@ -31,6 +31,7 @@ function createContext(validated) {
     nightModeVersion: validated.nightModeVersion || null,
     // Display-only run origin (e.g. 'phone'), carried to the ritual timer step.
     origin: typeof validated.origin === 'string' ? validated.origin : null,
+    routineOccurrenceKey: validated.routineOccurrenceKey || null,
     createdAt: Date.now()
   };
   return pendingContext.token;

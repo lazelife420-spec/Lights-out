@@ -20,7 +20,7 @@ const VISUALS = {
   fireplace: { label: 'Fireplace', icon: '\u{1F525}' },
   rain: { label: 'Rain on Glass', icon: '\u{1F327}' },
   starfield: { label: 'Starfield', icon: '\u{2B50}' },
-  aurora: { label: 'Aurora', icon: '\u{1F3A4}' },
+  aurora: { label: 'Aurora', icon: '\u{1F30C}' },
   off: { label: 'Off', icon: '\u274C' }
 };
 
@@ -33,14 +33,17 @@ function init(canvasEl) {
 
 function resize() {
   if (!canvas) return;
-  const rect = canvas.parentElement?.getBoundingClientRect() || { width: 520, height: 760 };
-  W = canvas.width = rect.width;
-  H = canvas.height = rect.height;
+  const rect = canvas.parentElement?.getBoundingClientRect();
+  const nextW = rect && rect.width > 0 ? Math.round(rect.width) : 520;
+  const nextH = rect && rect.height > 0 ? Math.round(rect.height) : 760;
+  W = canvas.width = nextW;
+  H = canvas.height = nextH;
 }
 
 function start(visualName) {
   stop();
-  if (!canvas || visualName === 'off') return;
+  if (!canvas || !visualName || visualName === 'off' || !Object.prototype.hasOwnProperty.call(VISUALS, visualName)) return;
+  resize();
   activeVisual = visualName;
   particles = [];
   initParticles(visualName);
@@ -55,6 +58,10 @@ function stop() {
 
 function tick() {
   if (!activeVisual || !ctx) return;
+  if (typeof document !== 'undefined' && document.hidden) {
+    animFrame = requestAnimationFrame(tick);
+    return;
+  }
   ctx.clearRect(0, 0, W, H);
 
   switch (activeVisual) {

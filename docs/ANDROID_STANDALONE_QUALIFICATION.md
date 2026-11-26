@@ -67,7 +67,7 @@ Deep lanes (driven on API 35):
 - **UI audit** (`ui-audit.js`, 8 screenshots): timer idle/running/paused/finished, lighting, routines, calendar, PC-controls entry. Accessibility findings adjudicated live: several controls measured under the 44px tap minimum → narrow CSS floor committed as `9c6dcb1` and re-measured on-device (days 45×44, month nav 44×44, clock/countdown 44px, PC entry 177×44).
 - **Advanced lifecycle** (manual/stepped, evidence partial): cold-boot restores the running monotonic timer; `dumpsys deviceidle force-idle` Doze preserves it; app-standby bucket preserves it; force-stop + relaunch restores the same runId/deadline; exact-alarm revocation shows the permission disclosure path.
 
-## Findings queued for M1.5 modernization
+## Findings queued for M1.5 modernization (historical M3 record, 2026-10-29)
 
 - **16KB page-size audit — REAL compatibility risk**: `libimage_processing_util_jni.so` (from `androidx.camera:camera-core:1.3.4` — verified by transform-cache provenance) has LOAD segments at 4096-byte alignment on **every ABI including arm64-v8a and x86_64**. Android's 16KB compatibility mode still installs and runs it: verified on a dedicated `google_apis_ps16k` API-36 emulator (`PAGE_SIZE=16384`) — the APK installs, HomeActivity launches, and the camera-path MainActivity becomes top-resumed without `UnsatisfiedLinkError`. The residual risk is OEM/kernel-level strict 16KB enforcement when the ML Kit analyzer actually binds (not reachable without a live QR frame loop). **Verified fix path**: `camera-core` ≥1.4.2 ships the same library at 16384 alignment on arm64-v8a AND x86_64 (checked artifacts 1.4.2/1.5.3/1.6.2); the other camera modules ship no natives. `libbarhopper_v3.so` (ML Kit barcode-scanning) is already 16384-aligned on both 64-bit ABIs. Belongs to the M1.5 tranche, not this baseline.
 - APK is not bitwise reproducible (dex serialization ordering only — see below).
@@ -95,21 +95,21 @@ The APKs are **not bitwise reproducible**; the variance is confined to dex seria
 | Electron unit suite | unchanged (integration touched zero `electron/` files) — last full run 1069/1069 green this session |
 | Emulator / physical device | NOT RUN — emulator needs system-image provisioning; physical needs owner phone |
 
-## Subsystem classifications (post-integration)
+## Subsystem classifications (current checkout)
 
 | Subsystem | Class | Confidence |
 | --- | --- | --- |
 | Phone timer/service | EMULATOR_TESTED (M1 merged-tree unit tests; M2 lifecycle 6/6; M3 lifecycle 6/6 on API 35 **and** API 36) | SUPPORTED |
 | Phone calendar incl. leap-day | EMULATOR_TESTED (M1+M2; M3 calendar 6/6 on API 35 **and** API 36) | SUPPORTED |
 | Routines + interchange | EMULATOR_TESTED (M3 interchange security 15/15 on-device via bridge) | SUPPORTED |
-| Handoff foundations (phone half) | AUTOMATED_TESTED (M1) | SUPPORTED |
+| Handoff foundations (phone half) | AUTOMATED_TESTED (unit tests); **gated OFF** via `ReleaseGates.HANDOFF_PAIRING = false` | SUPPORTED (UI hidden, deep link absent, bridge refuses calls) |
 | Light experiences + beacons | AUTOMATED_TESTED (M1) | SUPPORTED |
 | WiZ direct control | EMULATOR_TESTED (M3 isolated UDP simulation 13/13 incl. discovery) | SUPPORTED (simulated fixture only — physical bulb UNKNOWN) |
 | Studio phone UI | EMULATOR_TESTED (M3 audit: 8 screenshots, 48dp-effective bounds inventoried) | SUPPORTED |
-| 16KB page-size compatibility | COMPAT_MODE (install+launch verified on `PAGE_SIZE=16384`; one latent native risk) | KNOWN RISK — `libimage_processing_util_jni.so` 4KB-aligned until CameraX ≥1.4.2 |
-| mTLS client (`HandoffConnection`/`Certificate`) | SOURCE_PRESENT in worktree B only — uncommitted, unqualified | PROVEN-ABSENT from main by design |
-| PC-side handoff/Studio | candidate-side only | BLOCKED pending Phase E owner gate |
-| First Light (phone-owned) | DESIGN_ONLY | PROVEN-ABSENT — not found on any line |
+| 16KB page-size compatibility | SOURCE-MITIGATED (CameraX bumped to 1.6.2 on 2026-11-22; historical API-34 build ran under `PAGE_SIZE=16384` compat mode) | OPEN VALIDATION — CameraX 1.6.2 ships 16 KB-aligned `libimage_processing_util_jni.so`, but packaged `.so` inspection and strict 16 KB runtime validation remain open |
+| mTLS client (`HandoffConnection`/`Certificate`) | SOURCE_PRESENT in current checkout — unqualified; **gated OFF** via `ReleaseGates.HANDOFF_PAIRING = false` | GATED OFF — no UI, no `lightsout-handoff://` deep link, bridge refuses all handoff requests |
+| PC-side handoff (`electron/handoff*`) | SOURCE_PRESENT in current checkout — unqualified; **gated OFF** via `electron/releaseGates.js` (`HANDOFF_PAIRING = false`) | GATED OFF — UI hidden, controller/TLS listener not initialized, `handoff-action` IPC refuses all requests |
+| First Light (phone-owned) | EMULATOR_TESTED (2026-11-25: 10 new JUnit tests in `PhoneFirstLightTest`, 117/117 total; live API-36 emulator CDP default-OFF, exact-alarm denial/grant, `lightsout://phone-first-light` PendingIntent, live AlarmManager firing + loopback WiZ UDP `setPilot(dimming:10, temp:2200)`, single notification ID 41 + immediate Stop sunrise teardown, and 320px/200% layout verified) | SUPPORTED (emulator + unit only — physical phone wake and real WiZ sunrise remain field-QA UNKNOWN) |
 | Production signing/distribution | BLOCKED — owner-gated | — |
 | Physical device reliability | UNKNOWN — field-QA hold | — |
 
@@ -124,6 +124,35 @@ The APKs are **not bitwise reproducible**; the variance is confined to dex seria
 - Doze/force-stop evidence exists only at emulator fidelity
   (`deviceidle force-idle`, app-standby buckets, force-stop/reopen);
   OEM-specific behaviors are not covered.
-- On 16KB pages the app runs under Android's compatibility mode today;
-  strict-enforcement environments remain a known risk until the CameraX
-  bump lands (M1.5).
+- CameraX 1.6.2 (16 KB-aligned `libimage_processing_util_jni.so`) has landed
+  in source (2026-11-22), superseding the historical CameraX 1.3.4 4 KB
+  alignment risk; packaged `.so` ELF inspection and strict 16 KB
+  emulator/physical validation remain open before claiming strict 16 KB
+  compliance.
+
+## Current automated build — 2026-11-22
+
+Current checkout qualification on the isolated `C:\Users\KickA\AppData\Local\Android\LightsOut-QA-SDK` API 36 SDK:
+
+| Gate | Result | Evidence |
+| --- | --- | --- |
+| Android JUnit | 107 passed / 0 failed / 0 skipped | `review/android-current-20261122/android-build.log` |
+| Android lint | PASS — build lane completed with no lint failure | `review/android-current-20261122/android-build.log` |
+| Debug build | PASS — `com.lightsout.companion.debug`, v11.2.0-debug, Gradle 8.14.6, AGP 8.13.2, Kotlin 2.3.21, compileSdk/targetSdk 36 | `review/android-current-20261122/android-qualification.json` |
+| Debug APK | `Lights-Out-Android-v11.2.0-debug.apk` | SHA-256 `3EF21BBA9C0AEA9D690C3AAC2477F08A9E346F0770C5184807F06A44C3020787` |
+| Production signing | NOT USED | isolated QA properties, no keystore/credential access |
+| Emulator / physical device | NOT RUN in this current lane | field qualification remains separate |
+
+## M6 Phone-owned First Light — isolated API-36 build & emulator verification (2026-11-25)
+
+Current checkout qualification on the isolated `C:\Users\KickA\AppData\Local\Android\LightsOut-QA-SDK` API 36 SDK and ephemeral headless AVD `LightsOut_QA_Review_API36` (`emulator-5596`, isolated ADB port `5049`, debug package `com.lightsout.companion.debug` only, temp directories deleted on completion):
+
+| Gate | Result | Notes |
+| --- | --- | --- |
+| Android JUnit | **117 passed / 0 failed / 0 skipped** | Includes 10 `PhoneFirstLightTest` cases (safe defaults OFF, weekday/weekend + consumed-key scheduling, sunrise lead-time + `armedAt` non-retroactive guard, DST spring-forward & fall-back, strict `HH:MM` & weekday type validation, brightness/Kelvin interpolation, private-LAN WiZ bounds, target pruning) |
+| Android lint | PASS — 0 errors | `:app:lintDebug` in isolated temp project |
+| Debug APK | PASS — `com.lightsout.companion.debug`, v11.2.0-debug, 87 source inputs hashed | Production signing NOT used; `keystore.properties` excluded |
+| Emulator Lifecycle | **6/6 PASS** | `android-standalone-lifecycle-proof.js` on API 36 |
+| Emulator Calendar | **6/6 PASS** | `android-standalone-lifecycle-proof.js --calendar-only --allow-emulator-clock-change` on API 36 |
+| Live WebView CDP UI & First Light | **PASS** | 0 runtime exceptions; `ReleaseGates.HANDOFF_PAIRING = false` (`#handoff-pairing` hidden); First Light defaults OFF, surfaces `Needs alarm access` when denied, switches to `Armed` with `lightsout://phone-first-light` PendingIntent when granted; live AlarmManager fired First Light and delivered real UDP `setPilot(dimming:10, temp:2200)` to loopback WiZ fixture; single ongoing notification ID 41 (`1/5`, zero duplicate ID 44); Stop sunrise tore down ramp + notification immediately (67ms); touch targets `>= 48px`, font `>= 12px`, `0px` horizontal overflow across all 4 tabs at 320px / 200% font scale |
+| Physical device / real WiZ bulb | NOT RUN — UNKNOWN | OEM battery managers, real screen-off morning wake, and physical WiZ UDP sunrise remain `ANDROID_FIELD_QA.md` items |

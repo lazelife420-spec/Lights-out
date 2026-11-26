@@ -3,18 +3,24 @@
 
 const dgram = require('dgram');
 const http = require('http');
+const net = require('net');
 const { EventEmitter } = require('events');
 const remoteControl = require('./remoteControl');
+const { isPrivateOrLocal } = require('./capabilityTruth');
 
 const DISCOVERY_PORT = 58733;
 const COMMAND_PORT = 58734;
 const BROADCAST_INTERVAL = 10000; // 10s beacon
 const FAMILY_MAGIC = 'LIGHTSOUT_FAMILY_V1';
 const TOKEN_HEADER = 'x-lightsout-token';
+const MAX_KNOWN_PEERS = 64;
+const LOCAL_IP_CACHE_MS = 5000;
 
 let discoverySocket = null;
 let beaconTimer = null;
 let localToken = ''; // pairing secret; required on every inbound/outbound command
+let cachedLocalIps = [];
+let cachedLocalIpsAt = 0;
 const emitter = new EventEmitter();
 const knownPeers = new Map(); // ip -> { ip, port, lastSeen }
 
@@ -57,6 +63,7 @@ function startDiscovery(peerName) {
         discoverySocket.send(msg, 0, msg.length, DISCOVERY_PORT, '255.255.255.255');
       } catch { /* socket may be closed */ }
     }, BROADCAST_INTERVAL);
+    beaconTimer.unref?.();
 
     // Also send immediately.
     try {
@@ -65,13 +72,30 @@ function startDiscovery(peerName) {
   });
 
   discoverySocket.on('message', (data, rinfo) => {
-    const peer = parseDiscoveryBeacon(data, rinfo.address, getLocalIPs());
-    if (!peer) return;
-    knownPeers.set(peer.ip, { ip: peer.ip, name: peer.name, lastSeen: Date.now() });
+    const now = Date.now();
+    if (now - cachedLocalIpsAt > LOCAL_IP_CACHE_MS) {
+      cachedLocalIps = getLocalIPs();
+      cachedLocalIpsAt = now;
+    }
+    const peer = parseDiscoveryBeacon(data, rinfo.address, cachedLocalIps);
+    if (!peer || !isPrivateOrLocal(peer.ip)) return;
+    if (!knownPeers.has(peer.ip) && knownPeers.size >= MAX_KNOWN_PEERS) {
+      // Evict expired entries first; if still full, drop oldest peer.
+      for (const [ip, entry] of knownPeers) {
+        if (now - entry.lastSeen > 30000) knownPeers.delete(ip);
+      }
+      if (knownPeers.size >= MAX_KNOWN_PEERS) {
+        const oldestKey = knownPeers.keys().next().value;
+        if (oldestKey) knownPeers.delete(oldestKey);
+      }
+    }
+    knownPeers.set(peer.ip, { ip: peer.ip, name: peer.name, lastSeen: now });
     emitter.emit('peer-found', { ip: peer.ip, name: peer.name });
   });
 
-  discoverySocket.on('error', () => { /* ignore */ });
+  discoverySocket.on('error', () => {
+    stopDiscovery();
+  });
 }
 
 function stopDiscovery() {
@@ -126,9 +150,14 @@ function isKnownPeer(ip) {
 
 function sendRemoteCommand(peerIp, command, payload = {}) {
   return new Promise((resolve, reject) => {
+    const targetIp = String(peerIp || '').trim();
+    if (!targetIp || net.isIP(targetIp) === 0 || !isPrivateOrLocal(targetIp)) {
+      reject(new Error('Refused remote family command to non-local peer address'));
+      return;
+    }
     const data = JSON.stringify({ command, ...payload });
     const options = {
-      hostname: peerIp,
+      hostname: targetIp,
       port: COMMAND_PORT, // Family command port (separate from PWA)
       path: '/command',
       method: 'POST',
@@ -221,6 +250,9 @@ function startCommandServer(onCommand, bindHost = '0.0.0.0') {
       // 1. Authenticate: pairing token must match (header or body).
       let parsed;
       try { parsed = JSON.parse(body); } catch { return reject(res, 400, 'invalid json'); }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return reject(res, 400, 'invalid json');
+      }
       const provided = req.headers[TOKEN_HEADER] || parsed.token;
       if (!remoteControl.tokensMatch(provided, localToken)) {
         return reject(res, 401, 'unauthorized');
@@ -259,7 +291,10 @@ function startCommandServer(onCommand, bindHost = '0.0.0.0') {
 
 function stopCommandServer() {
   if (commandServer) {
-    try { commandServer.close(); } catch {}
+    try {
+      if (typeof commandServer.closeAllConnections === 'function') commandServer.closeAllConnections();
+      commandServer.close();
+    } catch {}
     commandServer = null;
   }
 }
@@ -279,6 +314,7 @@ function start(opts, onCommand) {
 function stop() {
   stopDiscovery();
   stopCommandServer();
+  knownPeers.clear();
   localToken = '';
 }
 

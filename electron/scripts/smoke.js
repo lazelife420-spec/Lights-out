@@ -45,8 +45,9 @@ function assertMatch(src, pattern, msg) {
   assert(pattern.test(src), msg || `missing pattern: ${pattern}`);
 }
 
-// 1. Syntax-check every first-party JS file.
-const jsFiles = ['main.js', 'preload.js', 'renderer-utils.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'renderer.js', 'settings.js', 'smartLights.js', 'profiles.js', 'profileIdentity.js', 'profileRitualContext.js', 'startDecision.js', 'updater.js', 'updaterPolicy.js', 'windowGeometry.js', 'calendar.js', 'lastLight.js', 'companionNetwork.js', 'companionFirewall.js', 'capabilityTruth.js'];
+// 1. Syntax-check every packaged first-party JS file dynamically from package.json build.files.
+const packageJsonForSyntax = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+const jsFiles = [...new Set((packageJsonForSyntax.build?.files || []).filter(f => f.endsWith('.js')))].sort();
 for (const file of jsFiles) {
   check(`syntax: ${file}`, () => {
     execFileSync(process.execPath, ['--check', path.join(root, file)], { stdio: 'pipe' });
@@ -61,6 +62,7 @@ check('package: local main-process modules are included in the build', () => {
     .map(match => path.extname(match[1]) ? match[1] : `${match[1]}.js`);
 
   for (const requiredFile of localRequires) {
+    if (requiredFile === 'package.json') continue;
     assert(packagedFiles.has(requiredFile), `${requiredFile} is required by main.js but missing from build.files`);
   }
 });
@@ -338,7 +340,7 @@ check('streaks: buildWeeklyNarrative summarizes only real computed fields (no in
   assert(report.narrative.includes('3 of the last 7 nights logged'), `narrative should state the real night count, got: ${report.narrative}`);
   assert(report.narrative.includes('Current streak: 3 nights (best ever: 3)'), `narrative should state the real (recomputed) streak numbers, got: ${report.narrative}`);
   assert(report.narrative.includes('Snoozed on 33% of logged nights'), `narrative should state the real snooze rate, got: ${report.narrative}`);
-  assert(report.narrative.includes('Real-mode completions: 2 shutdown, 1 sleep'), `narrative should break down real action counts, got: ${report.narrative}`);
+  assert(report.narrative.includes('Non-Test ritual records: 2 shutdown, 1 sleep'), `narrative should break down real action counts, got: ${report.narrative}`);
   assert(!/Actions taken/.test(report.narrative), 'narrative must not claim power actions ran');
   // UI-R3 Fire 10: Routine shows no achievements, so the narrative never
   // mentions them (the rebuilt count itself is still pinned above).
@@ -350,7 +352,7 @@ check('streaks: buildWeeklyNarrative summarizes only real computed fields (no in
   const testOnly = streaks.getWeeklyReport();
   assert(testOnly.nightsThisWeek === 0 && testOnly.totalNights === 0 && testOnly.streak === 0, 'Test Mode events must not count');
   assert(testOnly.testModeRunsThisWeek === 1, `expected 1 Test Mode run this week, got ${testOnly.testModeRunsThisWeek}`);
-  assert(testOnly.narrative.startsWith('No real completions this week. Test Mode runs are recorded in Proof but don\'t count toward your routine.'), `Test-Mode-only narrative wrong, got: ${testOnly.narrative}`);
+  assert(testOnly.narrative.startsWith('No non-Test ritual records this week. Test Mode runs are recorded in Proof but don\'t count toward your routine.'), `Test-Mode-only narrative wrong, got: ${testOnly.narrative}`);
 
   // Per night, never per event: a daily 23:00 user's last legacy week plus
   // tonight's REAL run never reads "8 of the last 7 nights".
@@ -427,7 +429,9 @@ check('tray: initialization and cleanup', () => {
   assertMatch(mainSrc, /if \(SUPPRESS_AUTOMATION_TRAY\) return;/, 'automation must not create real Windows tray icons');
   assertMatch(mainSrc, /if \(tray && !tray\.isDestroyed\(\)\) return;/, 'tray creation must be idempotent within one app process');
   assertMatch(mainSrc, /tray = new Tray\(trayIcons\.idle\);/, 'tray creation missing');
-  assertMatch(mainSrc, /before-quit[\s\S]{0,200}tray\.destroy\(\);[\s\S]{0,100}tray = null;/, 'quit must explicitly destroy the tray icon');
+  // v11.3: before-quit first restores an unretained Wi-Fi Guard block (bounded,
+  // once), then runs the existing cleanup.
+  assertMatch(mainSrc, /app\.on\('before-quit', \(event\) => \{[\s\S]{0,1600}tray\.destroy\(\);[\s\S]{0,100}tray = null;/, 'quit must explicitly destroy the tray icon');
   for (const runner of [
     'desktop-ux-functional-gate.js',
     'settings-native-proof.js',
@@ -481,7 +485,7 @@ check('window state: normal bounds persist safely across launches and mini mode'
 });
 
 check('tray: close-to-tray behavior remains the default window close action', () => {
-  assertMatch(mainSrc, /mainWindow\.on\('close', event => \{\s+if \(app\.isQuitting\) return;\s+event\.preventDefault\(\);\s+mainWindow\.hide\(\);\s+refreshTrayMenu\(\);\s+\}\);/s, 'window close no longer hides to tray');
+  assertMatch(mainSrc, /mainWindow\.on\('close', event => \{\s+if \(app\.isQuitting\) return;\s+event\.preventDefault\(\);\s+mainWindow\.hide\(\);\s+writeTimerLifecycle\('Window hidden to tray'\);\s+refreshTrayMenu\(\);\s+\}\);/s, 'window close must hide to tray, record the running state and retain tray controls');
 });
 
 check('tray: menu keeps show-hide, settings, timer controls, and quick starts', () => {
@@ -506,7 +510,9 @@ check('timer: pause, resume, snooze, and cancel state transitions remain wired i
   assertMatch(mainSrc, /function pauseTimer\(\) \{[\s\S]*timerState\.paused = true;[\s\S]*emitTimerUpdate\('paused'\);/s, 'pause timer flow changed');
   assertMatch(mainSrc, /function resumeTimer\(\) \{[\s\S]*timerState\.paused = false;[\s\S]*emitTimerUpdate\('resumed'\);/s, 'resume timer flow changed');
   assertMatch(mainSrc, /function snoozeTimer\(seconds = 300, reason\) \{[\s\S]*timerState\.totalSeconds \+= addSeconds;[\s\S]*timerState\.remainingSeconds \+= addSeconds;[\s\S]*emitTimerUpdate\('snoozed', \{ addedSeconds: addSeconds, tax: taxResult \}\);/s, 'snooze timer flow changed');
-  assertMatch(mainSrc, /function cancelTimer\(\) \{[\s\S]*timerState\.running = false;[\s\S]*timerState\.phase = 'idle';[\s\S]*emitTimerUpdate\('cancelled'\);/s, 'cancel timer flow changed');
+  // v11.3: cancelTimer also ends a slept-through run as 'missed' via options;
+  // a plain cancel() keeps the cancelled defaults.
+  assertMatch(mainSrc, /function cancelTimer\(\{ result = 'cancelled', restoreReason = 'cancel'[^)]*\} = \{\}\) \{[\s\S]*timerState\.running = false;[\s\S]*timerState\.phase = 'idle';[\s\S]*emitTimerUpdate\('cancelled'/s, 'cancel timer flow changed');
 });
 
 check('ipc: shared Start architecture and timer/login handlers remain exposed', () => {
@@ -576,7 +582,8 @@ check('bedtime-reminder: runtime honors disabled state and avoids duplicate rend
   const reminderSrc = fs.readFileSync(path.join(root, 'bedtimeReminder.js'), 'utf8');
   assertMatch(reminderSrc, /function normalizeReminderMinutes\(value, fallback = 15\) \{[\s\S]*if \(num <= 0\) return 0;/s, 'bedtime reminder normalization should allow disabled state');
   assertMatch(reminderSrc, /if \(reminderMinutesBefore <= 0\) return;/, 'bedtime reminder should short-circuit when disabled');
-  assertMatch(reminderSrc, /Start-Sleep -Milliseconds 100/, 'bedtime reminder PowerShell warm-up should use valid Start-Sleep');
+  assertMatch(reminderSrc, /new Notification\(/, 'bedtime reminder should use native Electron Notification');
+  assert(!/NotifyIcon|powershell\.exe/i.test(reminderSrc), 'bedtime reminder should not shell out to PowerShell WinForms');
   assert(!/BrowserWindow\.getAllWindows\(\)\[0\][\s\S]*bedtime-reminder/.test(reminderSrc), 'bedtime reminder module should not double-push directly to renderer');
   assertMatch(mainSrc, /minutesBefore: appSettings\.bedtimeReminderEnabled === false \? 0 : \(appSettings\.bedtimeReminderMinutes \|\| 15\)/, 'bedtime reminder startup should honor saved enabled state');
 });
@@ -657,19 +664,18 @@ check('F2: Settings › General is a real page (startup truth, idle clock, About
   const rendererF2 = fs.readFileSync(path.join(root, 'renderer.js'), 'utf8');
   const genAt = htmlSrc.search(/<div class="option-section[^"]*" data-settings-category="general">/);
   const general = htmlSrc.slice(genAt, htmlSrc.indexOf('<div class="option-section', genAt + 10));
-  const ids = ['chk-run-login', 'set-startup-note', 'chk-clock-mode', 'cz-clock-format', 'set-app-version', 'set-updater-status', 'btn-set-check-update', 'btn-set-shortcuts', 'set-data-note'];
+  const ids = ['chk-run-login', 'set-startup-note', 'cz-clock-format', 'set-app-version', 'set-updater-status', 'btn-set-check-update', 'btn-set-shortcuts', 'set-data-note'];
   let last = -1;
   for (const id of ids) {
     const at = general.indexOf(`id="${id}"`);
     assert(at > last, `#${id} must be in Settings › General, in order`);
     last = at;
   }
+  assert(general.includes('Idle clock') && general.includes("The ring shows local time until you start. Duration stays in Tonight's Plan."), 'General explains the always-visible idle clock');
   const appAt = htmlSrc.search(/<div class="option-section[^"]*" data-settings-category="appearance">/);
   const appearance = htmlSrc.slice(appAt, htmlSrc.indexOf('<div class="option-section', appAt + 10));
   assert(!appearance.includes('id="chk-clock-mode"') && !appearance.includes('id="cz-clock-format"'), 'the idle-clock toggle and Time Format moved out of Appearance');
   assert(appearance.includes('id="cz-clockface"') && appearance.includes('id="cz-clock-scale"'), 'clock face and size stay in Appearance');
-  // #chk-clock-mode: live, applied and persisted on change (it used to be dead until a Save that dropped it).
-  assertMatch(rendererF2, /els\.chkClockMode\.addEventListener\('change', async \(\) => \{\s*state\.clockMode = els\.chkClockMode\.checked;[\s\S]*?render\(\);[\s\S]*?api\.saveAppSettings\(\{ app: \{ clockMode: state\.clockMode \} \}\)/, '#chk-clock-mode applies and persists on change');
   assertMatch(rendererF2, /els\.setBtnCheckUpdate\?\.addEventListener\('click', runUpdateCheck\);/, 'General uses the same update check as About');
   assert((htmlSrc.match(/id="updater-status"/g) || []).length === 1 && (htmlSrc.match(/id="btn-check-update"/g) || []).length === 1, 'General does not duplicate About ids');
 });
@@ -918,7 +924,8 @@ check('companion: phone timer actions are attributed on the desktop', () => {
   assertMatch(mainSrc, /case 'startNightMode':[\s\S]*notifyRemoteAction\(`\$\{resolution\.resolved\.nightModeTitle\} started from your phone/, 'remote Night Mode start attribution missing');
   assertMatch(mainSrc, /case 'togglePause':[\s\S]*Timer resumed from your phone[\s\S]*Timer paused from your phone/, 'remote pause/resume attribution missing');
   assertMatch(mainSrc, /case 'snooze':[\s\S]*Timer snoozed from your phone/, 'remote snooze attribution missing');
-  assertMatch(mainSrc, /case 'cancel': \{[\s\S]*const wasActive = timerState\.running \|\| timerState\.paused;[\s\S]*cancelTimer\(\);[\s\S]*if \(wasActive\)[\s\S]*Timer cancelled from your phone/, 'remote cancel must preserve unconditional command execution while only reporting active cancellation');
+  // v11.3: "active" includes a completion still preparing its power request.
+  assertMatch(mainSrc, /case 'cancel': \{[\s\S]*const wasActive = hasCancellableRun\(\);[\s\S]*cancelTimer\(\);[\s\S]*if \(wasActive\)[\s\S]*Timer cancelled from your phone/, 'remote cancel must preserve unconditional command execution while only reporting active cancellation');
   assertMatch(preloadSrc, /onRemoteAction: \(callback\) => \{[\s\S]*ipcRenderer\.on\('remote-action'/, 'preload remote-action bridge missing');
   assertMatch(rendererSrc, /api\.onRemoteAction\?\.\(data => \{[\s\S]*notify\(data\.message, 'info'\)/, 'renderer remote-action toast missing');
 });
@@ -928,6 +935,35 @@ check('companion C2: protocol validates startNightMode and getNightModes', () =>
   assertMatch(remoteControlSrc, /['"]startNightMode['"]/, 'startNightMode missing from COMPANION_ACTIONS');
   assertMatch(remoteControlSrc, /['"]getNightModes['"]/, 'getNightModes missing from COMPANION_ACTIONS');
   assertMatch(remoteControlSrc, /if \(typeof nightModeId !== 'string' \|\| nightModeId\.length === 0\)/, 'startNightMode does not validate nightModeId');
+});
+
+check('companion C3-A: idempotencyRegistry.js is packaged and protocol primitives load cleanly', () => {
+  const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const packagedFiles = new Set(packageJson.build?.files || []);
+  assert(packagedFiles.has('idempotencyRegistry.js'), 'idempotencyRegistry.js missing from package.json build.files');
+  assert(fs.existsSync(path.join(root, 'idempotencyRegistry.js')), 'idempotencyRegistry.js file missing');
+
+  const rc = require(path.join(root, 'remoteControl.js'));
+  const IdempotencyRegistry = require(path.join(root, 'idempotencyRegistry.js'));
+  assert(typeof rc.createRequestId === 'function', 'createRequestId missing from remoteControl exports');
+  assert(typeof rc.createCommandAck === 'function', 'createCommandAck missing from remoteControl exports');
+  assert(typeof rc.validateCompanionV3Message === 'function', 'validateCompanionV3Message missing from remoteControl exports');
+  assert(rc.REJECTION_REASONS && rc.REJECTION_REASONS.REQUEST_ID_CONFLICT === 'request_id_conflict', 'REJECTION_REASONS missing REQUEST_ID_CONFLICT');
+  assert(rc.ACK_STATUSES && rc.ACK_STATUSES.COMPLETED === 'completed', 'ACK_STATUSES missing COMPLETED');
+
+  // Legacy shipping validation must remain unversioned-compatible; explicit pause/resume stay dormant by default in V3.
+  assert(rc.validateCompanionMessage({ action: 'togglePause' }).ok === true, 'legacy validateCompanionMessage broke togglePause');
+  const reqId = rc.createRequestId();
+  assert(rc.validateCompanionV3Message({ protocolVersion: 3, requestId: reqId, action: 'pause' }).ok === false, 'V3 pause must be disabled by default');
+  assert(rc.validateCompanionV3Message({ protocolVersion: 3, requestId: reqId, action: 'pause' }, { enabledActions: ['pause', 'resume'] }).ok === true, 'V3 pause must work when enabled');
+
+  const reg = new IdempotencyRegistry({ maxEntries: 2 });
+  const first = reg.register('smoke-token', reqId, 'snooze', { action: 'snooze', seconds: 300 });
+  assert(first.state === 'new' && first.ack.status === 'accepted', 'IdempotencyRegistry failed new reservation');
+  const dup = reg.register('smoke-token', reqId, 'snooze', { action: 'snooze', seconds: 300 });
+  assert(dup.state === 'in_progress_duplicate' && dup.ack.duplicate === true, 'IdempotencyRegistry failed duplicate detection');
+  const conflict = reg.register('smoke-token', reqId, 'snooze', { action: 'snooze', seconds: 900 });
+  assert(conflict.state === 'conflict' && conflict.ack.reason === 'request_id_conflict', 'IdempotencyRegistry failed conflict detection');
 });
 
 check('companion: mode buttons have explanatory tooltips, and a live description reflects the selected mode', () => {
@@ -1111,10 +1147,10 @@ check('morning proof: the Proof hero has no dismiss controls and always states T
   assert(!/key === 'Escape'[^}]*morningProofSection/.test(rendererSrc), 'Escape must not hide the Proof hero');
   const receiptSrc = fs.readFileSync(path.join(root, 'renderer-receipts.js'), 'utf8');
   const truthFn = p03FnBody(receiptSrc, 'receiptTruth');
-  assertMatch(truthFn, /if \(receipt && receipt\.dryRun\) return \{ text: 'TEST MODE · nothing ran'/, '#ns-proof-truth reads TEST MODE from receipt.dryRun first');
+  assertMatch(truthFn, /if \(receipt\?\.dryRun === true\) truth = \{ text: 'TEST MODE · PC power action skipped'/, '#ns-proof-truth identifies Test Mode without claiming unrelated effects did not run');
   const truthTexts = [...truthFn.matchAll(/text: [`']([^`']+)[`']/g)].map(m => m[1]);
-  assert(truthTexts.length >= 4 && truthTexts.slice(1).every(t => t.startsWith('REAL ACTION')), `every non-dry-run path reads REAL ACTION, got ${truthTexts.join(' | ')}`);
-  assert(/command sent/.test(truthFn) && (truthFn.match(/command sent/g) || []).length === 1 && /result === 'power_executed'\) return \{ text: `REAL ACTION · \$\{action\} command sent`/.test(truthFn), "'command sent' only for power_executed");
+  assert(truthTexts.some(t => t.startsWith('LEGACY')) && truthTexts.some(t => t.startsWith('REAL MODE')), 'legacy and new mode claims are distinguished');
+  assert(!/command sent|\$\{action\} completed/.test(truthFn) && /Windows outcome unverified/.test(truthFn), 'command events never become a confirmed Windows outcome');
   const hero = p03FnBody(receiptSrc, 'renderMorningProof');
   assertMatch(hero, /truthEl\.textContent = truth\.text;/, 'renderMorningProof writes #ns-proof-truth for every receipt');
   assert(!/proofBadge\.style\.|\.style\.color|\.style\.borderColor/.test(hero), 'no style.color writes on #proof-badge (colour comes from data-tone)');
@@ -1162,7 +1198,7 @@ check('production truth: companion publishes pairing data only after readiness',
   assert(htmlSrc.includes('id="remote-port"'), 'configurable companion port input missing');
   assertMatch(mainSrc, /await companionNetwork\.getDefaultRouteLanIp\(\)/, 'same-wifi host selection must read the OS route table, not an Internet hint');
   assertMatch(mainSrc, /code: 'RUN_ACTIVE'[\s\S]*A Lights Out run is already active/, 'family start must reject while a run is active');
-  assertMatch(mainSrc, /dryRun: Boolean\(appSettings\.dryRun \|\| profile\?\.dryRun\)[\s\S]*?}[\s\S]*?case 'pause'/, 'family start must inherit the desktop Dry Run policy');
+  assertMatch(mainSrc.match(/function familyCommandHandler\([^]*?\n\}/)[0], /dryRun: Boolean\(appSettings\.dryRun\)[\s\S]*?case 'pause'/, 'family start must inherit the desktop Dry Run policy');
   assertMatch(mainSrc, /bindHost: lanIp/, 'family command server must bind the selected LAN interface');
   const familySrc = fs.readFileSync(path.join(root, 'family.js'), 'utf8');
   assertMatch(familySrc, /outcome && outcome\.success === false/, 'family command server must report real outcomes, not unconditional success');
@@ -1190,7 +1226,7 @@ check('production truth: UI feedback follows observable state', () => {
   }
   assertMatch(htmlSrc, /id="testmode-pill"/, 'TEST MODE/REAL ACTION truth pill must exist');
   assertMatch(rendererSrc, /TEST MODE · No PC power action will run/, 'TEST MODE pill must state the no-power-action truth');
-  assertMatch(rendererSrc, /REAL ACTION · \$\{actionLabel\(\)\} will run at end/, 'REAL ACTION pill must name the real ending');
+  assertMatch(rendererSrc, /REAL ACTION · \$\{actionLabel\(\)\} request at end/, 'the live pill names the intended request, not a guaranteed Windows action');
   assertMatch(htmlSrc, /class="snooze-chip" data-snooze="(300|900|1800)"/, 'explicit snooze chips must exist');
   // P06: #btn-snooze is the +5m segment, so the duplicate 300 s chip is gone.
   assert(!htmlSrc.includes('data-snooze="300"'), 'the duplicate data-snooze="300" chip must be removed (#btn-snooze is +5m)');
@@ -1291,8 +1327,9 @@ check('ui-r2: brand lockup uses the real wordmark and logo-derived motifs', () =
   // UI-R3 P07: the real wordmark is inlined (two stacked copies of its art
   // box) so the lamp and the broken O can live. The asset stays: About and
   // the tray use it.
+  assert(!htmlSrc.includes('href="studio.css"'), 'the restored cockpit must not load the skin that hides the living wordmark');
   const wmAt = htmlSrc.indexOf('<span class="brand-wordmark" id="brand-wordmark" role="img" aria-label="Lights Out">');
-  assert(wmAt > 0, 'header must use the inline living wordmark (span.brand-wordmark role=img aria-label="Lights Out")');
+  assert(wmAt > 0, 'the living lamp wordmark is the accessible app identity');
   const wm = htmlSrc.slice(wmAt, htmlSrc.indexOf('</span>', wmAt));
   assertMatch(wm, /<svg class="wm-static" viewBox="44 88 556 116" aria-hidden="true" focusable="false">/, 'svg.wm-static missing');
   assertMatch(wm, /<svg class="wm-live" viewBox="44 88 556 116" aria-hidden="true" focusable="false">/, 'svg.wm-live missing');
@@ -1503,7 +1540,7 @@ check('receipts: humanizeReceiptResult turns raw result codes into readable proo
   assert(fnMatch, 'humanizeReceiptResult function not found in renderer-receipts.js');
   const humanizeReceiptResult = new Function(`${fnMatch[0]}; return humanizeReceiptResult;`)();
 
-  assert(humanizeReceiptResult('power_executed') === 'Completed', 'power_executed should read "Completed"');
+  assert(humanizeReceiptResult('power_executed') === 'Legacy · unverified', 'historical dispatch is explicitly legacy/unverified');
   assert(humanizeReceiptResult('dry_run_completed') === 'Test Mode Completed', 'dry_run_completed should read "Test Mode Completed"');
   assert(humanizeReceiptResult('cancelled') === 'Cancelled', 'cancelled should read "Cancelled"');
   assert(humanizeReceiptResult(null) === 'Unknown', 'null/undefined result should read "Unknown", not crash');
@@ -1521,7 +1558,7 @@ check('receipts: humanizeReceiptResult turns raw result codes into readable proo
   assertMatch(receiptsOnly, /function buildProofText\(receipt\) \{/, 'renderer-receipts.js defines buildProofText');
   assertMatch(coreOnly, /const text = buildProofText\(receipt\);/, 'the Copy Proof handler calls buildProofText(...)');
   assert(!/Lights Out - Morning Proof/.test(coreOnly), 'the stale Copy Proof template is gone');
-  assertMatch(rendererSrc, /Result: \$\{humanizeReceiptResult\(r\.result\)\}/, 'Export Ledger handler should humanize the result, not dump the raw code');
+  assertMatch(rendererSrc, /Result: \$\{receiptResultLabel\(r\)\}/, 'Export Ledger humanizes results and surfaces unsaved evidence');
 });
 
 check('receipts: profile label renders only when canonical identity exists', () => {
@@ -1641,7 +1678,8 @@ check('P01 truth: start paths, single run, and truthful live surfaces', () => {
   };
   const calSrc = fs.readFileSync(path.join(root, 'renderer-calendar.js'), 'utf8');
   const autopilotSrc = fs.readFileSync(path.join(root, 'autopilot.js'), 'utf8');
-  const widgetSrc = fs.readFileSync(path.join(root, 'widget.html'), 'utf8');
+  const widgetSrc = fs.readFileSync(path.join(root, 'widget.html'), 'utf8')
+    + '\n' + fs.readFileSync(path.join(root, 'widget.js'), 'utf8');
   const companionSrc = fs.readFileSync(path.join(root, 'companion.html'), 'utf8');
 
   // Test Mode on every start path.
@@ -1671,7 +1709,7 @@ check('P01 truth: start paths, single run, and truthful live surfaces', () => {
   assertMatch(mainSrc, /ipcMain\.handle\('ritual-start'[\s\S]{0,400}if \(timerState\.running \|\| timerState\.paused\) return \{ active: false, reason: 'run-active' \};/, 'ritual-start must refuse while a countdown is active');
   const cal = fnBody(mainSrc, 'checkCalendarAutoStart');
   assertMatch(cal, /if \(isRunActive\(\)\) return;/, 'calendar auto-start must use isRunActive()');
-  assertMatch(cal, /startTimer\(\{[^}]*dryRun: Boolean\(appSettings\.dryRun \|\| profile\?\.dryRun\)/, 'calendar auto-start must preserve app or routine Test Mode');
+  assertMatch(cal, /startTimer\(\{[^}]*dryRun: Boolean\(appSettings\.dryRun \|\| profile\?\.dryRun \|\| event\.testMode\)/, 'calendar auto-start must preserve app, routine or per-rule Test Mode');
 
   // Truthful OS surfaces.
   assertMatch(mainSrc, /setTaskbarProgress\(percent, !timerState\.dryRun && percent <= 10 \? 'error' : 'normal'\);/, 'red taskbar must be gated on a REAL run');
@@ -1689,7 +1727,7 @@ check('P01 truth: start paths, single run, and truthful live surfaces', () => {
   const calStartCount = (calSrc.match(/api\.startTimer\(/g) || []).length;
   const insideCount = (schedStart.match(/api\.startTimer\(/g) || []).length;
   assert(insideCount === 1 && calStartCount === insideCount, 'api.startTimer( may appear only inside startFromScheduleEvent');
-  assertMatch(schedStart, /const dryRun = Boolean\(state\.dryRun \|\| profile\?\.dryRun\);/, 'Schedule start preserves app or assigned routine Test Mode');
+  assertMatch(schedStart, /const dryRun = Boolean\(state\.dryRun \|\| profile\?\.dryRun \|\| evt\.testMode\);/, 'Schedule start preserves app, assigned routine or per-rule Test Mode');
   assertMatch(schedStart, /api\.startTimer\(\{[^}]*dryRun,/, 'Schedule start passes the resolved Test Mode value');
   assert(/forceShutdown: false/.test(schedStart) && !/forceShutdown: (?!false)/.test(schedStart), 'Schedule start never enables forced shutdown');
 
@@ -1701,7 +1739,7 @@ check('P01 truth: start paths, single run, and truthful live surfaces', () => {
   assertMatch(rendererSrc, /els\.body\.classList\.toggle\('test-mode', state\.settingsLoaded && state\.dryRun === true\);\s*els\.body\.classList\.toggle\('real-action', state\.settingsLoaded && state\.dryRun === false\);/, 'render() must toggle test-mode and real-action');
   const ringLabel = fnBody(rendererSrc, 'countdownRingLabel');
   assertMatch(ringLabel, /if \(state\.dryRun\) return[\s\S]*Test ends/, 'Test Mode countdown must label the test end without promising a power action');
-  assertMatch(rendererSrc, /state\.running \|\| state\.paused \? countdownRingLabel\(\)/, 'running ring must use the authoritative end-time label');
+  assertMatch(rendererSrc, /(?:state\.running \|\| state\.paused|running) \? countdownRingLabel\((?:now)?\)/, 'running ring must use the authoritative end-time label');
   // Fire 05 migrated the phone label to 'Test · no …' / 'then …' (phoneRingLabel), still keyed on the run's own dryRun.
   assertMatch(companionSrc, /if \(dryRun === true\) return `Test · no \$\{words \? words\.noun : 'power action'\}`;\s*if \(dryRun === false\) return words \? `then \$\{words\.verb\}` : 'until end';/, "companion's 'then …' template must sit inside a dryRun === false conditional");
   assertMatch(companionSrc, /timerLabel\.textContent = phoneRingLabel\(running, paused, data\.dryRun, data\.action\);/, "companion's ring label must read the run's own data.dryRun");
@@ -1724,11 +1762,11 @@ check('P02 records: only real completions count; Test Mode never leaves as a suc
   const completeBody = mainSrc.match(/async function completeTimer\(\) \{[\s\S]*?\n\}\n/);
   assert(completeBody, 'completeTimer not found');
   const body = completeBody[0];
-  assertMatch(body, /if \(!timerState\.dryRun\) \{\s*try \{ streaks\.recordEvent\(null, timerState\.action, Boolean\(rec && rec\.snoozeCount > 0\)\)[\s\S]*?sleepDebt\.recordNight\([\s\S]*?\n {2}\}\n/, 'completeTimer must guard recordEvent and recordNight with !timerState.dryRun and pass the receipt snooze flag');
+  assertMatch(body, /if \(!completionOptions\.dryRun\) \{\s*try \{ streaks\.recordEvent\(null, completionOptions\.action, Boolean\(rec && rec\.snoozeCount > 0\)\)[\s\S]*?sleepDebt\.recordNight\([\s\S]*?\n {2}\}\n/, 'completeTimer guards ritual credit using the frozen completed run and retains its snooze flag');
   assert((body.match(/streaks\.recordEvent\(/g) || []).length === 1 && (body.match(/sleepDebt\.recordNight\(/g) || []).length === 1, 'completeTimer must record streak/deficit exactly once (inside the guard)');
   assertMatch(body, /runReceipts\.getReceiptById\(activeReceiptId\)/, 'completeTimer must read the receipt for the real snooze flag');
-  assertMatch(body, /await playLastLightRitual\(timerState\.dryRun\);\s*await executePowerAction\(\{ \.\.\.timerState \}\);\s*\}\s*$/, 'playLastLightRitual-then-executePowerAction order changed');
-  assert(body.indexOf("result: timerState.dryRun ? 'dry_run_completed' : 'completing'") > body.indexOf('if (!timerState.dryRun) {'), 'receipt update must stay unconditional after the guard');
+  assertMatch(body, /await playLastLightRitual\(completionOptions\.dryRun\);[\s\S]*?await executePowerAction\(\{ \.\.\.completionOptions, receiptId: completingReceiptId \}\);\s*\}\s*$/, 'Last Light precedes dispatch of the frozen completed run');
+  assert(body.indexOf("result: completionOptions.dryRun ? 'dry_run_completed' : 'timer_elapsed'") > body.indexOf('if (!completionOptions.dryRun) {'), 'receipt update stays unconditional after ritual credit');
 
   const overrideSrc = fs.readFileSync(path.join(root, 'emergencyOverride.js'), 'utf8');
   assertMatch(overrideSrc, /if \(!timerState\?\.dryRun\) \{[\s\S]*?streaks\.recordEvent\(null, 'override', true\)[\s\S]*?sleepDebt\.recordNight\(/, 'executeOverride must skip streak and deficit records in Test Mode');
@@ -1743,7 +1781,7 @@ check('P02 records: only real completions count; Test Mode never leaves as a suc
   // Legacy events (no source) are never deleted: recordEvent replaces only an
   // earlier REAL event for the same night key.
   assertMatch(streaksSrc, /function recordEvent\([\s\S]*?data\.events = data\.events\.filter\(e => !\(e && e\.source === 'real' && e\.date === tonight\)\)/, 'recordEvent must only replace same-night REAL events, never legacy ones');
-  assertMatch(streaksSrc, /function buildWeeklyNarrative[\s\S]*?Object\.entries\(report\.realActionCounts/, 'Real-mode completions must come from source:real events only');
+  assertMatch(streaksSrc, /function buildWeeklyNarrative[\s\S]*?Object\.entries\(report\.realActionCounts/, 'Non-Test ritual records must come from source:real events only');
   // Counts are per night, never per event: legacy UTC-keyed events map to
   // their local night at read time, so a week can never read "8 of the last 7".
   assertMatch(streaksSrc, /function getWeeklyReport\([\s\S]*?const counted = countedNights\(data\.events\);/, 'getWeeklyReport must count nights, not events');
@@ -1763,7 +1801,7 @@ check('P02 records: only real completions count; Test Mode never leaves as a suc
   for (const id of Object.keys(acc.EVENTS)) {
     assert(acc.describeEvent(id, true).label.startsWith('Test Mode: '), `Test Mode ${id} label must be prefixed`);
   }
-  assert(acc.describeEvent('TIMER_COMPLETE', false).label === 'Completed', 'REAL completion keeps its wording');
+  assert(acc.describeEvent('TIMER_COMPLETE', false).label === 'Timer finished; Windows outcome unverified', 'partner notification distinguishes the elapsed timer from Windows outcome');
 });
 
 // UI-R3 P03: nothing hides or misstates Test Mode / REAL during a session or
@@ -1829,8 +1867,8 @@ check('P03 truth: honest finale, footer truth bar, real hero facts, honest About
   assert(click.includes("openSettingsCategory('power-safety')") && !/state\.dryRun\s*=[^=]/.test(click), 'the footer pill opens Power & Safety and never changes the mode itself');
   assertMatch(rendererSrc, /pill\.disabled = !state\.settingsLoaded \|\| \(!isIdle && tonightVisible\);/, 'the footer pill is enabled with settings loaded, and mid-run only while Tonight is off screen (Fire 03)');
   // UI-R3 Fire 02: the outcome is a word in the time slot; the mode stays in #status-text.
-  assertMatch(rendererSrc, /dryrun: \{ cls: 'dryrun', slot: 'Done' \}/, 'a Test Mode completion is never shown as a green success');
-  assertMatch(rendererSrc, /completed: \{ cls: state\.dryRun \? 'dryrun' : 'complete', slot: 'Done' \}/, "'complete' is only ever a REAL completion");
+  assertMatch(rendererSrc, /dryrun: \{ cls: 'dryrun', slot: 'Test done' \}/, 'a Test Mode completion names the test');
+  assertMatch(rendererSrc, /completed: \{ cls: state\.dryRun \? 'dryrun' : 'complete', slot: 'Timer done' \}/, 'the completion slot names the timer instead of implying the PC action finished');
   assertMatch(css, /\.status-pill\.dryrun \{[^}]*color: var\(--accent-amber\)/, '.status-pill.dryrun must be amber');
   assert(!/\.status-pill\.[a-z]+ \.status-dot \{[^}]*statusPulse/.test(css), 'footer status dots must not pulse');
   assertMatch(htmlSrc, /id="notif-badge" style="display:none"/, '#notif-badge keeps its inline display:none (renderer shows it by clearing it)');
@@ -2077,8 +2115,9 @@ check('P06 Tonight instrument: one ring, one console, a plan you can read', () =
   assert(positions.every((p, i) => i === 0 || p > positions[i - 1]), '#ns-panel-lib children must be ordered banner, pill, plan, console, ring, readiness');
   const hero = panel.slice(panel.indexOf('id="ns-hero-card"'), panel.indexOf('id="action-bar-running"'));
   assert(hero.includes('id="setup-controls"') && hero.includes('id="ns-play-btn"') && hero.includes('id="btn-ritual"'), '#setup-controls, the CTA and Begin Ritual must live inside #ns-hero-card');
-  for (const id of ['ns-hero-label', 'ns-preview-time', 'plan-out-at', 'ns-meta-ending', 'ns-meta-reach']) assert(hero.includes(`id="${id}"`), `plan column missing #${id}`);
-  assertMatch(hero, /<dl class="plan-facts">[\s\S]*<dd id="ns-preview-time">[\s\S]*<dd id="plan-out-at">[\s\S]*<dd id="ns-meta-ending"><\/dd>/, 'plan facts must be a <dl> of Runs / Ends at / Ends with');
+  for (const id of ['ns-hero-label', 'ns-preview-time', 'plan-out-at', 'ns-meta-ending', 'ns-meta-reach', 'plan-finale']) assert(hero.includes(`id="${id}"`), `plan column missing #${id}`);
+  assertMatch(hero, /<dl class="plan-facts">[\s\S]*<dd id="plan-out-at">[\s\S]*<dd id="ns-meta-ending"><\/dd>[\s\S]*<dd id="ns-meta-reach">/, 'plan facts must be a <dl> of If started now / Ends with / Controls');
+  assertMatch(hero, /<label class="plan-field-label" for="timer-input">Duration <span class="plan-duration" id="ns-preview-time">/, 'Duration label must sit beside #timer-input with #ns-preview-time');
   assert(!hero.includes('ns-preview-ring') && !hero.includes('ns-hero-right'), 'the second (preview) ring must be gone');
   assert(!/&#x25B6;|▶/.test(hero), 'the CTA play glyph must be an inline SVG, not a text glyph');
   assert(!htmlSrc.includes('Clearance'), "no 'Clearance' anywhere");
@@ -2100,12 +2139,12 @@ check('P06 Tonight instrument: one ring, one console, a plan you can read', () =
   const facts = p03FnBody(rendererOnly, 'updatePlanFacts');
   assertMatch(facts, /const secs = planSecondsNow\(\);/, 'Ends at must use the plan duration');
   assertMatch(p03FnBody(rendererOnly, 'planSecondsNow'), /state\.armedNightMode \? state\.armedNightMode\.durationSeconds : inputSeconds\(\)/, 'plan duration = armed Night Mode or inputSeconds()');
-  assertMatch(facts, /getElementById\('plan-out-at'\), `~\$\{formatIdleClockTime\(new Date\(Date\.now\(\) \+ secs \* 1000\), true\)\}`/, '#plan-out-at must come from formatIdleClockTime');
-  assertMatch(facts, /getElementById\('plan-out-at-label'\), state\.settingsLoaded && state\.dryRun \? 'Test ends' : 'Ends at'/, 'the Ends at dt must follow the mode');
-  assert(!/plan-out-at|formatIdleClockTime/.test(p03FnBody(rendererOnly, 'renderTonightHero')), 'renderTonightHero must not compute clock facts (contract sandbox)');
+  assertMatch(facts, /getElementById\('plan-out-at'\), formatClockTarget\(new Date\(now\.getTime\(\) \+ secs \* 1000\), now\)/, '#plan-out-at must come from formatClockTarget');
+  assertMatch(facts, /getElementById\('plan-out-at-label'\), 'If started now'/, 'the If started now dt stays distinct from an active session end');
+  assert(!/plan-out-at|formatIdleClockTime|formatClockTarget/.test(p03FnBody(rendererOnly, 'renderTonightHero')), 'renderTonightHero must not compute clock facts (contract sandbox)');
   const render = p03FnBody(rendererOnly, 'render');
-  assertMatch(render, /if \(isIdle\) updatePlanFacts\(\);\s*else updateSessionHead\(\);/, 'render() writes plan facts idle and the session head while active');
-  assertMatch(rendererOnly, /if \(state\.clockMode\) render\(\);\s*else updatePlanFacts\(\);/, 'the idle tick must refresh Ends at with clock mode off');
+  assertMatch(render, /if \(isIdle\) updatePlanFacts\(now\);\s*else updateSessionHead\((?:now)?\);/, 'render() writes plan facts idle and the session head while active');
+  assertMatch(rendererOnly, /if \(state\.running \|\| state\.paused\) \{ updateWallClock\(\); updateSessionHead\(\); \}\s*else render\(\);/, 'the one wall-clock tick updates wall time while active and renders when idle');
 
   // The bezel: one call site, in the idle analog/hybrid branch; updateRing
   // otherwise. updateRing's body is unchanged by P06 (P07 extends it).
@@ -2651,9 +2690,9 @@ check('P08 Devices: host strip, honest family control, live signals', () => {
   assert(liveSets.length === 1 && /function noteWifiGuardLive\(blocked\) \{\s*window\.wifiGuardLive = \{ blocked: Boolean\(blocked\), at: Date\.now\(\) \};/.test(rendererOnly), 'wifiGuardLive is written only by noteWifiGuardLive');
   const noteCalls = [...rendererSrc.matchAll(/^.*noteWifiGuardLive\((?!blocked\)).*$/gm)].map(m => m[0].trim());
   for (const line of noteCalls) {
-    assert(/^noteWifiGuardLive\(Boolean\(data\.blocked\)\);$|^if \(result\?\.success\) noteWifiGuardLive\((true|false)\);$|^if \(restored\) noteWifiGuardLive\(false\);$/.test(line), `noteWifiGuardLive only from the event or a real success: ${line}`);
+    assert(/^noteWifiGuardLive\(data\.blocked\);$|^if \(result\?\.success\) noteWifiGuardLive\((true|false)\);$|^if \(restored\) noteWifiGuardLive\(false\);$/.test(line), `noteWifiGuardLive only from the event or a real success: ${line}`);
   }
-  assertMatch(rendererOnly, /api\.onWifiGuardStatus\?\.\(data => \{[\s\S]*?noteWifiGuardLive\(Boolean\(data\.blocked\)\);/, 'the wifi-guard-status event feeds the live row');
+  assertMatch(rendererOnly, /api\.onWifiGuardStatus\?\.\(data => \{[\s\S]*?noteWifiGuardLive\(data\.blocked\);/, 'the wifi-guard-status event feeds the live row');
   assertMatch(rendererOnly, /if \(r\?\.success\) \{\s*restored = true;/, 'Restore succeeds only on a real success');
   assertMatch(rendererOnly, /els\.btnDeviceWifiRestore\.hidden = !blockedNow \|\| runActive;/, 'Restore shows only while paused and no run is active');
   assertMatch(rendererOnly, /'Wi-Fi Guard not configured'/, 'an error-less failure reads as not configured');
@@ -3136,6 +3175,11 @@ check('P10 schedule: one page, one Auto-start switch, honest hero, moves to Sett
   // main tags eligibility with its own rule; the renderer never guesses.
   assertMatch(mainSrc, /autoStartEligible: e\.source === 'builtin' \|\| isBedtimeEvent\(e\)/, 'fetch-calendar-events must carry autoStartEligible');
   assertMatch(p03FnBody(calSrc, 'isAutoStartEligible'), /evt\.source === 'builtin' \|\| evt\.autoStartEligible === true/, 'unknown eligibility is never "Will auto-start"');
+  const recurrenceSrc = fs.readFileSync(path.join(root, 'calendarRecurrence.js'), 'utf8');
+  assertMatch(recurrenceSrc, /function isPastDate\(value, todayValue\)[\s\S]*value < todayValue/, 'shared recurrence arithmetic identifies past Individual-date values');
+  assertMatch(p03FnBody(calSrc, 'ruleRecurrenceLabel'), /rule\.date < today[\s\S]*· Past/, 'Individual-date rule cards label historical dates as Past');
+  const saveFn = p03FnBody(calSrc, 'saveRuleFromForm');
+  assertMatch(saveFn, /isPastDate\(date,CalendarRecurrence\.dateKey\(new Date\(\)\)\)[\s\S]*Choose today or a future date/, 'saving a past Individual-date rule is rejected with an actionable warning');
 
   // Hero: the END time, armed from persisted state, static consequence pill,
   // the single manual start via startFromScheduleEvent.
@@ -3265,7 +3309,7 @@ check('P11 proof: one result vocabulary, honest marks, a safe Delete all, the st
   const status = p03FnBody(rendererOnly, 'renderStatusPanel');
   assertMatch(status, /api\.listReceipts\?\.\(5\)/, 'history keeps listReceipts(5)');
   assertMatch(status, /<button type="button" class="proof-row" data-tone="\$\{toneOf\(r\)\}"\$\{id \? ` data-receipt-id="\$\{escapeHtml\(id\)\}"` : ''\}/, 'history rows are buttons with data-tone and an escaped data-receipt-id');
-  assertMatch(status, /const mode = r\.dryRun \? 'test' : \(r\.dryRun === false && r\.result === 'power_executed' \? 'real' : ''\);/, 'TEST MODE for every dryRun receipt; REAL only for a confirmed command');
+  assertMatch(status, /const mode = r\.dryRun \? 'test' : \(r\.dryRun === false \? 'real' : ''\);/, 'mode labels describe Test Mode versus power-enabled mode, never a confirmed outcome');
   assertMatch(rendererOnly, /els\.statsSessionSummary\?\.addEventListener\('click', async \(event\) => \{[\s\S]*?if \(await openReceiptsLedger\(\) !== true \|\| !id\) return;[\s\S]*?focusLedgerReceipt\(id\);\s*\}\);/, 'a history row opens the ledger and lands on its receipt');
   const focusFn = p03FnBody(receiptSrc, 'focusLedgerReceipt');
   assert(/target\.scrollIntoView\(\{ block: 'center', behavior: reduce \? 'auto' : 'smooth' \}\);/.test(focusFn) && /target\.classList\.add\('is-focus'\);/.test(focusFn) && /setTimeout\(\(\) => target\.classList\.remove\('is-focus'\), 900\);/.test(focusFn), 'focusLedgerReceipt scrolls (smooth unless reduced motion) and outlines the row for 900 ms');
@@ -3273,7 +3317,7 @@ check('P11 proof: one result vocabulary, honest marks, a safe Delete all, the st
   assertMatch(ledger, /data-receipt-id="\$\{escapeHtml\(id\)\}"/, 'ledger rows carry an escaped data-receipt-id');
   assertMatch(ledger, /class="receipt-night"/, 'the ledger groups rows by night');
   assertMatch(ledger, /r\.dryRun === true \? '<span class="receipt-meta-chip chip-test">Test Mode<\/span>'/, 'every dryRun receipt keeps its Test Mode chip (the same r.dryRun === true rule as the Test Mode count)');
-  assertMatch(ledger, /humanizeReceiptResult\(r\.result\)/, 'the ledger keeps the humanized result text (Interrupted)');
+  assertMatch(ledger, /receiptResultLabel\(r\)/, 'the ledger keeps humanized result text and persistence warnings');
   assert(statsPanel.indexOf('id="btn-stats-view-ledger"') > statsPanel.indexOf('Session History') && statsPanel.indexOf('id="btn-stats-view-ledger"') < statsPanel.indexOf('id="stats-session-summary"'), '#btn-stats-view-ledger sits in the Session History card header');
 
   // Delete all: two steps; only the confirm button deletes.
@@ -3298,9 +3342,10 @@ check('P11 proof: one result vocabulary, honest marks, a safe Delete all, the st
   const callout = p03FnBody(rendererOnly, 'updateStreakCallout');
   assert(!/streakCallout\.style\.display = ''/.test(callout) && /els\.streakCallout\.style\.display = 'none';\s*\}$/.test(callout), 'updateStreakCallout never unhides the callout on Proof');
 
-  // The morning note: power_executed only, hidden while running.
+  // The morning note repeats unverified evidence, never a confirmed OS claim.
   const noteFn = p03FnBody(receiptSrc, 'morningNoteFor');
-  assertMatch(noteFn, /if \(!receipt \|\| receipt\.result !== 'power_executed' \|\| receipt\.dryRun === true\) return null;/, 'the morning note needs a confirmed REAL command');
+  assertMatch(noteFn, /\['power_executed', 'completed', 'command_returned_success', 'outcome_unverified'\]\.includes\(receipt\.result\)/, 'the morning note uses legacy or unverified command evidence');
+  assertMatch(noteFn, /outcomeLabel:[\s\S]*legacy outcome unverified[\s\S]*Windows outcome unverified/, 'every morning note states its unverified outcome');
   assertMatch(htmlSrc, /<p class="morning-note" id="morning-note" hidden>/, '#morning-note is hidden by default');
   const plan = htmlSrc.slice(htmlSrc.indexOf('id="ns-hero-card"'), htmlSrc.indexOf('id="action-bar-running"'));
   assert(plan.includes('id="morning-note"'), 'the morning note lives in the Tonight plan column');
@@ -3546,7 +3591,7 @@ check('ux: ns-play-btn has exactly one click handler (no duplicate startTimer)',
 });
 
 check('ux: ns-play-btn has aria-label', () => {
-  assertMatch(htmlSrc, /id="ns-play-btn"[^>]*aria-label="Start tonight/, 'ns-play-btn aria-label missing');
+  assertMatch(htmlSrc, /id="ns-play-btn"[^>]*aria-label="Start prepared timer"[^>]*aria-describedby="testmode-pill"/, 'ns-play-btn aria-label or aria-describedby missing');
 });
 
 check('ux: exactly one Start control exists -- no hidden or duplicate #btn-start', () => {
@@ -3586,7 +3631,9 @@ check('ux: disabled button styling defined', () => {
 });
 
 check('warning: dialog timing and emergency cancel', () => {
-  assertMatch(mainSrc, /if \(timerState\.gracePeriod > 0 && timerState\.remainingSeconds === timerState\.gracePeriod \* 60\) \{/, 'warning dialog trigger timing regressed');
+  // v11.3: the warning fires when the countdown crosses the grace threshold,
+  // so a skipped tick or fractional grace value cannot drop it.
+  assertMatch(mainSrc, /const graceSeconds = timerState\.gracePeriod \* 60;\s*if \(timerState\.gracePeriod > 0 && previousRemaining > graceSeconds && timerState\.remainingSeconds <= graceSeconds && timerState\.remainingSeconds > 0\) \{/, 'warning dialog trigger timing regressed');
   // P01: a Test Mode run says so; the REAL wording is kept verbatim.
   assertMatch(mainSrc, /const warningMessage = timerState\.dryRun\s*\? `Test Mode: \$\{formatAction\(timerState\.action\)\} would run in \$\{timerState\.gracePeriod\} min\. Nothing will power off\.`\s*: `\$\{formatAction\(timerState\.action\)\} in \$\{timerState\.gracePeriod\} minutes`;/, 'warning message content regressed');
   assertMatch(mainSrc, /emitTimerUpdate\('warning', \{\s*message: warningMessage\s*\}\);/, 'warning must emit the mode-aware message');
@@ -3605,7 +3652,7 @@ check('session: recovery banner and tax safety', () => {
   assertMatch(mainSrc, /function getRecoverableTimer\(\) \{/, 'recoverable timer logic missing');
   // The canonical function is promptTimerRecovery(snapshot), not showRecoveryBanner(snapshot)
   assertMatch(rendererSrc, /function promptTimerRecovery\(snapshot\) \{/, 'promptTimerRecovery function missing in renderer');
-  assertMatch(mainSrc, /const taxResult = overrideTax\.recordSnooze\(reason\);/, 'override tax recording missing');
+  assertMatch(mainSrc, /overrideTax\.recordSnooze\(reason\)/, 'override tax recording missing');
   assertMatch(mainSrc, /emitTimerUpdate\('snoozed', \{ addedSeconds: addSeconds, tax: taxResult \}\);/, 'snooze tax update broadcast missing');
 });
 
@@ -3668,7 +3715,7 @@ check('session: recovery banner flow on resume', () => {
 });
 
 check('session: override tax applied to snooze', () => {
-  assertMatch(mainSrc, /const taxResult = overrideTax\.recordSnooze\(reason\);/, 'override tax recording missing');
+  assertMatch(mainSrc, /overrideTax\.recordSnooze\(reason\)/, 'override tax recording missing');
   assertMatch(mainSrc, /emitTimerUpdate\('snoozed', \{ addedSeconds: addSeconds, tax: taxResult \}\);/, 'snooze tax broadcast missing');
 });
 
@@ -4012,7 +4059,7 @@ check('P12 Night Modes: page head, tiers, scenes, truthful detail, states and My
   assert(!/innerHTML/.test(truthFn), 'the truth line and CTA label are written with textContent');
 
   // Timeline: the real ritual steps from api.ritualConfig, never defaults.
-  assert(nmSrc.includes('api.ritualConfig') && !/automatic/.test(nmSrc), 'timeline reads api.ritualConfig and never says automatic');
+  assert(nmSrc.includes('api.ritualConfig') && !/automatic steps/i.test(nmSrc), 'timeline reads api.ritualConfig and never says automatic');
   const tlBox = { nmFacts: null };
   vm.createContext(tlBox);
   vm.runInContext(`${fnSrc(nmSrc, 'formatDuration')} ${fnSrc(nmSrc, 'formatAction')} ${fnSrc(nmSrc, 'nmStepSetting')} ${fnSrc(nmSrc, 'nmStepSeconds')} ${fnSrc(nmSrc, 'nmRitualSteps')} ${fnSrc(nmSrc, 'buildTimeline')}
@@ -4026,7 +4073,7 @@ check('P12 Night Modes: page head, tiers, scenes, truthful detail, states and My
     { id: 'lights', label: 'Smart Lights to Night Mode', durationSeconds: 0 }
   ];
   const nodes = tlBox.build({ ritual: { enabled: true, steps }, contentBlocker: { enabled: true }, app: { nightLightOnDim: false }, lights: null }, full);
-  assert(JSON.stringify(nodes.map(n => n.label)) === JSON.stringify(['Guided Breathing', 'Block Distractions', 'Dim Environment', '1h countdown starts', 'Smart Lights to Night Mode', 'Shutdown this PC']), `real order: ${nodes.map(n => n.label)}`);
+  assert(JSON.stringify(nodes.map(n => n.label)) === JSON.stringify(['Guided Breathing', 'Block Distractions', 'Dim Environment', '1 h countdown starts', 'Smart Lights to Night Mode', 'Shutdown this PC']), `real order: ${nodes.map(n => n.label)}`);
   assert(JSON.stringify(nodes.map(n => n.meta)) === JSON.stringify(['1 min', 'tap to continue', 'Off', 'tap to continue', 'if enabled in Settings', 'when the countdown ends']), `step meta: ${nodes.map(n => n.meta)}`);
   const lit = tlBox.build({ ritual: { enabled: true, steps }, contentBlocker: { enabled: true }, app: { nightLightOnDim: true }, lights: { enabled: true } }, full);
   assert(lit[4].meta === 'during the countdown' && lit[5].kind === 'action', 'the lights step runs during the countdown; the action is last');
@@ -4159,7 +4206,7 @@ check('P13 settings: safety hero, honest saves, smart lights truth, dark fields,
   vm.createContext(truthBox);
   vm.runInContext(`${rendererJs.match(/const FORCE_SHUTDOWN_NO_EFFECT = [^\n]*\n/)[0]} function actionLabel(action = state.action) { return { shutdown: 'Shutdown', sleep: 'Sleep' }[action]; } function renderSafetyTruth() ${truthBody} this.run = renderSafetyTruth;`, truthBox);
   truthBox.run();
-  assert(truthBox.els.setDryrunDesc.textContent === 'On: the timer runs, but no power action will happen.' && !heroClasses.has('is-real'), 'Test Mode on reads On and is not REAL');
+  assert(truthBox.els.setDryrunDesc.textContent === 'On: rehearse the timer and ritual. Their automatic power, lighting, router, system and partner actions are skipped.' && !heroClasses.has('is-real'), 'Test Mode on reads On and is not REAL');
   truthBox.state.dryRun = false;
   truthBox.run();
   assert(truthBox.els.setDryrunDesc.textContent.startsWith('Off: Shutdown will really run when the timer ends') && heroClasses.has('is-real'), 'Test Mode off names the real action and marks the hero REAL');
@@ -4176,7 +4223,7 @@ check('P13 settings: safety hero, honest saves, smart lights truth, dark fields,
   assert(/No effect for Sleep/.test(truthBox.els.setForceDesc.textContent), 'Force shutdown says it has no effect for Sleep');
 
   // Honest save model: data-live + "Applies now", a dirty note, one delegated listener.
-  const liveIds = ['chk-dryrun', 'chk-clock-mode', 'chk-forceshutdown', 'chk-mute', 'chk-graceful', 'grace-minutes', 'cz-clockface', 'cz-clock-style', 'cz-clock-dial', 'cz-clock-format', 'cz-clock-scale', 'cz-clock-hands', 'cz-clock-seconds', 'cz-clock-date', 'cz-clock-sweep', 'chk-idle-detect', 'chk-bedtime-reminder', 'chk-calendar-autostart', 'chk-override-tax', 'tax-free-snoozes', 'tax-tighten-min', 'tax-max-tighten', 'tax-reason-after', 'chk-autopilot', 'autopilot-override-time', 'cb-schedules-list'];
+  const liveIds = ['chk-dryrun', 'chk-forceshutdown', 'chk-mute', 'chk-graceful', 'grace-minutes', 'cz-clockface', 'cz-clock-style', 'cz-clock-dial', 'cz-clock-format', 'cz-clock-scale', 'cz-clock-hands', 'cz-clock-seconds', 'cz-clock-date', 'cz-clock-sweep', 'chk-idle-detect', 'chk-bedtime-reminder', 'chk-calendar-autostart', 'chk-override-tax', 'tax-free-snoozes', 'tax-tighten-min', 'tax-max-tighten', 'tax-reason-after', 'chk-autopilot', 'autopilot-override-time', 'cb-schedules-list'];
   for (const id of liveIds) {
     const tag = (htmlSrc.match(new RegExp(`<[a-z]+ [^>]*id="${id}"[^>]*>`)) || [''])[0];
     assert(/data-live="1"/.test(tag), `#${id} must be marked data-live`);
@@ -4195,7 +4242,7 @@ check('P13 settings: safety hero, honest saves, smart lights truth, dark fields,
     assertMatch(htmlSrc, new RegExp(`id="${id}"[^>]*data-action-scoped="1"`), `#${id} must be data-action-scoped`);
   }
   assertMatch(htmlSrc, /<span class="set-footer-note" id="set-dirty-note" role="status" aria-live="polite">No unsaved changes<\/span>\s*<button class="btn-secondary" id="btn-cancel-opt">/, '#set-dirty-note (role=status) sits before Cancel/Save');
-  assertMatch(rendererJs, /target\.closest\('\[data-live\], \[data-action-scoped\]'\)/, 'the delegated listener ignores [data-live] and [data-action-scoped]');
+  assertMatch(rendererJs, /target\.closest\('\[data-live\], \[data-action-scoped\], \[data-preview-only\]'\)/, 'the delegated listener ignores live settings, action controls and screen previews');
   assertMatch(rendererJs, /\['input', 'change'\]\.forEach\(type => \{\s*els\.settingsCategories\?\.addEventListener\(type,/, 'one delegated input/change listener on .settings-categories');
   for (const fn of ['openSettingsPanel', 'saveSettingsPanel', 'discardSettingsPanelChanges']) {
     assert(/els\.panelSet\?\.classList\?\.remove\('is-dirty'\)/.test(p03FnBody(rendererJs, fn)), `${fn} clears the dirty state`);
@@ -4221,7 +4268,8 @@ check('P13 settings: safety hero, honest saves, smart lights truth, dark fields,
   assertMatch(htmlSrc, /<span class="set-state-pill[^"]*" id="lights-state-pill">/, '#lights-state-pill missing');
   const lightsAt = htmlSrc.indexOf('<div class="option-section lights-section"');
   const lights = htmlSrc.slice(lightsAt, htmlSrc.indexOf('<!-- Focus Sessions', lightsAt));
-  assert(!/<details/.test(lights), 'Smart lights has no <details> wrapper');
+  const manualHelp = lights.match(/<details class="settings-help-details wiz-manual-details">[\s\S]*?<\/details>/g) || [];
+  assert(manualHelp.length === 1 && manualHelp[0].includes('id="wiz-addresses"') && !/<details/.test(lights.replace(manualHelp[0], '')), 'only manual addressing/help is collapsed; primary lighting controls remain exposed');
   assert(!/btn-mode/.test(lights), 'no .btn-mode inside .lights-section (renderRemoteControl owns .btn-mode)');
   const testBlock = lights.slice(lights.indexOf('<div class="set-test-action"'));
   assert(testBlock.includes('id="btn-test-action"') && /physically changes/.test(testBlock), '#btn-test-action sits in .set-test-action with "physically changes"');
@@ -4246,6 +4294,20 @@ check('P13 settings: safety hero, honest saves, smart lights truth, dark fields,
     [{ provider: 'hue', enabled: true, verifiedConfigKey: 'k', hueAllowLegacyHttp: true }, 'Ready · legacy HTTP allowed', 'warn'],
     [{ provider: 'hue', enabled: true, verifiedConfigKey: 'k' }, 'Ready', 'ready']
   ];
+  // v11.3: real digest-form keys, as production writes them, with main's
+  // verifiedForSetup verdict (the plaintext fixtures above use the fallback).
+  {
+    const lights = require(path.join(root, 'smartLights.js'));
+    const httpCfg = { provider: 'http', enabled: false, httpMethod: 'PUT', httpUrl: 'https://hooks.example/lights', httpBodyTemplate: '{"on":true}', httpHeaders: {} };
+    const httpKey = lights.configurationKey(httpCfg);
+    assert(httpKey && !httpKey.includes('hooks.example') && !httpKey.includes('{"on":true}'), 'HTTP verification key carries no webhook URL or body in plaintext');
+    pillCases.push([{ ...httpCfg, verifiedConfigKey: httpKey, verifiedForSetup: true }, 'Verified · off', 'muted']);
+    pillCases.push([{ ...httpCfg, verifiedConfigKey: httpKey, verifiedForSetup: false }, 'Not verified · off', 'muted']);
+    const hueCfg = { provider: 'hue', enabled: false, hueBridgeIp: '10.0.0.2', hueUsername: 'synthetic-hue-user', hueGroupId: '1' };
+    const hueKey = lights.configurationKey(hueCfg);
+    assert(hueKey && !hueKey.includes('synthetic-hue-user'), 'Hue verification key carries no Hue username in plaintext');
+    pillCases.push([{ ...hueCfg, hueUsername: undefined, verifiedConfigKey: hueKey, verifiedForSetup: true }, 'Verified · off', 'muted']);
+  }
   for (const [cfg, text, tone] of pillCases) {
     const got = pillBox.pill(cfg);
     assert(got.text === text && got.tone === tone, `pill for ${JSON.stringify(cfg)} should be ${text}`);
@@ -4633,7 +4695,7 @@ check('Fire 02 truth and names', () => {
   const pause = p03FnBody(rendererJs, 'togglePause');
   assert(/notify\('Timer resumed', 'success', 3000, \{ toast: !tonightVisible \}\)/.test(pause) && /notify\('Timer paused', 'warning', 3000, \{ toast: !tonightVisible \}\)/.test(pause), 'togglePause passes a { toast } option');
   assert(/notify\(`Pause failed: [^`]*`, 'error'\);/.test(pause), "'Pause failed' still toasts");
-  assertMatch(p03FnBody(rendererJs, 'notify'), /if \(toast\) showToast\(message, type, duration\);/, 'notify skips only the toast');
+  assertMatch(p03FnBody(rendererJs, 'notify'), /if \(toast\) showToast\(message, type, duration, \{ sessionOutcome \}\);/, 'notify preserves session scope while skipping only the toast');
 
   // The footer: no pill-wide teal 'complete'; the outcome word is the hook.
   assert(!/\.app-footer \.status-pill\.complete \{/.test(css), 'the pill-wide teal complete override is gone');
@@ -4657,16 +4719,15 @@ check('Fire 02 truth and names', () => {
   assert(phases && !/Focus/.test(phases), "SESSION_PHASE_LABELS has no 'Focus' (Focus Sessions own the word)");
   assert(!/focus: 'Focus'/.test(footer), "the footer's first phase reads Running");
 
-  // Source guard: Test Mode does not hold back the wind-down in main. If main
-  // ever gates one of these, windDownEffects and its copy must change too.
+  // Source guard: Test Mode rehearses the timer without automatic wind-down effects in main.
   const dim = p03FnBody(mainSrc, 'applyDimPhase');
-  for (const needle of ['nightLightOnDim', 'applyFocusMode(true)', 'pauseMediaOnDim', 'wifiGuard.blockInternet', 'contentBlocker.blockSites', 'lockoutOnDim']) {
+  for (const needle of ['nightLightOnDim', 'applyFocusMode(true)', 'pauseMediaOnDim', 'wifiLifecycle.block', 'contentBlocker.blockSites', 'lockoutOnDim']) {
     assert(dim.includes(needle), `applyDimPhase still runs ${needle}`);
   }
-  assert(!/dryRun/.test(dim), 'applyDimPhase has no Test Mode check (the Test Mode notes depend on it)');
+  assert(/if \(dryRun\)/.test(dim), 'applyDimPhase skips external effects in Test Mode');
   const lightAt = mainSrc.indexOf('smartLights.startSmartLightDim(timerState.remainingSeconds)');
   const tickAt = mainSrc.lastIndexOf('timerInterval = setInterval(', lightAt);
-  assert(lightAt > 0 && tickAt > 0 && !/dryRun/.test(mainSrc.slice(tickAt, lightAt)), 'the countdown tick starts the smart-light dim with no Test Mode condition');
+  assert(lightAt > 0 && tickAt > 0 && /!timerState\.dryRun/.test(mainSrc.slice(tickAt, lightAt)), 'the countdown tick gates smart-light dim on !timerState.dryRun');
 
   // windDownEffects knows exactly the seven effects; pickWindDownFacts keeps
   // no credential-shaped field (behaviour, in a sandbox).
@@ -4787,7 +4848,7 @@ check('Fire 03 shell', () => {
 
   // One-line rail labels, one item height.
   const label = all.filter(r => r.selector === '.ns-nav-label').pop();
-  assert(label && /'Bahnschrift SemiCondensed'/.test(label.body) && /white-space:\s*nowrap/.test(label.body) && /font-size:\s*10px/.test(label.body) && /overflow:\s*hidden/.test(label.body), 'rail labels: one line of Bahnschrift SemiCondensed 10px, clipped never wrapped');
+  assert(label && /font-family:\s*var\(--font-ui\)/.test(label.body) && /white-space:\s*nowrap/.test(label.body) && /font-size:\s*11px/.test(label.body) && /overflow:\s*hidden/.test(label.body), 'rail labels: readable 11px UI face on one line, without overflow');
   const item = all.filter(r => r.selector === '.ns-nav-item' && /height:/.test(r.body)).pop();
   assert(item && /height:\s*54px/.test(item.body) && Number((item.body.match(/width:\s*(\d+)px/) || [])[1]) <= 76, 'one 54px item height, at most 76px wide inside the 80px rail');
 
@@ -4859,7 +4920,8 @@ check('Fire 03 shell', () => {
 check('Fire 04 Tonight instrument', () => {
   const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
   const rendererJs = fs.readFileSync(path.join(root, 'renderer.js'), 'utf8');
-  const widgetSrc = fs.readFileSync(path.join(root, 'widget.html'), 'utf8');
+  const widgetSrc = fs.readFileSync(path.join(root, 'widget.html'), 'utf8')
+    + '\n' + fs.readFileSync(path.join(root, 'widget.js'), 'utf8');
   const all = p03CssRules(css);
 
   // The block: above the contract, judged on its own, no loops.
@@ -5034,18 +5096,22 @@ check('Fire 07 devices', () => {
   assert(!/\.url|shortCode|failureDetails|errorMessage|lanIp/.test(reasonFn), 'the phone reason never reads the URL, pairing code, process details, address or raw error text');
   assert(!/\.url\b|shortCode|failureDetails/.test(devicesFn), 'renderDevicesPanel reads no URL, pairing code or process details');
 
-  // Test Mode scope notes from Fire 02's one helper.
+  // Test Mode scope notes from Fire 02's one helper. main.js skips these
+  // effects in Test Mode, so the static notes say "Skipped in Test Mode".
   for (const id of ['device-lights-scope', 'device-wifi-scope']) {
-    assertMatch(htmlSrc, new RegExp(`<p class="device-scope-note" id="${id}" hidden>Runs in Test Mode too\\.`), `#${id} is static, hidden by default`);
+    assertMatch(htmlSrc, new RegExp(`<p class="device-scope-note" id="${id}" hidden>Skipped in Test Mode\\.`), `#${id} is static, hidden by default`);
   }
   const syncFn = p03FnBody(rendererOnly, 'syncDeviceScopeNotes');
   assert(/windDownEffects\(facts\)/.test(syncFn) && /state\.settingsLoaded === true && state\.dryRun === true/.test(syncFn), 'the notes read windDownEffects and show only in loaded Test Mode');
   assert(!/blockOnDim|enabled|deviceMacs/.test(syncFn), 'no second copy of main\'s conditions in syncDeviceScopeNotes');
   assertMatch(devicesFn, /pickWindDownFacts\(\{ wifiGuard: wifi, lights \}\)/, 'Devices feeds its fresh reads into the shared facts');
   assertMatch(renderFn, /typeof syncDeviceScopeNotes === 'function'\) syncDeviceScopeNotes\(\);/, 'render() keeps the notes in step with a Test Mode switch');
-  for (const f of ['wifiGuard.js', 'smartLights.js']) {
-    assert(!/dryRun/.test(fs.readFileSync(path.join(root, f), 'utf8')), `${f} has started handling dryRun: reword or remove the Devices Test Mode note`);
-  }
+  // Tripwire: the notes promise a skip, so main's Test Mode gates must stay.
+  // (They used to promise the opposite and grepped wifiGuard.js/smartLights.js,
+  // which missed the gates moving into main.js.)
+  const dimGate = p03FnBody(mainSrc, 'applyDimPhase');
+  assert(dimGate.indexOf('if (dryRun)') >= 0 && dimGate.indexOf('if (dryRun)') < dimGate.indexOf('wifiLifecycle.block'), 'applyDimPhase must skip Wi-Fi Guard in Test Mode, or reword the Devices Test Mode note');
+  assert(/if \(!timerState\.dryRun && smartLights\.getConfig\(\)\.enabled\) \{\s*smartLights\.updateSmartLightTick/.test(mainSrc), 'the smart-light tick must skip Test Mode, or reword the Devices Test Mode note');
   assert(fireRules.some(r => r.selector === '.device-scope-note[hidden]' && /display:\s*none/.test(r.body)), 'a hidden scope note takes no space');
   assert(!fireRules.some(r => /device-scope-note/.test(r.selector) && /transition|opacity/.test(r.body)), 'the scope note is static truth');
 
@@ -5149,7 +5215,7 @@ check('Fire 08 night modes', () => {
   assertMatch(htmlSrc, /<p class="nm-detail-truth" id="nm-detail-truth" hidden><\/p>\s*<p class="nm-detail-scope" id="nm-detail-scope" hidden><\/p>/, '#nm-detail-scope sits under the truth line, hidden by default');
   const truthFn = p03FnBody(nmSrc, 'renderDetailTruth');
   assert(/windDownEffects\(facts\)/.test(truthFn) && /typeof getWindDownFacts === 'function'/.test(truthFn) && /mode\.status === 'ready'/.test(truthFn) && /state\.settingsLoaded === true && state\.dryRun === true/.test(truthFn), 'the scope line reads windDownEffects only in loaded Test Mode on a ready mode');
-  assert(/Wind-down still runs in Test Mode: \$\{effects\.map\(e => e\.label\)\.join\(', '\)\}\./.test(truthFn) && /scope\.textContent !== text/.test(truthFn) && !/scope\.innerHTML/.test(truthFn), 'the scope line is text, written on change');
+  assert(/Skipped in Test Mode: \$\{effects\.map\(e => e\.label\)\.join\(', '\)\}\./.test(truthFn) && /scope\.textContent !== text/.test(truthFn) && !/scope\.innerHTML/.test(truthFn), 'the scope line is text, written on change');
   assert(!allRules.some(r => /nm-detail-scope/.test(r.selector) && /(animation|transition)\s*:/.test(r.body)), 'the scope line never moves');
   assert(/color:\s*var\(--accent-amber\)/.test((rule('.nm-detail-scope') || {}).body || ''), 'the scope line is amber');
 
@@ -5172,7 +5238,7 @@ check('Fire 08 night modes', () => {
 
   // My Mode cards: keyboard-reachable, navigate only after a successful idle load.
   const renderProfilesFn = p03FnBody(profSrc, 'renderProfiles');
-  assertMatch(renderProfilesFn, /data-profile-id="\$\{profile\.id\}" role="button" tabindex="0"/, 'My Mode cards carry role=button and tabindex=0');
+  assertMatch(renderProfilesFn, /data-profile-id="\$\{safeProfileId\}" role="button" tabindex="0"/, 'My Mode cards carry role=button and tabindex=0');
   assertMatch(renderProfilesFn, /<span class="profile-dur">\$\{escapeHtml\(profileDurationText\(profile\)\)\}<\/span>/, 'the right-hand duration uses the shared vocabulary');
   const bindFn = p03FnBody(profSrc, 'bindProfileCard');
   assert(/addEventListener\('keydown'/.test(bindFn) && /e\.target !== card \|\| e\.repeat/.test(bindFn) && /e\.key === 'Enter' \|\| e\.key === ' '/.test(bindFn) && /e\.preventDefault\(\)/.test(bindFn), 'Enter / Space on the card itself, no repeats, Space never scrolls');
@@ -5212,7 +5278,7 @@ check('Fire 08 night modes', () => {
   assert(/transform:\s*none/.test((rule('#profiles-modal .btn-quiet:active .chip-glyph') || {}).body || '') && fire.indexOf('#profiles-modal .btn-quiet:active .chip-glyph') < fire.indexOf('#profiles-modal .profile-item-btn.move-btn[data-action="up"] .profile-move-glyph'), 'manager glyphs (the pin flag included) never take the quiet press spin; the chevron rules still win');
 
   // Main: a disabled ritual is an honest failure, and the phone hears it.
-  assertMatch(mainSrc, /const ritual = ritualMode\.startRitual\(null, \{ profileRitualToken: runToken, remoteOrigin: options\.source === 'remote' \|\| options\.origin === 'calendar' \}\);\s*\/\/[\s\S]*?const ritualStarted = Boolean\(ritual && ritual\.active === true\)\s*\|\| Boolean\(timerState\.running \|\| timerState\.paused\);\s*if \(!ritualStarted\) \{\s*profileRitualContext\.clear\(\);\s*if \(!ritual \|\| ritual\.reason === 'disabled'\) \{\s*return \{\s*success: false,\s*code: 'RITUAL_DISABLED'/, 'the gateway judges a ritual start from evidence (active, or a live countdown after a remote fast-forward)');
+  assertMatch(mainSrc, /const ritual = ritualMode\.startRitual\(null, \{ profileRitualToken: runToken,[\s\S]*?remoteOrigin: options\.source === 'remote' \|\| options\.origin === 'calendar' \}\);\s*\/\/[\s\S]*?const ritualStarted = Boolean\(ritual && ritual\.active === true\)\s*\|\| Boolean\(timerState\.running \|\| timerState\.paused\);\s*if \(!ritualStarted\) \{\s*profileRitualContext\.clear\(\);\s*if \(!ritual \|\| ritual\.reason === 'disabled'\) \{\s*return \{\s*success: false,\s*code: 'RITUAL_DISABLED'/, 'the gateway judges a ritual start from evidence (active, or a live countdown after a remote fast-forward)');
 });
 
 // UI-R3 Fire 09: Schedule as one instrument page. The hero carries the one
@@ -5301,7 +5367,7 @@ check('Fire 09 schedule', () => {
   const form = sch.slice(sch.indexOf('id="schedule-rule-form"'), sch.indexOf('id="sch-once"'));
   for (const id of ['rule-label', 'rule-time', 'rule-duration', 'rule-action']) assert(form.includes(`<label for="${id}">`) && form.includes(`id="${id}"`), `#${id} has a label[for]`);
   assertMatch(form, /<div class="day-toggle-grid" id="rule-days" role="group" aria-label="Active days">/, 'the days group is a named group');
-  assert(/>Save rule<\/button>/.test(form) && /Minutes before the action/.test(form), 'sentence-case Save, honest minutes label');
+  assert(/>Save rule<\/button>/.test(form) && /Start a timer · minutes/.test(form), 'sentence-case Save, explicit timer action label');
   const grid = rule('#sch-rules #schedule-rule-form');
   assert(grid && /display:\s*grid/.test(grid.body) && /grid-template-columns:\s*minmax\(0, 1\.4fr\) minmax\(0, 1fr\)/.test(grid.body), 'the editor is a two-column grid');
   assertMatch(p03FnBody(calSrc, 'openRuleForm'), /form\.style\.display = '';/, "openRuleForm clears the inline none (the CSS grid applies)");
@@ -5321,7 +5387,8 @@ check('Fire 09 schedule', () => {
   assertMatch(preloadText, /getCalendarFetchStatus: \(\) => ipcRenderer\.invoke\('get-calendar-fetch-status'\),/, 'preload exposes getCalendarFetchStatus with no arguments');
   assertMatch(mainSrc, /ipcMain\.handle\('get-calendar-fetch-status', \(\) => calProviders\.getLastFetchStatus\(\)\);/, 'main answers it argument-free from getLastFetchStatus');
   assertMatch(mainSrc, /calProviders\.fetchAllEvents\(calConfig, new Date\(\), withinDays \|\| 14, \{ recordStatus: true \}\)/, 'only the renderer fetch records a status');
-  assert((mainSrc.match(/calProviders\.fetchAllEvents\(calSettings, new Date\((?:Date\.now\(\) - 60000)?\), 1\)/g) || []).length === 2, 'the 1-day background fetches record nothing');
+  // v11.3: the auto-start fetch looks back to its watermark (lookBackFrom()).
+  assert((mainSrc.match(/calProviders\.fetchAllEvents\(calSettings, new Date\((?:Date\.now\(\) - 60000|lookBackFrom\(\))?\), 1\)/g) || []).length === 2, 'the 1-day background fetches record nothing');
   assertMatch(coreSrc, /getCalendarFetchStatus: async \(\) => \(\{\}\),/, 'the browser preview has a fallback');
   const cpOutsideClassifier = cpSrc.replace(p03FnBody(cpSrc, 'fetchFailureReason'), '').replace(/\/\/[^\n]*/g, '');
   assert(!/err\.message/.test(cpOutsideClassifier) && /console\.error\('ICS feed fetch failed:', reason\);/.test(cpSrc), 'only fetchFailureReason reads err.message; nothing logs or stores it (feed URLs and tokens are secrets)');
@@ -5405,12 +5472,25 @@ check('Fire 10 proof', () => {
 
   // Routine: quiet until real, one merged note, no source li.
   assert(!htmlSrc.includes('routine-src') && !p03CssRules(css).some(r => /routine-src/.test(r.selector)), 'the legend source item and its CSS are gone');
-  assertMatch(htmlSrc, /<p class="proof-routine-note">From local receipts on this PC\. Streaks count completed real runs only, not measured sleep\.<\/p>/, 'one merged Routine note');
+  assertMatch(htmlSrc, /<p class="proof-routine-note">Streaks count logged non-Test timer endings and emergency overrides; legacy entries remain\. They do not verify Windows actions or measure sleep\.<\/p>/, 'one Routine note discloses the preserved calculation and its limits');
   assert(/color:\s*var\(--text-muted\)/.test((rule('.routine-streak') || {}).body || '') && /color:\s*var\(--pf-teal\)/.test((rule('.routine-streak[data-state="live"]') || {}).body || ''), 'the streak line is muted until live (teal)');
   assertMatch(htmlSrc, /<span class="routine-cell-val streak-number" id="streak-count">0<\/span>/, '#streak-count keeps .streak-number');
   assertMatch(htmlSrc, /<span class="routine-cell-note" id="score-label">Routine Consistency Score<\/span>/, '#score-label keeps its honest initial text');
-  assert(/>Before 11 PM · last 7 nights</.test(htmlSrc) && /Avg lights-out/.test(htmlSrc), 'the on-time threshold is stated; Avg lights-out is the one name');
+  assert(/>Before 11 PM · last 7 nights</.test(htmlSrc) && /Avg logged time/.test(htmlSrc), 'the on-time threshold is stated; the timestamp is a logged event, not observed lights-out');
   assertMatch(p03FnBody(coreSrc, 'renderStreaks'), /part\(bd\.ritual, 'Ritual'\)/, "the score's fourth part keeps the honest name 'Ritual'");
+});
+
+check('LO-SDH-1 release gate: handoff pairing stays disabled on desktop until qualified', () => {
+  const gates = require(path.join(root, 'releaseGates.js'));
+  assert(gates.HANDOFF_PAIRING === false, 'ReleaseGates.HANDOFF_PAIRING must remain false until LO-SDH-1 is qualified');
+  assert(typeof gates.HANDOFF_UNAVAILABLE_MESSAGE === 'string' && gates.HANDOFF_UNAVAILABLE_MESSAGE.length > 0, 'HANDOFF_UNAVAILABLE_MESSAGE must be non-empty');
+  assertMatch(mainSrc, /const releaseGates = require\('\.\/releaseGates'\);/, 'main.js must load releaseGates');
+  assertMatch(mainSrc, /if \(releaseGates\.HANDOFF_PAIRING\) \{\s*handoffService\.configure\(/, 'main.js must gate handoffService.configure on releaseGates.HANDOFF_PAIRING');
+  assertMatch(mainSrc, /ipcMain\.handle\('handoff-action', \(event, action, options\) => \{\s*if \(!releaseGates\.HANDOFF_PAIRING\) return \{ ok: false, error: releaseGates\.HANDOFF_UNAVAILABLE_MESSAGE \};/, 'handoff-action IPC handler must fail closed when HANDOFF_PAIRING is false');
+  assertMatch(htmlSrc, /<details class="sch-section" id="handoff-pairing" hidden>/, '#handoff-pairing must start hidden in index.html');
+  assert(htmlSrc.indexOf('<script src="releaseGates.js"></script>') > 0 && htmlSrc.indexOf('<script src="releaseGates.js"></script>') < htmlSrc.indexOf('<script src="renderer-handoff.js"></script>'), 'releaseGates.js must load before renderer-handoff.js');
+  const rendererHandoffSrc = fs.readFileSync(path.join(root, 'renderer-handoff.js'), 'utf8');
+  assertMatch(rendererHandoffSrc, /ReleaseGates\.HANDOFF_PAIRING === true/, 'renderer-handoff.js must gate HandoffUI mount on ReleaseGates.HANDOFF_PAIRING === true');
 });
 
 // Cleanup.

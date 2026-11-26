@@ -85,12 +85,18 @@ function resetStores() {
   debt.dailyLog = [];
 }
 
-function runCompleteTimer({ dryRun, receipt }) {
+function runCompleteTimer({ dryRun, receipt, cancelDuring }) {
   const calls = [];
   const receipts = new Map(receipt ? [[receipt.id, { ...receipt }]] : []);
   const sandbox = {
     console: { warn: () => {}, log: () => {}, error: () => {} },
     setTimeout,
+    AbortController: globalThis.AbortController,
+    completionGuardController: null,
+    // Completion-time helpers added by the v11.3 audit: the run is on time
+    // and owns no paused media here.
+    windDownChanges: { mediaPause: null },
+    isCompletionStale: () => false,
     timerState: { running: true, paused: false, remainingSeconds: 3, endsAt: 'x', phase: 'warning', action: 'shutdown', dryRun },
     activeReceiptId: receipt ? receipt.id : null,
     mainWindow: null,
@@ -105,13 +111,20 @@ function runCompleteTimer({ dryRun, receipt }) {
     sendAccountability: type => calls.push(`accountability:${type}`),
     settingsStore: { getSection: section => (section === 'app' ? { wakeTime: '07:00' } : {}) },
     runReceipts: {
+      recordActionEvent: (id, event) => { Object.assign(receipts.get(id) || {}, { result: event.state }); },
       getReceiptById: id => receipts.get(id) || null,
       updateRunReceipt: (id, updates) => { calls.push(`receipt:${updates.result}`); Object.assign(receipts.get(id) || {}, updates); }
     },
-    unsavedGuard: { scanUnsavedWork: async () => [] },
+    unsavedGuard: { scanUnsavedWork: async () => {
+      if (cancelDuring === 'guard') { sandbox.activeReceiptId = null; receipts.get(receipt.id).result = 'cancelled'; }
+      return [];
+    } },
     streaks,
     sleepDebt,
-    playLastLightRitual: async flag => { calls.push(`lastLight:${flag}`); },
+    playLastLightRitual: async flag => {
+      calls.push(`lastLight:${flag}`);
+      if (cancelDuring === 'last-light') { sandbox.activeReceiptId = null; receipts.get(receipt.id).result = 'cancelled'; }
+    },
     executePowerAction: async state => { calls.push(`power:${state.dryRun}`); }
   };
   const context = vm.createContext(sandbox);
@@ -148,13 +161,23 @@ test('a real completion records one source:real event with the receipt snooze fl
     assert.deepEqual({ ...events[0], bedTime: 'x' }, { date: key(2024, 1, 10), bedTime: 'x', action: 'shutdown', snoozed: true, source: 'real' });
     assert.ok(streaks.getWeeklyReport().snoozeRate > 0, 'a snoozed real night shows in the snooze rate');
     assert.equal(sleepDebt._load().dailyLog.length, 1, 'a real night records its deficit estimate');
-    assert.deepEqual(calls, ['receipt:completing', 'accountability:TIMER_COMPLETE', 'lastLight:false', 'power:false']);
+    assert.deepEqual(calls, ['receipt:timer_elapsed', 'accountability:TIMER_COMPLETE', 'lastLight:false', 'power:false']);
 
     resetStores();
     await runCompleteTimer({ dryRun: false, receipt: { id: 'r3', snoozeCount: 0 } });
     assert.equal(streaks.exportData().events[0].snoozed, false);
   } finally {
     mock.timers.reset();
+  }
+});
+
+test('cancel during the unsaved-work guard or Last Light cannot dispatch the completed run', async () => {
+  for (const cancelDuring of ['guard', 'last-light']) {
+    resetStores();
+    const { calls, receipts } = await runCompleteTimer({ dryRun: false, receipt: { id: 'pending-run', snoozeCount: 0 }, cancelDuring });
+    assert.equal(receipts.get('pending-run').result, 'cancelled');
+    assert.equal(calls.includes('power:false'), false, 'no power executor after cancellation');
+    assert.equal(streaks.exportData().events.length, 1, 'existing ritual credit at timer elapsed remains unchanged');
   }
 });
 
@@ -233,7 +256,7 @@ test('a Test-Mode-only history gives totalNights 0, streak 0, no achievements an
     assert.equal(report.nightsThisWeek, 0);
     assert.deepEqual(report.actionCounts, {});
     assert.equal(report.testModeRunsThisWeek, 3);
-    assert.match(report.narrative, /^No real completions this week\. Test Mode runs are recorded in Proof but don't count toward your routine\./);
+    assert.match(report.narrative, /^No non-Test ritual records this week\. Test Mode runs are recorded in Proof but don't count toward your routine\./);
     assert.equal(streaks.getHistory30().filter(day => day.hasEvent).length, 0, 'a Test-Mode-only night is not a filled cell');
     assert.equal(streaks.getTrend('week').length, 0);
     assert.equal(streaks.getSleepScore().score, null);
@@ -257,7 +280,7 @@ test('Test Mode receipts this week are acknowledged in the report without counti
     const report = streaks.getWeeklyReport({ receipts });
     assert.equal(report.testModeRunsThisWeek, 1);
     assert.equal(report.nightsThisWeek, 0);
-    assert.match(report.narrative, /^No real completions this week\./);
+    assert.match(report.narrative, /^No non-Test ritual records this week\./);
     // With no Test Mode runs at all, the original empty wording stays.
     assert.match(streaks.getWeeklyReport().narrative, /^No nights logged this week/);
   } finally {
@@ -399,7 +422,7 @@ for (const tz of ['America/New_York', 'America/Adak', 'UTC', 'Asia/Tokyo', 'Paci
     const m = /(\d+) of the last 7 nights/.exec(r.narrative);
     assert.ok(m && Number(m[1]) <= 7, r.narrative);
     assert.match(r.narrative, /^7 of the last 7 nights logged \(8 total since you started\)\./);
-    assert.match(r.narrative, /Real-mode completions: 1 shutdown\./);
+    assert.match(r.narrative, /Non-Test ritual records: 1 shutdown\./);
     assert.match(r.narrative, /6 logged nights were recorded before Test Mode tracking\./);
   });
 }
@@ -416,7 +439,7 @@ test('a mixed legacy + Test Mode receipt week is reported neutrally, never as Re
     assert.equal(report.legacyNightsThisWeek, 1);
     assert.deepEqual(report.realActionCounts, {});
     assert.equal(report.testModeRunsThisWeek, 0, 'the receipt is the same run as the counted legacy night');
-    assert.doesNotMatch(report.narrative, /Real-mode completions/);
+    assert.doesNotMatch(report.narrative, /Non-Test ritual records/);
     assert.doesNotMatch(report.narrative, /not counted/);
     assert.match(report.narrative, /1 logged night was recorded before Test Mode tracking\./);
 
@@ -427,7 +450,7 @@ test('a mixed legacy + Test Mode receipt week is reported neutrally, never as Re
     streaks.recordEvent('22:00', 'sleep', false);
     const mixed = streaks.getWeeklyReport({ receipts });
     assert.deepEqual(mixed.realActionCounts, { sleep: 1 });
-    assert.match(mixed.narrative, /Real-mode completions: 1 sleep\./);
+    assert.match(mixed.narrative, /Non-Test ritual records: 1 sleep\./);
     assert.match(mixed.narrative, /1 logged night was recorded before Test Mode tracking\./);
 
     // A later Test Mode run the same UTC day (a different run: the legacy

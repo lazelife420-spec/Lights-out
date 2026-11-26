@@ -52,35 +52,18 @@ const GRAMMAR = {
   red: '#ff5c7a'
 };
 
-test('a Test Mode start is labelled Test Mode with testMode:true, in amber', async () => {
-  const payload = await send('TIMER_STARTED', true);
-  assert.equal(payload.testMode, true);
-  assert.ok(payload.label.startsWith('Test Mode: '), payload.label);
-  assert.match(payload.message, /Test Mode: Wind-down started/);
-  assert.equal(payload.color, GRAMMAR.amber);
-});
-
-test('a Test Mode completion says no power action ran and never says Completed', async () => {
-  const payload = await send('TIMER_COMPLETE', true);
-  assert.equal(payload.testMode, true);
-  assert.ok(payload.label.startsWith('Test Mode: '), payload.label);
-  assert.match(payload.label, /no power action/);
-  assert.doesNotMatch(JSON.stringify(payload), /Completed/);
-  assert.doesNotMatch(payload.message, /✅/, 'no check-mark success icon');
-  assert.equal(payload.color, GRAMMAR.amber);
-});
-
-test('every event type is prefixed in Test Mode', async () => {
+test('all Test Mode events send no partner requests', async () => {
+  received.length = 0;
   for (const eventType of Object.keys(accountability.EVENTS)) {
-    const payload = await send(eventType, true);
-    assert.ok(payload.label.startsWith('Test Mode: '), `${eventType}: ${payload.label}`);
-    assert.equal(payload.testMode, true);
+    const result = await accountability.notifyPartner(eventType, { testMode: true, config: { partners: [{ type: 'webhook', url: hookUrl }] } });
+    assert.deepEqual(result, []);
   }
+  assert.equal(received.length, 0);
 });
 
 test('a REAL completion keeps its wording and is not marked Test Mode', async () => {
   const payload = await send('TIMER_COMPLETE', false);
-  assert.equal(payload.label, 'Completed');
+  assert.equal(payload.label, 'Timer finished; Windows outcome unverified');
   assert.equal(payload.testMode, false);
   assert.doesNotMatch(payload.message, /Test Mode/);
   assert.equal(payload.color, GRAMMAR.teal);

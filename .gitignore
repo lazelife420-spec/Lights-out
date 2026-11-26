@@ -28,6 +28,10 @@ electron/docs/proof/**/userdata-*/
 Thumbs.db
 .DS_Store
 
+# JVM / Gradle crash logs
+hs_err_pid*.log
+replay_pid*.log
+
 # IDE / tool snapshots
 .snapshots/
 

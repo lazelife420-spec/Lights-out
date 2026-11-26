@@ -4,11 +4,12 @@ Open the app to a **phone timer that works offline**, with no PC, account or pai
 required. Start, pause, resume, add five minutes or cancel. Countdown ring is the
 default; an optional analog clock appears while idle. Timers remain saved when you
 leave the screen, close the app normally or reopen it. They finish with an Android
-notification, rather than a phone power action. The Lighting, Routines and Calendar
-tabs are also native phone features: their saved settings and alarms do not need
-the PC or the PC companion server.
+notification, rather than a phone power action. The bottom tabs are **Tonight**
+(the reminder timer), **Lights**, **Routines** and **Schedule**. Lights, Routines
+and Schedule are also native phone features: their saved settings and alarms do
+not need the PC or the PC companion server.
 
-**Pair a PC / Open PC controls** opens a separate screen for controlling a running
+**Pair PC / Open PC controls** opens a separate screen for controlling a running
 Lights Out desktop app. The phone and PC timers are independent: operating one
 does not change the other. PC routines run on the PC; phone routines run on the
 phone. Set up the phone's lights and schedules separately. This is phone-to-PC
@@ -16,19 +17,35 @@ control, as requested; the PC does not control the phone timer.
 
 ## Direct WiZ lighting and phone calendar
 
-1. Open **Lighting**, join the bulbs' Wi-Fi and enable **Local communication** in
+1. Open **Lights**, join the bulbs' Wi-Fi and enable **Local communication** in
    the WiZ app. Find lights or enter their local IPv4 addresses. Save up to eight
    lights. **Check** reads status without changing a bulb; On, Off and warm
    brightness controls require a WiZ acknowledgement before reporting success.
 2. Open **Routines**. Save a name and timer duration, optionally select lights,
    warm starting brightness (10–100%, 2700K), and lights off at completion.
    A routine can also be a phone reminder with no lighting action.
-3. Open **Calendar**, choose a saved routine and a local start time. Rules support
+3. Open **Schedule**, choose a saved routine and a local start time. Rules support
    ISO weekdays, selected months with days 1–31 or **last**, and individual dates.
    The month planner covers all months and can create a date rule by tapping a day.
-4. Grant **Allow precise alerts** (Android Alarms & reminders). Saved calendar
-   rules remain paused without this access. Android displays scheduled routines
-   as alarms. Notifications are separate permission for visible finish alerts.
+4. Grant **Allow precise alerts** on the Tonight tab (Android Alarms & reminders).
+   Saved calendar rules remain paused without this access. Android displays
+   scheduled routines as alarms. Notifications are separate permission for
+   visible finish alerts.
+
+## First Light morning wake (phone)
+
+The **First Light** card on the **Schedule** tab sets a wake reminder for this
+phone: a wake time in the phone's local time and the days it repeats. It is off
+by default (**Enable First Light on this phone**) and works with the PC off.
+It needs Alarms & reminders access; without it First Light stays unarmed. The
+phone must be powered on: it cannot wake a powered-off phone.
+
+An optional **Gradual local WiZ sunrise** ramps saved WiZ lights (from the
+Lights tab, local IPv4 only) for 5-45 minutes before the wake time, over the
+home Wi-Fi as best-effort LAN UDP. Turning a light off by hand releases it for
+the rest of the sunrise, and **Stop sunrise** ends the ramp. First Light is
+qualified on the emulator and in unit tests only; physical wake delivery, OEM
+battery behaviour and real bulbs are field-QA unknowns.
 
 Calendar rules use the phone's local time zone, with a fresh alarm after each
 occurrence and on reboot, time/time-zone changes, app updates and permission
@@ -107,7 +124,8 @@ routines, calendar rules, occurrence ledger and companion URL/token locally.
 2. **Run** (▶) onto your device, or **Build → Build APK(s)**.
 
 ### Option B — command line
-The Gradle 8.7 wrapper is included, with a pinned distribution checksum. Build a
+The Gradle 8.14.6 wrapper is included, with a pinned distribution checksum
+(AGP 8.13.2, Kotlin 2.3.21, `compileSdk`/`targetSdk` 36, CameraX 1.6.2). Build a
 debug APK with:
 
 ```bash
@@ -142,7 +160,7 @@ phone/router and broadcast-discovery reliability remain unqualified.
 serial and an exact `LightsOut_QA_*` AVD identity. It checks the APK's actual
 `.debug` package, SHA-256 and every source input against the isolated build
 inventory before installing. It resets QA debug data; preserve the production
-package. Use an owned API 35 AVD, SDK build-tools 34.0.0 and the supported Node
+package. Use an owned API 35/36 AVD, SDK build-tools 35.0.0 (or 36.0.0) and the supported Node
 runtime. Generate the inventory/APK with `android-debug-qa.ps1` first.
 
 ```powershell
@@ -188,7 +206,8 @@ ADB, just hit Run and skip the manual install.)
 ## First run
 
 1. Open **Lights Out** on the phone.
-2. Use **Start phone timer** independently, or tap **Pair a PC**. For PC control,
+2. Use **Start reminder** on the Tonight tab independently, or tap **Pair PC**
+   (it reads **Open PC controls** once paired). For PC control,
    enable **Same Wi-Fi** in the desktop Phone Companion settings (it shows a QR).
 3. Tap **Scan QR code** and point the camera at it — the app pairs and connects
    automatically. (Or paste/type the `http://PC-IP:58732/?t=TOKEN` link and tap
@@ -199,9 +218,9 @@ ADB, just hit Run and skip the manual install.)
 QR scanning uses CameraX + on-device ML Kit barcode scanning (no network, no
 Play Services dependency). Camera permission is requested on first scan.
 
-> Note: ML Kit's bundled native libraries aren't 16 KB-page aligned, so on
-> Android 15 a debuggable build shows a one-time "App Compatibility" warning. It
-> is harmless on current devices and does not appear in release builds.
+> Note: CameraX 1.6.2 and ML Kit barcode-scanning 17.3.0 ship 16 KB-aligned
+> 64-bit native libraries in source; strict 16 KB ELF inspection and
+> device/emulator validation remain separate from source qualification.
 
 ## Debugging
 
@@ -266,7 +285,7 @@ production app to work around a debug signing mismatch.
 
 ## Local light experiences
 
-Lighting now includes Room Hourglass, Orbit and Ember timer animations, a
+The Lights tab now includes Room Hourglass, Orbit and Ember timer animations, a
 screen-only preview, and separate timer/selected-app notification beacons.
 Choose saved WiZ lights separately for timer modes and alerts. All effects start
 off; app beacons also need Android notification access and selected apps. The

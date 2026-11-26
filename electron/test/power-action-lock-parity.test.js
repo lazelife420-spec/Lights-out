@@ -24,6 +24,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const { EventEmitter } = require('node:events');
+const { createDispatcher, commandForAction } = require('../powerActionDispatcher');
 
 const mainPath = path.join(__dirname, '..', 'main.js');
 const mainSource = fs.readFileSync(mainPath, 'utf8');
@@ -68,13 +70,15 @@ const plain = value => (Array.isArray(value) ? [...value] : { ...value });
 // bodies, with child_process.spawn replaced by a tracked mock that never
 // spawns a real process. Returns the async executePowerAction plus
 // inspectable call logs.
-function createPowerActionSandbox({ desktopUxProof = false, qaPowerLock = desktopUxProof, initialReceiptId = 'receipt-1' } = {}) {
+function createPowerActionSandbox({ desktopUxProof = false, qaPowerLock = desktopUxProof, initialReceiptId = 'receipt-1', suspend } = {}) {
   const spawnCalls = [];
   const emitCalls = [];
   const receiptUpdates = [];
 
   const sandbox = {
     console,
+    AbortController: globalThis.AbortController,
+    completionGuardController: null,
     DESKTOP_UX_PROOF: desktopUxProof,
     QA_POWER_LOCK: qaPowerLock,
     realPowerActionLog: [],
@@ -83,13 +87,20 @@ function createPowerActionSandbox({ desktopUxProof = false, qaPowerLock = deskto
       spawnCalls.push({ cmd, args, opts });
       // Mimic the shape executePowerAction relies on (chained .unref()) --
       // this is the ONLY spawn implementation reachable from this sandbox.
-      return { unref: () => {} };
+      const child = new EventEmitter();
+      child.unref = () => {};
+      queueMicrotask(() => { child.emit('spawn'); child.emit('exit', 0, null); child.emit('close', 0, null); });
+      return child;
     },
     emitTimerUpdate: (type, data) => { emitCalls.push({ type, data }); },
     runReceipts: {
-      updateRunReceipt: (id, patch) => { receiptUpdates.push({ id, patch }); }
+      updateRunReceipt: (id, patch) => { receiptUpdates.push({ id, patch }); },
+      recordActionEvent: (id, event) => { receiptUpdates.push({ id, patch: { result: event.state } }); return { persistence: { saved: true } }; }
     }
   };
+  sandbox.dispatchPowerAction = createDispatcher({ spawn: sandbox.spawn, suspend });
+  sandbox.writeStartupLog = () => {};
+  sandbox.showNativeNotification = () => {};
 
   const context = vm.createContext(sandbox);
   vm.runInContext(
@@ -112,7 +123,8 @@ test('canonical "lock" reaches the main-process action dispatcher (no longer "Un
 
   const result = await executePowerAction({ action: 'lock', dryRun: false });
 
-  assert.deepEqual(plain(result), { success: true });
+  assert.equal(result.status, 'command_returned_success');
+  assert.equal(result.systemOutcome, 'unverified');
   assert.equal(spawnCalls.length, 1, 'exactly one process must be spawned for a real Lock dispatch');
 });
 
@@ -146,25 +158,61 @@ test('real Lock dispatch invokes only the intended Windows lock mechanism', asyn
   assert.doesNotMatch(JSON.stringify(call), /shutdown\.exe|powrprof\.dll|SetSuspendState|\/s\b|\/r\b/);
 });
 
-test('Sleep / Shutdown / Restart / Hibernate dispatch is unchanged by the Lock addition', async () => {
+test('Shutdown / Restart dispatch and force opt-in remain unchanged', async () => {
   const cases = [
     { action: 'shutdown', options: { forceShutdown: false }, cmd: 'shutdown.exe', args: ['/s', '/t', '0'] },
     { action: 'shutdown', options: { forceShutdown: true }, cmd: 'shutdown.exe', args: ['/s', '/f', '/t', '0'] },
     { action: 'restart', options: { forceShutdown: false }, cmd: 'shutdown.exe', args: ['/r', '/t', '0'] },
-    { action: 'restart', options: { forceShutdown: true }, cmd: 'shutdown.exe', args: ['/r', '/f', '/t', '0'] },
-    { action: 'sleep', options: {}, cmd: 'rundll32.exe', args: ['powrprof.dll,SetSuspendState', '0,1,0'] },
-    { action: 'hibernate', options: {}, cmd: 'rundll32.exe', args: ['powrprof.dll,SetSuspendState', '1,1,0'] }
+    { action: 'restart', options: { forceShutdown: true }, cmd: 'shutdown.exe', args: ['/r', '/f', '/t', '0'] }
   ];
 
   for (const { action, options, cmd, args } of cases) {
     const { executePowerAction, spawnCalls } = createPowerActionSandbox();
     const result = await executePowerAction({ action, dryRun: false, ...options });
 
-    assert.deepEqual(plain(result), { success: true }, `${action} (forceShutdown=${Boolean(options.forceShutdown)}) should still report success`);
+    assert.equal(result.status, 'command_returned_success', `${action} must observe the fake command return`);
+    assert.equal(result.systemOutcome, 'unverified');
     assert.equal(spawnCalls.length, 1, `${action} should spawn exactly once`);
     assert.equal(spawnCalls[0].cmd, cmd, `${action} command must be unchanged`);
     assert.deepEqual(plain(spawnCalls[0].args), args, `${action} args must be unchanged`);
   }
+});
+
+for (const action of ['sleep', 'hibernate']) test(`${action} main path uses native adapter with accurate user-visible result`, async () => {
+  let calls = 0;
+  const h = createPowerActionSandbox({ suspend({ action: requested, signal, onEvidence }) {
+    calls++; assert.equal(requested, action); assert.equal(signal.aborted, false);
+    onEvidence({ state: 'command_returned_success', api: 'SetSuspendState', nativeAccepted: true });
+    return { success: true, status: 'command_returned_success', systemOutcome: 'unverified' };
+  } });
+  const r = await h.executePowerAction({ action }); assert.equal(r.systemOutcome, 'unverified');
+  assert.equal(calls, 1); assert.equal(h.spawnCalls.length, 0); assert.equal(h.sandbox.completionGuardController, null);
+  assert.match(h.emitCalls.at(-1).data.message, /accepted.*physical power state unverified/);
+});
+
+test('Sleep preparation can be cancelled through the main emergency-cancel controller', async () => {
+  const h = createPowerActionSandbox({ suspend({ signal }) { return new Promise(resolve => signal.addEventListener('abort', () => resolve({ status: 'cancelled', success: false }))); } });
+  const pending = h.executePowerAction({ action: 'sleep' });
+  assert.ok(h.sandbox.completionGuardController); h.sandbox.completionGuardController.abort();
+  assert.equal((await pending).status, 'cancelled'); assert.equal(h.spawnCalls.length, 0);
+});
+
+test('unsupported or denied Sleep result is visible as blocked rather than timer success', async () => {
+  const h = createPowerActionSandbox({ suspend({ onEvidence }) {
+    onEvidence({ state: 'blocked', api: 'SetSuspendState', reason: 'native-error', errorCode: 1300 });
+    return { success: false, status: 'blocked' };
+  } });
+  const r = await h.executePowerAction({ action: 'sleep' }); assert.equal(r.success, false);
+  assert.match(h.emitCalls.at(-1).data.message, /blocked.*1300.*no native power request/);
+});
+
+test('Test Mode never reaches the native suspend adapter', async () => {
+  let calls = 0;
+  for (const action of ['sleep', 'hibernate']) {
+    const h = createPowerActionSandbox({ suspend() { calls++; throw Error('must not call'); } });
+    assert.equal((await h.executePowerAction({ action, dryRun: true })).dryRun, true);
+  }
+  assert.equal(calls, 0);
 });
 
 test('unknown actions still fail closed (no spawn, explicit error)', async () => {
@@ -172,7 +220,9 @@ test('unknown actions still fail closed (no spawn, explicit error)', async () =>
 
   const result = await executePowerAction({ action: 'defenestrate', dryRun: false });
 
-  assert.deepEqual(plain(result), { success: false, error: 'Unknown action: defenestrate' });
+  assert.equal(result.success, false);
+  assert.equal(result.status, 'blocked');
+  assert.equal(result.error, 'Unknown action: defenestrate');
   assert.equal(spawnCalls.length, 0, 'an unrecognized action must never reach spawn');
 });
 
@@ -192,7 +242,7 @@ test('Tonight\'s Plan Lock selection corresponds to an actually-executable actio
   assert.ok(chipActions.includes('lock'), 'manual selector must still offer Lock');
 
   // ...must be a subset of what executePowerAction can actually dispatch.
-  const dispatchableActions = [...executePowerActionSource.matchAll(/case '([a-z]+)':/g)].map(m => m[1]);
+  const dispatchableActions = [...commandForAction.toString().matchAll(/case '([a-z]+)':/g)].map(m => m[1]);
   for (const action of chipActions) {
     assert.ok(
       dispatchableActions.includes(action),
@@ -232,8 +282,8 @@ test('main.js derives QA_POWER_LOCK from the proof flag or an explicit env opt-i
     /const QA_POWER_LOCK = DESKTOP_UX_PROOF \|\| process\.env\.LIGHTS_OUT_QA_POWER_LOCK === '1';/
   );
   const lockIndex = executePowerActionSource.indexOf('if (QA_POWER_LOCK)');
-  const switchIndex = executePowerActionSource.indexOf('switch (action)');
-  assert.ok(lockIndex > 0 && lockIndex < switchIndex, 'the QA lock must run before any dispatch');
+  const dispatchIndex = executePowerActionSource.indexOf('dispatchPowerAction(');
+  assert.ok(lockIndex > 0 && lockIndex < dispatchIndex, 'the QA lock must run before any dispatch');
 });
 
 test('safety invariant: no test in this file triggers a real spawn -- every executePowerAction call here runs against the mocked spawn only', () => {

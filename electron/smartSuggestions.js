@@ -93,7 +93,7 @@ function getSuggestions() {
 
   return suggestions.sort((a, b) => {
     const prio = { high: 0, medium: 1, low: 2 };
-    return (prio[a.priority] || 2) - (prio[b.priority] || 2);
+    return (prio[a.priority] ?? 2) - (prio[b.priority] ?? 2);
   });
 }
 

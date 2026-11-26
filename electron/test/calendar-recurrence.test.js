@@ -46,3 +46,9 @@ test('a specific date takes priority when its start matches a recurring rule', (
   const events=providers.getDefaultCalendarEvents({rules:[weekly,{...weekly,id:'once',repeat:'once',date:'2026-10-15'}]},new Date(2026,9,15,12),0);
   assert.equal(events.length,2);assert.equal(events[0].repeat,'once');
 });
+test('individual dates reject past values and preserve today/future values', () => {
+  assert.equal(recurrence.isPastDate('2026-11-21', '2026-11-22'), true);
+  assert.equal(recurrence.isPastDate('2026-11-22', '2026-11-22'), false);
+  assert.equal(recurrence.isPastDate('2026-11-23', '2026-11-22'), false);
+  assert.equal(recurrence.isPastDate('2027-02-29', '2026-11-22'), false);
+});

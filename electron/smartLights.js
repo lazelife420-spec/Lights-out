@@ -12,6 +12,9 @@ const net = require('net');
 const dgram = require('dgram');
 const crypto = require('crypto');
 const wizLights = require('./wizLights');
+const { isPrivateOrLocal } = require('./capabilityTruth');
+const lightExperience = require('./lightExperience');
+const isExperience = mode => ['hourglass','orbit','ember'].includes(mode);
 
 const SHIPPED_PROVIDERS = ['none', 'wiz', 'hue', 'http'];
 
@@ -25,6 +28,7 @@ let config = {
   wizAddresses: [],
   wizDevices: [],
   wizLook: wizLights.normalizeLook(),
+  timerBeacon: false,
   // Hue settings
   hueBridgeIp: '',
   hueUsername: '',
@@ -58,15 +62,47 @@ function httpHeadersDigest(headers) {
   return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex').slice(0, 16);
 }
 
+// Digest of a credential-bearing field. verifiedConfigKey is stored in plain
+// settings, sent to the renderer and compared only for equality, so it holds
+// the Hue key, webhook URL and body template only in this form.
+function secretDigest(value) {
+  return '#' + crypto.createHash('sha256').update(String(value || '')).digest('hex').slice(0, 16);
+}
+
 function configurationKey(value = config) {
   const provider = value.provider || 'none';
   if (provider === 'wiz') {
     const ips = wizLights.normalizeAddresses(value.wizAddresses);
     return ips.length ? `wiz:${ips.join(',')}` : '';
   }
+  if (provider === 'hue') return `hue:${value.hueBridgeIp || ''}:${secretDigest(value.hueUsername)}:${value.hueGroupId || ''}`;
+  if (provider === 'http') return `http:${value.httpMethod || 'POST'}:${secretDigest(value.httpUrl)}:${httpHeadersDigest(value.httpHeaders)}:${secretDigest(value.httpBodyTemplate)}`;
+  return '';
+}
+
+// The key format saved by builds before 11.3: the same fields with the Hue
+// key, webhook URL and body template in plaintext. Only ever compared.
+function legacyConfigurationKey(value = config) {
+  const provider = value.provider || 'none';
   if (provider === 'hue') return `hue:${value.hueBridgeIp || ''}:${value.hueUsername || ''}:${value.hueGroupId || ''}`;
   if (provider === 'http') return `http:${value.httpMethod || 'POST'}:${value.httpUrl || ''}:${httpHeadersDigest(value.httpHeaders)}:${value.httpBodyTemplate || ''}`;
   return '';
+}
+
+const DIGEST_KEY_FORMS = [
+  /^hue:.*:#[0-9a-f]{16}:[^:]*$/,
+  /^http:[^:]*:#[0-9a-f]{16}:(none|[0-9a-f]{16}):#[0-9a-f]{16}$/
+];
+
+// A saved key that still matches this exact setup in the old plaintext form
+// becomes the digest form, so the verification survives the upgrade. An
+// old-form Hue / webhook key that matches nothing is dropped rather than kept
+// with credentials in it (it could not enable anything anyway).
+function migrateVerifiedConfigKey(key, value, currentKey = configurationKey(value)) {
+  if (!key || key === currentKey) return key;
+  if (key === legacyConfigurationKey(value)) return currentKey;
+  if (/^(hue|http):/.test(key) && !DIGEST_KEY_FORMS.some(form => form.test(key))) return '';
+  return key;
 }
 
 // Runtime state
@@ -117,6 +153,47 @@ function fetchBounded(url, options = {}, timeoutMs = 5000) {
 
 const hueTransportCache = new Map(); // host -> 'https' | 'http'
 
+// Parse a Hue bridge host ("192.168.1.5", "127.0.0.1:8080", "fd00::1",
+// "[::1]:8080") and enforce that it resolves to a private/local IP literal.
+function parseHueHost(rawHost) {
+  const raw = String(rawHost || '').trim();
+  if (!raw) return null;
+  let hostname = raw;
+  let port = null;
+  if (raw.startsWith('[')) {
+    const close = raw.indexOf(']');
+    if (close <= 1) return null;
+    hostname = raw.slice(1, close);
+    const rest = raw.slice(close + 1);
+    if (rest) {
+      if (!/^:\d{1,5}$/.test(rest)) return null;
+      port = Number(rest.slice(1));
+    }
+  } else if (net.isIP(raw) === 6) {
+    hostname = raw;
+  } else {
+    const colon = raw.lastIndexOf(':');
+    if (colon > 0 && raw.indexOf(':') === colon) {
+      const candidateHost = raw.slice(0, colon);
+      const candidatePort = raw.slice(colon + 1);
+      if (!/^\d{1,5}$/.test(candidatePort)) return null;
+      hostname = candidateHost;
+      port = Number(candidatePort);
+    }
+  }
+  if (port !== null && (!Number.isInteger(port) || port < 1 || port > 65535)) return null;
+  if (net.isIP(hostname) === 0 || !isPrivateOrLocal(hostname)) return null;
+  return { hostname, port };
+}
+
+function safeHueSegment(value, label) {
+  const cleaned = String(value == null ? '' : value).trim();
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(cleaned)) {
+    throw new Error(`Invalid Hue ${label}`);
+  }
+  return encodeURIComponent(cleaned);
+}
+
 // Errors that mean "the other side is plain HTTP, not TLS".
 function isTlsMismatchError(err) {
   const code = err && (err.code || '');
@@ -127,11 +204,25 @@ function isTlsMismatchError(err) {
 
 function rawHueRequest(transport, host, method, path, bodyObj, timeoutMs) {
   return new Promise((resolve, reject) => {
-    const [hostname, portStr] = host.split(':');
+    const parsedHost = parseHueHost(host);
+    if (!parsedHost) {
+      const err = new Error('Hue bridge address must be a private/local IP address');
+      err.code = 'INVALID_BRIDGE_ADDRESS';
+      reject(err);
+      return;
+    }
+    const { hostname, port } = parsedHost;
     const client = transport === 'https' ? https : http;
+    let settled = false;
+    const finish = (err, value) => {
+      if (settled) return;
+      settled = true;
+      if (err) reject(err);
+      else resolve(value);
+    };
     const req = client.request({
       hostname,
-      port: portStr ? Number(portStr) : (transport === 'https' ? 443 : 80),
+      port: port || (transport === 'https' ? 443 : 80),
       path,
       method,
       headers: { 'Content-Type': 'application/json' },
@@ -155,11 +246,11 @@ function rawHueRequest(transport, host, method, path, bodyObj, timeoutMs) {
           const c = res.socket && res.socket.getPeerCertificate && res.socket.getPeerCertificate();
           if (c && c.subject) cert = { subject: c.subject, issuer: c.issuer };
         } catch { /* not a TLS socket */ }
-        resolve({ status: res.statusCode || 0, body: data, certificate: cert });
+        finish(null, { status: res.statusCode || 0, body: data, certificate: cert });
       });
     });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('Request timeout')); });
+    req.on('error', err => finish(err));
+    req.on('timeout', () => { req.destroy(); finish(new Error('Request timeout')); });
     if (bodyObj !== undefined && bodyObj !== null) req.write(JSON.stringify(bodyObj));
     req.end();
   });
@@ -181,9 +272,15 @@ function isHueBridgeCertificate(cert) {
 // allowLegacyHttp defaults to the configured opt-in. Pass true explicitly for
 // credential-free probes (discovery fingerprinting) where reporting the legacy
 // transport is the goal, not sending secrets.
-async function hueRequest(host, method, path, bodyObj, timeoutMs = 5000, { allowLegacyHttp = config.hueAllowLegacyHttp } = {}) {
+async function hueRequest(host, method, path, bodyObj, timeoutMs = 5000, { allowLegacyHttp = config.hueAllowLegacyHttp, cacheTransport = true } = {}) {
+  if (!parseHueHost(host)) {
+    const e = new Error('Hue bridge address refused: must be a private/local IP address');
+    e.code = 'INVALID_BRIDGE_ADDRESS';
+    throw e;
+  }
   const cached = hueTransportCache.get(host);
-  const order = cached ? [cached] : ['https', 'http'];
+  const usableCached = cached && (cached === 'https' || allowLegacyHttp) ? cached : null;
+  const order = usableCached ? [usableCached] : ['https', 'http'];
   let lastErr = null;
   for (const transport of order) {
     if (transport === 'http' && !allowLegacyHttp) {
@@ -193,7 +290,9 @@ async function hueRequest(host, method, path, bodyObj, timeoutMs = 5000, { allow
     }
     try {
       const r = await rawHueRequest(transport, host, method, path, bodyObj, timeoutMs);
-      if (!cached) hueTransportCache.set(host, transport);
+      if (cacheTransport && (!usableCached || usableCached !== transport)) {
+        hueTransportCache.set(host, transport);
+      }
       let parsed = null;
       try { parsed = JSON.parse(r.body); } catch { /* keep raw */ }
       const certCheck = transport === 'https' ? isHueBridgeCertificate(r.certificate) : null;
@@ -220,6 +319,7 @@ async function hueRequest(host, method, path, bodyObj, timeoutMs = 5000, { allow
 function hueFailureFromError(error) {
   const msg = error && error.message ? error.message : String(error);
   const code = error && error.code === 'HTTPS_REQUIRED' ? 'HTTPS_REQUIRED'
+    : error && error.code === 'INVALID_BRIDGE_ADDRESS' ? 'INVALID_BRIDGE_ADDRESS'
     : /unrecognized bridge certificate/i.test(msg) ? 'CERT_UNRECOGNIZED'
     : /timeout/i.test(msg) ? 'TIMEOUT' : 'NETWORK_ERROR';
   return failure('hue', code, msg);
@@ -247,15 +347,24 @@ function readDnsName(buf, offset) {
   let pos = offset;
   let jumped = false;
   let next = offset;
+  const visited = new Set();
   for (let guard = 0; guard < 128; guard++) {
+    if (pos < 0 || pos >= buf.length || visited.has(pos)) {
+      return { name: labels.join('.'), next: buf.length };
+    }
+    visited.add(pos);
     const len = buf[pos];
     if (len === 0) { if (!jumped) next = pos + 1; break; }
     if ((len & 0xc0) === 0xc0) {
+      if (pos + 1 >= buf.length) return { name: labels.join('.'), next: buf.length };
       const ptr = ((len & 0x3f) << 8) | buf[pos + 1];
       if (!jumped) next = pos + 2;
       jumped = true;
       pos = ptr;
       continue;
+    }
+    if ((len & 0xc0) !== 0 || pos + 1 + len > buf.length) {
+      return { name: labels.join('.'), next: buf.length };
     }
     labels.push(buf.slice(pos + 1, pos + 1 + len).toString());
     pos += 1 + len;
@@ -271,16 +380,19 @@ function parseMdnsResponse(buf) {
   const qd = buf.readUInt16BE(4);
   const an = buf.readUInt16BE(6) + buf.readUInt16BE(8) + buf.readUInt16BE(10);
   let pos = 12;
-  for (let i = 0; i < qd; i++) {
+  for (let i = 0; i < qd && pos < buf.length; i++) {
     const q = readDnsName(buf, pos);
+    if (q.next + 4 > buf.length) return out;
     pos = q.next + 4;
   }
-  for (let i = 0; i < an && pos + 10 <= buf.length; i++) {
+  for (let i = 0; i < an && pos < buf.length; i++) {
     const rr = readDnsName(buf, pos);
     pos = rr.next;
+    if (pos + 10 > buf.length) break;
     const type = buf.readUInt16BE(pos);
     const rdlen = buf.readUInt16BE(pos + 8);
     const rdata = pos + 10;
+    if (rdata + rdlen > buf.length) break;
     if (type === 12) { // PTR
       const t = readDnsName(buf, rdata);
       out.ptrNames.push(t.name);
@@ -291,6 +403,7 @@ function parseMdnsResponse(buf) {
       const end = rdata + rdlen;
       while (t < end) {
         const l = buf[t];
+        if (t + 1 + l > end) break;
         const s = buf.slice(t + 1, t + 1 + l).toString();
         const m = s.match(/^bridgeid=(.+)$/i);
         if (m) out.bridgeIds.push(m[1]);
@@ -318,17 +431,18 @@ function discoverHueBridgeLocal(timeoutMs = 3000) {
     };
 
     socket.on('message', async (msg) => {
-      const parsed = parseMdnsResponse(msg);
+      let parsed;
+      try { parsed = parseMdnsResponse(msg); } catch { return; }
       const hueish = parsed.ptrNames.some(n => /_hue\._tcp/i.test(n)) || parsed.bridgeIds.length > 0;
       if (!hueish) return;
       for (const ip of parsed.ips) {
-        if (!net.isIP(ip) || seen.has(ip)) continue;
+        if (!net.isIP(ip) || !isPrivateOrLocal(ip) || seen.has(ip)) continue;
         seen.add(ip);
         try {
           // Fingerprint probe carries no credentials — legacy-allowed here so
-          // an old bridge is still found (and labeled), even though credentialed
-          // API calls to it require the explicit opt-in.
-          const r = await hueRequest(ip, 'GET', '/api/config', null, 2500, { allowLegacyHttp: true });
+          // an old bridge is still found (and labeled), without caching plain
+          // HTTP for later credentialed requests.
+          const r = await hueRequest(ip, 'GET', '/api/config', null, 2500, { allowLegacyHttp: true, cacheTransport: false });
           if (r.data && r.data.bridgeid) {
             done({ ip, id: r.data.bridgeid, source: 'mdns', transport: r.transport });
           }
@@ -355,7 +469,10 @@ async function discoverHueBridgeCloud() {
     const response = await fetchBounded('https://discovery.meethue.com', {}, 5000);
     const data = await response.json();
     if (Array.isArray(data) && data.length > 0 && data[0].internalipaddress) {
-      return { ip: data[0].internalipaddress, id: data[0].id, source: 'cloud' };
+      const ip = String(data[0].internalipaddress).trim();
+      if (net.isIP(ip) !== 0 && isPrivateOrLocal(ip)) {
+        return { ip, id: data[0].id, source: 'cloud' };
+      }
     }
   } catch (error) {
     console.error('Hue cloud discovery failed:', error.message);
@@ -390,7 +507,8 @@ async function registerHueBridge(bridgeIp) {
 // never silently converted into an empty list that looks like "no lights".
 async function getHueLights(bridgeIp, username) {
   try {
-    const r = await hueRequest(bridgeIp, 'GET', `/api/${username}/lights`, null, 5000);
+    const safeUser = safeHueSegment(username, 'username');
+    const r = await hueRequest(bridgeIp, 'GET', `/api/${safeUser}/lights`, null, 5000);
     if (!r.ok) return failure('hue', 'HTTP_' + r.status, `Bridge returned HTTP ${r.status}`);
     const data = r.data;
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
@@ -416,7 +534,8 @@ async function getHueLights(bridgeIp, username) {
 
 async function getHueGroups(bridgeIp, username) {
   try {
-    const r = await hueRequest(bridgeIp, 'GET', `/api/${username}/groups`, null, 5000);
+    const safeUser = safeHueSegment(username, 'username');
+    const r = await hueRequest(bridgeIp, 'GET', `/api/${safeUser}/groups`, null, 5000);
     if (!r.ok) return failure('hue', 'HTTP_' + r.status, `Bridge returned HTTP ${r.status}`);
     const data = r.data;
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
@@ -434,7 +553,9 @@ async function getHueGroups(bridgeIp, username) {
 
 async function setHueLightState(bridgeIp, username, lightId, lightState) {
   try {
-    const r = await hueRequest(bridgeIp, 'PUT', `/api/${username}/lights/${lightId}/state`, lightState, 5000);
+    const safeUser = safeHueSegment(username, 'username');
+    const safeLight = safeHueSegment(lightId, 'light ID');
+    const r = await hueRequest(bridgeIp, 'PUT', `/api/${safeUser}/lights/${safeLight}/state`, lightState, 5000);
     if (!r.ok) return failure('hue', 'HTTP_' + r.status, `Light ${lightId} returned HTTP ${r.status}`);
     const data = r.data;
     if (Array.isArray(data) && data.some(e => e && e.error)) {
@@ -448,7 +569,9 @@ async function setHueLightState(bridgeIp, username, lightId, lightState) {
 
 async function setHueGroupState(bridgeIp, username, groupId, groupState) {
   try {
-    const r = await hueRequest(bridgeIp, 'PUT', `/api/${username}/groups/${groupId}/action`, groupState, 5000);
+    const safeUser = safeHueSegment(username, 'username');
+    const safeGroup = safeHueSegment(groupId, 'group ID');
+    const r = await hueRequest(bridgeIp, 'PUT', `/api/${safeUser}/groups/${safeGroup}/action`, groupState, 5000);
     if (!r.ok) return failure('hue', 'HTTP_' + r.status, `Group ${groupId} returned HTTP ${r.status}`);
     const data = r.data;
     if (Array.isArray(data) && data.some(e => e && e.error)) {
@@ -496,9 +619,10 @@ async function restoreLightSnapshot(bridgeIp, username, snapshot) {
 // Restore the snapshot captured at dim start. Returns a truthful result —
 // restoration failure is surfaced, never hidden, and never throws.
 async function restoreHueOriginalState() {
+  hueGeneration++;
   const snapshot = state.originalLightState;
   state.originalLightState = null;
-  return restoreLightSnapshot(config.hueBridgeIp, config.hueUsername, snapshot);
+  return queueHueOperation(() => restoreLightSnapshot(config.hueBridgeIp, config.hueUsername, snapshot));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -533,40 +657,53 @@ async function invokeHttpLightAction(brightness = 254, colorTemp = 366, on = tru
     .replace(/\{\{COLOR_TEMP\}\}/g, colorTemp)
     .replace(/\{\{ON\}\}/g, on ? 'true' : 'false');
 
+  const sendBody = method !== 'GET';
+  const headers = sendBody
+    ? { 'Content-Type': 'application/json', ...config.httpHeaders }
+    : { ...config.httpHeaders };
+
   const options = {
-    hostname: url.hostname,
+    hostname: url.hostname.replace(/^\[|\]$/g, ''),
     port: url.port || (url.protocol === 'https:' ? 443 : 80),
     path: url.pathname + url.search,
     method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...config.httpHeaders
-    },
+    headers,
     timeout: 5000
   };
 
   const client = url.protocol === 'https:' ? https : http;
   try {
     await new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (err) => {
+        if (settled) return;
+        settled = true;
+        if (err) reject(err);
+        else resolve();
+      };
       const req = client.request(options, (res) => {
-        let data = '';
+        let bytes = 0;
         let tooBig = false;
         res.on('data', chunk => {
           if (tooBig) return;
-          data += chunk;
-          if (data.length > HTTP_MAX_RESPONSE) { tooBig = true; req.destroy(); }
+          bytes += chunk.length;
+          if (bytes > HTTP_MAX_RESPONSE) {
+            tooBig = true;
+            req.destroy();
+            finish(new Error('Webhook response too large'));
+          }
         });
         res.on('end', () => {
-          if (tooBig) return reject(new Error('Webhook response too large'));
+          if (tooBig) return finish(new Error('Webhook response too large'));
           if (res.statusCode >= 400) {
-            return reject(new Error(`Webhook returned HTTP ${res.statusCode}`));
+            return finish(new Error(`Webhook returned HTTP ${res.statusCode}`));
           }
-          resolve();
+          finish();
         });
       });
-      req.on('error', reject);
-      req.on('timeout', () => { req.destroy(); reject(new Error('Request timeout')); });
-      req.write(bodyStr);
+      req.on('error', err => finish(err));
+      req.on('timeout', () => { req.destroy(); finish(new Error('Request timeout')); });
+      if (sendBody) req.write(bodyStr);
       req.end();
     });
   } catch (error) {
@@ -584,13 +721,22 @@ async function invokeHttpLightAction(brightness = 254, colorTemp = 366, on = tru
 // ─────────────────────────────────────────────────────────────────────────────
 
 let hueBatchBusy = false;
+let hueGeneration = 0;
+let hueOperationChain = Promise.resolve();
 const HUE_LIGHT_PACE_MS = 120;
 
-async function sendToHueTargets(ids, lightState) {
+function queueHueOperation(operation) {
+  const next = hueOperationChain.then(operation);
+  hueOperationChain = next.catch(() => {});
+  return next;
+}
+
+async function sendToHueTargets(ids, lightState, { isCurrent = () => true } = {}) {
   const results = [];
   for (let i = 0; i < ids.length; i++) {
+    if (!isCurrent()) break;
     results.push(await setHueLightState(config.hueBridgeIp, config.hueUsername, ids[i], lightState));
-    if (i < ids.length - 1) await new Promise(r => setTimeout(r, HUE_LIGHT_PACE_MS));
+    if (i < ids.length - 1 && isCurrent()) await new Promise(r => setTimeout(r, HUE_LIGHT_PACE_MS));
   }
   return results;
 }
@@ -608,8 +754,10 @@ function startSmartLightDim(remainingSeconds) {
 
   state.dimStarted = true;
   state.dimStartTime = Date.now();
-  state.dimDurationMs = Math.min(remainingSeconds, config.dimMinutes * 60) * 1000;
-  if (config.provider === 'wiz' && config.mode !== 'off_at_end') {
+  const safeRemaining = Math.max(1, Number(remainingSeconds) || 1);
+  const safeDimMinutes = Math.max(1, Number(config.dimMinutes) || 1);
+  state.dimDurationMs = Math.max(1000, (isExperience(config.mode) ? safeRemaining : Math.min(safeRemaining, safeDimMinutes * 60)) * 1000);
+  if (config.provider === 'wiz' && (config.mode !== 'off_at_end' || config.timerBeacon)) {
     const generation = ++wizGeneration;
     const addresses = [...config.wizAddresses];
     state.wizSnapshotPending = queueWizOperation(() => wizLights.readStates(addresses)).then(snapshot => {
@@ -620,17 +768,21 @@ function startSmartLightDim(remainingSeconds) {
 
   if (config.provider === 'hue' && config.hueBridgeIp && config.hueUsername) {
     // Fire-and-forget snapshot; dim ticks proceed even if the snapshot is slow.
-    saveHueCurrentState(config.hueBridgeIp, config.hueUsername)
-      .catch(() => {});
+    const generation = ++hueGeneration;
+    queueHueOperation(async () => {
+      if (generation !== hueGeneration) return;
+      await saveHueCurrentState(config.hueBridgeIp, config.hueUsername);
+    }).catch(() => {});
   }
 }
 
 function updateSmartLightTick(remainingSeconds) {
   if (!config.enabled || !state.dimStarted) return;
-  if (config.mode === 'off_at_end') return;
+  if (config.mode === 'off_at_end' && !(config.provider==='wiz'&&config.timerBeacon&&remainingSeconds<=6)) return;
 
   const elapsedMs = Date.now() - state.dimStartTime;
-  const progress = Math.min(1.0, Math.max(0.0, elapsedMs / state.dimDurationMs));
+  const durationMs = Math.max(1000, Number(state.dimDurationMs) || 1000);
+  const progress = Math.min(1.0, Math.max(0.0, isExperience(config.mode) ? 1 - remainingSeconds * 1000 / durationMs : elapsedMs / durationMs));
 
   // Calculate target brightness (254 -> 0)
   const targetBri = Math.round(254 * (1.0 - progress));
@@ -649,10 +801,14 @@ function updateSmartLightTick(remainingSeconds) {
         wizBatchBusy = true;
         const generation = wizGeneration;
         const snapshot = state.wizOriginalState;
-        const warm = config.mode === 'warm_dim';
+        const warm = config.mode === 'warm_dim' && !(config.timerBeacon&&remainingSeconds<=6);
         const look = config.wizLook;
+        const seconds=state.dimDurationMs/1000-remainingSeconds;
+        const frame = config.timerBeacon && remainingSeconds<=6 && remainingSeconds>0
+          ? (index,count)=>lightExperience.beacon({elapsedSeconds:6-remainingSeconds,index,count,brightness:look.brightness})
+          : isExperience(config.mode) ? (index,count)=>lightExperience.frame(config.mode,{progress,elapsedSeconds:seconds,index,count,brightness:look.brightness}) : undefined;
         queueWizOperation(() => generation === wizGeneration ? wizLights.dimStates(snapshot, progress, warm, undefined,
-          { look, isCurrent: () => generation === wizGeneration && config.enabled }) : null)
+          { look, frame, isCurrent: () => generation === wizGeneration && config.enabled }) : null)
           .catch(() => {})
           .finally(() => { wizBatchBusy = false; });
       }
@@ -663,18 +819,24 @@ function updateSmartLightTick(remainingSeconds) {
       if (config.mode === 'warm_dim') lightState.ct = targetCt;
       if (targetBri <= 0) lightState.on = false;
 
-      if (config.hueGroupId) {
-        setHueGroupState(config.hueBridgeIp, config.hueUsername, config.hueGroupId, lightState)
-          .catch(() => {});
-      } else if (!hueBatchBusy) {
-        const ids = config.hueLightIds.length > 0
-          ? config.hueLightIds
-          : (state.originalLightState || []).map(l => l.id);
-        if (ids.length) {
+      if (!hueBatchBusy) {
+        const generation = hueGeneration;
+        const isCurrent = () => generation === hueGeneration && config.enabled;
+        if (config.hueGroupId) {
           hueBatchBusy = true;
-          sendToHueTargets(ids, lightState)
+          queueHueOperation(() => isCurrent() ? setHueGroupState(config.hueBridgeIp, config.hueUsername, config.hueGroupId, lightState) : null)
             .catch(() => {})
             .finally(() => { hueBatchBusy = false; });
+        } else {
+          const ids = config.hueLightIds.length > 0
+            ? config.hueLightIds
+            : (state.originalLightState || []).map(l => l.id);
+          if (ids.length) {
+            hueBatchBusy = true;
+            queueHueOperation(() => isCurrent() ? sendToHueTargets(ids, lightState, { isCurrent }) : null)
+              .catch(() => {})
+              .finally(() => { hueBatchBusy = false; });
+          }
         }
       }
       break;
@@ -770,19 +932,26 @@ async function invokeSmartLightOff() {
       break;
     }
     case 'hue': {
+      hueGeneration++;
       const lightState = { on: false, transitiontime: 10 };
-      if (config.hueGroupId) {
-        res = await setHueGroupState(config.hueBridgeIp, config.hueUsername, config.hueGroupId, lightState);
-      } else {
-        const ids = config.hueLightIds.length > 0
+      res = await queueHueOperation(async () => {
+        if (config.hueGroupId) {
+          return setHueGroupState(config.hueBridgeIp, config.hueUsername, config.hueGroupId, lightState);
+        }
+        let ids = config.hueLightIds.length > 0
           ? config.hueLightIds
           : (state.originalLightState || []).map(l => l.id);
+        if (ids.length === 0 && config.hueBridgeIp && config.hueUsername) {
+          const live = await getHueLights(config.hueBridgeIp, config.hueUsername);
+          if (!live.success) return live;
+          ids = live.lights.filter(l => l.on).map(l => l.id);
+        }
         const results = await sendToHueTargets(ids, lightState);
         const failedCount = countFailures(results);
-        res = failedCount === 0
+        return failedCount === 0
           ? result('hue', true, 'OK', 'Lights off')
           : failure('hue', failedCount === results.length && results.length ? 'ALL_FAILED' : 'PARTIAL', `${failedCount} of ${results.length} lights failed to turn off`);
-      }
+      });
       break;
     }
     case 'http': {
@@ -798,6 +967,7 @@ async function invokeSmartLightOff() {
 
 function resetSmartLightState() {
   wizGeneration++;
+  hueGeneration++;
   state.wizOriginalState = null;
   state.wizSnapshotPending = null;
   state.dimStarted = false;
@@ -884,36 +1054,56 @@ async function testSmartLightAction() {
 // Configuration Management
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Returns { migrated }: true when the stored verifiedConfigKey was rewritten
+// from the pre-11.3 plaintext form, so the caller should persist the section
+// again (with the backup replaced) to take the plaintext off disk.
 function loadConfig(newConfig) {
-  if (!newConfig) return;
+  if (!newConfig) return { migrated: false };
+  let nextHueIp = config.hueBridgeIp;
+  if (newConfig.hueBridgeIp !== undefined) {
+    const trimmed = String(newConfig.hueBridgeIp || '').trim();
+    if (trimmed === '') {
+      nextHueIp = '';
+    } else if (net.isIP(trimmed) !== 0 && isPrivateOrLocal(trimmed)) {
+      nextHueIp = trimmed;
+    }
+  }
   const merged = {
     ...config,
     provider: newConfig.provider !== undefined
       ? (SHIPPED_PROVIDERS.includes(newConfig.provider) ? newConfig.provider : 'none')
       : config.provider,
     mode: newConfig.mode || config.mode,
-    dimMinutes: newConfig.dimMinutes !== undefined ? Number(newConfig.dimMinutes) : config.dimMinutes,
+    dimMinutes: newConfig.dimMinutes !== undefined && Number.isFinite(Number(newConfig.dimMinutes))
+      ? Math.max(1, Math.min(180, Math.round(Number(newConfig.dimMinutes))))
+      : config.dimMinutes,
     enabled: newConfig.enabled !== undefined ? Boolean(newConfig.enabled) : config.enabled,
     wizAddresses: newConfig.wizAddresses !== undefined ? wizLights.normalizeAddresses(newConfig.wizAddresses) : config.wizAddresses,
     wizDevices: wizLights.normalizeDevices(newConfig.wizDevices ?? config.wizDevices, newConfig.wizAddresses ?? config.wizAddresses),
     wizLook: wizLights.normalizeLook(newConfig.wizLook ?? config.wizLook),
-    hueBridgeIp: (newConfig.hueBridgeIp && net.isIP(String(newConfig.hueBridgeIp).trim()) !== 0) ? String(newConfig.hueBridgeIp).trim() : config.hueBridgeIp,
+    timerBeacon: newConfig.timerBeacon !== undefined ? newConfig.timerBeacon === true : config.timerBeacon,
+    hueBridgeIp: nextHueIp,
     hueAllowLegacyHttp: newConfig.hueAllowLegacyHttp !== undefined ? Boolean(newConfig.hueAllowLegacyHttp) : config.hueAllowLegacyHttp,
     // Empty string means "keep existing" so a redacted (blanked) renderer field
     // never clobbers the stored credential.
     hueUsername: newConfig.hueUsername || config.hueUsername,
-    hueLightIds: newConfig.hueLightIds || config.hueLightIds,
-    hueGroupId: newConfig.hueGroupId || config.hueGroupId,
-    httpUrl: newConfig.httpUrl || config.httpUrl,
+    hueLightIds: Array.isArray(newConfig.hueLightIds) ? newConfig.hueLightIds : config.hueLightIds,
+    hueGroupId: newConfig.hueGroupId !== undefined ? String(newConfig.hueGroupId || '') : config.hueGroupId,
+    httpUrl: newConfig.httpUrl !== undefined ? String(newConfig.httpUrl || '') : config.httpUrl,
     httpMethod: newConfig.httpMethod || config.httpMethod,
     httpHeaders: newConfig.httpHeaders || config.httpHeaders,
-    httpBodyTemplate: newConfig.httpBodyTemplate || config.httpBodyTemplate,
-    verifiedConfigKey: newConfig.verifiedConfigKey || ''
+    httpBodyTemplate: newConfig.httpBodyTemplate !== undefined ? String(newConfig.httpBodyTemplate || '') : config.httpBodyTemplate,
+    verifiedConfigKey: ''
   };
-  merged.enabled = Boolean(merged.enabled && merged.verifiedConfigKey && merged.verifiedConfigKey === configurationKey(merged));
+  const requestedKey = typeof newConfig.verifiedConfigKey === 'string' ? newConfig.verifiedConfigKey : '';
+  const currentKey = configurationKey(merged);
+  merged.verifiedConfigKey = migrateVerifiedConfigKey(requestedKey, merged, currentKey);
+  merged.enabled = Boolean(merged.enabled && merged.verifiedConfigKey && merged.verifiedConfigKey === currentKey);
+  if(merged.provider!=='wiz'&&isExperience(merged.mode))merged.mode='gradual_dim';
   if (!merged.enabled || configurationKey(merged) !== configurationKey(config) || merged.mode !== config.mode
       || JSON.stringify(merged.wizLook) !== JSON.stringify(config.wizLook)) resetSmartLightState();
   config = merged;
+  return { migrated: merged.verifiedConfigKey !== requestedKey };
 }
 
 // Full config — main-process only. Never send to the renderer.
@@ -931,11 +1121,14 @@ function getPublicConfig() {
     publicConfig[indicator] = Boolean(present);
     delete publicConfig[field];
   }
+  // The key is opaque (digests), so the renderer cannot match it against the
+  // visible setup fields itself; this says whether it belongs to this setup.
+  publicConfig.verifiedForSetup = Boolean(config.verifiedConfigKey && config.verifiedConfigKey === configurationKey(config));
   return publicConfig;
 }
 
 function shouldStartDim(remainingSeconds) {
-  return config.enabled && !state.dimStarted && remainingSeconds <= config.dimMinutes * 60;
+  return config.enabled && !state.dimStarted && (config.provider==='wiz'&&isExperience(config.mode) || remainingSeconds <= config.dimMinutes * 60);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -948,6 +1141,8 @@ module.exports = {
   getConfig,
   getPublicConfig,
   configurationKey,
+  legacyConfigurationKey,
+  migrateVerifiedConfigKey,
   SHIPPED_PROVIDERS,
   discoverWizLights: wizLights.discover,
 

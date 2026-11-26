@@ -1,6 +1,8 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-const DESKTOP_UX_PROOF = process.argv.includes('--desktop-ux-proof') || process.env.LIGHTS_OUT_DESKTOP_UX_GATE === '1' || process.env.LIGHTS_OUT_DESKTOP_UX_GATE === 'true';
+// Must match main.js exactly: main only engages its QA power lock for '1' or
+// the flag, so the renderer must never act as proof mode on any other value.
+const DESKTOP_UX_PROOF = process.argv.includes('--desktop-ux-proof') || process.env.LIGHTS_OUT_DESKTOP_UX_GATE === '1';
 
 // Secure IPC bridge
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -116,6 +118,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   applyProfile: (id) => ipcRenderer.invoke('profiles-apply', id),
   getProfileHint: (profile) => ipcRenderer.invoke('profiles-get-hint', profile),
   exportProfiles: () => ipcRenderer.invoke('profiles-export'),
+  routineFileList: () => ipcRenderer.invoke('routine-file-list'),
+  handoffAction: (action, options = {}) => ipcRenderer.invoke('handoff-action', action, options),
+  routineFilePreview: text => ipcRenderer.invoke('routine-file-preview', text),
+  routineFileImport: (text, policy) => ipcRenderer.invoke('routine-file-import', text, policy),
+  routineFileAdopt: options => ipcRenderer.invoke('routine-file-adopt', options),
+  routineFileStart: id => ipcRenderer.invoke('routine-file-start', id),
+  routineFileOpen: () => ipcRenderer.invoke('routine-file-open'),
+  routineFileExport: selection => ipcRenderer.invoke('routine-file-export', selection),
   importProfiles: (jsonString) => ipcRenderer.invoke('profiles-import', jsonString),
   createDefaultProfiles: () => ipcRenderer.invoke('profiles-create-defaults'),
 

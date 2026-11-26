@@ -53,11 +53,29 @@ async function render(svgPath, size) {
   console.log('Wrote assets/logo-512.png');
 
   // Pre-rendered tray glyph from the dedicated transparent tray mark for crisp 16px compositing.
-  await sharp(fs.readFileSync(traySvg), { density: 384 })
+  const tray32Buf = await sharp(fs.readFileSync(traySvg), { density: 384 })
     .resize(32, 32, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .png()
-    .toFile(path.join(assets, 'tray-32.png'));
+    .toBuffer();
+  fs.writeFileSync(path.join(assets, 'tray-32.png'), tray32Buf);
   console.log('Wrote assets/tray-32.png');
+
+  // Pre-rendered 16px tray status icons (idle, test, real) so runtime never needs sharp/libvips.
+  const base16 = await sharp(tray32Buf).resize(16, 16).png().toBuffer();
+  const trayVariants = [
+    ['tray-idle-16.png', '#6b7685', 0.5],
+    ['tray-test-16.png', '#f5b83d', 0.95],
+    ['tray-real-16.png', '#ff5c7a', 0.95]
+  ];
+  for (const [filename, color, opacity] of trayVariants) {
+    const dotSvg = `<svg width="16" height="16"><circle cx="13" cy="13" r="3" fill="${color}" opacity="${opacity}"/></svg>`;
+    const dotBuf = await sharp(Buffer.from(dotSvg)).png().toBuffer();
+    await sharp(base16)
+      .composite([{ input: dotBuf, blend: 'over' }])
+      .png()
+      .toFile(path.join(assets, filename));
+    console.log(`Wrote assets/${filename}`);
+  }
 
   // Transparent full wordmark PNG for About / splash / docs (composites on dark chrome).
   await sharp(fs.readFileSync(wordmarkSvg), { density: 384 })

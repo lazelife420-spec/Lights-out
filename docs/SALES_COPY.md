@@ -46,7 +46,7 @@ View release proof
 Microcopy:
 
 ```text
-Latest: v11.1.0. Installer, portable build, and SHA256 checksums available.
+Latest: v11.3.0. Installer, portable ZIP, and SHA256 checksums available.
 ```
 
 ## Problem Section
@@ -96,7 +96,7 @@ Saved profiles
 Reuse routines like movie night, hard stop, or a two-hour limit.
 
 Streaks
-Track nights from actual recorded events, not fake wellness guesses.
+Track nights from actual recorded events, not fake wellness guesses. A night counts when a real timer finishes or you log an emergency override (recorded as a snoozed night).
 
 Receipts
 Copy or view proof of completed sessions.
@@ -105,7 +105,10 @@ Safer remote control
 Remote control is gated behind a pairing token and stays off by default.
 
 Verified updates
-Release assets include installer, portable build, and checksums.
+Release assets include installer, portable build, and checksums. The app checks Proof Foundry's public release record at launch and every 4 hours, and downloads a verified ZIP only when you click Download.
+
+Honest power actions
+Sleep and Hibernate run only when Windows offers them on this PC; otherwise the action is blocked and nothing runs. Test Mode rehearses the night with no power action and no automatic device changes.
 ```
 
 ## Proof Section
@@ -119,18 +122,21 @@ Receipts or it did not happen.
 Body:
 
 ```text
-Lights Out is built around runtime proof: smoke tests, build checks, release assets, checksum files, and screenshots for real workflows.
+Lights Out is built around runtime proof: unit and smoke tests, build checks, release assets, checksum files, and screenshots for real workflows.
 ```
 
 Proof bullets:
 
 ```text
-- v11.1.0 smoke tests: 239/239 passing, plus 8/8 real Electron Night Modes checks.
-- Installer and portable builds published.
+- v11.2.0 qualification: 1,046 unit tests, 299 smoke checks and real Electron Night Modes checks.
+- Installer and portable ZIP builds verified with BUILD-MANIFEST.json.
 - SHA256SUMS.txt included with releases.
 - Streaks tab restored and verified with seeded data.
 - Cancel timer path verified with no red error toast.
 ```
+
+Quote test counts only from a named release's qualification record (for v11.2.0,
+`docs/RELEASE_QUALIFICATION_11.2.0.md`). Suite sizes change between releases.
 
 ## Workflow Section
 
@@ -146,7 +152,7 @@ Steps:
 1. Pick a duration.
 2. Start the countdown.
 3. Pause or snooze if needed.
-4. Let Lights Out shut things down.
+4. Let Lights Out shut things down (or cancel with Ctrl+Shift+X).
 5. Check the receipt and streak later.
 ```
 

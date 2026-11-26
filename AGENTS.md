@@ -59,9 +59,12 @@ The important behavior is:
 - force shutdown is never the default launcher behavior; it must be chosen explicitly
 - "Run at login" means "start minimized and idle" — login startup never silently
   implies a force shutdown or an active countdown
-- the current release version is `v11.2.0`; verify GitHub Releases before claiming
-  publication. `docs/RELEASE_QUALIFICATION_11.2.0.md` records the qualified scope
-  and evidence. Windows installer/portable publication and Android debug-source
+- the current source version is `v11.3.0` (the last published release before it is
+  `v11.2.0`); verify GitHub Releases before claiming publication — CI publishes
+  only when the `v11.3.0` tag is pushed. `docs/RELEASE_QUALIFICATION_11.3.0.md`
+  records the qualified scope and evidence (`docs/RELEASE_QUALIFICATION_11.2.0.md`
+  for the previous release). `electron/scripts/build-proof-foundry-kit.js` builds the
+  Proof Foundry upload kit (product page, truth record) from the published release. Windows installer/portable publication and Android debug-source
   qualification remain separate from Android production signing and physical QA
 - `npm run build` produces a native Windows installer, portable ZIP, checksums
   and source/runtime manifest; installer QA uses isolated paths and registration
@@ -76,8 +79,26 @@ The important behavior is:
   packaging uses the provisioned Electron runtime and rcedit, rather than
   electron-builder. The Sharp N-API binary needs no Electron ABI rebuild.
 - `main.js` installs `process.on('uncaughtException'/'unhandledRejection', ...)`
-  handlers that log to `userData/startup.log` and keep the app alive rather than
-  letting an unrelated bug silently kill the user's active timer
+  handlers that log to `userData/startup.log` (rotated at 1 MiB) and keep the app
+  alive rather than letting an unrelated bug silently kill the user's active timer
+- a real countdown whose deadline passed more than 5 minutes earlier (the PC slept
+  or hibernated through it) ends as a `missed` receipt and never fires its power
+  action on wake; the same bound is re-checked right before dispatch. Every cancel
+  path (window, tray, Ctrl+Shift+X, phone, family) works until the power request is
+  dispatched (`hasCancellableRun()`), and Emergency Override cancels before it
+  contacts partners
+- the global quick-start shortcuts (Ctrl+Shift+L, Ctrl+Shift+1..4) are opt-in via
+  `app.globalQuickStartShortcuts` (default false); cancel/pause/snooze/show stay
+- Wi-Fi Guard writes a credential-free recovery record (provider + adapter GUID,
+  `userData/wifi-guard-recovery.json`) before any network change and clears it only
+  after a confirmed restore; startup restores a block a crashed session left, and
+  quit restores first (bounded). It is unit-tested only — never claim physical
+  router/adapter qualification from it
+- QA/proof/installer-verification launches (`LIGHTS_OUT_QA_POWER_LOCK=1` or
+  `LIGHTS_OUT_INSTALLER_QA=1`) never create or delete the per-user autopilot
+  watchdog task, and a disarm only deletes the task when it launches this exe
+- "Export all data" never contains credentials, the pairing token or an in-flight
+  timer; import keeps this PC's credentials
 
 ## Source Of Truth
 

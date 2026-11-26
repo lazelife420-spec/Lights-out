@@ -104,8 +104,13 @@ class CdpClient {
 }
 
 async function firewallSnapshot() {
-  const command = `$rules = @(Get-NetFirewallRule -Group 'Lights Out Companion' -ErrorAction SilentlyContinue); @($rules | ForEach-Object { $app = $_ | Get-NetFirewallApplicationFilter; $port = $_ | Get-NetFirewallPortFilter; [pscustomobject]@{ Name = $_.Name; Profile = [string]$_.Profile; Direction = [string]$_.Direction; Action = [string]$_.Action; Program = $app.Program; Protocol = [string]$port.Protocol; LocalPort = [string]$port.LocalPort } }) | ConvertTo-Json -Compress`;
-  const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { windowsHide: true, timeout: 15000 });
+  const command = require('../companionFirewall').snapshotOwnedRulesCommand();
+  const encodedCommand = Buffer.from(command, 'utf16le').toString('base64');
+  const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encodedCommand], {
+    windowsHide: true,
+    timeout: 15000,
+    env: { ...process.env, PSModulePath: '' }
+  });
   const trimmed = stdout.trim();
   if (!trimmed) return [];
   const parsed = JSON.parse(trimmed);

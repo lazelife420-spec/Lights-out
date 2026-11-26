@@ -8,7 +8,9 @@ const tcpRuleName = `LightsOutCompanion-${ruleOwner}-TCP`;
 const discoveryRuleName = `LightsOutCompanion-${ruleOwner}-UDP`;
 
 function quotePowerShell(value) {
-  return `'${String(value || '').replace(/'/g, "''")}'`;
+  // PowerShell treats Unicode curly single quotes as string delimiters as well
+  // as ASCII apostrophes, so double all of them inside single-quoted literals.
+  return `'${String(value || '').replace(/['\u2018\u2019\u201A\u201B]/g, '$&$&')}'`;
 }
 
 function validatePort(value) {
@@ -42,7 +44,22 @@ function configureOwnedRulesCommand(executablePath, port) {
 
 function snapshotOwnedRulesCommand() {
   const group = quotePowerShell(RULE_GROUP);
-  return `$rules = Get-NetFirewallRule -Group ${group} -ErrorAction SilentlyContinue; @($rules | ForEach-Object { $port = $_ | Get-NetFirewallPortFilter; $app = $_ | Get-NetFirewallApplicationFilter; [pscustomobject]@{ DisplayName = $_.DisplayName; Group = $_.Group; Profile = [string]$_.Profile; Direction = [string]$_.Direction; Action = [string]$_.Action; Enabled = [string]$_.Enabled; Protocol = [string]$port.Protocol; LocalPort = [string]$port.LocalPort; Program = [string]$app.Program } }) | ConvertTo-Json -Compress`;
+  // Bulk-load application and port filters once and join by unique rule Name (InstanceID)
+  // so hosts with many existing rules stay well inside snapshot timeouts, and silence
+  // progress streams so stderr stays free of CLIXML noise.
+  return [
+    "$ProgressPreference = 'SilentlyContinue'",
+    `$rules = @(Get-NetFirewallRule -Group ${group} -ErrorAction SilentlyContinue | Where-Object { $null -ne $_ })`,
+    "if ($rules.Count -eq 0) { '[]' } else {",
+    '$ids = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)',
+    'foreach ($r in $rules) { if ($r.Name) { [void]$ids.Add([string]$r.Name) } }',
+    '$apps = @{}',
+    'foreach ($a in @(Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue)) { if ($null -ne $a -and $ids.Contains([string]$a.InstanceID)) { $apps[[string]$a.InstanceID] = $a.Program } }',
+    '$ports = @{}',
+    'foreach ($p in @(Get-NetFirewallPortFilter -ErrorAction SilentlyContinue)) { if ($null -ne $p -and $ids.Contains([string]$p.InstanceID)) { $ports[[string]$p.InstanceID] = $p } }',
+    '@($rules | ForEach-Object { $p = $ports[[string]$_.Name]; [pscustomobject]@{ Name = [string]$_.Name; DisplayName = $_.DisplayName; Group = $_.Group; Profile = [string]$_.Profile; Direction = [string]$_.Direction; Action = [string]$_.Action; Enabled = [string]$_.Enabled; Protocol = [string]$p.Protocol; LocalPort = ($p.LocalPort -join \',\'); Program = [string]$apps[[string]$_.Name] } }) | ConvertTo-Json -Compress',
+    '}'
+  ].join('; ');
 }
 
 module.exports = {

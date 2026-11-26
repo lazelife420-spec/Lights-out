@@ -66,7 +66,7 @@ function settingsSection(category) {
 
 test('General holds Run at login first, the startup note, the idle clock, About & updates and Your data', () => {
   const general = settingsSection('general');
-  const order = ['id="chk-run-login"', 'id="set-startup-note"', 'id="chk-clock-mode"', 'id="cz-clock-format"',
+  const order = ['id="chk-run-login"', 'id="set-startup-note"', 'Idle clock', 'id="cz-clock-format"',
     'id="set-app-version"', 'id="set-updater-status"', 'id="btn-set-check-update"', 'id="btn-set-shortcuts"', 'id="set-data-note"'];
   let last = -1;
   for (const needle of order) {
@@ -76,7 +76,8 @@ test('General holds Run at login first, the startup note, the idle clock, About 
   }
   assert.ok(general.indexOf('<input') === general.indexOf('<input type="checkbox" id="chk-run-login"'), 'Run at login is the first control');
   assert.match(general, /Run at login \(start minimized and idle\)/);
-  assert.match(general, /<input type="checkbox" id="chk-clock-mode" checked data-live="1">/, '#chk-clock-mode is live');
+  assert.match(general, /The ring shows local time until you start/);
+  assert.doesNotMatch(html, /id="chk-clock-mode"/, 'the obsolete clock-hiding toggle is not offered');
   assert.match(general, /<select id="cz-clock-format" data-live="1">/, '#cz-clock-format stays live');
   assert.ok(!/style="/.test(general), 'no inline styles in General');
 });
@@ -172,8 +173,8 @@ test('toggling #chk-clock-mode applies at once and persists only clockMode', asy
 
 test('the honest-save footer never marks #chk-clock-mode or #cz-clock-format as unsaved', () => {
   // The delegated dirty listener skips anything inside [data-live].
-  assert.match(rendererJs, /const isStagedSettingsEdit = target => Boolean\(target\?\.closest\)\s*&& !target\.closest\('\[data-live\], \[data-action-scoped\]'\);/);
-  for (const id of ['chk-clock-mode', 'cz-clock-format']) {
+  assert.match(rendererJs, /const isStagedSettingsEdit = target => Boolean\(target\?\.closest\)\s*&& !target\.closest\('\[data-live\], \[data-action-scoped\], \[data-preview-only\]'\);/);
+  for (const id of ['cz-clock-format']) {
     const tag = (html.match(new RegExp(`<[a-z]+ [^>]*id="${id}"[^>]*>`)) || [''])[0];
     assert.match(tag, /data-live="1"/, `#${id} is data-live`);
   }

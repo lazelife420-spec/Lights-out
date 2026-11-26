@@ -208,3 +208,187 @@ test('validateCommand refuses an unreviewed status command', () => {
 test('validateCommand strips extra fields from parameterless commands', () => {
   assert.deepEqual(rc.validateCommand({ command: 'pause', durationSeconds: 999999, action: 'logout', forceShutdown: true }), { ok: true, command: { command: 'pause' } });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Strict Protocol V3 Companion Validator (validateCompanionV3Message, C3-A)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const validReqId = 'req-1234567890123456';
+
+test('validateCompanionV3Message requires protocolVersion: 3 and valid requestId', () => {
+  const missingPv = rc.validateCompanionV3Message({ action: 'cancel', requestId: validReqId });
+  assert.equal(missingPv.ok, false);
+  assert.equal(missingPv.reason, rc.REJECTION_REASONS.UPGRADE_REQUIRED);
+
+  const pv2 = rc.validateCompanionV3Message({ protocolVersion: 2, action: 'cancel', requestId: validReqId });
+  assert.equal(pv2.ok, false);
+  assert.equal(pv2.reason, rc.REJECTION_REASONS.UPGRADE_REQUIRED);
+
+  const pv4 = rc.validateCompanionV3Message({ protocolVersion: 4, action: 'cancel', requestId: validReqId });
+  assert.equal(pv4.ok, false);
+  assert.equal(pv4.reason, rc.REJECTION_REASONS.UNSUPPORTED_PROTOCOL_VERSION);
+
+  const stringPv = rc.validateCompanionV3Message({ protocolVersion: '3', action: 'cancel', requestId: validReqId });
+  assert.equal(stringPv.ok, false);
+  assert.equal(stringPv.reason, rc.REJECTION_REASONS.INVALID_PROTOCOL_VERSION);
+
+  const nanPv = rc.validateCompanionV3Message({ protocolVersion: Number.NaN, action: 'cancel', requestId: validReqId });
+  assert.equal(nanPv.ok, false);
+  assert.equal(nanPv.reason, rc.REJECTION_REASONS.INVALID_PROTOCOL_VERSION);
+
+  const floatPv = rc.validateCompanionV3Message({ protocolVersion: 3.5, action: 'cancel', requestId: validReqId });
+  assert.equal(floatPv.ok, false);
+  assert.equal(floatPv.reason, rc.REJECTION_REASONS.INVALID_PROTOCOL_VERSION);
+
+  const missingReq = rc.validateCompanionV3Message({ protocolVersion: 3, action: 'cancel' });
+  assert.equal(missingReq.ok, false);
+  assert.equal(missingReq.reason, rc.REJECTION_REASONS.INVALID_REQUEST_ID);
+
+  const badReq = rc.validateCompanionV3Message({ protocolVersion: 3, action: 'cancel', requestId: 'short' });
+  assert.equal(badReq.ok, false);
+  assert.equal(badReq.reason, rc.REJECTION_REASONS.INVALID_REQUEST_ID);
+});
+
+test('validateCompanionV3Message rejects pause and resume by default', () => {
+  const p = rc.validateCompanionV3Message({ protocolVersion: 3, requestId: validReqId, action: 'pause' });
+  assert.equal(p.ok, false);
+  assert.equal(p.reason, rc.REJECTION_REASONS.UNSUPPORTED_ACTION);
+
+  const r = rc.validateCompanionV3Message({ protocolVersion: 3, requestId: validReqId, action: 'resume' });
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, rc.REJECTION_REASONS.UNSUPPORTED_ACTION);
+});
+
+test('validateCompanionV3Message accepts pause and resume when explicitly enabled in options', () => {
+  const opts = { enabledActions: ['pause', 'resume', 'cancel'] };
+  const p = rc.validateCompanionV3Message({ protocolVersion: 3, requestId: validReqId, action: 'pause' }, opts);
+  assert.equal(p.ok, true);
+  assert.equal(p.command.action, 'pause');
+
+  const r = rc.validateCompanionV3Message({ protocolVersion: 3, requestId: validReqId, action: 'resume' }, opts);
+  assert.equal(r.ok, true);
+  assert.equal(r.command.action, 'resume');
+});
+
+test('validateCompanionV3Message strips forged fields and returns canonical payload', () => {
+  const res = rc.validateCompanionV3Message({
+    protocolVersion: 3,
+    requestId: validReqId,
+    action: 'snooze',
+    seconds: 300,
+    forceShutdown: true,
+    profileId: 'forged',
+    nightModeTitle: 'Forged'
+  });
+
+  assert.equal(res.ok, true);
+  assert.deepEqual(res.command, {
+    protocolVersion: 3,
+    requestId: validReqId,
+    action: 'snooze',
+    seconds: 300
+  });
+  assert.deepEqual(res.canonicalPayload, {
+    action: 'snooze',
+    seconds: 300
+  });
+});
+
+test('validateCompanionV3Message handles getNightModes correlationId without requiring requestId', () => {
+  const withCorr = rc.validateCompanionV3Message({ action: 'getNightModes', correlationId: 'q-98765' });
+  assert.equal(withCorr.ok, true);
+  assert.deepEqual(withCorr.command, { action: 'getNightModes', correlationId: 'q-98765' });
+
+  const withoutCorr = rc.validateCompanionV3Message({ action: 'getNightModes' });
+  assert.equal(withoutCorr.ok, true);
+  assert.deepEqual(withoutCorr.command, { action: 'getNightModes', correlationId: null });
+});
+
+test('validateCompanionV3Message validates start and startNightMode bounds and strips forged fields', () => {
+  const badStart = rc.validateCompanionV3Message({
+    protocolVersion: 3,
+    requestId: validReqId,
+    action: 'start',
+    timerAction: 'hibernate',
+    durationSeconds: 600
+  });
+  assert.equal(badStart.ok, false);
+  assert.equal(badStart.reason, rc.REJECTION_REASONS.INVALID_PAYLOAD);
+
+  const okStart = rc.validateCompanionV3Message({
+    protocolVersion: 3,
+    requestId: validReqId,
+    action: 'start',
+    timerAction: 'sleep',
+    durationSeconds: 900,
+    forceShutdown: true,
+    dryRun: true
+  });
+  assert.equal(okStart.ok, true);
+  assert.deepEqual(okStart.command, {
+    protocolVersion: 3,
+    requestId: validReqId,
+    action: 'start',
+    timerAction: 'sleep',
+    durationSeconds: 900
+  });
+
+  const okNm = rc.validateCompanionV3Message({
+    protocolVersion: 3,
+    requestId: validReqId,
+    action: 'startNightMode',
+    nightModeId: 'quick-sleep',
+    dryRun: true,
+    forceShutdown: true
+  });
+  assert.equal(okNm.ok, true);
+  assert.deepEqual(okNm.command, {
+    protocolVersion: 3,
+    requestId: validReqId,
+    action: 'startNightMode',
+    nightModeId: 'quick-sleep'
+  });
+});
+
+test('validateCompanionV3Message rejects arrays, coerced numeric types, empty timerAction, and bad getNightModes protocolVersion', () => {
+  const arr = rc.validateCompanionV3Message([]);
+  assert.equal(arr.ok, false);
+  assert.equal(arr.reason, rc.REJECTION_REASONS.INVALID_PAYLOAD);
+
+  const arraySeconds = rc.validateCompanionV3Message({
+    protocolVersion: 3,
+    requestId: validReqId,
+    action: 'snooze',
+    seconds: [300]
+  });
+  assert.equal(arraySeconds.ok, false);
+  assert.equal(arraySeconds.reason, rc.REJECTION_REASONS.INVALID_PAYLOAD);
+
+  const stringDuration = rc.validateCompanionV3Message({
+    protocolVersion: 3,
+    requestId: validReqId,
+    action: 'start',
+    timerAction: 'sleep',
+    durationSeconds: '600'
+  });
+  assert.equal(stringDuration.ok, false);
+  assert.equal(stringDuration.reason, rc.REJECTION_REASONS.INVALID_PAYLOAD);
+
+  const emptyTimerAction = rc.validateCompanionV3Message({
+    protocolVersion: 3,
+    requestId: validReqId,
+    action: 'start',
+    timerAction: '',
+    durationSeconds: 600
+  });
+  assert.equal(emptyTimerAction.ok, false);
+  assert.equal(emptyTimerAction.reason, rc.REJECTION_REASONS.INVALID_PAYLOAD);
+
+  const badGetNmPv = rc.validateCompanionV3Message({ protocolVersion: 4, action: 'getNightModes' });
+  assert.equal(badGetNmPv.ok, false);
+  assert.equal(badGetNmPv.reason, rc.REJECTION_REASONS.UNSUPPORTED_PROTOCOL_VERSION);
+
+  const okGetNmPv = rc.validateCompanionV3Message({ protocolVersion: 3, action: 'getNightModes', correlationId: 'c-1' });
+  assert.equal(okGetNmPv.ok, true);
+  assert.deepEqual(okGetNmPv.command, { action: 'getNightModes', correlationId: 'c-1' });
+});

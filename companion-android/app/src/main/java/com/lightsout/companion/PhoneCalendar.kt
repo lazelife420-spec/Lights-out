@@ -54,7 +54,7 @@ object PhoneCalendar {
         val occurrence = Instant.ofEpochMilli(wall).atZone(ZoneId.systemDefault())
         val day = occurrence.toLocalDate()
         val expected = day.atTime(rule.time).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        if (!rule.matches(day) || expected != wall || wall < rule.createdAt) return null
+        if (!rule.matches(day) || expected != wall || wall < rule.effectiveArmAt) return null
         val p = PhoneHomeStore.routines(c).find { it.id == rule.routineId } ?: return null
         val key = PhoneRoutineOutcomes.claim(c, rule, RoutinePlan.from(p, rule), wall) ?: return null
         if (PhoneTimerStore.read(c).phase in setOf("running", "paused")) {

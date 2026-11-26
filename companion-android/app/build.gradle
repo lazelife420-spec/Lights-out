@@ -4,14 +4,17 @@ plugins {
 }
 
 // Release signing is configured from keystore.properties (gitignored), Gradle properties,
-// or environment variables. Release builds FAIL CLOSED if signing configuration is missing.
+// or environment variables — loaded ONLY when a release task is requested so debug builds
+// never touch the owner's release signing material. Release builds FAIL CLOSED if missing.
+def isReleaseTaskRequested = gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
 def keystorePropsFile = rootProject.file('keystore.properties')
 def keystoreProps = new Properties()
-if (keystorePropsFile.exists()) {
+if (isReleaseTaskRequested && keystorePropsFile.exists()) {
     keystorePropsFile.withInputStream { keystoreProps.load(it) }
 }
 
 def getReleaseProp = { propName, envName ->
+    if (!isReleaseTaskRequested) return null
     if (keystoreProps.containsKey(propName) && keystoreProps.getProperty(propName)?.trim()) {
         return keystoreProps.getProperty(propName).trim()
     }
@@ -33,12 +36,12 @@ def hasReleaseSigning = relStoreFile && relStorePass && relKeyAlias && relKeyPas
 
 android {
     namespace 'com.lightsout.companion'
-    compileSdk 34
+    compileSdk 36
 
     defaultConfig {
         applicationId 'com.lightsout.companion'
         minSdk 26
-        targetSdk 34
+        targetSdk 36
         versionCode 4
         versionName '11.2.0'
     }
@@ -75,20 +78,23 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = '17'
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
     }
     buildFeatures { buildConfig true }
 }
 
 dependencies {
-    implementation 'androidx.core:core-ktx:1.13.1'
-    implementation 'androidx.appcompat:appcompat:1.7.0'
-    implementation 'androidx.activity:activity-ktx:1.9.2'
-    implementation 'androidx.webkit:webkit:1.11.0'
+    implementation 'androidx.core:core-ktx:1.15.0'
+    implementation 'androidx.appcompat:appcompat:1.7.1'
+    implementation 'androidx.activity:activity-ktx:1.10.1'
+    implementation 'androidx.webkit:webkit:1.14.0'
 
     // QR pairing: CameraX preview/analysis + on-device (bundled) barcode model.
-    def cameraxVersion = '1.3.4'
+    // 1.6.2+ ships libimage_processing_util_jni.so at 16 KB LOAD alignment.
+    def cameraxVersion = '1.6.2'
     implementation "androidx.camera:camera-core:$cameraxVersion"
     implementation "androidx.camera:camera-camera2:$cameraxVersion"
     implementation "androidx.camera:camera-lifecycle:$cameraxVersion"

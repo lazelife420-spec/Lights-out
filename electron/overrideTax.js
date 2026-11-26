@@ -86,7 +86,9 @@ function resetSession() {
 function assessSnoozeCost() {
   const data = load();
   const cfg = data.config;
-  if (!cfg.enabled) return { allowed: true, cost: 'free', level: 0, consequences: [] };
+  if (!cfg.enabled) {
+    return { allowed: true, cost: 'free', level: 0, consequences: [], tomorrowDebt: 0, tightenMinutes: 0 };
+  }
 
   const count = data.sessionSnoozeCount + 1; // the snooze about to happen
   const level = Math.max(0, count - cfg.freeSnoozes);
@@ -95,7 +97,7 @@ function assessSnoozeCost() {
 
   if (level === 0) {
     // Free snooze — no cost.
-    return { allowed: true, cost: 'free', level: 0, consequences: [], snoozeNumber: count };
+    return { allowed: true, cost: 'free', level: 0, consequences: [], snoozeNumber: count, tomorrowDebt: data.tomorrowDebt, tightenMinutes: cfg.tightenMinutes };
   }
 
   if (level >= 1) {
@@ -142,7 +144,9 @@ function assessSnoozeCost() {
     level,
     snoozeNumber: count,
     consequences,
-    requireReason
+    requireReason,
+    tomorrowDebt: data.tomorrowDebt,
+    tightenMinutes: cfg.tightenMinutes
   };
 }
 
@@ -150,13 +154,16 @@ function assessSnoozeCost() {
 function recordSnooze(reason) {
   const data = load();
   const cfg = data.config;
+  if (!cfg.enabled) {
+    return { level: 0, snoozeNumber: data.sessionSnoozeCount, tomorrowDebt: data.tomorrowDebt };
+  }
   data.sessionSnoozeCount++;
 
   const level = Math.max(0, data.sessionSnoozeCount - cfg.freeSnoozes);
 
-  // Apply tomorrow's tightening debt.
+  // Apply tomorrow's tightening debt (never negative if maxTighten was lowered).
   if (level >= 2) {
-    const addDebt = Math.min(cfg.tightenMinutes, cfg.maxTighten - data.tomorrowDebt);
+    const addDebt = Math.max(0, Math.min(cfg.tightenMinutes, cfg.maxTighten - data.tomorrowDebt));
     data.tomorrowDebt += addDebt;
   }
 
@@ -187,6 +194,7 @@ function getTomorrowDebt() {
 // Consume the debt (apply it to today's timer start, then zero it out).
 function consumeDebt() {
   const data = load();
+  if (!data.config.enabled) return 0;
   const debt = data.tomorrowDebt;
   data.tomorrowDebt = 0;
   save();
@@ -198,10 +206,23 @@ function getConfig() {
   return load().config;
 }
 
-// Update override tax config.
+function clampInt(val, min, max, fallback) {
+  const n = Math.round(Number(val));
+  return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : fallback;
+}
+
+// Update override tax config (allowlisted & bounded fields only).
 function updateConfig(updates) {
   const data = load();
-  Object.assign(data.config, updates);
+  if (!updates || typeof updates !== 'object') return data.config;
+  const cfg = data.config;
+  if (typeof updates.enabled === 'boolean') cfg.enabled = updates.enabled;
+  if (updates.freeSnoozes !== undefined) cfg.freeSnoozes = clampInt(updates.freeSnoozes, 0, 20, cfg.freeSnoozes);
+  if (typeof updates.notifyOnEscalation === 'boolean') cfg.notifyOnEscalation = updates.notifyOnEscalation;
+  if (updates.tightenMinutes !== undefined) cfg.tightenMinutes = clampInt(updates.tightenMinutes, 0, 120, cfg.tightenMinutes);
+  if (updates.maxTighten !== undefined) cfg.maxTighten = clampInt(updates.maxTighten, 0, 240, cfg.maxTighten);
+  if (updates.requireReasonAfter !== undefined) cfg.requireReasonAfter = clampInt(updates.requireReasonAfter, 0, 20, cfg.requireReasonAfter);
+  if (typeof updates.streakBreakOnOverride === 'boolean') cfg.streakBreakOnOverride = updates.streakBreakOnOverride;
   save();
   return data.config;
 }

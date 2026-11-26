@@ -190,11 +190,11 @@ test('getReceiptStats counts interrupted after reconciliation and every bucket s
   const stats = runReceipts.getReceiptStats();
   assert.equal(stats.total, 9);
   assert.equal(stats.interrupted, 1, 'the reconciled orphan is counted as interrupted');
-  assert.equal(stats.completed, 1);
+  assert.equal(stats.completed, 2, 'legacy completion and recovered in-flight request are unverified endings');
   assert.equal(stats.dryRun, 1);
   assert.equal(stats.cancelled, 1);
   assert.equal(stats.blocked, 2, 'blocked + error');
-  assert.equal(stats.other, 3, 'running + completing + unknown');
+  assert.equal(stats.other, 2, 'running + unknown; completing is reconciled as outcome unverified');
   const sum = stats.completed + stats.cancelled + stats.dryRun + stats.blocked + stats.interrupted + stats.other;
   assert.equal(sum, stats.total, 'buckets must sum to total');
   assert.equal(stats.testRuns + stats.realRuns + stats.unknownModeRuns, stats.total, 'the mode axis sums to total');
@@ -202,7 +202,9 @@ test('getReceiptStats counts interrupted after reconciliation and every bucket s
 
 test('getReceiptStats on an empty ledger is all zeros', () => {
   reset();
-  assert.deepEqual(runReceipts.getReceiptStats(), { total: 0, completed: 0, cancelled: 0, dryRun: 0, blocked: 0, interrupted: 0, other: 0, testRuns: 0, realRuns: 0, unknownModeRuns: 0 });
+  assert.deepEqual(runReceipts.getReceiptStats(), { total: 0, completed: 0, cancelled: 0, dryRun: 0, blocked: 0, interrupted: 0, other: 0, testRuns: 0, realRuns: 0, unknownModeRuns: 0,
+    timerFinished: 0, legacyUnverified: 0, systemOutcomesObserved: 0,
+    persistence: { saved: true, pending: false, recoveredFrom: null, errorCode: null } });
 });
 
 // UI-R3 Fire 10: the ledger summary separates mode (Real / Test Mode) from

@@ -66,10 +66,12 @@ function ritualStateFor(ritualActive, ritualStep) {
   };
 }
 
-function quickSandbox({ timerState = baseTimerState(), ritualActive = false, ritualStep, appDryRun = true, startResult } = {}) {
+function quickSandbox({ timerState = baseTimerState(), ritualActive = false, ritualStep, appDryRun = true, startResult, activeReceiptId = null, completionGuardController = null } = {}) {
   const calls = { startTimer: [], notifications: [] };
   const sandbox = {
     timerState,
+    activeReceiptId,
+    completionGuardController,
     ritualMode: { getState: () => ritualStateFor(ritualActive, ritualStep) },
     settingsStore: { getSection: section => (section === 'app' ? { dryRun: appDryRun } : null) },
     showNativeNotification: (title, body) => { calls.notifications.push(body); },
@@ -83,6 +85,7 @@ function quickSandbox({ timerState = baseTimerState(), ritualActive = false, rit
   vm.runInContext([
     extractFunction(mainSource, 'ritualAwaitingCountdown'),
     extractFunction(mainSource, 'isRunActive'),
+    extractFunction(mainSource, 'isCompletionInFlight'),
     extractFunction(mainSource, 'startQuickTimer'),
     'this.startQuickTimer = startQuickTimer;'
   ].join('\n'), context);
@@ -92,7 +95,11 @@ function quickSandbox({ timerState = baseTimerState(), ritualActive = false, rit
 for (const [label, setup] of [
   ['a countdown is running', { timerState: baseTimerState({ running: true }) }],
   ['a countdown is paused', { timerState: baseTimerState({ running: true, paused: true }) }],
-  ['a ritual is active', { ritualActive: true }]
+  ['a ritual is active', { ritualActive: true }],
+  // v11.3 audit: the countdown reached zero but its completion steps (scan,
+  // save delay, Last Light, native pre-commit) are still running.
+  ['a completion is still preparing its power request', { activeReceiptId: 'completing-receipt' }],
+  ['a Sleep/Hibernate pre-commit can still be aborted', { completionGuardController: {} }]
 ]) {
   test(`startQuickTimer refuses while ${label}, without calling startTimer or announcing a start`, () => {
     const { calls, startQuickTimer } = quickSandbox(setup);

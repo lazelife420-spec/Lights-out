@@ -22,6 +22,7 @@
     async function showPreview(text) {
       pendingText=null;preview.replaceChildren();
       const result=await adapter.preview(text);pendingText=text;
+      status.textContent='Review the routine contents before saving inactive drafts.';
       preview.append(node('h4','Review file contents'));
       for(const r of result.routines){const row=node('article',undefined,'transfer-item');row.append(node('strong',r.name),node('p',r.actions.map(a=>actionText(a)).join(' · ')));
         for(const issue of r.issues)row.append(node('p',issue,'transfer-warning'));if(r.conflict)row.append(node('p','Routine ID already exists.','transfer-warning'));preview.append(row);}
@@ -59,7 +60,10 @@
       if(!data.choices.length)choices.append(node('p','Save or import a routine to export it.','transfer-note'));
       for(const entry of data.drafts){const card=node('article',undefined,'transfer-item');card.dataset.routineId=entry.intent.id;
         card.append(node('strong',entry.intent.name),node('p',entry.intent.actions.map(actionText).join(' · ')),node('p',entry.adopted?'Adopted locally · rules were saved disabled':'Inactive draft · nothing can run yet','transfer-note'));
-        if(!entry.adopted){const b=button('Review local actions',async()=>{b.disabled=true;review(entry,card);});b.dataset.transfer='review';card.append(b);}
+        if(!entry.adopted){
+          const b=button('Review local actions',async()=>{b.disabled=true;review(entry,card);});b.dataset.transfer='review';card.append(b);
+          if(adapter.deleteDraft){const del=button('Remove draft',async()=>{await adapter.deleteDraft(entry.intent.id);status.textContent='Imported draft removed.';await refresh();});del.dataset.transfer='delete';card.append(del);}
+        }
         else if(adapter.start){const b=button(adapter.platform==='windows'?'Start in Test Mode':'Start phone routine',()=>adapter.start(entry.intent.id));b.dataset.transfer='start';card.append(b);}
         drafts.append(card);
       }

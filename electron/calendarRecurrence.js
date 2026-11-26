@@ -29,5 +29,8 @@
     }
     return (Array.isArray(rule.days) ? rule.days : []).map(day=>String(day).toLowerCase()).includes(DAYS[date.getDay()]);
   }
-  return { DAYS, dateKey, validDate, matchesDate };
+  function isPastDate(value, todayValue) {
+    return validDate(value) && validDate(todayValue) && value < todayValue;
+  }
+  return { DAYS, dateKey, validDate, isPastDate, matchesDate };
 });

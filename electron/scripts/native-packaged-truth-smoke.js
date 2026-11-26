@@ -8,17 +8,18 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const pkg = require('../package.json');
 const { requirePackagedArtifact } = require('./packaged-artifact-resolver');
 
 const { executable, unpackedDir: distNative } = requirePackagedArtifact();
 const expected = {
   CompanyName: 'The Proof Foundry',
   FileDescription: 'Lights Out',
-  FileVersion: '11.1.3.0',
+  FileVersion: `${pkg.version}.0`,
   InternalName: 'Lights Out',
   OriginalFilename: 'Lights Out.exe',
   ProductName: 'Lights Out',
-  ProductVersion: '11.1.3',
+  ProductVersion: pkg.version,
   LegalCopyright: 'Copyright (C) 2026 The Proof Foundry. All rights reserved.'
 };
 
@@ -30,7 +31,8 @@ function runPowerShell(command) {
 }
 
 function getVersionInfo(exePath) {
-  const out = runPowerShell(`$vi = (Get-ItemProperty -Path '${exePath}').VersionInfo; [PSCustomObject]@{ CompanyName = $vi.CompanyName; FileDescription = $vi.FileDescription; FileVersion = $vi.FileVersion; InternalName = $vi.InternalName; OriginalFilename = $vi.OriginalFilename; ProductName = $vi.ProductName; ProductVersion = $vi.ProductVersion; LegalCopyright = $vi.LegalCopyright } | ConvertTo-Json`);
+  const escaped = exePath.replace(/'/g, "''");
+  const out = runPowerShell(`$vi = (Get-ItemProperty -LiteralPath '${escaped}').VersionInfo; [PSCustomObject]@{ CompanyName = $vi.CompanyName; FileDescription = $vi.FileDescription; FileVersion = $vi.FileVersion; InternalName = $vi.InternalName; OriginalFilename = $vi.OriginalFilename; ProductName = $vi.ProductName; ProductVersion = $vi.ProductVersion; LegalCopyright = $vi.LegalCopyright } | ConvertTo-Json`);
   return JSON.parse(out.trim());
 }
 

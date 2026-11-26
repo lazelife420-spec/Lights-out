@@ -2,10 +2,10 @@
 
 ## Repo Path Proof
 
-- Input junction: `C:\Users\KickA\Projects\Active\Lights Out`
+- Input junction: `<USERPROFILE>\Projects\Active\Lights Out`
 - Junction confirmed: `True`
-- Junction target: `C:\Users\KickA\Desktop\Lights Out`
-- Git top-level: `C:\Users\KickA\Desktop\Lights Out`
+- Junction target: `<USERPROFILE>\Desktop\Lights Out`
+- Git top-level: `<USERPROFILE>\Desktop\Lights Out`
 
 ## Branch / HEAD / Remotes
 
@@ -147,7 +147,7 @@ Runtime command used:
 
 - Real app launch:
   - `npm start`
-  - working directory: `C:\Users\KickA\Desktop\Lights Out\electron`
+  - working directory: `<USERPROFILE>\Desktop\Lights Out\electron`
 - Companion/family runtime exercise:
   - shipped `electron/companion.js` and `electron/family.js` modules started directly under Node for contained listener/token proof without mutating saved app settings
 

@@ -11,39 +11,13 @@
       "timeoutMs": 300000
     },
     {
-      "name": "Syntax — main",
+      "name": "Syntax check — all electron and script JS files",
       "command": "node",
-      "args": ["--check", "electron/main.js"]
-    },
-    {
-      "name": "Syntax — renderer",
-      "command": "node",
-      "args": ["--check", "electron/renderer.js"]
-    },
-    {
-      "name": "Syntax — preload",
-      "command": "node",
-      "args": ["--check", "electron/preload.js"]
-    },
-    {
-      "name": "Syntax — settings",
-      "command": "node",
-      "args": ["--check", "electron/settings.js"]
-    },
-    {
-      "name": "Syntax — capabilityTruth",
-      "command": "node",
-      "args": ["--check", "electron/capabilityTruth.js"]
-    },
-    {
-      "name": "Syntax — companion",
-      "command": "node",
-      "args": ["--check", "electron/companion.js"]
-    },
-    {
-      "name": "Syntax — smartLights",
-      "command": "node",
-      "args": ["--check", "electron/smartLights.js"]
+      "args": [
+        "-e",
+        "const fs=require('node:fs'),path=require('node:path'),{execFileSync}=require('node:child_process');for(const dir of ['electron','electron/scripts']){for(const f of fs.readdirSync(dir).filter(n=>n.endsWith('.js')).sort()){execFileSync(process.execPath,['--check',path.join(dir,f)],{stdio:'inherit'});}}"
+      ],
+      "timeoutMs": 60000
     },
     {
       "name": "ESLint",

@@ -12,20 +12,80 @@
   // Custom sequence support. Users can create step scripts stored in settings.
   // ───────────────────────────────────────────────────────────────────────────
   const CUSTOM_PREFIX = 'custom_';
+  // A new finale can be added only while fewer than this many exist.
+  const MAX_CUSTOM_SEQUENCES = 32;
+  // Load-time sanity bound for a hand-edited file. Lists saved by builds that
+  // had no add limit load in full, so the next add/remove (which persists this
+  // in-memory list) cannot silently drop entries beyond the add limit.
+  const MAX_LOADED_CUSTOM_SEQUENCES = 256;
   let customSequences = [];  // [{ id, name, description, steps: [{ headline, line, dwellMs }] }]
 
+  function sanitizeStep(step) {
+    if (!step || typeof step !== 'object') return null;
+    const headline = String(step.headline || '').slice(0, 80);
+    const line = String(step.line || '').slice(0, 160);
+    if (!headline && !line) return null;
+    const rawDwell = Number(step.dwellMs);
+    const dwellMs = Number.isFinite(rawDwell) ? Math.max(200, Math.min(10000, Math.round(rawDwell))) : 1500;
+    return { headline, line, dwellMs };
+  }
+
+  function isCustomId(id) {
+    return typeof id === 'string' && id.startsWith(CUSTOM_PREFIX) && /^[A-Za-z0-9_-]{8,64}$/.test(id);
+  }
+
+  // Small stable hash (FNV-1a) so this file stays usable in the renderer.
+  function stableHash(text) {
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < text.length; i++) {
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    return hash.toString(36);
+  }
+
+  // fallbackId: the id to use when seq has no valid one. A new finale gets a
+  // fresh id; a stored one gets an id derived from what was stored, so it is
+  // the same on every launch.
+  function sanitizeCustomSequence(seq, fallbackId) {
+    if (!seq || typeof seq !== 'object' || !Array.isArray(seq.steps)) return null;
+    const name = String(seq.name || '').trim().slice(0, 60);
+    const steps = seq.steps.map(sanitizeStep).filter(Boolean).slice(0, 20);
+    if (!name || !steps.length) return null;
+    const id = isCustomId(seq.id)
+      ? seq.id
+      : fallbackId || CUSTOM_PREFIX + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+    return { id, name, description: String(seq.description || '').slice(0, 160), steps };
+  }
+
   function loadCustomSequences(seqs) {
-    customSequences = Array.isArray(seqs) ? seqs.filter(s => s && s.id && s.steps?.length) : [];
+    const loaded = [];
+    const used = new Set();
+    for (const seq of Array.isArray(seqs) ? seqs : []) {
+      if (loaded.length >= MAX_LOADED_CUSTOM_SEQUENCES) break;
+      const stored = seq && typeof seq === 'object' ? seq : null;
+      const derived = CUSTOM_PREFIX + 'stored_' + stableHash(JSON.stringify([stored && stored.id, stored && stored.name]));
+      const entry = sanitizeCustomSequence(seq, derived);
+      if (!entry) continue;
+      // Ids stay unique, so removing one finale never removes another.
+      let id = entry.id;
+      for (let n = 2; used.has(id); n++) id = `${entry.id.slice(0, 60)}_${n}`;
+      used.add(id);
+      loaded.push(id === entry.id ? entry : { ...entry, id });
+    }
+    customSequences = loaded;
   }
 
   function getCustomSequences() {
     return customSequences;
   }
 
+  // Returns null when the sequence is invalid or the limit is reached.
   function addCustomSequence(seq) {
-    if (!seq || !seq.name || !seq.steps?.length) return null;
-    const id = CUSTOM_PREFIX + Date.now().toString(36);
-    const entry = { id, name: seq.name, description: seq.description || '', steps: seq.steps };
+    if (customSequences.length >= MAX_CUSTOM_SEQUENCES) return null;
+    // A new finale always gets a fresh id, never one the caller supplied.
+    const entry = sanitizeCustomSequence(seq && typeof seq === 'object' ? { ...seq, id: undefined } : seq);
+    if (!entry) return null;
     customSequences.push(entry);
     return entry;
   }
@@ -177,6 +237,7 @@
 
   return {
     VALID_IDS,
+    MAX_CUSTOM_SEQUENCES,
     getCatalog,
     normalizeId,
     isValidId,

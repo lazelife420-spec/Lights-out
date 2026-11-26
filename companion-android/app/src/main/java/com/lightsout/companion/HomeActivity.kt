@@ -1,14 +1,18 @@
 package com.lightsout.companion
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
 import android.os.*
 import android.provider.Settings
+import android.view.ViewGroup
 import android.webkit.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
@@ -24,13 +28,16 @@ class HomeActivity : AppCompatActivity() {
     private var openRequest: String? = null
     private var saveRequest: Pair<String,String>? = null
     private var handoffScanRequest:String?=null
+    private var pageReady = false
     private val handoffScanner=registerForActivityResult(ActivityResultContracts.StartActivityForResult()){ result ->
+        if(!ReleaseGates.HANDOFF_PAIRING){handoffScanRequest=null;return@registerForActivityResult}
         val id=handoffScanRequest ?: return@registerForActivityResult;handoffScanRequest=null
         val link=result.data?.getStringExtra(ScannerActivity.EXTRA_URL)
         if(result.resultCode!=RESULT_OK||link==null)transferReply(id,null,"Scan cancelled. No device was enrolled.")
         else HandoffController.get(this).handle("open",JSONObject().put("link",link)){ reply -> handler.post { transferReply(id,reply) } }
     }
     private val handoffCamera=registerForActivityResult(ActivityResultContracts.RequestPermission()){ granted ->
+        if(!ReleaseGates.HANDOFF_PAIRING){handoffScanRequest=null;return@registerForActivityResult}
         if(granted)handoffScanner.launch(Intent(this,ScannerActivity::class.java).putExtra(ScannerActivity.EXTRA_MODE,"routine-handoff"))
         else {val id=handoffScanRequest;handoffScanRequest=null;if(id!=null)transferReply(id,null,"Camera permission is needed to scan. You can paste the invitation instead.")}
     }
@@ -66,49 +73,73 @@ class HomeActivity : AppCompatActivity() {
     private val poll = object : Runnable {
         override fun run() { refresh(); handler.postDelayed(this, 500) }
     }
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        supportActionBar?.hide()
-        web = WebView(this)
-        web.setBackgroundColor(0xff0d0e14.toInt())
-        setContentView(web)
-        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
-        web.settings.javaScriptEnabled = true
-        web.settings.domStorageEnabled = true
-        web.settings.allowFileAccess = false
-        web.settings.allowContentAccess = false
-        web.settings.setSupportMultipleWindows(false)
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun createBundledWebView(): WebView {
+        pageReady = false
+        val view = WebView(this)
+        view.setBackgroundColor(0xff0d0e14.toInt())
+        ViewCompat.setOnApplyWindowInsetsListener(view) { target, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            target.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            insets
+        }
+        view.settings.javaScriptEnabled = true
+        view.settings.domStorageEnabled = true
+        view.settings.allowFileAccess = false
+        view.settings.allowContentAccess = false
+        view.settings.javaScriptCanOpenWindowsAutomatically = false
+        view.settings.setSupportMultipleWindows(false)
         val assets = WebViewAssetLoader.Builder().addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this)).build()
-        web.webViewClient = object : WebViewClient() {
-            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+        view.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(v: WebView, request: WebResourceRequest): WebResourceResponse? {
                 return assets.shouldInterceptRequest(request.url) ?: WebResourceResponse("text/plain", "UTF-8", 403,
                     "Blocked", emptyMap(), "".byteInputStream())
             }
-            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
+            override fun shouldOverrideUrlLoading(v: WebView, request: WebResourceRequest): Boolean =
                 request.url.host != "appassets.androidplatform.net" || request.url.scheme != "https"
-            override fun onPageFinished(view: WebView, url: String) { refresh();showHandoffInvitation() }
-        }
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
-            WebViewCompat.addWebMessageListener(web, "phoneNative", setOf("https://appassets.androidplatform.net")) {
-                    _, message, origin, mainFrame, _ ->
-                if (mainFrame && origin.toString() == "https://appassets.androidplatform.net") {
-                    try { handle(JSONObject(message.data ?: "{}")) }
-                    catch (e: IllegalArgumentException) { showError(e.message ?: "Check the timer duration.") }
-                    catch (_: Exception) { showError("Could not apply that change.") }
+            override fun onPageFinished(v: WebView, url: String) { pageReady = true; refresh(); showHandoffInvitation() }
+            override fun onRenderProcessGone(v: WebView, detail: RenderProcessGoneDetail): Boolean {
+                // Recover gracefully without letting Android terminate the app process.
+                try {
+                    (v.parent as? ViewGroup)?.removeView(v)
+                    v.destroy()
+                } catch (_: Exception) {}
+                if (!isFinishing && !isDestroyed) {
+                    web = createBundledWebView()
+                    setContentView(web)
+                    web.loadUrl("https://appassets.androidplatform.net/assets/phone/index.html")
                 }
+                return true
             }
-        } else {
-            web.destroy()
+        }
+        WebViewCompat.addWebMessageListener(view, "phoneNative", setOf("https://appassets.androidplatform.net")) {
+                _, message, origin, mainFrame, _ ->
+            if (mainFrame && origin.toString() == "https://appassets.androidplatform.net") {
+                try { handle(JSONObject(message.data ?: "{}")) }
+                catch (e: IllegalArgumentException) { showError(e.message ?: "Check the timer duration.") }
+                catch (_: Exception) { showError("Could not apply that change.") }
+            }
+        }
+        return view
+    }
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        supportActionBar?.hide()
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             val text = android.widget.TextView(this)
             text.text = "Update Android System WebView to use Lights Out."
             setContentView(text)
             return
         }
+        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
+        web = createBundledWebView()
+        setContentView(web)
         web.loadUrl("https://appassets.androidplatform.net/assets/phone/index.html")
     }
     private fun handle(msg: JSONObject) {
         if(msg.optString("action")=="handoff"){
             val id=msg.optString("requestId");if(!id.matches(Regex("[a-zA-Z0-9-]{1,64}"))||msg.toString().length>16384)return
+            if(!ReleaseGates.HANDOFF_PAIRING){transferReply(id,null,ReleaseGates.HANDOFF_UNAVAILABLE_MESSAGE);return}
             val operation=msg.optString("operation")
             if(operation=="scan"){if(handoffScanRequest!=null){transferReply(id,null,"Finish the current scanner first.");return};handoffScanRequest=id;handoffCamera.launch(Manifest.permission.CAMERA)}
             else HandoffController.get(this).handle(operation,msg.optJSONObject("options") ?: JSONObject()){ reply -> handler.post { transferReply(id,reply) } }
@@ -116,7 +147,7 @@ class HomeActivity : AppCompatActivity() {
         }
         if(msg.optString("action").startsWith("routineFile")) { handleTransfer(msg);return }
         if(msg.optString("action")=="lightExperience"){
-            val id=msg.optString("requestId");if(!id.matches(Regex("[a-zA-Z0-9-]{36}")))return
+            val id=msg.optString("requestId");if(!id.matches(Regex("[a-zA-Z0-9-]{1,64}")))return
             try{val result=when(msg.optString("operation")){
                 "status"->PhoneLightExperience.publicConfig(this)
                 "save"->PhoneLightExperience.save(this,msg.getJSONObject("settings"))
@@ -136,11 +167,24 @@ class HomeActivity : AppCompatActivity() {
             "exact" -> if (Build.VERSION.SDK_INT >= 31) {
                 startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName")))
             }
-            "saveLights", "saveRoutine", "deleteRoutine", "saveRule", "deleteRule" -> {
+            "saveLights", "saveRoutine", "deleteRoutine", "saveRule", "deleteRule", "saveFirstLight" -> {
                 PhoneHomeStore.update(this, action, msg)
                 PhoneHomeStore.event(this, "Saved on this phone.")
                 refresh()
                 web.evaluateJavascript("window.phoneHome?.saved(${JSONObject.quote(action)})", null)
+                // The wake reminder is a notification: in reminder-only mode it is First
+                // Light's only output, so ask once (like timer start) when it is enabled.
+                if (action == "saveFirstLight" && msg.optJSONObject("firstLight")?.optBoolean("enabled", false) == true) {
+                    askNotificationsOnce("askedFirstLightAlerts")
+                }
+            }
+            "stopFirstLight" -> {
+                // Stops the light ramp only; the wake reminder still fires at the wake time.
+                val wasActive = PhoneFirstLight.stopSunriseByUser(this)
+                if (wasActive) {
+                    safeStartService(Intent(this, PhoneTimerService::class.java).setAction("firstLightStop"))
+                }
+                refresh()
             }
             "discoverLights" -> { PhoneHomeStore.event(this, "Looking for WiZ lights…"); PhoneLights.discover(this) }
             "lightCommand" -> {
@@ -155,7 +199,7 @@ class HomeActivity : AppCompatActivity() {
                     ?: throw IllegalArgumentException("Choose a saved routine.")
                 val state = PhoneTimerStore.read(this)
                 state.command("start", profile.seconds, SystemClock.elapsedRealtime(), System.currentTimeMillis(), PhoneTimerStore.boot(this), "preview")
-                startService(Intent(this, PhoneTimerService::class.java).setAction("startRoutine")
+                safeStartService(Intent(this, PhoneTimerService::class.java).setAction("startRoutine")
                     .putExtra("routineId", profile.id).putExtra("runId", state.runId))
             }
             "start", "pause", "resume", "snooze", "cancel" -> {
@@ -166,27 +210,42 @@ class HomeActivity : AppCompatActivity() {
                 state.command(action, seconds, SystemClock.elapsedRealtime(), System.currentTimeMillis(), PhoneTimerStore.boot(this), "preview")
                 // This command comes from a visible Activity. The service promotes
                 // itself only if a timer remains active; cancel/finish need no FGS.
-                startService(Intent(this, PhoneTimerService::class.java)
+                safeStartService(Intent(this, PhoneTimerService::class.java)
                     .setAction(action).putExtra("seconds", seconds).putExtra("runId", state.runId))
-                if (action == "start" && Build.VERSION.SDK_INT >= 33 &&
-                    !NotificationManagerCompat.from(this).areNotificationsEnabled() &&
-                    !getPreferences(MODE_PRIVATE).getBoolean("askedAlerts", false)) {
-                    getPreferences(MODE_PRIVATE).edit().putBoolean("askedAlerts", true).apply()
-                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                }
+                if (action == "start") askNotificationsOnce("askedAlerts")
                 handler.postDelayed({ refresh() }, 150)
             }
         }
     }
+    /** Asks for POST_NOTIFICATIONS at most once per [askedKey] on API 33+ when notifications are off. */
+    private fun askNotificationsOnce(askedKey: String) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            !NotificationManagerCompat.from(this).areNotificationsEnabled() &&
+            !getPreferences(MODE_PRIVATE).getBoolean(askedKey, false)) {
+            getPreferences(MODE_PRIVATE).edit().putBoolean(askedKey, true).apply()
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+    private fun safeStartService(intent: Intent) {
+        try {
+            startService(intent)
+        } catch (_: Exception) {
+            showError("Could not start the timer service right now. Try again.")
+        }
+    }
     private fun transferReply(id: String, result: JSONObject?, error: String? = null) {
+        if (!::web.isInitialized) return
         val reply = JSONObject().put("ok",error == null).put("result",result ?: JSONObject.NULL).put("error",error ?: JSONObject.NULL)
         web.evaluateJavascript("window.phoneTransferReply?.(${JSONObject.quote(id)},$reply)",null)
     }
     override fun onNewIntent(intent:Intent){super.onNewIntent(intent);setIntent(intent);showHandoffInvitation()}
     private fun showHandoffInvitation(){
+        if(!ReleaseGates.HANDOFF_PAIRING || !pageReady)return
         val link=intent?.data?.toString() ?: return
         try {RoutineHandoff.parseInvitation(link)}catch(_:Exception){return}
-        if(::web.isInitialized)web.evaluateJavascript("window.handoffUI?.prefill(${JSONObject.quote(link)});document.querySelector('[data-tab=routines]')?.click();document.getElementById('handoff-pairing').open=true;",null)
+        // Clear consumed deep link so subsequent page reloads do not replay it.
+        intent?.data = null
+        if(::web.isInitialized)web.evaluateJavascript("window.handoffUI?.prefill(${JSONObject.quote(link)});document.querySelector('[data-tab=routines]')?.click();(()=>{const el=document.getElementById('handoff-pairing');if(el){el.hidden=false;el.open=true;}})();",null)
     }
     private fun handleTransfer(msg: JSONObject) {
         val id = msg.optString("requestId")
@@ -197,6 +256,7 @@ class HomeActivity : AppCompatActivity() {
                 "routineFilePreview" -> RoutineInterchange.preview(this,msg.getString("text"))
                 "routineFileImport" -> RoutineInterchange.importFile(this,msg.getString("text"),msg.getString("policy"))
                 "routineFileAdopt" -> RoutineInterchange.adopt(this,msg.getJSONObject("options"))
+                "routineFileDelete" -> RoutineInterchange.deleteDraft(this,msg.getString("id"))
                 "routineFileOpen" -> {
                     require(openRequest == null && saveRequest == null) { "Finish the current file picker first." }
                     openRequest = id;openRoutineFile.launch(arrayOf("application/json","text/plain","application/octet-stream"));return
@@ -225,6 +285,8 @@ class HomeActivity : AppCompatActivity() {
             .put("label", t.label).put("home", PhoneHomeStore.config(this))
             .put("event", PhoneHomeStore.event(this)).put("upcoming", PhoneCalendar.upcoming(this))
             .put("routineOutcomes", PhoneRoutineOutcomes.display(this))
+            .put("firstLight", PhoneFirstLight.statusJson(this))
+            .put("handoffPairing", ReleaseGates.HANDOFF_PAIRING)
             .put("paired", !getSharedPreferences("lightsout", MODE_PRIVATE).getString("companion_token", null).isNullOrBlank())
         web.evaluateJavascript("window.phoneUI?.update($j)", null)
     }
@@ -233,11 +295,13 @@ class HomeActivity : AppCompatActivity() {
         val timer = PhoneTimerStore.restore(this)
         PhoneTimerStore.schedule(this, timer)
         PhoneCalendar.schedule(this)
+        PhoneFirstLight.schedule(this)
+        try { PhoneFirstLight.noteInterruptedRamp(this) } catch (_: Exception) {}
         if (timer.phase in listOf("running", "paused")) {
-            startService(Intent(this, PhoneTimerService::class.java))
+            safeStartService(Intent(this, PhoneTimerService::class.java))
         }
         handler.post(poll)
     }
     override fun onPause() { handler.removeCallbacks(poll); super.onPause() }
-    override fun onDestroy() { handler.removeCallbacksAndMessages(null); web.destroy(); super.onDestroy() }
+    override fun onDestroy() { handler.removeCallbacksAndMessages(null); if (::web.isInitialized) web.destroy(); super.onDestroy() }
 }

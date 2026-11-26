@@ -7,7 +7,7 @@ qualified October candidate, per the founder directive of 2026-10-29.
 
 | Authority | Commit / state | Status |
 | --- | --- | --- |
-| Canonical checkout | `C:\Users\KickA\Projects\Active\Lights-out` | `main` @ `6adb1cf` (7 unpublished commits on `335ba77`) |
+| Canonical checkout | `<USERPROFILE>\Projects\Active\Lights-out` | `main` @ `6adb1cf` (7 unpublished commits on `335ba77`) |
 | October candidate | `0b0b69826847b5d749db5858062ec82411bef8ef` | 13 commits on `335ba77`, **qualified PASS** 2026-10-17 |
 | Candidate worktree A | `Lights-out-platform-alignment-20261016` | clean @ `0b0b698` (device-trust branch); hosts `review/` evidence |
 | Candidate worktree B | `Lights-out-integration-0b0b698-20261017` | **dirty**: +1504/−757 across 57 tracked files + ~52 untracked — post-candidate desktop tranche (LO-FINAL-CLOSEOUT/RC3–RC5 lineage, `HandoffConnection.kt`, `HandoffCertificate.kt`, `firstLightDelivery.js`, `boundedProcess.js`, `electron/experimental/`, `electron/native/`) |

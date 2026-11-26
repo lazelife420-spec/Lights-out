@@ -1,4 +1,4 @@
-// Flat ESLint config (ESLint 9). Pragmatic: catch real correctness bugs
+// Flat ESLint config (ESLint 10). Pragmatic: catch real correctness bugs
 // (undefined names, unreachable code, bad regexes) without fighting this
 // codebase's intentional patterns (empty catch blocks, LAN control-char regex).
 // Style is deliberately not enforced here — that's not what this lane is for.
@@ -24,7 +24,7 @@ const nodeGlobals = {
   TextEncoder: 'readonly', TextDecoder: 'readonly',
   // Modern Node built-ins (Node 18+): used by smartLights/streaks/etc.
   fetch: 'readonly', AbortSignal: 'readonly', Blob: 'readonly',
-  structuredClone: 'readonly', performance: 'readonly', window: 'readonly',
+  structuredClone: 'readonly', performance: 'readonly',
 };
 
 // Globals for the browser-context renderer (no nodeIntegration; talks to the
@@ -87,7 +87,7 @@ module.exports = [
   // false positive of this split-file architecture, not dead code — check the
   // sibling file for a call site before "cleaning up" one of these warnings.
   {
-    files: ['renderer.js', 'renderer-signature.js', 'calendarRecurrence.js', 'renderer-utils.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'renderer-night-modes.js', 'ambientVisuals.js', 'lastLight.js'],
+    files: ['renderer.js', 'renderer-signature.js', 'calendarRecurrence.js', 'renderer-utils.js', 'renderer-profiles.js', 'renderer-calendar.js', 'renderer-receipts.js', 'renderer-family-remote.js', 'renderer-ritual-focus.js', 'renderer-settings.js', 'renderer-lastlight-alarm.js', 'renderer-onboarding-updater.js', 'renderer-night-modes.js', 'renderer-handoff.js', 'renderer-light-experience.js', 'ambientVisuals.js', 'lastLight.js', 'widget.js'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'script',

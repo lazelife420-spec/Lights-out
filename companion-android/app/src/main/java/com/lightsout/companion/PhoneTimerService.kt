@@ -18,6 +18,9 @@ class PhoneTimerService : Service() {
             PhoneLightExperience.tick(this@PhoneTimerService)
             if (state.phase in listOf("running", "paused")) {
                 handler.postDelayed(this, if (state.phase == "paused") 60000 else 1000)
+            } else if (PhoneFirstLight.isRampActive()) {
+                PhoneFirstLight.syncRampNotification(this@PhoneTimerService)
+                handler.postDelayed(this, 10000)
             } else {
                 PhoneLightExperience.stopTimer(this@PhoneTimerService)
                 stopForeground(STOP_FOREGROUND_REMOVE)
@@ -28,15 +31,49 @@ class PhoneTimerService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val calendar = intent?.action == "calendar"
-        // A calendar PendingIntent starts an FGS: fulfill the contract even if
-        // the saved rule was deleted, is late, or another timer is busy.
-        if (calendar) startForeground(PhoneTimerStore.ONGOING, PhoneTimerStore.ongoing(this, PhoneTimerStore.read(this)))
+        val firstLight = intent?.action == "firstLight"
+        val firstLightStop = intent?.action == "firstLightStop"
+        // A calendar or First Light PendingIntent starts an FGS: fulfill the contract
+        // even if the rule was disabled, is late, or another timer is busy.
+        if (calendar || firstLight) {
+            try {
+                val initial = PhoneTimerStore.read(this)
+                val notif = if (firstLight && initial.phase !in listOf("running", "paused")) {
+                    PhoneFirstLight.rampNotification(this, 1, 1)
+                } else {
+                    PhoneTimerStore.ongoing(this, initial)
+                }
+                startForeground(PhoneTimerStore.ONGOING, notif)
+            } catch (_: Exception) {
+                // The alarm that started us is used up. Without the foreground service no
+                // sunrise can run, but First Light must not go unarmed: a reminder-only
+                // morning still posts, a sunrise morning keeps its wake reminder, and
+                // later mornings are re-armed (the occurrence is consumed in-process).
+                if (firstLight) runFirstLight(intent, canRamp = false)
+                stopSelf()
+                return START_NOT_STICKY
+            }
+        }
+        if (intent == null) {
+            // Sticky restart after process death: an in-memory sunrise ramp is gone. Say so
+            // once and keep the independent wake reminder armed instead of dropping the morning.
+            try { PhoneFirstLight.noteInterruptedRamp(this) } catch (_: Exception) {}
+        }
         PhoneTimerStore.restore(this)
         PhoneTimerStore.finishIfDue(this)
         var state = PhoneTimerStore.read(this)
         var action = intent?.action
         var profile: PhoneRoutine? = null
-        if (calendar) {
+        if (firstLight) {
+            // Never throws: a failure records an event, consumes the occurrence
+            // in-process and re-arms First Light.
+            runFirstLight(intent, canRamp = true)
+            action = null
+        } else if (firstLightStop) {
+            // Stops the light ramp only; the independent wake reminder stays armed.
+            PhoneFirstLight.stopSunriseByUser(this)
+            action = null
+        } else if (calendar) {
             profile = try { PhoneCalendar.due(this, intent?.getStringExtra("ruleId") ?: "", intent?.getLongExtra("wall", 0) ?: 0) }
             catch (_: Exception) {
                 PhoneHomeStore.event(this, "Could not claim the calendar routine; nothing was started. Check routine history and storage.")
@@ -63,10 +100,23 @@ class PhoneTimerService : Service() {
         }
         handler.removeCallbacks(tick)
         if (state.phase in listOf("running", "paused")) {
-            startForeground(PhoneTimerStore.ONGOING, PhoneTimerStore.ongoing(this, state))
+            try {
+                startForeground(PhoneTimerStore.ONGOING, PhoneTimerStore.ongoing(this, state))
+            } catch (_: Exception) {
+                // AlarmManager still backs the timer even if FGS promotion is blocked.
+            }
         }
         tick.run()
-        return if (state.phase in listOf("running", "paused")) START_STICKY else START_NOT_STICKY
+        return if (state.phase in listOf("running", "paused") || PhoneFirstLight.isRampActive()) START_STICKY else START_NOT_STICKY
+    }
+    private fun runFirstLight(intent: Intent?, canRamp: Boolean) {
+        PhoneFirstLight.runTrigger(
+            this,
+            intent?.getStringExtra("occurrenceKey") ?: "",
+            intent?.getLongExtra("wakeWall", 0L) ?: 0L,
+            intent?.getLongExtra("triggerWall", 0L) ?: 0L,
+            canRamp
+        )
     }
     override fun onDestroy() {
         handler.removeCallbacks(tick)

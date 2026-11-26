@@ -268,7 +268,9 @@ test('media source contract uses VK_MEDIA_PLAY_PAUSE (179) and keeps 174 out of 
     'media.js must contain the media play/pause key [char]179'
   );
   const pauseSource = extractFunction(mediaSource, 'pauseAllMedia');
-  const resumeSource = extractFunction(mediaSource, 'resumeAllMedia');
+  // resumeAllMedia sends its key through the gated RESUME_PAUSED_MEDIA_COMMAND.
+  assert.match(extractFunction(mediaSource, 'resumeAllMedia'), /executePS\(RESUME_PAUSED_MEDIA_COMMAND,/);
+  const resumeSource = require('../media').RESUME_PAUSED_MEDIA_COMMAND;
 
   assert.match(
     pauseSource,

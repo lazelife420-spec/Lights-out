@@ -2,36 +2,78 @@
 
 const fs = require('fs');
 
+const RETRYABLE_RENAME_CODES = new Set(['EPERM', 'EBUSY', 'EACCES']);
+
+function sleepSync(ms) {
+  try {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  } catch {
+    const end = Date.now() + ms;
+    while (Date.now() < end) { /* fallback bounded spin */ }
+  }
+}
+
+function writeAndFsyncSync(tmpFile, json) {
+  const fd = fs.openSync(tmpFile, 'w');
+  try {
+    fs.writeFileSync(fd, json, 'utf8');
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+function renameWithRetrySync(tmpFile, file, maxAttempts = 6) {
+  let lastErr;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      fs.renameSync(tmpFile, file);
+      return;
+    } catch (err) {
+      lastErr = err;
+      if (!err || !RETRYABLE_RENAME_CODES.has(err.code) || attempt === maxAttempts - 1) {
+        throw err;
+      }
+      sleepSync(15 * (attempt + 1));
+    }
+  }
+  throw lastErr;
+}
+
 /**
- * Atomically writes data to a JSON file using write-tmp-verify-rename with .bak backup.
+ * Atomically writes data to a JSON file using write-tmp-fsync-verify-rename with .bak backup.
  * @param {string} file - Target file path
  * @param {object|string} data - Object to stringify or string to write
  * @returns {boolean} Success status
  */
 function writeTmpVerifyRename(file, data) {
-  const tmpFile = file + '.tmp';
+  const tmpFile = `${file}.${process.pid}.${Date.now()}.tmp`;
   const bakFile = file + '.bak';
   const json = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
 
   try {
-    // 1. Write to temp file.
-    fs.writeFileSync(tmpFile, json, 'utf8');
+    // 1. Write to unique temp file and flush to storage.
+    writeAndFsyncSync(tmpFile, json);
 
     // 2. Verify temp file is valid JSON.
     const verification = fs.readFileSync(tmpFile, 'utf8');
     JSON.parse(verification);
 
-    // 3. Backup current primary file if it exists and is non-empty.
+    // 3. Backup current primary file only if it exists, is non-empty, and parses cleanly.
     try {
       if (fs.existsSync(file) && fs.statSync(file).size > 0) {
-        fs.copyFileSync(file, bakFile);
+        const existingRaw = fs.readFileSync(file, 'utf8');
+        if (existingRaw && existingRaw.trim()) {
+          JSON.parse(existingRaw);
+          fs.copyFileSync(file, bakFile);
+        }
       }
     } catch (bakErr) {
       console.warn(`durableJsonStore: failed to create backup for ${file}:`, bakErr.message);
     }
 
-    // 4. Atomically rename temp file over primary.
-    fs.renameSync(tmpFile, file);
+    // 4. Atomically rename temp file over primary (retrying transient Windows AV locks).
+    renameWithRetrySync(tmpFile, file);
     return true;
   } catch (error) {
     console.error(`durableJsonStore: failed to write ${file}:`, error.message);

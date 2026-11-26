@@ -141,4 +141,27 @@ class CompanionUrlNormalizerTest {
         assertEquals(true, CompanionUrlNormalizer.isStaleScan(3, 4))
         assertEquals(true, CompanionUrlNormalizer.isStaleScan(3, 0))
     }
+
+    @Test
+    fun `rejects cleartext http to public hosts while allowing private LAN and https`() {
+        assertNull(CompanionUrlNormalizer.normalize("http://8.8.8.8:58732/"))
+        assertNull(CompanionUrlNormalizer.normalize("http://example.com/?t=secret"))
+        assertEquals("https://example.com/", CompanionUrlNormalizer.normalize("https://example.com"))
+        assertEquals("http://10.0.0.5:58732/", CompanionUrlNormalizer.normalize("10.0.0.5"))
+    }
+
+    @Test
+    fun `buildUrl brackets IPv6 hosts and encodes token characters`() {
+        assertEquals(
+            "http://[fd00::1]:58732/?t=a%26b%3Dc",
+            CompanionUrlNormalizer.buildUrl("fd00::1", "a&b=c")
+        )
+    }
+
+    @Test
+    fun `isSameOrigin matches exact scheme host and port only`() {
+        assertEquals(true, CompanionUrlNormalizer.isSameOrigin("http://192.168.1.50:58732/", "http://192.168.1.50:58732/?t=abc"))
+        assertEquals(false, CompanionUrlNormalizer.isSameOrigin("http://192.168.1.51:58732/", "http://192.168.1.50:58732/"))
+        assertEquals(false, CompanionUrlNormalizer.isSameOrigin("https://192.168.1.50:58732/", "http://192.168.1.50:58732/"))
+    }
 }

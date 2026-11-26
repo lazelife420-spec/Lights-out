@@ -29,16 +29,44 @@ let ritualState = {
 
 let onStepCallback = null;
 let onCompleteCallback = null;
+let onCancelCallback = null;
 let stepTimer = null;
+
+const MAX_STEP_DURATION_SECONDS = 24 * 60 * 60;
+
+function sanitizeStep(step) {
+  if (!step || typeof step !== 'object' || !step.id || step.id === 'breathe') return null;
+  const rawDur = Number(step.durationSeconds);
+  const durationSeconds = Number.isFinite(rawDur)
+    ? Math.max(0, Math.min(MAX_STEP_DURATION_SECONDS, Math.round(rawDur)))
+    : 0;
+  return {
+    ...step,
+    id: String(step.id).slice(0, 48),
+    label: String(step.label || step.id).slice(0, 80),
+    durationSeconds,
+    skippable: step.skippable !== false,
+    auto: Boolean(step.auto)
+  };
+}
+
+function sanitizeSteps(list, fallback = DEFAULT_STEPS) {
+  const source = Array.isArray(list) ? list : fallback;
+  return source.map(sanitizeStep).filter(Boolean).slice(0, 20);
+}
 
 function getConfig() {
   const ritualConfig = settingsStore.getSection('ritual') || {};
+  const rawDuration = Number(ritualConfig.timerDuration);
+  const timerDuration = Number.isFinite(rawDuration) && rawDuration > 0
+    ? Math.max(60, Math.min(MAX_STEP_DURATION_SECONDS, Math.round(rawDuration)))
+    : 28 * 60;
   return {
     enabled: ritualConfig.enabled !== false,
     // Old saved routines may still contain the removed breathing step.
-    steps: (Array.isArray(ritualConfig.steps) ? ritualConfig.steps : DEFAULT_STEPS).filter(step => step && step.id !== 'breathe'),
+    steps: sanitizeSteps(ritualConfig.steps, DEFAULT_STEPS),
     autoAdvance: ritualConfig.autoAdvance !== false,
-    timerDuration: ritualConfig.timerDuration || 28 * 60,
+    timerDuration,
     timerAction: ritualConfig.timerAction || 'shutdown'
   };
 }
@@ -50,8 +78,9 @@ function startRitual(customSteps, meta) {
   // Clear any pending auto-advance timer from a previous run.
   if (stepTimer) { clearTimeout(stepTimer); stepTimer = null; }
 
-  const steps = (Array.isArray(customSteps) ? customSteps : config.steps).filter(step => step && step.id !== 'breathe');
+  const steps = Array.isArray(customSteps) ? sanitizeSteps(customSteps, []) : config.steps;
   if (!steps.length) { cancelRitual(); return { active: false, reason: 'no-steps' }; }
+  if (ritualState.active) cancelRitual();
   runIdCounter++;
   ritualState = {
     active: true,
@@ -98,7 +127,9 @@ function skipStep() {
 
 function cancelRitual() {
   if (stepTimer) { clearTimeout(stepTimer); stepTimer = null; }
+  const wasActive = ritualState.active;
   ritualState.active = false;
+  if (wasActive && onCancelCallback) onCancelCallback(getState(), ritualState.runMeta, ritualState.runId);
   return getState();
 }
 
@@ -150,7 +181,10 @@ function emitStep() {
   // through the whole sequence instead of getting stuck on the first step
   // forever; each step's real side effect (block/dim/timer/lights) still
   // runs via the onStepCallback above.
-  if (ritualState.runMeta && ritualState.runMeta.remoteOrigin) {
+  // Calendar preparation honors its explicit duration. Phone starts retain
+  // their established immediate fast-forward behavior.
+  if (ritualState.runMeta && ritualState.runMeta.remoteOrigin &&
+    !(ritualState.runMeta.waitForTimedSteps && current.auto && current.durationSeconds > 0)) {
     advanceStep(false);
     return;
   }
@@ -168,6 +202,7 @@ function emitStep() {
 
 function onStep(cb) { onStepCallback = cb; }
 function onComplete(cb) { onCompleteCallback = cb; }
+function onCancel(cb) { onCancelCallback = cb; }
 
 function updateConfig(updates) {
   const current = settingsStore.getSection('ritual') || {};
@@ -188,5 +223,6 @@ module.exports = {
   getRunId,
   onStep,
   onComplete,
+  onCancel,
   updateConfig
 };

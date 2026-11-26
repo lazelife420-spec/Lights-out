@@ -28,8 +28,8 @@ function setupAlarmHandlers() {
   });
 
   els.btnRemoveAlarm?.addEventListener('click', async () => {
-    await api.removeWakeAlarm();
-    notify('First Light removed', 'info');
+    const result = await api.removeWakeAlarm();
+    notify(result.success ? 'First Light removed' : `Alarm removal failed: ${result.error}`, result.success ? 'info' : 'error');
     refreshAlarmStatus();
   });
 
@@ -63,7 +63,7 @@ async function refreshAlarmStatus() {
         els.alarmStatus.textContent = `First Light at ${status.alarmTime || 'scheduled'}`;
         els.alarmStatus.style.color = 'var(--accent-green)';
       } else {
-        els.alarmStatus.textContent = 'No First Light scheduled';
+        els.alarmStatus.textContent = status.error || 'No First Light scheduled';
         els.alarmStatus.style.color = 'var(--text-muted)';
       }
     }
@@ -124,6 +124,8 @@ function setupLastLightHandlers() {
       opt.value = entry.id;
       opt.textContent = entry.name + ' *';
       els.selLastLightSequence?.appendChild(opt);
+    } else if (typeof notify === 'function') {
+      notify('You can keep up to 32 custom finales. Delete one to add another.', 'warning');
     }
   });
 }
@@ -280,8 +282,8 @@ function playLastLight(payload) {
       els.llLine.textContent = step.line || '';
       els.llStamp.textContent = '';
       if (soundMode === 'Soft') {
-        SoundSystem.playTone(880, 0.08, 'sine', 0.1);
-        setTimeout(() => SoundSystem.playTone(660, 0.12, 'sine', 0.08), 120);
+        SoundSystem.playTone(246.94, 0.12, 'sine', 0.10);
+        setTimeout(() => SoundSystem.playTone(196.00, 0.18, 'sine', 0.08), 130);
       }
     }, elapsed));
     elapsed += Number(step.dwellMs || 0);

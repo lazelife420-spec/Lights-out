@@ -87,7 +87,7 @@
 ## Inno Setup installer
 
 - **Inno Setup version**: `6.7.1`
-- **Inno compiler path**: `C:\ProgramData\chocolatey\bin\ISCC.exe` (engine `C:\Users\KickA\AppData\Local\Programs\Inno Setup 6\ISCC.exe`)
+- **Inno compiler path**: `C:\ProgramData\chocolatey\bin\ISCC.exe` (engine `%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe`)
 - **Installer script path**: `electron/scripts/LightsOut-Setup.iss`
 - **Application ID**: `com.lightsout.sleep-timer`
 - **Application name**: `Lights Out`

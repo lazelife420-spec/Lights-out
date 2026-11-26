@@ -20,7 +20,11 @@ claim may exceed its evidence class.
   preview-before-import, explicit inactive adoption — an imported routine is
   data, not authorization.
 - Secure handoff foundations (LO-SDH-0/1): pinned-TLS transfer primitives,
-  protected identities, pairing inbox with consent gates. Phone half only.
+  protected identities, pairing inbox with consent gates. Source-present on
+  Android and Desktop, **release-gated OFF** (`ReleaseGates.HANDOFF_PAIRING = false`
+  and `electron/releaseGates.js`) until cross-device TLS qualification passes
+  (pairing UI hidden, Android `lightsout-handoff://` deep link omitted, native
+  bridge and desktop IPC refuse handoff calls).
 - Studio phone UI + Tonight open-horizon presentation.
 - Optional PC Controls: isolated pairing + WebView control of a paired PC.
 
@@ -32,20 +36,18 @@ claim may exceed its evidence class.
 in an isolated provisioned SDK (see `ANDROID_STANDALONE_QUALIFICATION.md`).
 100/100 JUnit, 0 lint errors, debug APK produced.
 
-### M1.5 — Play-target modernization (separate tranche — do NOT mix with baseline)
+### M1.5 — Play-target modernization — **SOURCE-MODERNIZED 2026-11-22**
 
-The recovered baseline (Gradle 8.7 / AGP 8.5.2 / Kotlin 1.9.24 / API 34) is the
-qualified configuration but is **not Google Play release-ready**: Play requires
-API 36+ for ordinary new apps and updates (extensions aside), and AGP 8.5
-officially supports max API 34. Direct APK distribution has different rules.
-A modernization tranche must re-verify independently: AGP + Gradle + Kotlin
-upgrade, `compileSdk`/`targetSdk` 36, API 36 behavior changes (foreground
-services, exact alarms, notification permissions), AndroidX/CameraX/ML Kit
-compatibility, and **16 KB native-library page-size alignment** inside the
-packaged APK (inspect the real `.so` set — ML Kit ships native code). Baseline
-evidence remains the fallback reference. The M3-max audit now has a concrete
-result for this item: `libimage_processing_util_jni.so` is 4096-aligned on
-every ABI including arm64-v8a/x86_64 — dependency modernization required.
+The current checkout uses Gradle 8.14.6, AGP 8.13.2, Kotlin 2.3.21,
+`compileSdk`/`targetSdk` 36, and CameraX 1.6.2. A 2026-11-22 isolated
+API 36 build is green: 107 unit tests, lint and debug APK packaging pass.
+This does not replace emulator, physical-device, Play signing, or distribution
+qualification. Historical API 34 evidence remains useful provenance, but it
+is not the only current toolchain claim.
+
+CameraX 1.6.2 is the source-mitigated 16 KB native-library configuration.
+The packaged `.so` set still requires an APK/page-size inspection and emulator
+or physical validation before a strict 16 KB compatibility claim.
 
 ### M2.5 — Expanded emulator-only qualification — **DONE 2026-10-29** (EMULATOR_MAXIMIZED)
 
@@ -68,13 +70,17 @@ re-verified, emulator state restored. Evidence and limits in
 `ANDROID_STANDALONE_QUALIFICATION.md` (incl. byte-level APK reproducibility
 finding: not bitwise reproducible; D8 ordering variance only).
 
-### M3 — Handoff client completion (candidate worktree B)
+### M3 — Handoff client completion (gated OFF until qualified)
 
-Promote `HandoffConnection.kt`/`HandoffCertificate.kt` + dirty handoff edits
-only after: (a) file-level diff against the qualified base, (b) its own
-qualification tranche, (c) explicit consent/inactivity defaults verified —
-received routines activate nothing silently. Keep every handoff feature
-inert unless the user explicitly pairs.
+`HandoffConnection.kt` and `HandoffCertificate.kt` are source-present in the
+checkout, and the entire LO-SDH-1 pairing surface is release-gated OFF via
+`ReleaseGates.HANDOFF_PAIRING = false` (pairing UI hidden and unmounted,
+`lightsout-handoff://` deep link omitted from `AndroidManifest.xml`, and
+`HomeActivity` refusing every `handoff` bridge call). Flip the gate only after:
+(a) cross-device Android-to-Electron TLS qualification passes, (b) its own
+qualification tranche is recorded, and (c) explicit consent/inactivity defaults
+are verified — received routines activate nothing silently. Keep every handoff
+feature inert unless the user explicitly pairs.
 
 ### M4 — Physical-device qualification (owner phone, e.g. S23-class)
 
@@ -84,17 +90,30 @@ timezone/DST, Wi-Fi loss mid-routine, real WiZ bulb behavior, app-update
 data retention, force-stop honesty. Debug package only — production app and
 keystore are never touched. Target: PHYSICAL_DEVICE_PROVEN per item.
 
-### M5 — PC-side handoff integration (Phase E, owner-gated)
+### M5 — PC-side handoff integration (gated OFF, owner-gated)
 
-Merge/reconcile `electron/handoff*`, `electron/routine*`, `lightExperience.js`,
-Studio desktop surface against current `main` desktop, with merge-state
-qualification. Requires owner approval — it changes the shipping desktop.
+Desktop `electron/handoff*` modules are source-present in the checkout and
+mirrored behind `electron/releaseGates.js` (`HANDOFF_PAIRING = false` — pairing
+UI hidden and unmounted, `handoffService`/`handoffConnection` TLS listener never
+initialized, and `handoff-action` IPC refusing every call). Enabling it in a
+shipping build requires LO-SDH-1 qualification and owner approval.
 
-### M6 — Phone-owned First Light (scoped)
+### M6 — Phone-owned First Light — **EMULATOR_TESTED 2026-11-25**
 
-Native morning alarm/reminder + optional local WiZ sunrise. No Windows
-dependency, no medical claims, no powered-off-wake claims. Design + authority
-check before implementation.
+Native phone-owned morning wake reminder + optional direct local WiZ sunrise
+ramp (`PhoneFirstLightModel.kt`, `PhoneFirstLight.kt`, wired into
+`PhoneHomeStore.kt`, `PhoneTimerService.kt`, `PhoneTimerStore.kt`,
+`HomeActivity.kt`, and the Schedule tab of `assets/phone/*`). Defaults OFF,
+works with the PC off, requires Alarms & reminders access and the phone powered
+on (never claims powered-off wake or medical benefits), enforces private-LAN
+WiZ IPv4 guardrails, yields cleanly on manual off / Stop sunrise, and preserves
+`ReleaseGates.HANDOFF_PAIRING = false`. Isolated API-36 QA build (117/117 JUnit,
+lint pass, debug APK) and headless API-36 emulator verification (lifecycle 6/6,
+calendar 6/6, live WebView CDP First Light + 320px/200% 0-overflow check, native
+`lightsout://phone-first-light` PendingIntent, live AlarmManager firing into a
+loopback WiZ UDP fixture with single ongoing notification ID 41 and immediate
+Stop sunrise teardown) passed. Physical phone, OEM battery manager, and physical
+WiZ bulb sunrise reliability remain `ANDROID_FIELD_QA.md` items.
 
 ### M7 — Release engineering (owner-gated throughout)
 
@@ -113,8 +132,10 @@ Publication is never agent-performed.
   are the only paths; not an unrestricted production push.
 - **Worktree B dirty state** — Oct 18–20 desktop tranche is uncommitted and
   unqualified; it must not be cleaned or silently promoted.
-- **Toolchain regression risk** — candidate built on Gradle 8.7/AGP 8.5.2/
-  compileSdk 34; any bump re-opens the whole verification matrix.
+- **Toolchain regression risk** — the current checkout was modernized to Gradle
+  8.14.6 / AGP 8.13.2 / Kotlin 2.3.21 / compileSdk & targetSdk 36 / CameraX 1.6.2
+  (from the historical Gradle 8.7 / AGP 8.5.2 / compileSdk 34 candidate); any
+  further toolchain bump re-opens the verification matrix.
 - **Android OS limits** — force-stop cannot be overridden; OEM battery
   managers vary; document, don't promise.
 - **WiZ is best-effort LAN UDP** — never claim fixture results are physical

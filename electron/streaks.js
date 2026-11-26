@@ -1,5 +1,6 @@
-// Sleep streaks + insights engine.
-// Records bedtime events and computes streaks, weekly stats, and achievements.
+// Ritual record and insights. Existing counting rules are retained:
+// non-Test timer endings, emergency overrides, and legacy logged events.
+// These are neither independently observed Windows outcomes nor measured sleep.
 
 const path = require('path');
 const { writeTmpVerifyRename, safeLoadJson } = require('./durableJsonStore');
@@ -59,9 +60,14 @@ function save() {
   } catch { /* best-effort */ }
 }
 
+const FORBIDDEN_MERGE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 function deepMerge(target, source) {
+  if (!source || typeof source !== 'object') return target;
   for (const key of Object.keys(source)) {
+    if (FORBIDDEN_MERGE_KEYS.has(key)) continue;
     if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key]) &&
+        Object.prototype.hasOwnProperty.call(target, key) &&
         target[key] && typeof target[key] === 'object' && !Array.isArray(target[key])) {
       deepMerge(target[key], source[key]);
     } else {
@@ -69,6 +75,29 @@ function deepMerge(target, source) {
     }
   }
   return target;
+}
+
+// Convert HH:MM bedtime into shifted "night minutes" where 00:00-05:59 follow
+// 23:59 (range 360..1799, aligned with NIGHT_OFFSET_MS = 6h). This keeps
+// midnight-spanning bedtimes (e.g. 23:30 and 00:30) averaging to 00:00 rather
+// than 12:00 noon, and prevents 00:30 from being misclassified as "before 23:00".
+function bedtimeToNightMinutes(bedTime, fallback = '23:00') {
+  const parse = (raw) => {
+    const match = /^(\d{1,2}):(\d{2})$/.exec(String(raw || '').trim());
+    if (!match) return null;
+    const h = Number(match[1]);
+    const m = Number(match[2]);
+    if (!Number.isInteger(h) || !Number.isInteger(m) || h < 0 || h > 23 || m < 0 || m > 59) return null;
+    return (h < 6 ? h + 24 : h) * 60 + m;
+  };
+  return parse(bedTime) ?? parse(fallback) ?? (23 * 60);
+}
+
+function formatNightMinutes(avgMin) {
+  const wrapped = ((Math.round(avgMin) % 1440) + 1440) % 1440;
+  const avgH = Math.floor(wrapped / 60);
+  const avgM = wrapped % 60;
+  return `${String(avgH).padStart(2, '0')}:${String(avgM).padStart(2, '0')}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -286,21 +315,18 @@ function getWeekStats(events, now = new Date()) {
   const recent = countedNights(events).filter(e => e.date >= weekAgo);
   if (!recent.length) return { avgBedTime: '--:--', onTimePercent: 0, days: [] };
 
-  // Average bedtime.
+  // Average bedtime (midnight-aware via shifted night minutes).
   let totalMin = 0;
   const days = recent.map(e => {
-    const [h, m] = (e.bedTime || '22:00').split(':').map(Number);
-    const mins = (h * 60 + m);
+    const mins = bedtimeToNightMinutes(e.bedTime, '22:00');
     totalMin += mins;
     return { date: e.date, bedTime: e.bedTime, onTime: mins < 23 * 60, snoozed: e.snoozed };
   });
-  const avgMin = Math.round(totalMin / recent.length);
-  const avgH = Math.floor(avgMin / 60) % 24;
-  const avgM = avgMin % 60;
+  const avgMin = totalMin / recent.length;
   const onTimeCount = days.filter(d => d.onTime).length;
 
   return {
-    avgBedTime: `${String(avgH).padStart(2, '0')}:${String(avgM).padStart(2, '0')}`,
+    avgBedTime: formatNightMinutes(avgMin),
     onTimePercent: recent.length ? Math.round(onTimeCount / recent.length * 100) : 0,
     days
   };
@@ -310,10 +336,10 @@ function getAchievementCatalog() {
   return [
     { id: 'first_light', name: 'First Light', desc: 'Completed your first bedtime ritual' },
     { id: 'weekly_warrior', name: 'Weekly Warrior', desc: '7 nights using Lights Out' },
-    { id: '3_night_streak', name: 'Triple Threat', desc: '3-night sleep streak' },
-    { id: '7_night_streak', name: 'Seven Strong', desc: '7-night sleep streak' },
-    { id: '14_night_streak', name: 'Fortnight Force', desc: '14-night sleep streak' },
-    { id: '30_night_streak', name: 'Monthly Monument', desc: '30-night sleep streak' },
+    { id: '3_night_streak', name: 'Triple Threat', desc: '3-night ritual record' },
+    { id: '7_night_streak', name: 'Seven Strong', desc: '7-night ritual record' },
+    { id: '14_night_streak', name: 'Fortnight Force', desc: '14-night ritual record' },
+    { id: '30_night_streak', name: 'Monthly Monument', desc: '30-night ritual record' },
     { id: 'centurion', name: 'Centurion', desc: 'Best streak of 100 nights' },
     { id: 'no_snooze_7', name: 'No Snooze Zone', desc: '7 nights with no snooze' },
     { id: 'last_light_activated', name: 'Last Light', desc: 'Used the Last Light finale' }
@@ -367,10 +393,10 @@ function getWeeklyReport(opts = {}) {
   // the larger count rather than summing them.
   const testModeRunsThisWeek = Math.max(flaggedThisWeek, countTestModeReceipts(opts && opts.receipts, weekAgo, legacyEvents));
 
-  // Bedtime trend (last 7 days, oldest first).
+  // Bedtime trend (last 7 days, oldest first; midnight-aware night minutes).
   const trend = recent.map(e => {
-    const [h, m] = (e.bedTime || '23:00').split(':').map(Number);
-    return { date: e.date, bedTime: e.bedTime, mins: h * 60 + m };
+    const mins = bedtimeToNightMinutes(e.bedTime, '23:00');
+    return { date: e.date, bedTime: e.bedTime, mins };
   }).sort((a, b) => a.date.localeCompare(b.date));
 
   // Consistency: standard deviation of bedtimes (lower = more consistent).
@@ -424,7 +450,7 @@ function getWeeklyReport(opts = {}) {
 function buildWeeklyNarrative(report) {
   if (!report || !report.nightsThisWeek) {
     if (report && Number(report.testModeRunsThisWeek) > 0) {
-      return 'No real completions this week. Test Mode runs are recorded in Proof but don\'t count toward your routine.';
+      return 'No non-Test ritual records this week. Test Mode runs are recorded in Proof but don\'t count toward your routine.';
     }
     return 'No nights logged this week yet. Start a timer tonight to begin this week\'s report.';
   }
@@ -440,7 +466,7 @@ function buildWeeklyNarrative(report) {
   // completed in Real mode -- not that a power action ran.
   const actionParts = Object.entries(report.realActionCounts || {})
     .map(([action, count]) => `${count} ${action}`);
-  if (actionParts.length) lines.push(`Real-mode completions: ${actionParts.join(', ')}.`);
+  if (actionParts.length) lines.push(`Non-Test ritual records: ${actionParts.join(', ')}.`);
   // Older nights can't be told apart (they may include Test Mode runs), so
   // they are stated neutrally, never as Real-mode.
   const legacyNights = Number(report.legacyNightsThisWeek) || 0;
@@ -454,6 +480,7 @@ function buildWeeklyNarrative(report) {
   // UI-R3 Fire 10: Routine no longer shows achievements, so the narrative
   // stops counting them (read-out only: report.achievements and every stored
   // field are unchanged).
+  lines.push('Ritual records include timer endings and emergency overrides, with legacy entries retained. They do not verify Windows actions or measured sleep.');
   return lines.join('\n');
 }
 
@@ -474,10 +501,7 @@ function getSleepScore() {
 
   // 1. Consistency (0-30): lower std dev = higher score.
   // Target: <30 min std dev = 30 points, >90 min = 0 points.
-  const bedtimes = recent30.map(e => {
-    const [h, m] = (e.bedTime || '23:00').split(':').map(Number);
-    return h * 60 + m;
-  });
+  const bedtimes = recent30.map(e => bedtimeToNightMinutes(e.bedTime, '23:00'));
   const mean = bedtimes.reduce((s, t) => s + t, 0) / bedtimes.length;
   const stdDev = Math.sqrt(bedtimes.reduce((s, t) => s + Math.pow(t - mean, 2), 0) / bedtimes.length);
   const consistencyScore = Math.round(Math.max(0, 30 * (1 - stdDev / 90)));
@@ -569,15 +593,12 @@ function getTrend(granularity = 'week', limit = 12) {
     let onTimeCount = 0;
     let snoozeCount = 0;
     for (const e of events) {
-      const [h, m] = (e.bedTime || '23:00').split(':').map(Number);
-      const mins = h * 60 + m;
+      const mins = bedtimeToNightMinutes(e.bedTime, '23:00');
       totalMin += mins;
       if (mins < 23 * 60) onTimeCount++;
       if (e.snoozed) snoozeCount++;
     }
-    const avgMin = Math.round(totalMin / events.length);
-    const avgH = Math.floor(avgMin / 60) % 24;
-    const avgM = avgMin % 60;
+    const avgMin = totalMin / events.length;
     const periodLength = normGranularity === 'month' ? daysInMonth(key) : 7;
 
     return {
@@ -585,7 +606,7 @@ function getTrend(granularity = 'week', limit = 12) {
       label: trendBucketLabel(key, normGranularity),
       nights: events.length,
       periodLength,
-      avgBedTime: `${String(avgH).padStart(2, '0')}:${String(avgM).padStart(2, '0')}`,
+      avgBedTime: formatNightMinutes(avgMin),
       onTimePercent: Math.round(onTimeCount / events.length * 100),
       snoozeRate: Math.round(snoozeCount / events.length * 100)
     };
@@ -625,7 +646,13 @@ function getHistory30() {
 // truthVersion round-trip untouched. Imported streak, bestStreak and
 // achievements are recomputed from the counted events, never trusted.
 function replaceAll(nextData) {
-  const normalized = deepMerge(clone(DEFAULTS), nextData && typeof nextData === 'object' ? nextData : {});
+  const safeInput = nextData && typeof nextData === 'object' && !Array.isArray(nextData)
+    ? {
+        events: Array.isArray(nextData.events) ? nextData.events : [],
+        ...(nextData.truthVersion !== undefined ? { truthVersion: nextData.truthVersion } : {})
+      }
+    : {};
+  const normalized = deepMerge(clone(DEFAULTS), safeInput);
   normalized.events = Array.isArray(normalized.events) ? normalized.events.slice(-365) : [];
   normalized.streak = currentStreak(normalized.events);
   normalized.bestStreak = longestRun(normalized.events);

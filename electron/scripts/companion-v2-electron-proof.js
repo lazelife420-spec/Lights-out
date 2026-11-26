@@ -123,11 +123,16 @@ async function runElectronProof() {
   const companion = require(path.join(electronRoot, 'companion.js'));
   const nativeCompanionStart = companion.start;
   const nativeCompanionBroadcast = companion.broadcast;
+  const nativeCompanionSendToClient = companion.sendToClient;
   let suppressStateBroadcast = false;
   companion.start = options => nativeCompanionStart({ ...options, port });
   companion.broadcast = data => {
     if (suppressStateBroadcast && data?.type === 'state') return;
     nativeCompanionBroadcast(data);
+  };
+  companion.sendToClient = (client, data) => {
+    if (suppressStateBroadcast && data?.type === 'commandAck') return true;
+    return nativeCompanionSendToClient(client, data);
   };
 
   let mainWindow = null;
@@ -474,7 +479,10 @@ async function runElectronProof() {
     })`);
     assert(value.paused && !value.running && value.ring === '#f5b83d' && value.head === '0' && value.label === 'Resume' && value.primary && !String(value.dash).startsWith('6'), JSON.stringify(value));
   });
-  await check('Pause sends one toggle', () => assert(commandLog.filter(message => message.action === 'togglePause').length === 1, 'pause sent more than once'));
+  await check('Pause sends one explicit V3 pause command', () => {
+    const pauses = commandLog.filter(message => message.action === 'pause');
+    assert(pauses.length === 1 && pauses[0].protocolVersion === 3 && typeof pauses[0].requestId === 'string', JSON.stringify(pauses));
+  });
   await check('Pending Pause clears only after authoritative paused state', async () => {
     const value = await phoneEval("({ paused: latestState.paused, pending: pendingOperation })");
     assert(value.paused === true && value.pending === null, JSON.stringify(value));
@@ -534,13 +542,16 @@ async function runElectronProof() {
     assert(commandLog.length === before, 'timeout resent or invented a command');
   });
 
-  const resumeBefore = commandLog.filter(message => message.action === 'togglePause').length;
+  const resumeBefore = commandLog.filter(message => message.action === 'resume').length;
   await phoneEval("(() => { const button = document.getElementById('btn-pause'); button.focus(); button.click(); })()");
   await sendKey('Space');
   await sendKey('Space');
   await waitFor(() => desktopEval('state.paused === false'), 'desktop did not resume');
   await waitFor(() => phoneEval('pendingOperation === null'), 'resume pending state did not clear');
-  await check('Resume tap plus repeated Space sends one toggle', () => assert(commandLog.filter(message => message.action === 'togglePause').length - resumeBefore === 1, 'resume toggle count changed'));
+  await check('Resume tap plus repeated Space sends one explicit V3 resume command', () => {
+    const resumes = commandLog.filter(message => message.action === 'resume');
+    assert(resumes.length - resumeBefore === 1 && resumes[resumes.length - 1].protocolVersion === 3, 'resume command count changed');
+  });
   await check('Pending Resume clears only after authoritative resumed state', async () => {
     const value = await phoneEval("({ paused: latestState.paused, pending: pendingOperation })");
     assert(value.paused === false && value.pending === null, JSON.stringify(value));
@@ -591,7 +602,7 @@ async function runElectronProof() {
   });
 
   suppressStateBroadcast = true;
-  const pauseDisconnectBefore = commandLog.filter(message => message.action === 'togglePause').length;
+  const pauseDisconnectBefore = commandLog.filter(message => message.action === 'pause').length;
   await phoneEval("document.getElementById('toast').classList.remove('show'); document.getElementById('toast').textContent = ''; document.getElementById('btn-pause').click()");
   await waitFor(() => desktopEval('state.paused === true'), 'pause-before-disconnect did not reach desktop');
   await companion.stop();
@@ -599,7 +610,7 @@ async function runElectronProof() {
   await check('pending Pause disconnect never resends or claims success', async () => {
     await wait(350);
     const value = await phoneEval("({ pending: pendingOperation, toast: document.getElementById('toast').textContent, shown: document.getElementById('toast').classList.contains('show') })");
-    const count = commandLog.filter(message => message.action === 'togglePause').length - pauseDisconnectBefore;
+    const count = commandLog.filter(message => message.action === 'pause').length - pauseDisconnectBefore;
     assert(value.pending === null && !value.shown && value.toast !== 'Paused' && count === 1, JSON.stringify({ value, count }));
   });
   suppressStateBroadcast = false;
@@ -607,7 +618,7 @@ async function runElectronProof() {
   await waitFor(() => phoneEval("stateIsAuthoritative() && latestState.paused === true"), 'reconnect did not show processed Pause', 10000);
 
   suppressStateBroadcast = true;
-  const resumeDisconnectBefore = commandLog.filter(message => message.action === 'togglePause').length;
+  const resumeDisconnectBefore = commandLog.filter(message => message.action === 'resume').length;
   await phoneEval("document.getElementById('toast').classList.remove('show'); document.getElementById('toast').textContent = ''; document.getElementById('btn-pause').click()");
   await waitFor(() => desktopEval('state.paused === false'), 'resume-before-disconnect did not reach desktop');
   await companion.stop();
@@ -615,7 +626,7 @@ async function runElectronProof() {
   await check('pending Resume disconnect never resends or claims success', async () => {
     await wait(350);
     const value = await phoneEval("({ pending: pendingOperation, toast: document.getElementById('toast').textContent, shown: document.getElementById('toast').classList.contains('show') })");
-    const count = commandLog.filter(message => message.action === 'togglePause').length - resumeDisconnectBefore;
+    const count = commandLog.filter(message => message.action === 'resume').length - resumeDisconnectBefore;
     assert(value.pending === null && !value.shown && value.toast !== 'Resumed' && count === 1, JSON.stringify({ value, count }));
   });
   suppressStateBroadcast = false;
@@ -658,13 +669,13 @@ async function runElectronProof() {
   await desktopEval(`window.electronAPI.startTimer(${JSON.stringify({ durationSeconds: 900, action: 'sleep', dryRun: true, profileId: profile.id, nightModeId: 'quick-sleep' })})`);
   await waitFor(() => phoneEval("stateIsAuthoritative() && latestState.running"), 'late-transition timer did not start');
   suppressStateBroadcast = true;
-  const lateBefore = commandLog.filter(message => message.action === 'togglePause').length;
+  const lateBefore = commandLog.filter(message => message.action === 'pause').length;
   await phoneEval("document.getElementById('toast').classList.remove('show'); document.getElementById('toast').textContent = ''; document.getElementById('btn-pause').click()");
   await waitFor(() => desktopEval('state.paused === true'), 'late transition did not reach desktop');
   await wait(6000);
   await check('timeout sends nothing further and remains uncertain', async () => {
     const value = await phoneEval("({ pendingKind: pendingOperation && pendingOperation.kind, text: pendingStatus.textContent, shown: document.getElementById('toast').classList.contains('show') })");
-    const count = commandLog.filter(message => message.action === 'togglePause').length - lateBefore;
+    const count = commandLog.filter(message => message.action === 'pause').length - lateBefore;
     assert(value.pendingKind === null && value.text === 'PC did not confirm the change' && !value.shown && count === 1, JSON.stringify({ value, count }));
   });
   suppressStateBroadcast = false;
@@ -890,9 +901,17 @@ async function runElectronProof() {
   const nmStartBefore = commandLog.length;
   await phoneEval("nmDetailStart.click()");
   await waitFor(() => commandLog.length === nmStartBefore + 1 && commandLog[nmStartBefore]?.action === 'startNightMode', 'startNightMode command did not reach main');
-  await check('C2: phone sends only nightModeId', async () => {
+  await check('C2: phone sends only nightModeId (with V3 protocolVersion + requestId)', async () => {
     const command = commandLog[nmStartBefore];
-    assert(JSON.stringify(command) === JSON.stringify({ action: 'startNightMode', nightModeId: 'quick-sleep' }), JSON.stringify(command));
+    const keys = Object.keys(command).sort();
+    assert(
+      command.action === 'startNightMode'
+      && command.nightModeId === 'quick-sleep'
+      && command.protocolVersion === 3
+      && typeof command.requestId === 'string'
+      && keys.join(',') === 'action,nightModeId,protocolVersion,requestId',
+      JSON.stringify(command)
+    );
   });
   await waitFor(() => desktopEval("state.running === true && state.action === 'sleep' && state.remainingSeconds <= 900"), 'desktop did not start Quick Sleep from phone');
   await check('C2: desktop resolves canonical mode and inherits desktop-authoritative Dry Run', async () => {
@@ -1288,6 +1307,166 @@ async function runElectronProof() {
   });
 
   await phoneEval("document.getElementById('nm-detail-close')?.click()");
+
+  // ── C3-A: Additive protocol & idempotency primitives inside Electron runtime ──
+  await check('C3-A: protocol primitives and IdempotencyRegistry operate inside Electron runtime', async () => {
+    const remoteControl = require(path.join(electronRoot, 'remoteControl.js'));
+    const IdempotencyRegistry = require(path.join(electronRoot, 'idempotencyRegistry.js'));
+    const reqId = remoteControl.createRequestId();
+    assert(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(reqId), `invalid requestId: ${reqId}`);
+
+    const defaultPause = remoteControl.validateCompanionV3Message({ protocolVersion: 3, requestId: reqId, action: 'pause' });
+    assert(!defaultPause.ok && defaultPause.reason === remoteControl.REJECTION_REASONS.UNSUPPORTED_ACTION, JSON.stringify(defaultPause));
+
+    const optInPause = remoteControl.validateCompanionV3Message(
+      { protocolVersion: 3, requestId: reqId, action: 'pause', forceShutdown: true },
+      { enabledActions: ['pause', 'resume'] }
+    );
+    assert(optInPause.ok && optInPause.command.action === 'pause' && !('forceShutdown' in optInPause.command), JSON.stringify(optInPause));
+
+    const reg = new IdempotencyRegistry({ maxEntries: 1 });
+    const first = reg.register(token, reqId, optInPause.command.action, optInPause.canonicalPayload);
+    assert(first.state === 'new' && first.ack.status === 'accepted' && first.ack.duplicate === false, JSON.stringify(first.ack));
+
+    const inFlight = reg.register(token, reqId, optInPause.command.action, optInPause.canonicalPayload);
+    assert(inFlight.state === 'in_progress_duplicate' && inFlight.ack.duplicate === true, JSON.stringify(inFlight.ack));
+
+    let waiterReceived = null;
+    reg.addWaiter(first.record, ack => { waiterReceived = ack; });
+
+    const conflict = reg.register(token, reqId, 'resume', { action: 'resume' });
+    assert(conflict.state === 'conflict' && conflict.ack.reason === remoteControl.REJECTION_REASONS.REQUEST_ID_CONFLICT, JSON.stringify(conflict.ack));
+
+    const capHit = reg.register(token, remoteControl.createRequestId(), 'cancel', { action: 'cancel' });
+    assert(capHit.state === 'capacity_exceeded' && capHit.ack.reason === remoteControl.REJECTION_REASONS.IDEMPOTENCY_CAPACITY, JSON.stringify(capHit.ack));
+
+    const termAck = remoteControl.createCommandAck({
+      requestId: reqId,
+      action: 'pause',
+      status: remoteControl.ACK_STATUSES.COMPLETED,
+      stateRevision: 1
+    });
+    assert(reg.resolve(token, reqId, termAck) === true, 'resolve failed');
+    assert(waiterReceived && waiterReceived.status === 'completed' && waiterReceived.duplicate === true, JSON.stringify(waiterReceived));
+
+    const replay = reg.register(token, reqId, optInPause.command.action, optInPause.canonicalPayload);
+    assert(replay.state === 'completed_duplicate' && replay.ack.status === 'completed' && replay.ack.duplicate === true, JSON.stringify(replay.ack));
+  });
+
+  // ── C3-B: Live Protocol V3 end-to-end runtime proof ──
+  const remoteControl = require(path.join(electronRoot, 'remoteControl.js'));
+  async function sendV3Frames(messages, waitMs = 350) {
+    return new Promise((resolve, reject) => {
+      const ws = new NodeWebSocket(`ws://127.0.0.1:${port}/?t=${encodeURIComponent(token)}`);
+      const frames = [];
+      const timer = setTimeout(() => { try { ws.close(); } catch {} reject(new Error('V3 WS session timed out')); }, 6000);
+      ws.addEventListener('message', e => { try { frames.push(JSON.parse(String(e.data))); } catch {} });
+      ws.addEventListener('open', async () => {
+        for (const m of messages) {
+          ws.send(JSON.stringify(m));
+          await wait(80);
+        }
+        await wait(waitMs);
+        clearTimeout(timer);
+        try { ws.close(); } catch {}
+        resolve(frames);
+      }, { once: true });
+      ws.addEventListener('error', () => { clearTimeout(timer); reject(new Error('V3 WS error')); }, { once: true });
+    });
+  }
+
+  await check('C3-B: phone client negotiated Protocol V3 hello and tracks monotonic stateRevision', async () => {
+    const st = await getNmTestState();
+    assert(st.desktopHello && st.desktopHello.protocol === 3, JSON.stringify(st.desktopHello));
+    assert(st.supportsProtocolV3 === true && st.protocolIncompatible === false, JSON.stringify(st));
+    assert(Number.isInteger(st.lastStateRevision) && st.lastStateRevision > 0, `expected positive stateRevision, got ${st.lastStateRevision}`);
+  });
+
+  await check('C3-B: live V3 start -> duplicate snooze replay adds time once -> conflict rejected -> explicit pause/resume -> cancel', async () => {
+    await ensureIdle();
+    const startId = remoteControl.createRequestId();
+    const startFrames = await sendV3Frames([{ protocolVersion: 3, requestId: startId, action: 'start', timerAction: 'sleep', durationSeconds: 600 }]);
+    const startAcks = startFrames.filter(f => f.type === 'commandAck' && f.requestId === startId);
+    const startAccepted = startAcks.find(a => a.status === 'accepted');
+    const startCompleted = startAcks.find(a => a.status === 'completed');
+    assert(startAccepted && startCompleted && startCompleted.stateRevision > startAccepted.stateRevision, JSON.stringify(startAcks));
+
+    // Duplicate snooze replay: send same requestId twice -> adds +300s ONLY ONCE
+    const beforeSnooze = await desktopEval('state.remainingSeconds');
+    const snoozeId = remoteControl.createRequestId();
+    const snoozeFrames = await sendV3Frames([
+      { protocolVersion: 3, requestId: snoozeId, action: 'snooze', seconds: 300 },
+      { protocolVersion: 3, requestId: snoozeId, action: 'snooze', seconds: 300 },
+      // Same requestId with different payload -> conflict
+      { protocolVersion: 3, requestId: snoozeId, action: 'snooze', seconds: 900 }
+    ]);
+    const snoozeAcks = snoozeFrames.filter(f => f.type === 'commandAck' && f.requestId === snoozeId);
+    assert(snoozeAcks.some(a => a.status === 'completed' && a.duplicate === false), JSON.stringify(snoozeAcks));
+    assert(snoozeAcks.some(a => a.status === 'completed' && a.duplicate === true), JSON.stringify(snoozeAcks));
+    assert(snoozeAcks.some(a => a.status === 'rejected' && a.reason === 'request_id_conflict'), JSON.stringify(snoozeAcks));
+    const afterSnooze = await desktopEval('state.remainingSeconds');
+    assert(afterSnooze >= beforeSnooze + 295 && afterSnooze <= beforeSnooze + 302, `expected single +300s snooze: ${beforeSnooze} -> ${afterSnooze}`);
+
+    // Explicit pause twice with distinct requestIds -> second returns already_paused
+    const pause1 = remoteControl.createRequestId();
+    const pause2 = remoteControl.createRequestId();
+    const resume1 = remoteControl.createRequestId();
+    const resume2 = remoteControl.createRequestId();
+    const cancel1 = remoteControl.createRequestId();
+    const prFrames = await sendV3Frames([
+      { protocolVersion: 3, requestId: pause1, action: 'pause' },
+      { protocolVersion: 3, requestId: pause2, action: 'pause' },
+      { protocolVersion: 3, requestId: resume1, action: 'resume' },
+      { protocolVersion: 3, requestId: resume2, action: 'resume' },
+      { protocolVersion: 3, requestId: cancel1, action: 'cancel' }
+    ]);
+    const ackOf = (id, st) => prFrames.find(f => f.type === 'commandAck' && f.requestId === id && f.status === st);
+    const p1Done = ackOf(pause1, 'completed');
+    const p2Rej = ackOf(pause2, 'rejected');
+    const r1Done = ackOf(resume1, 'completed');
+    const r2Rej = ackOf(resume2, 'rejected');
+    const c1Done = ackOf(cancel1, 'completed');
+    assert(p1Done && p2Rej?.reason === 'already_paused', JSON.stringify({ p1Done, p2Rej }));
+    assert(r1Done && r2Rej?.reason === 'already_running', JSON.stringify({ r1Done, r2Rej }));
+    assert(c1Done && p1Done.stateRevision < r1Done.stateRevision && r1Done.stateRevision < c1Done.stateRevision, JSON.stringify({ p1Done, r1Done, c1Done }));
+    await ensureIdle();
+  });
+
+  await check('C3-B: live V3 rejects idle pause, unknown/unavailable Night Mode, bad protocolVersion/requestId, and forbidden power actions', async () => {
+    await ensureIdle();
+    const idlePauseId = remoteControl.createRequestId();
+    const unknownNmId = remoteControl.createRequestId();
+    const disabledNmId = remoteControl.createRequestId();
+    const badPvId = remoteControl.createRequestId();
+    const forbiddenId = remoteControl.createRequestId();
+    const frames = await sendV3Frames([
+      { protocolVersion: 3, requestId: idlePauseId, action: 'pause' },
+      { protocolVersion: 3, requestId: unknownNmId, action: 'startNightMode', nightModeId: 'no-such-mode' },
+      { protocolVersion: 3, requestId: disabledNmId, action: 'startNightMode', nightModeId: 'quiet-house' },
+      { protocolVersion: 4, requestId: badPvId, action: 'cancel' },
+      { protocolVersion: 3, requestId: 'bad', action: 'cancel' },
+      { protocolVersion: 3, requestId: forbiddenId, action: 'start', timerAction: 'logout', durationSeconds: 600 }
+    ]);
+    const rejOf = id => frames.find(f => f.type === 'commandAck' && f.requestId === id && f.status === 'rejected');
+    assert(rejOf(idlePauseId)?.reason === 'no_active_timer', JSON.stringify(rejOf(idlePauseId)));
+    assert(rejOf(unknownNmId)?.reason === 'mode_unknown', JSON.stringify(rejOf(unknownNmId)));
+    assert(rejOf(disabledNmId)?.reason === 'mode_unavailable', JSON.stringify(rejOf(disabledNmId)));
+    assert(rejOf(badPvId)?.reason === 'unsupported_protocol_version', JSON.stringify(rejOf(badPvId)));
+    assert(frames.some(f => f.type === 'commandAck' && f.requestId === 'bad' && f.reason === 'invalid_request_id'), JSON.stringify(frames));
+    assert(rejOf(forbiddenId)?.reason === 'invalid_payload', JSON.stringify(rejOf(forbiddenId)));
+    const st = await desktopEval('({ running: state.running, paused: state.paused })');
+    assert(!st.running && !st.paused, JSON.stringify(st));
+  });
+
+  await check('C3-B: legacy unversioned V2 commands remain backward compatible', async () => {
+    await ensureIdle();
+    await sendRealWebSocketFrame({ action: 'start', timerAction: 'sleep', durationSeconds: 600 });
+    await waitFor(() => desktopEval('state.running === true && !state.paused'), 'legacy V2 start did not execute');
+    await sendRealWebSocketFrame({ action: 'togglePause' });
+    await waitFor(() => desktopEval('state.paused === true'), 'legacy V2 togglePause did not execute');
+    await sendRealWebSocketFrame({ action: 'cancel' });
+    await waitFor(() => desktopEval('!state.running && !state.paused'), 'legacy V2 cancel did not execute');
+  });
 
   console.log(`\nCompanion V2 Electron proof: ${passed} passed, ${failed} failed`);
   console.log(`Commands observed: ${commandLog.length}`);

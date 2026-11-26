@@ -104,7 +104,7 @@ test('an outcome shows in the time slot only while it agrees with the current mo
         if (agrees) {
           assert.equal(f.statusTime.hidden, false, label);
           assert.equal(f.statusTime.dataset.phase, 'outcome', label);
-          assert.equal(f.statusTime.textContent, lastOutcome === 'cancelled' ? 'Cancelled' : 'Done', label);
+          assert.equal(f.statusTime.textContent, lastOutcome === 'cancelled' ? 'Cancelled' : lastOutcome === 'dryrun' ? 'Test done' : 'Timer done', label);
         } else {
           assert.equal(f.statusTime.hidden, true, label);
           assert.notEqual(f.statusTime.dataset.phase, 'outcome', label);
@@ -156,7 +156,8 @@ test('the aria-label names the mode exactly once', () => {
       if (modeName === 'test') assert.equal(count(label, /Test Mode/g), 1, label);
       if (modeName === 'real') assert.equal(count(label, /\bReal\b/g), 1, label);
       if (modeName === 'checking') assert.doesNotMatch(label, /Test Mode|Real/);
-      if (lastOutcome && modeName !== 'checking') assert.match(label, /, last session (done|cancelled)/, label);
+      if (lastOutcome && modeName !== 'checking') assert.match(label, /, last session (timer done|test done|cancelled)/, label);
+      if (lastOutcome === 'completed' && modeName === 'real') assert.match(label, /Windows outcome unverified/);
       assert.equal(label.endsWith(', change in Settings'), modeName !== 'checking', label);
     }
   }

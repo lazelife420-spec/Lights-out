@@ -3,7 +3,13 @@
 // Manages saved timer profiles with quick-load capability
 
 const path = require('path');
+const crypto = require('crypto');
 const { writeTmpVerifyRename, safeLoadJson } = require('./durableJsonStore');
+
+const PROFILE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+// Ids the last load or import changed: [{ from, to }]. main uses this to
+// re-point references (calendar rule profileId, the persisted selection).
+let lastIdMigrations = [];
 
 // Default profiles storage
 const PROFILES_FILE = 'profiles.json';
@@ -44,8 +50,9 @@ function loadProfilesFromDisk() {
     const configFile = getConfigPath();
     const { data, recovered } = safeLoadJson(configFile, Array.isArray);
     if (Array.isArray(data)) {
-      profilesCache = data.map(normalizeProfile).filter(p => p !== null);
-      if (recovered) saveProfilesToDisk();
+      profilesCache = normalizeAll(data);
+      // A changed id is written back once, so it is the same on every launch.
+      if (recovered || lastIdMigrations.length) saveProfilesToDisk();
       return profilesCache;
     }
   } catch (error) {
@@ -82,9 +89,10 @@ function normalizeProfile(raw) {
   const validModes = ['duration', 'clock', 'calendar'];
   const mode = validModes.includes(raw.mode) ? raw.mode : 'duration';
 
-  const id = raw.id || generateId();
+  const id = normalizeProfileId(raw.id);
   const seconds = Math.max(60, Math.round(Number(raw.seconds) || 1800));
-  const clock = raw.clock || '23:30';
+  const rawClock = typeof raw.clock === 'string' ? raw.clock.trim() : '';
+  const clock = /^([01]\d|2[0-3]):[0-5]\d$/.test(rawClock) ? rawClock : '23:30';
   // Optional free-text reminder of what/why this profile is for. Capped well
   // under the hosts-file/PowerShell-injection-relevant lengths elsewhere in
   // the app since this never reaches a shell command -- it is only ever
@@ -129,7 +137,7 @@ function normalizeProfile(raw) {
     lastLightSound: raw.lastLightSound || 'Off',
     ritualId: raw.ritualId === 'standard' ? 'standard' : 'none',
     createdAt: raw.createdAt || new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    updatedAt: raw.updatedAt || raw.createdAt || new Date().toISOString(),
     // When this profile was last loaded via apply() -- distinct from
     // updatedAt (which tracks metadata edits). Null until first used.
     lastUsedAt: raw.lastUsedAt || null
@@ -138,6 +146,34 @@ function normalizeProfile(raw) {
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
+}
+
+// Builds before 11.3 kept any imported id ('wind.down', 'Wind Down', 7). An
+// id outside the path-safe pattern is replaced by one derived from it, so it
+// is the same on every launch and distinct from other ids. Only a profile
+// with no id at all gets a fresh random one.
+function legacyProfileId(text) {
+  const base = text.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 100);
+  const digest = crypto.createHash('sha256').update(text).digest('hex').slice(0, 8);
+  return `${base}-${digest}`;
+}
+
+function normalizeProfileId(value) {
+  const rawId = typeof value === 'string' ? value.trim()
+    : (typeof value === 'number' && Number.isFinite(value) ? String(value) : '');
+  if (PROFILE_ID_PATTERN.test(rawId)) return rawId;
+  return rawId ? legacyProfileId(rawId) : generateId();
+}
+
+function normalizeAll(rawProfiles) {
+  const migrations = [];
+  const normalized = rawProfiles.map(raw => {
+    const profile = normalizeProfile(raw);
+    if (profile && raw.id !== profile.id) migrations.push({ from: raw.id === undefined ? null : raw.id, to: profile.id });
+    return profile;
+  }).filter(p => p !== null);
+  lastIdMigrations = migrations;
+  return normalized;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -149,7 +185,21 @@ function getAllProfiles() {
 }
 
 function getProfileById(id) {
-  return profilesCache.find(p => p.id === id) || null;
+  const exact = profilesCache.find(p => p.id === id);
+  if (exact) return exact;
+  // A reference saved by an older build (a calendar rule's profileId) may
+  // still name an id that load replaced. The replacement is derived from it,
+  // so it still resolves to that profile and never to any other.
+  const replaced = replacementIdFor(id);
+  return replaced ? profilesCache.find(p => p.id === replaced) || null : null;
+}
+
+function replacementIdFor(id) {
+  const rawId = typeof id === 'string' ? id.trim()
+    : (typeof id === 'number' && Number.isFinite(id) ? String(id) : '');
+  if (!rawId) return null;
+  const replaced = PROFILE_ID_PATTERN.test(rawId) ? rawId : legacyProfileId(rawId);
+  return replaced === id ? null : replaced;
 }
 
 function createProfile(profileData) {
@@ -167,9 +217,12 @@ function createProfile(profileData) {
     // Update existing
     normalized.id = profilesCache[existingIndex].id;
     normalized.createdAt = profilesCache[existingIndex].createdAt;
+    normalized.lastUsedAt = normalized.lastUsedAt || profilesCache[existingIndex].lastUsedAt || null;
+    normalized.updatedAt = new Date().toISOString();
     profilesCache[existingIndex] = normalized;
   } else {
     // Add new
+    normalized.updatedAt = new Date().toISOString();
     profilesCache.push(normalized);
   }
 
@@ -213,6 +266,9 @@ function deleteProfile(id) {
 }
 
 function reorderProfiles(orderedIds) {
+  if (!Array.isArray(orderedIds)) {
+    return { success: false, error: 'Invalid order list' };
+  }
   const orderedMap = new Map();
   orderedIds.forEach((id, index) => orderedMap.set(id, index));
 
@@ -246,13 +302,17 @@ function applyProfile(profileId, currentState = {}) {
   let endsAt = null;
 
   if (profile.mode === 'clock' && profile.clock) {
-    const [hours, minutes] = profile.clock.split(':').map(Number);
-    const now = new Date();
-    const target = new Date(now);
-    target.setHours(hours, minutes, 0, 0);
-    if (target <= now) target.setDate(target.getDate() + 1);
-    durationSeconds = Math.max(60, Math.round((target - now) / 1000));
-    endsAt = target.toISOString();
+    const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(profile.clock).trim());
+    if (match) {
+      const hours = Number(match[1]);
+      const minutes = Number(match[2]);
+      const now = new Date();
+      const target = new Date(now);
+      target.setHours(hours, minutes, 0, 0);
+      if (target <= now) target.setDate(target.getDate() + 1);
+      durationSeconds = Math.max(60, Math.round((target - now) / 1000));
+      endsAt = target.toISOString();
+    }
   }
 
   return {
@@ -292,13 +352,16 @@ function markProfileUsed(profileId) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function getProfileHint(profile) {
-  if (!profile) return '';
+  if (!profile || typeof profile !== 'object') return '';
 
-  const actionLabel = profile.action.charAt(0).toUpperCase() + profile.action.slice(1);
+  const action = typeof profile.action === 'string' && profile.action ? profile.action : 'shutdown';
+  const actionLabel = action.charAt(0).toUpperCase() + action.slice(1);
 
   switch (profile.mode) {
     case 'clock':
-      return `${actionLabel} at ${profile.clock}`;
+      return typeof profile.clock === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(profile.clock)
+        ? `${actionLabel} at ${profile.clock}`
+        : `${actionLabel} (clock)`;
     case 'calendar':
       if (profile.calendarEventTitle) {
         return `${actionLabel} - ${profile.calendarEventTitle}`;
@@ -306,12 +369,15 @@ function getProfileHint(profile) {
       if (profile.scheduledAt) {
         try {
           const dt = new Date(profile.scheduledAt);
-          return `${actionLabel} at ${dt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
+          if (!Number.isNaN(dt.getTime())) {
+            return `${actionLabel} at ${dt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
+          }
         } catch {}
       }
       return `${actionLabel} (calendar)`;
     default: {
-      const minutes = Math.ceil(profile.seconds / 60);
+      const secs = Number(profile.seconds);
+      const minutes = Number.isFinite(secs) && secs > 0 ? Math.ceil(secs / 60) : 30;
       return `${actionLabel} in ${minutes}m`;
     }
   }
@@ -339,7 +405,7 @@ function importProfiles(jsonString) {
       return { success: false, error: 'Invalid format: expected array' };
     }
 
-    const normalized = parsed.map(normalizeProfile).filter(p => p !== null);
+    const normalized = normalizeAll(parsed);
     profilesCache = normalized;
     saveProfilesToDisk();
     return { success: true, count: normalized.length };
@@ -442,6 +508,7 @@ module.exports = {
   formatDuration,
   PROFILE_ACCENT_PALETTE,
   normalize: normalizeProfile,
+  getIdMigrations: () => lastIdMigrations.map(m => ({ ...m })),
   
   // Import/Export
   export: exportProfiles,

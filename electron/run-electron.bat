@@ -11,15 +11,15 @@ where node >nul 2>&1
 if %errorlevel% neq 0 (
     echo ERROR: Node.js is not installed or not in PATH
     echo.
-    echo Please install Node.js from https://nodejs.org/
+    echo Please install Node.js 22.13.0+ from https://nodejs.org/
     pause
     exit /b 1
 )
 
-:: Check dependencies
+:: Install dependencies when missing
 if not exist "node_modules" (
     echo Installing dependencies...
-    call npm install
+    call npm ci --no-audit --no-fund
     if %errorlevel% neq 0 (
         echo ERROR: Failed to install dependencies
         pause
@@ -27,6 +27,17 @@ if not exist "node_modules" (
     )
 )
 
+:: Provision locked Electron binary when missing
+if not exist "node_modules\electron\dist\electron.exe" (
+    echo Provisioning locked Electron runtime...
+    call npm run electron:provision
+    if %errorlevel% neq 0 (
+        echo ERROR: Failed to provision Electron binary
+        pause
+        exit /b 1
+    )
+)
+
 :: Launch
 echo Starting Lights Out...
-npm start
+call npm start

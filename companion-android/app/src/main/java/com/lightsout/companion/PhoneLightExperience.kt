@@ -14,8 +14,10 @@ import kotlin.math.abs
 /** Opt-in phone-owned WiZ effects. No notification contents are read or stored. */
 object PhoneLightExperience {
     private val worker=Executors.newSingleThreadExecutor()
-    private val busy=AtomicBoolean(false)
-    private var lastTick=0L;private var lastBeacon= -30000L
+    private val tickBusy=AtomicBoolean(false)
+    private val beaconBusy=AtomicBoolean(false)
+    @Volatile private var lastTick=0L
+    @Volatile private var lastBeacon= -30000L
     private var run=""
     private data class Light(val ip:String,val original:JSONObject,val epoch:Int,var last:JSONObject?=null,var released:Boolean=false)
     private val timerLights=mutableListOf<Light>()
@@ -23,12 +25,22 @@ object PhoneLightExperience {
     private fun settings(c:Context)=try{JSONObject(prefs(c).getString("settings","{}")?:"{}")}catch(_:Exception){JSONObject()}
     private fun targets(j:JSONObject,key:String)=PhoneHomeStore.strings(j.optJSONArray(key))
     fun access(c:Context)=NotificationManagerCompat.getEnabledListenerPackages(c).contains(c.packageName)
+    fun isAlertAllowed(c:Context,packageId:String):Boolean {
+        val j=settings(c)
+        return LightAlertPolicy.allowed(j.optBoolean("appAlerts"),access(c),c.packageName,packageId,targets(j,"apps"))
+    }
     fun publicConfig(c:Context):JSONObject {
         val j=settings(c);val lights=PhoneHomeStore.lights(c)
         val intent=Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        @Suppress("DEPRECATION") val apps=c.packageManager.queryIntentActivities(intent,0).map { it.activityInfo.applicationInfo }.distinctBy { it.packageName }.filter { it.packageName!=c.packageName }.sortedBy { c.packageManager.getApplicationLabel(it).toString().lowercase() }.take(200)
+        val pm=c.packageManager
+        @Suppress("DEPRECATION") val apps=pm.queryIntentActivities(intent,0)
+            .map { it.activityInfo.applicationInfo }
+            .distinctBy { it.packageName }
+            .filter { it.packageName!=c.packageName }
+            .map { info -> info.packageName to pm.getApplicationLabel(info).toString() }
+            .sortedBy { it.second.lowercase() }
         return JSONObject().put("settings",j).put("lights",JSONArray(lights)).put("notificationAccess",access(c))
-            .put("apps",JSONArray(apps.map { JSONObject().put("id",it.packageName).put("name",c.packageManager.getApplicationLabel(it).toString()) }))
+            .put("apps",JSONArray(apps.map { (pkg, label) -> JSONObject().put("id",pkg).put("name",label) }))
     }
     fun save(c:Context,value:JSONObject):JSONObject {
         val mode=value.optString("timerMode","off");require(mode in setOf("off","hourglass","orbit","ember"))
@@ -66,7 +78,7 @@ object PhoneLightExperience {
     }}
     private fun awake(c:Context,work:()->Unit){val lock=c.getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"LightsOut:LightMode");try{lock.acquire(25000);work()}finally{if(lock.isHeld)lock.release()}}
     fun tick(c:Context){
-        val now=SystemClock.elapsedRealtime();if(now-lastTick<3000||!busy.compareAndSet(false,true))return;lastTick=now
+        val now=SystemClock.elapsedRealtime();if(now-lastTick<3000||!tickBusy.compareAndSet(false,true))return;lastTick=now
         val app=c.applicationContext
         worker.execute {try{val t=PhoneTimerStore.read(app);val j=settings(app);val ips=targets(j,"timerTargets").filter { usable(app,it) };val mode=j.optString("timerMode","off")
             val key=t.runId+":"+mode+":"+ips.joinToString(",")
@@ -77,13 +89,13 @@ object PhoneLightExperience {
                     val frame=LightExperienceModel.frame(mode,p,(t.totalMs-left)/1000.0,index,timerLights.size,j.optInt("brightness",35))?:continue;apply(app,light,params(frame))
                 }
             }
-        }catch(_:Exception){/* Failed/unreachable lights never gain power authority. */}finally{busy.set(false)}}
+        }catch(_:Exception){/* Failed/unreachable lights never gain power authority. */}finally{tickBusy.set(false)}}
     }
     fun finished(c:Context,allowBeacon:Boolean){val app=c.applicationContext;worker.execute {try{val alert=allowBeacon&&settings(app).optBoolean("timerAlerts");if(timerLights.isEmpty()&&!alert)return@execute;awake(app){restore(app,timerLights);timerLights.clear();run="";if(alert)beacon(app,"timer")}}catch(_:Exception){}}}
     fun stopTimer(c:Context){finished(c,false)}
-    fun notification(c:Context,packageId:String){val j=settings(c);if(!LightAlertPolicy.allowed(j.optBoolean("appAlerts"),access(c),c.packageName,packageId,targets(j,"apps")))return
-        val now=SystemClock.elapsedRealtime();if(now-lastBeacon<30000||!busy.compareAndSet(false,true))return;lastBeacon=now
-        val app=c.applicationContext;worker.execute {try{awake(app){beacon(app,"app")}}catch(_:Exception){}finally{busy.set(false)}}
+    fun notification(c:Context,packageId:String){if(!isAlertAllowed(c,packageId))return
+        val now=SystemClock.elapsedRealtime();if(now-lastBeacon<30000||!beaconBusy.compareAndSet(false,true))return;lastBeacon=now
+        val app=c.applicationContext;worker.execute {try{awake(app){beacon(app,"app")}}catch(_:Exception){}finally{beaconBusy.set(false)}}
     }
     private fun beacon(c:Context,kind:String){
         val j=settings(c);val enabled=if(kind=="app")"appAlerts" else "timerAlerts";if(!j.optBoolean(enabled))return

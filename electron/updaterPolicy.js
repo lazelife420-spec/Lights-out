@@ -24,20 +24,58 @@ const PORTABLE_NAME_RE = /^Lights-Out-Portable-v\d+\.\d+\.\d+-win-x64\.zip$/;
 // Hard bound on any single artifact download, regardless of declared size.
 const MAX_ARTIFACT_BYTES = 512 * 1024 * 1024;
 
-function compareVersions(a, b) {
-  const pa = String(a || '').replace(/^v/, '').split('.').map(Number);
-  const pb = String(b || '').replace(/^v/, '').split('.').map(Number);
-  for (let i = 0; i < 3; i++) {
-    if ((pa[i] || 0) > (pb[i] || 0)) return 1;
-    if ((pa[i] || 0) < (pb[i] || 0)) return -1;
+function parseVersion(v) {
+  const raw = String(v || '').replace(/^v/i, '').trim();
+  const [core, prerelease = ''] = raw.split('-', 2);
+  const parts = core.split('.').map(n => Number.parseInt(n, 10) || 0);
+  return { parts: [parts[0] || 0, parts[1] || 0, parts[2] || 0], prerelease };
+}
+
+function comparePrerelease(a, b) {
+  const ia = a.split('.');
+  const ib = b.split('.');
+  const len = Math.max(ia.length, ib.length);
+  for (let i = 0; i < len; i++) {
+    if (i >= ia.length) return -1;
+    if (i >= ib.length) return 1;
+    const sa = ia[i];
+    const sb = ib[i];
+    if (sa === sb) continue;
+    const na = /^\d+$/.test(sa);
+    const nb = /^\d+$/.test(sb);
+    if (na && nb) {
+      const diff = Number(sa) - Number(sb);
+      if (diff !== 0) return diff > 0 ? 1 : -1;
+    } else if (na !== nb) {
+      return na ? -1 : 1; // SemVer 2.0 §11.4.3: numeric < non-numeric
+    } else {
+      return sa > sb ? 1 : -1;
+    }
   }
+  return 0;
+}
+
+function compareVersions(a, b) {
+  const pa = parseVersion(a);
+  const pb = parseVersion(b);
+  for (let i = 0; i < 3; i++) {
+    if (pa.parts[i] > pb.parts[i]) return 1;
+    if (pa.parts[i] < pb.parts[i]) return -1;
+  }
+  if (!pa.prerelease && pb.prerelease) return 1;
+  if (pa.prerelease && !pb.prerelease) return -1;
+  if (pa.prerelease !== pb.prerelease) return comparePrerelease(pa.prerelease, pb.prerelease);
   return 0;
 }
 
 function isValidDownloadUrl(url) {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === 'https:' && parsed.hostname === DOWNLOAD_HOST;
+    return parsed.protocol === 'https:'
+      && parsed.hostname === DOWNLOAD_HOST
+      && parsed.port === ''
+      && !parsed.username
+      && !parsed.password;
   } catch {
     return false;
   }
@@ -46,7 +84,11 @@ function isValidDownloadUrl(url) {
 function isValidTruthUrl(url) {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === 'https:' && parsed.hostname === TRUTH_HOST;
+    return parsed.protocol === 'https:'
+      && parsed.hostname === TRUTH_HOST
+      && parsed.port === ''
+      && !parsed.username
+      && !parsed.password;
   } catch {
     return false;
   }

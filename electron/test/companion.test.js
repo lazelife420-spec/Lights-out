@@ -112,6 +112,9 @@ test('P09: the phone viewport allows pinch-zoom and covers notched screens', () 
   assert.ok(meta, 'viewport meta missing');
   assert.doesNotMatch(meta[1], /user-scalable\s*=\s*no|maximum-scale/);
   assert.match(meta[1], /viewport-fit=cover/);
+  for (const edge of ['top', 'right', 'bottom', 'left']) {
+    assert.match(companionHtml, new RegExp(`calc\\([^)]*env\\(safe-area-inset-${edge}`), `companion.html missing additive safe-area-inset-${edge} padding`);
+  }
 });
 
 test('P09: the #action-seg default (shutdown) is pressed in markup', () => {
@@ -830,4 +833,129 @@ test('Fire 06: the plan steps by 5 minutes within 1..1440 and one sentence state
   assert.equal(real.word + real.rest, 'REAL ACTION · This run will restart this PC.');
   assert.equal(sandbox.band(false, 'constructor').rest, ' · Runs started here use real PC power actions.');
   assert.equal(sandbox.band(undefined, 'shutdown').word, 'CHECKING');
+});
+
+test('C3-B: companion.html V3 client generates UUID requestIds, speaks V3 to protocol 3, and falls back to togglePause for V2', () => {
+  const sentFrames = [];
+  const sandbox = {
+    WebSocket: { OPEN: 1 },
+    ws: { readyState: 1, send: raw => sentFrames.push(JSON.parse(raw)) },
+    desktopHello: { protocol: 3, desktopVersion: '11.2.0', capabilities: ['protocol-v3', 'command-ack'] },
+    pendingOperation: { requestId: '11111111-2222-4333-8444-555555555555', awaitingAck: true },
+    globalThis: { crypto: require('node:crypto').webcrypto }
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(`
+    const MUTATING_ACTIONS = new Set(['start', 'startNightMode', 'pause', 'resume', 'togglePause', 'snooze', 'cancel']);
+    ${['createClientRequestId', 'supportsProtocolV3', 'isIncompatibleProtocol', 'send'].map(n => liftFunction(companionHtml, n)).join('\n')}
+    this.createId = createClientRequestId;
+    this.supportsV3 = supportsProtocolV3;
+    this.incompat = isIncompatibleProtocol;
+    this.send = send;
+  `, sandbox);
+
+  const uuid = sandbox.createId();
+  assert.match(uuid, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  assert.equal(sandbox.supportsV3(), true);
+  assert.equal(sandbox.incompat(), false);
+
+  sandbox.send({ action: 'pause' });
+  assert.deepEqual(sentFrames[0], {
+    action: 'pause',
+    protocolVersion: 3,
+    requestId: '11111111-2222-4333-8444-555555555555'
+  });
+
+  sandbox.send({ action: 'getNightModes' });
+  assert.equal(sentFrames[1].action, 'getNightModes');
+  assert.equal(sentFrames[1].protocolVersion, 3);
+  assert.match(sentFrames[1].correlationId, /^[0-9a-f-]{36}$/);
+
+  // Legacy V2 desktop fallback translates pause/resume to togglePause without protocolVersion
+  sandbox.desktopHello = { protocol: 2, desktopVersion: '11.1.0', capabilities: [] };
+  sandbox.send({ action: 'pause' });
+  sandbox.send({ action: 'resume' });
+  assert.deepEqual(sentFrames[2], { action: 'togglePause' });
+  assert.deepEqual(sentFrames[3], { action: 'togglePause' });
+
+  // Newer desktop protocol > 3 surfaces incompatibility and refuses mutating sends (never downgrades to V2 togglePause)
+  sandbox.desktopHello = { protocol: 4, desktopVersion: '12.0.0', capabilities: [] };
+  assert.equal(sandbox.incompat(), true);
+  assert.equal(sandbox.send({ action: 'pause' }), false);
+  assert.equal(sentFrames.length, 4, 'incompatible protocol must not send downgraded V2 togglePause');
+});
+
+test('C3-B: handleCommandAck reconciles accepted, completed, rejected, and incompatible protocol ACKs honestly', () => {
+  const pendingMessages = [];
+  const cleared = [];
+  const outcomes = [];
+  let refreshCount = 0;
+  const reqId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+  const sandbox = {
+    lastCommandAck: null,
+    lastStateRevision: 0,
+    protocolIncompatible: false,
+    pendingErrorTimeout: null,
+    pendingOperation: {
+      kind: 'cancel',
+      requestId: reqId,
+      awaitingAck: true,
+      ackStatus: null,
+      success: 'Tonight’s run stopped',
+      snapshot: { remainingSeconds: 180, phase: 'focus', dryRun: false, action: 'shutdown' }
+    },
+    setTimeout: () => 1,
+    clearTimeout: () => {},
+    setPendingMessage: (msg, isError) => pendingMessages.push({ msg, isError: Boolean(isError) }),
+    clearPending: opts => { cleared.push(opts || {}); sandbox.pendingOperation = null; },
+    outcomeEligible: (kind, snap) => kind === 'cancel' && Boolean(snap),
+    showOutcome: snap => outcomes.push(snap),
+    refreshPcLabel: () => { refreshCount++; }
+  };
+  vm.createContext(sandbox);
+  const rejMatch = companionHtml.match(/const REJECTION_MESSAGES = Object\.assign\([\s\S]*?\}\);/);
+  assert.ok(rejMatch, 'REJECTION_MESSAGES not found');
+  vm.runInContext(`
+    ${rejMatch[0]}
+    ${['formatRejectionReason', 'handleCommandAck'].map(n => liftFunction(companionHtml, n)).join('\n')}
+    this.ack = handleCommandAck;
+  `, sandbox);
+
+  // Mismatched requestId is ignored for pending settlement
+  sandbox.ack({ type: 'commandAck', protocolVersion: 3, requestId: 'bbbbbbbb-bbbb-4ccc-8ddd-eeeeeeeeeeee', action: 'cancel', status: 'completed', duplicate: false, reason: null, stateRevision: 3 });
+  assert.equal(cleared.length, 0);
+  assert.equal(sandbox.lastStateRevision, 3);
+
+  // Accepted updates pending message without clearing
+  sandbox.ack({ type: 'commandAck', protocolVersion: 3, requestId: reqId, action: 'cancel', status: 'accepted', duplicate: false, reason: null, stateRevision: 3 });
+  assert.equal(sandbox.pendingOperation.ackStatus, 'accepted');
+  assert.equal(pendingMessages[0].msg, 'Applying on PC…');
+  assert.equal(cleared.length, 0);
+
+  // Completed clears pending, triggers success + outcome strip
+  sandbox.ack({ type: 'commandAck', protocolVersion: 3, requestId: reqId, action: 'cancel', status: 'completed', duplicate: false, reason: null, stateRevision: 4 });
+  assert.equal(cleared.length, 1);
+  assert.equal(cleared[0].success, 'Tonight’s run stopped');
+  assert.equal(outcomes.length, 1);
+  assert.equal(sandbox.lastStateRevision, 4);
+
+  // Rejected with unsupported_protocol_version flags protocolIncompatible, re-syncs controls, and shows honest error
+  let syncCalls = 0;
+  let nmClosed = 0;
+  sandbox.syncMutationControls = () => { syncCalls++; };
+  sandbox.nightModeBackdrop = { classList: { contains: c => c === 'show' } };
+  sandbox.closeNightModeDetail = () => { nmClosed++; };
+  const req2 = 'cccccccc-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+  sandbox.pendingOperation = { kind: 'startNightMode', requestId: req2, awaitingAck: true, success: 'Night Mode started' };
+  sandbox.ack({ type: 'commandAck', protocolVersion: 3, requestId: req2, action: 'startNightMode', status: 'rejected', duplicate: false, reason: 'unsupported_protocol_version', stateRevision: 4 });
+  assert.equal(sandbox.protocolIncompatible, true);
+  assert.equal(refreshCount, 1);
+  assert.equal(syncCalls, 1);
+  assert.equal(nmClosed, 1, 'rejected startNightMode must close detail modal so rejection banner is visible');
+  assert.equal(cleared.length, 2);
+  assert.equal(pendingMessages[pendingMessages.length - 1].isError, true);
+  assert.match(pendingMessages[pendingMessages.length - 1].msg, /Incompatible protocol/);
+
+  // socket.onopen resets protocolIncompatible so reconnecting to a compatible desktop recovers cleanly
+  assert.match(companionHtml, /desktopHello = null;\s*protocolIncompatible = false;/);
 });

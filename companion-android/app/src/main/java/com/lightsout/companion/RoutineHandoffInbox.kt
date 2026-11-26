@@ -9,6 +9,9 @@ class RoutineHandoffInbox(private val context: Context, private val book: Routin
     private data class Ready(val delivery: RoutineHandoff.Delivery,val peer: RoutineHandoff.Peer)
     private val ready = mutableMapOf<String,Ready>()
     fun receive(peer: RoutineHandoff.Peer,frame: ByteArray): JSONObject {
+        val now = book.clock()
+        val expired = ready.entries.filter { it.value.delivery.expiresAt <= now }.map { it.key }
+        expired.forEach { ready.remove(it); endpoint.cancel(it) }
         require(ready.size < 8) { "Review or dismiss pending transfers first." }
         val result=endpoint.receiveDocument(peer,frame);ready[result.sessionId]=Ready(result,peer)
         return JSONObject().put("sessionId",result.sessionId).put("preview",result.preview)

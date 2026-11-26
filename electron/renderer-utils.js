@@ -24,9 +24,12 @@ function hexToRgba(hex, alpha) {
 }
 
 function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+  return String(text ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 // -- Glyph system (UI-R3 P04) -------------------------------------------------
@@ -143,6 +146,23 @@ function formatClock(date) {
   return formatIdleClockTime(date, false);
 }
 
+// A wall-clock target, qualified by its local calendar day (not a 24-hour
+// offset, which is wrong over DST). Countdown values never come from here.
+function formatClockTarget(date, now = new Date()) {
+  const time = formatClock(date);
+  if (!time) return '';
+  const sameDay = other => date.getFullYear() === other.getFullYear()
+    && date.getMonth() === other.getMonth() && date.getDate() === other.getDate();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const day = sameDay(now) ? 'today' : sameDay(tomorrow) ? 'tomorrow'
+    : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  // A repeated/skipped DST hour needs its target zone to remain intelligible.
+  const zone = date.getTimezoneOffset() !== now.getTimezoneOffset()
+    ? new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(date).find(part => part.type === 'timeZoneName')?.value : '';
+  return `${time}${zone ? ` ${zone}` : ''} · ${day}`;
+}
+
 // -- One name per session (UI-R3 Fire 02) --------------------------------------
 // 'Tonight's plan' is what is set up to run. A session is named by its Night
 // Mode, else its My Mode, else the name the user typed on the ring, else
@@ -156,12 +176,11 @@ function sessionDisplayName({ nightModeTitle, profileName, timerName } = {}) {
 }
 
 // -- What Test Mode does not hold back (UI-R3 Fire 02) --------------------------
-// Test Mode holds back only the power action. main.js applyDimPhase() runs the
-// wind-down with no Test Mode check (Night Light, closing apps, media pause,
-// Stay on top, Wi-Fi Guard, the Content Blocker) and the countdown tick starts
-// the smart-light dim the same way. These two pure functions say so from
-// main's own conditions; smoke 'Fire 02 truth and names' fails if main ever
-// gates one of them, so this copy must change with it.
+// Test Mode skips the power action and every automatic effect: main.js
+// applyDimPhase() returns early for a rehearsal, and the smart-light tick and
+// partner messages are gated too. These two pure functions list what a REAL
+// run would do, from main's own conditions; the Devices/Settings copy says
+// "Skipped in Test Mode" for the external ones.
 //
 // pickWindDownFacts keeps only non-secret facts, picked by name: a Wi-Fi
 // provider config carries router credentials, so a config is never spread.
@@ -184,7 +203,7 @@ function pickWindDownFacts({ app, contentBlocker, wifiGuard, lights } = {}) {
     } : null,
     contentBlocker: cb ? { enabled: Boolean(cb.enabled), blockOnDim: cb.blockOnDim !== false } : null,
     wifiGuard: wg ? {
-      enabled: Boolean(wg.enabled),
+      enabled: Boolean(wg.enabled) && wg.blockingAvailable !== false,
       blockOnDim: wg.blockOnDim !== false,
       provider: typeof wg.provider === 'string' ? wg.provider : '',
       // A selected device is stored as a MAC + IP pair: count devices, not fields.
@@ -250,6 +269,7 @@ function twoStepNext(pending, key, now, windowMs = 4000) {
 // first. Opening and closing stay with each dialog's own code: this never
 // shows, hides or dismisses anything, and never handles Escape.
 const LO_DIALOG_IDS = Object.freeze([
+  'onboarding', 'last-light-overlay',
   'warning-modal', 'override-modal', 'snooze-tax-modal', 'ritual-overlay',
   'profiles-modal', 'lan-warning-modal', 'receipts-modal',
   'about-modal', 'notif-drawer', 'streak-celebration-modal'
@@ -264,9 +284,13 @@ function loElementVisible(el) {
 }
 
 // A .modal is open when it is laid out (.active, or an inline display that
-// beats the base display:none: ritual-overlay / notif-drawer).
+// beats the base display:none: ritual-overlay / notif-drawer). Onboarding uses
+// inline display:flex / display:none without a .modal class.
 function loDialogIsOpen(el) {
   if (!el || !el.isConnected) return false;
+  if (el.id === 'onboarding') {
+    return el.style.display !== 'none' && getComputedStyle(el).display !== 'none';
+  }
   if (el.classList.contains('modal')) {
     return el.classList.contains('active') || getComputedStyle(el).display !== 'none';
   }
@@ -294,7 +318,10 @@ function syncDialogLayers() {
   // A hand-off (warning -> override in one task) keeps the original opener.
   const hadLayers = loDialogStack.length > 0;
   for (let i = loDialogStack.length - 1; i >= 0; i--) {
-    if (!open.includes(loDialogStack[i])) loDialogStack.splice(i, 1);
+    if (!open.includes(loDialogStack[i])) {
+      loDialogStack[i].removeAttribute?.('inert');
+      loDialogStack.splice(i, 1);
+    }
   }
   const opened = open.filter(el => !loDialogStack.includes(el));
   if (opened.length) {
@@ -303,6 +330,18 @@ function syncDialogLayers() {
       loDialogOpener = active && active !== document.body && !opened.some(d => d.contains(active)) ? active : null;
     }
     loDialogStack.push(...opened);
+  }
+  // Only the topmost stacked dialog should be interactive; lower stacked
+  // dialogs are marked inert so keyboard Tab cannot escape beneath the top layer.
+  for (let i = 0; i < loDialogStack.length; i++) {
+    const dialog = loDialogStack[i];
+    if (i < loDialogStack.length - 1) {
+      if (!dialog.hasAttribute?.('inert')) dialog.setAttribute?.('inert', '');
+    } else {
+      dialog.removeAttribute?.('inert');
+    }
+  }
+  if (opened.length) {
     if (cockpit && !cockpit.hasAttribute('inert')) cockpit.setAttribute('inert', '');
     loFocusDialogTitle(loDialogStack[loDialogStack.length - 1]);
     return;
@@ -368,4 +407,4 @@ function showContextMenu(x, y, items) {
 }
 // This script loads at the end of <body>, after every dialog container.
 initDialogLayers();
-/* exported clamp, formatTimeAgo, hexToRgba, escapeHtml, showContextMenu, LO_GLYPHS, loGlyph, ORIGIN_LABELS, nightKey, nightKeyDate, nightKeyShift, formatIdleClockTime, formatClock, DEFAULT_TIMER_NAME, sessionDisplayName, pickWindDownFacts, windDownEffects, twoStepNext */
+/* exported clamp, formatTimeAgo, hexToRgba, escapeHtml, showContextMenu, LO_GLYPHS, loGlyph, ORIGIN_LABELS, nightKey, nightKeyDate, nightKeyShift, formatIdleClockTime, formatClock, formatClockTarget, DEFAULT_TIMER_NAME, sessionDisplayName, pickWindDownFacts, windDownEffects, twoStepNext */

@@ -36,6 +36,10 @@ class PhoneCalendarRuleTest {
     @Test fun fallOverlapUsesFirstOccurrence() { assertEquals(ZoneOffset.ofHours(-7), rule("once", time = "01:30", date = "2025-11-02").nextAfter(after("2025-11-02T00:00"), zone)!!.offset) }
     @Test fun overlapCannotStartTwice() { assertNull(rule("once", time = "01:30", date = "2025-11-02").nextAfter(after("2025-11-02T00:00"), zone, setOf("rule-1:2025-11-02"))) }
     @Test fun creationDoesNotCatchUpPastMinute() { val r = rule(created = after("2026-10-15T22:00:30").toEpochMilli()); assertEquals(16, r.nextAfter(after("2026-10-15T21:59"), zone)!!.dayOfMonth) }
+    @Test fun rearmingRuleDoesNotRetroactivelyFireInLateWindow() {
+        val r = rule(created = after("2026-10-01T00:00").toEpochMilli()).copy(armedAt = after("2026-10-15T22:00:30").toEpochMilli())
+        assertEquals(16, r.nextAfter(after("2026-10-15T21:59"), zone)!!.dayOfMonth)
+    }
     @Test(expected = IllegalArgumentException::class) fun weeklyNeedsDays() { rule(days = emptySet()) }
     @Test(expected = IllegalArgumentException::class) fun monthlyNeedsMonths() { rule("monthly", months = emptySet()) }
     @Test(expected = IllegalArgumentException::class) fun rejectsInvalidDay() { rule("monthly", monthDays = setOf(32)) }

@@ -6,19 +6,31 @@ const accountability = require('./accountability');
 const streaks = require('./streaks');
 const settingsStore = require('./settings');
 
+function resolveWakeTime(appSettings) {
+  try {
+    const sleepDebt = require('./sleepDebt');
+    const debt = sleepDebt.getDebtSummary();
+    if (debt && /^([01]\d|2[0-3]):[0-5]\d$/.test(debt.wakeTime || '')) return debt.wakeTime;
+  } catch {}
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(appSettings.wakeTime || '') ? appSettings.wakeTime : '07:00';
+}
+
 // Override consequences.
 function getOverrideConsequences(timerState) {
   const appSettings = settingsStore.getSection('app') || {};
   const accConfig = settingsStore.getSection('accountability') || {};
-  const bedtime = appSettings.bedtime || '22:30';
+  const bedtime = /^([01]\d|2[0-3]):[0-5]\d$/.test(appSettings.bedtime || '') ? appSettings.bedtime : '22:30';
   const now = new Date();
   const [bh, bm] = bedtime.split(':').map(Number);
   const bedMin = bh * 60 + bm;
   const nowMin = now.getHours() * 60 + now.getMinutes();
-  const minutesPastBedtime = Math.max(0, nowMin - bedMin);
+  // Handle post-midnight overrides (e.g. 00:30 after a 22:30 bedtime = 120 min past).
+  let deltaFromBed = nowMin - bedMin;
+  if (deltaFromBed < -12 * 60) deltaFromBed += 24 * 60;
+  const minutesPastBedtime = Math.max(0, deltaFromBed);
 
   // Calculate estimated sleep if they stay up another 30/60 min.
-  const wakeTime = appSettings.wakeTime || '07:00';
+  const wakeTime = resolveWakeTime(appSettings);
   const [wh, wm] = wakeTime.split(':').map(Number);
   let wakeMin = wh * 60 + wm;
   if (wakeMin <= nowMin) wakeMin += 24 * 60; // next day
@@ -52,7 +64,7 @@ function getOverrideConsequences(timerState) {
   }
 
   // 2. Accountability partner will be notified.
-  if (accConfig.enabled && accConfig.partners?.length) {
+  if (!timerState?.dryRun && accConfig.enabled && accConfig.partners?.length) {
     consequences.push({
       type: 'accountability',
       severity: 'high',
@@ -112,7 +124,7 @@ async function executeOverride(reason, timerState) {
   // 1. Notify accountability partner.
   try {
     const accConfig = settingsStore.getSection('accountability') || {};
-    if (accConfig.enabled) {
+    if (!timerState?.dryRun && accConfig.enabled) {
       await accountability.notifyPartner('OVERRIDE', {
         config: accConfig,
         timerName: settingsStore.getSection('app')?.timerName || 'Last Call',
@@ -137,10 +149,11 @@ async function executeOverride(reason, timerState) {
     try {
       const sleepDebt = require('./sleepDebt');
       const appSettings = settingsStore.getSection('app') || {};
+      const wakeTime = resolveWakeTime(appSettings);
       const bedTime = new Date().toTimeString().slice(0, 5);
-      const estimated = sleepDebt.estimateSleepHours(bedTime, appSettings.wakeTime || '07:00');
+      const estimated = sleepDebt.estimateSleepHours(bedTime, wakeTime);
       // Timer-to-wake estimate only; never present this as measured sleep.
-      sleepDebt.recordNight(bedTime, appSettings.wakeTime || '07:00', estimated);
+      sleepDebt.recordNight(bedTime, wakeTime, estimated);
     } catch {}
   }
 

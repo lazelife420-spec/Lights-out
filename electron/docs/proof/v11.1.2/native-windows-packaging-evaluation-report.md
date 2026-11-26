@@ -54,7 +54,7 @@ Portable artifact: single-file self-extracting `LightsOut.exe`.
 
 ## 3. Repository-owned unpacked build
 
-Evaluation worktree: `c:\Users\KickA\AppData\Local\Temp\lightsout-native-packaging-eval`
+Evaluation worktree: `%TEMP%\lightsout-native-packaging-eval`
 
 PowerShell script: `electron/scripts/package-native-windows.ps1`
 

@@ -18,7 +18,7 @@ const CATEGORIES = {
   gaming: {
     label: 'Gaming',
     icon: '\u{1F3AE}',
-    processes: ['steam', 'SteamService', 'GameBar', 'GameBarFT', 'Discord']
+    processes: ['steam', 'SteamService', 'GameBar', 'GameBarFT']
   },
   productivity: {
     label: 'Productivity',
@@ -44,8 +44,8 @@ async function getScreenTimeToday() {
     return `
       $p = Get-Process -Name '${proc}' -ErrorAction SilentlyContinue
       if ($p) {
-        $totalSec = ($p | Measure-Object -Property TotalProcessorTime -Sum).Sum.TotalSeconds
-        "${proc}:$([math]::Round($totalSec))"
+        $totalSec = ($p | ForEach-Object { $_.TotalProcessorTime.TotalSeconds } | Measure-Object -Sum).Sum
+        if ($null -ne $totalSec) { "${proc}:$([math]::Round($totalSec))" }
       }
     `;
   }).join('; ');
@@ -55,8 +55,11 @@ async function getScreenTimeToday() {
     if (!raw) return emptyResult();
 
     const procTimes = {};
-    for (const line of raw.split('\n').map(s => s.trim()).filter(Boolean)) {
-      const [name, sec] = line.split(':');
+    for (const line of raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean)) {
+      const idx = line.indexOf(':');
+      if (idx <= 0) continue;
+      const name = line.slice(0, idx);
+      const sec = line.slice(idx + 1);
       if (name && sec) procTimes[name] = parseFloat(sec) || 0;
     }
 
@@ -116,18 +119,32 @@ function emptyResult() {
   return { categories: {}, distracting: 0, productive: 0, total: 0, ratio: 100 };
 }
 
-function executePS(command) {
+function executePS(command, timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
     const ps = spawn('powershell.exe', [
       '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command
     ], { stdio: ['ignore', 'pipe', 'pipe'] });
-    let output = '';
-    ps.stdout.on('data', data => { output += data.toString(); });
-    ps.stderr.on('data', data => { output += data.toString(); });
-    ps.on('error', reject);
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    const finish = (err, val) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (err) reject(err);
+      else resolve(val);
+    };
+    const timer = setTimeout(() => {
+      try { ps.kill(); } catch {}
+      finish(new Error('PowerShell timeout'));
+    }, timeoutMs);
+    timer.unref();
+    ps.stdout.on('data', data => { stdout += data.toString(); });
+    ps.stderr.on('data', data => { stderr += data.toString(); });
+    ps.on('error', err => finish(err));
     ps.on('close', code => {
-      if (code === 0) resolve(output.trim());
-      else reject(new Error(output.trim() || `PS exit ${code}`));
+      if (code === 0) finish(null, stdout.trim());
+      else finish(new Error(stderr.trim() || stdout.trim() || `PS exit ${code}`));
     });
   });
 }

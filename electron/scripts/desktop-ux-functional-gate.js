@@ -1360,6 +1360,7 @@ async function armAndStartMode(s, modeId, phase) {
   results.hero = await s.eval(`({
     title: document.getElementById('ns-hero-title').textContent,
     playLabel: document.getElementById('ns-play-label').textContent,
+    playAriaLabel: document.getElementById('ns-play-btn').getAttribute('aria-label'),
     duration: document.getElementById('timer-input').value,
     action: state.action,
     preview: document.getElementById('ns-preview-time').textContent,
@@ -1369,12 +1370,18 @@ async function armAndStartMode(s, modeId, phase) {
   requireGate(results.armed?.id === modeId && results.armed?.title === expected.title, `${modeId} did not become the authoritative selected plan`, results);
   requireGate(results.armed?.durationSeconds === expected.durationSeconds && results.armed?.action === expected.action, `${modeId} selected-plan execution values drifted`, results);
   requireGate(results.hero.title.includes(expected.title) && results.hero.duration === String(expected.durationSeconds / 60), `${modeId} hero title/duration did not project selected plan`, results.hero);
-  requireGate(results.hero.action === expected.action && results.hero.playLabel === `Start ${expected.title}`, `${modeId} hero action/CTA did not project selected plan`, results.hero);
+  requireGate(
+    results.hero.action === expected.action
+      && results.hero.playLabel === 'Start timer'
+      && Boolean(results.hero.playAriaLabel && results.hero.playAriaLabel.startsWith(`Start ${expected.title}, `)),
+    `${modeId} hero action/CTA did not project selected plan`,
+    results.hero
+  );
   const expectedHours = Math.floor(expected.durationSeconds / 3600);
   const expectedMinutes = Math.floor((expected.durationSeconds % 3600) / 60);
   const expectedPreview = expectedHours > 0
-    ? `${expectedHours}:${String(expectedMinutes).padStart(2, '0')}:00`
-    : `${expectedMinutes}:00`;
+    ? (expectedMinutes > 0 ? `${expectedHours} h ${expectedMinutes} min` : `${expectedHours} h`)
+    : `${expectedMinutes} min`;
   requireGate(results.hero.preview === expectedPreview && results.hero.endTime, `${modeId} preview/end-time projection was incomplete`, results.hero);
   requireGate(results.hero.ritual.includes('Standard ritual'), `${modeId} ritual steps were not projected`, results.hero);
   addShot(phase, await s.screenshot(`${phase}-${modeId}-projection.png`));
@@ -1462,13 +1469,19 @@ async function runUseTonightGate() {
       await s2.waitFor('#ns-play-btn');
       await WAIT(800);
       const restored = await s2.eval(`state.armedNightMode ? { id: state.armedNightMode.nightModeId, title: state.armedNightMode.nightModeTitle, durationSeconds: state.armedNightMode.durationSeconds, action: state.armedNightMode.action } : null`);
-      const hero2 = await s2.eval(`({ title: document.getElementById('ns-hero-title').textContent, playLabel: document.getElementById('ns-play-label').textContent, duration: document.getElementById('timer-input').value, action: state.action })`);
+      const hero2 = await s2.eval(`({ title: document.getElementById('ns-hero-title').textContent, playLabel: document.getElementById('ns-play-label').textContent, playAriaLabel: document.getElementById('ns-play-btn').getAttribute('aria-label'), duration: document.getElementById('timer-input').value, action: state.action })`);
       const expected = modeId === 'movie-wind-down'
         ? { title: 'Movie Wind-Down', durationSeconds: 5400, action: 'sleep' }
         : { title: 'Full Shutdown', durationSeconds: 3600, action: 'shutdown' };
       requireGate(restored?.id === modeId && restored?.title === expected.title, `${modeId} did not restore after restart`, restored);
       requireGate(restored?.durationSeconds === expected.durationSeconds && restored?.action === expected.action, `${modeId} restored execution values drifted`, restored);
-      requireGate(hero2.title.includes(expected.title) && hero2.playLabel === `Start ${expected.title}`, `${modeId} restored hero projection drifted`, hero2);
+      requireGate(
+        hero2.title.includes(expected.title)
+          && hero2.playLabel === 'Start timer'
+          && Boolean(hero2.playAriaLabel && hero2.playAriaLabel.startsWith(`Start ${expected.title}, `)),
+        `${modeId} restored hero projection drifted`,
+        hero2
+      );
       addShot(phase, await s2.screenshot(`${phase}-${modeId}-restore.png`));
       results.push({ modeId, restart: true, restored, hero: hero2 });
     } finally {

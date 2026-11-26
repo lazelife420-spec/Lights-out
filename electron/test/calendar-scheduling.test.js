@@ -8,8 +8,9 @@ function runtime(events,options={}) {
   const calendar={enabled:true,autoStartFromEvents:true,...options.calendar};
   const starts=[];const clock=class extends Date{constructor(...args){super(...(args.length?args:[now]));}static now(){return now;}};
   const context={Date:clock,Set,Boolean,Math,calendarAutoStartBusy:false,calendarStartedOccurrences:new Set(),
+    calendarCheckedThrough:options.checkedThrough??null,CALENDAR_START_MAX_LATENESS_MS:5*60*1000,
     settingsStore:{getSection:name=>name==='calendar'?calendar:{dryRun:options.dryRun!==false},updateSection:(name,patch)=>Object.assign(calendar,patch)},
-    isRunActive:()=>false,calProviders:{fetchAllEvents:async()=>events},isBedtimeEvent:()=>true,
+    isRunActive:()=>false,calProviders:{fetchAllEvents:async()=>events,eventTimeIsTrusted:require('../calendarProviders').eventTimeIsTrusted},isBedtimeEvent:()=>true,
     profiles:{getById:id=>options.profile?.id===id?options.profile:null},
     startTimer:input=>{starts.push(input);return {success:true};},showNativeNotification:()=>{},getEventTitle:()=>''};
   vm.createContext(context);vm.runInContext(check+';globalThis.checkCalendar=checkCalendarAutoStart;',context);
@@ -55,4 +56,33 @@ test('manual Schedule starts use the assigned routine and honour its Test Mode',
   assert.equal(await context.start(evt),true);assert.equal(calls[0].profileId,'assigned');assert.equal(calls[0].dryRun,true);assert.equal(calls[0].forceShutdown,false);
   assert.equal(calls[0].startOrigin,'profile-start');assert.match(notices[0].text,/Test Mode/);
   assert.equal(await context.start({...evt,profileId:'deleted'}),false);assert.equal(calls.length,1);
+});
+
+// v11.3 audit: a slow fetch or a skipped poll must not drop an event that
+// started between two checks; a slept-through event stays missed.
+test('an event that started since the last check is still started after a slow poll', async () => {
+  const late = runtime([event(-150000)], { checkedThrough: now - 200000 });
+  await late.context.checkCalendar();
+  assert.equal(late.starts.length, 1, '2.5 min old event inside the watermark window starts');
+  assert.equal(late.context.calendarCheckedThrough, now, 'the watermark advances to this check');
+});
+test('without an older watermark the window stays the usual last minute', async () => {
+  const fresh = runtime([event(-150000)]);
+  await fresh.context.checkCalendar();
+  assert.equal(fresh.starts.length, 0);
+});
+test('an event the PC slept through is never started on wake, whatever the watermark', async () => {
+  const slept = runtime([event(-2 * 3600 * 1000)], { checkedThrough: now - 3 * 3600 * 1000 });
+  await slept.context.checkCalendar();
+  assert.equal(slept.starts.length, 0, 'older than the 5-minute bound');
+  const edge = runtime([event(-6 * 60 * 1000)], { checkedThrough: now - 10 * 60 * 1000 });
+  await edge.context.checkCalendar();
+  assert.equal(edge.starts.length, 0);
+});
+test('a failed fetch does not advance the watermark, so the next check catches up', async () => {
+  const failing = runtime([]);
+  failing.context.calProviders.fetchAllEvents = async () => { throw new Error('offline'); };
+  failing.context.calendarCheckedThrough = now - 90000;
+  await failing.context.checkCalendar();
+  assert.equal(failing.context.calendarCheckedThrough, now - 90000);
 });

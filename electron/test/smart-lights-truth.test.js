@@ -139,10 +139,9 @@ test('Hue cancel restoration replays the captured snapshot truthfully', async (t
   assert.equal(nothing.code, 'NOTHING_TO_RESTORE');
 });
 
-test('Test Mode contract: smart lights actuate during dry-run (lights are the rehearsal, not the power action)', () => {
-  // The module intentionally has no dryRun/Test Mode input: Test Mode suppresses
-  // Windows power actions only, while the light ritual still runs so the user
-  // sees the real bedtime sequence. REAL_POWER_ACTIONS stays 0 in main.js.
+test('Lighting providers keep explicit manual controls separate from timer rehearsal policy', () => {
+  // Main owns automatic rehearsal suppression. Explicit device test controls
+  // remain provider operations; the provider never changes timer policy.
   const src = fs.readFileSync(path.join(__dirname, '..', 'smartLights.js'), 'utf8');
   assert.equal(src.includes('dryRun'), false, 'smartLights must not consult dry-run state');
 });

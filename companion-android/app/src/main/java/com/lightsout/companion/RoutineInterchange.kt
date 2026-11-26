@@ -13,6 +13,14 @@ import java.math.BigDecimal
 
 /** Offline v1 intent adapter. One existing phone-home commit stores each change. */
 object RoutineInterchange {
+    private fun parseSafeNumber(raw: String): BigDecimal {
+        // Bound digits and reject scientific notation so crafted exponents like
+        // 1e9999999 can never trigger OOM/ANR during integer conversion.
+        require(raw.length <= 32 && raw.matches(Regex("-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?"))) {
+            "Invalid number in the routine file."
+        }
+        return BigDecimal(raw)
+    }
     private fun strictJson(text: String): JSONObject {
         val reader = JsonReader(StringReader(text.removePrefix("\uFEFF")))
         reader.isLenient = false
@@ -23,7 +31,7 @@ object RoutineInterchange {
                     while(reader.hasNext()) { val key = reader.nextName();require(keys.add(key)) { "Duplicate JSON field." };j.put(key,value(depth+1)) };reader.endObject();j }
                 JsonToken.BEGIN_ARRAY -> { reader.beginArray();val a = JSONArray();while(reader.hasNext())a.put(value(depth+1));reader.endArray();a }
                 JsonToken.STRING -> reader.nextString()
-                JsonToken.NUMBER -> BigDecimal(reader.nextString())
+                JsonToken.NUMBER -> parseSafeNumber(reader.nextString())
                 JsonToken.BOOLEAN -> reader.nextBoolean()
                 JsonToken.NULL -> { reader.nextNull();JSONObject.NULL }
                 else -> throw IllegalArgumentException("The routine file is not valid JSON.")
@@ -39,11 +47,25 @@ object RoutineInterchange {
         val v = j.get(key); require(v is String) { "Expected text in the routine file." }; return v
     }
     private fun integer(j: JSONObject, key: String): Long {
-        val v = j.get(key); require(v is Number && v.toDouble().isFinite() && v.toDouble() == v.toLong().toDouble()) { "Expected an integer in the routine file." }; return v.toLong()
+        val v = j.get(key)
+        return when (v) {
+            is BigDecimal -> try { v.longValueExact() } catch (_: ArithmeticException) { throw IllegalArgumentException("Expected an integer in the routine file.") }
+            is Int -> v.toLong()
+            is Long -> v
+            else -> throw IllegalArgumentException("Expected an integer in the routine file.")
+        }
     }
     private fun ints(j: JSONObject, key: String): Set<Int> {
         val a = j.getJSONArray(key); require(a.length() <= 31) { "Too many calendar selectors." }
-        val values = (0 until a.length()).map { val v = a.get(it); require(v is Number && v.toDouble() == v.toInt().toDouble()) { "Invalid calendar selectors." }; v.toInt() }
+        val values = (0 until a.length()).map {
+            val v = a.get(it)
+            when (v) {
+                is BigDecimal -> try { v.intValueExact() } catch (_: ArithmeticException) { throw IllegalArgumentException("Invalid calendar selectors.") }
+                is Int -> v
+                is Long -> { require(v in Int.MIN_VALUE..Int.MAX_VALUE) { "Invalid calendar selectors." }; v.toInt() }
+                else -> throw IllegalArgumentException("Invalid calendar selectors.")
+            }
+        }
         require(values.distinct().size == values.size) { "Duplicate calendar selectors." }; return values.toSet()
     }
     private fun schedule(j: JSONObject, id: String, routineId: String): PhoneCalendarRule {
@@ -74,7 +96,7 @@ object RoutineInterchange {
                 val type = string(a,"type"); val actionId = string(a,"id"); val p = a.getJSONObject("parameters")
                 require(actionIds.add(actionId) && types.add(type)) { "Duplicate action identity or type." }
                 fields(p, when(type) { "timer.start" -> setOf("seconds", "endAction"); "wiz.warm" -> setOf("bindings", "brightness"); "wiz.off" -> setOf("bindings"); else -> throw IllegalArgumentException("This action has no supported interchange adapter.") })
-                val bindings = if(type != "timer.start") p.getJSONArray("bindings").let { a -> (0 until a.length()).map { val v = a.get(it);require(v is String) { "Light binding identities must be text." };v } } else emptyList()
+                val bindings = if(type != "timer.start") p.getJSONArray("bindings").let { arr -> (0 until arr.length()).map { val v = arr.get(it);require(v is String) { "Light binding identities must be text." };v } } else emptyList()
                 PortableRoutineChecks.action(actionId, type, string(a,"phase"), if(type == "timer.start") integer(p,"seconds") else 0,
                     if(type == "timer.start") string(p,"endAction") else "", bindings, if(type == "wiz.warm") integer(p,"brightness").also { require(it in 10..100) }.toInt() else 0)
                 slots.addAll(bindings)
@@ -164,6 +186,17 @@ object RoutineInterchange {
         if(omit) intent.put("actions",JSONArray(listOf(timer)))
         entry.put("adopted",true);config.put("portable",p).put("routines",JSONArray(oldRoutines+routine.json())).put("rules",JSONArray(oldRules+nativeRules))
         PhoneHomeStore.saveDraft(c,config); return JSONObject().put("count",nativeRules.size)
+    }
+    fun deleteDraft(c: Context, id: String): JSONObject {
+        synchronized(PhoneHomeStore) {
+            val config = PhoneHomeStore.config(c); val p = library(config)
+            val keptRoutines = objects(p.getJSONArray("routines")).filter { it.getJSONObject("intent").getString("id") != id }
+            val keptRules = objects(p.getJSONArray("rules")).filter { it.getString("routineId") != id }
+            p.put("routines", JSONArray(keptRoutines)).put("rules", JSONArray(keptRules))
+            config.put("portable", p)
+            PhoneHomeStore.saveDraft(c, config)
+            return JSONObject().put("deleted", true)
+        }
     }
     fun export(c: Context, selection: JSONArray): JSONObject {
         val config = PhoneHomeStore.config(c); val p = library(config); val routines = PhoneHomeStore.routines(c)

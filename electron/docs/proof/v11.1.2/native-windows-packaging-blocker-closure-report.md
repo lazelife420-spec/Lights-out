@@ -52,7 +52,7 @@ Before stamping, `dist-native\win-unpacked\Lights Out.exe` carried the default E
 
 ### Approved Tool Used
 
-- `rcedit.exe` located at `C:\Users\KickA\AppData\Local\Programs\Antigravity IDE\resources\app\node_modules\@vscode\gulp-electron\node_modules\rcedit\bin\rcedit.exe`
+- `rcedit.exe` located at `%LOCALAPPDATA%\Programs\Antigravity IDE\resources\app\node_modules\@vscode\gulp-electron\node_modules\rcedit\bin\rcedit.exe`
 - No new resource editor was installed.
 
 ### Implementation

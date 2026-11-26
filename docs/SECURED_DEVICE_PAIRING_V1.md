@@ -1,10 +1,24 @@
 # LO-SDH-1 — protected device identity and local pairing
 
 This is local, unreleased engineering on Windows and standalone Android.
-The application now has pairing and receiving screens and persistent protected
-identities. Production LAN listening, connection establishment and discovery
-remain disabled. The screens say so; opening a public invitation alone cannot
-enable approval. Offline LO-RIE-1 files and independent timer engines still work.
+The source tree contains pairing/receiving primitives, persistent protected
+identities, and manual TLS transport modules, **gated OFF in shipping builds**
+until cross-device TLS qualification passes:
+
+- **Android (`ReleaseGates.HANDOFF_PAIRING = false`)**: `#handoff-pairing`
+  starts `hidden` in `index.html`, `home.js` does not mount `HandoffUI` (no
+  polling loop or bridge traffic), `AndroidManifest.xml` omits the
+  `lightsout-handoff://` deep link, and `HomeActivity` refuses every `handoff`
+  bridge action with `ReleaseGates.HANDOFF_UNAVAILABLE_MESSAGE`.
+- **Desktop (`electron/releaseGates.js`, `HANDOFF_PAIRING = false`)**:
+  `#handoff-pairing` starts `hidden` in `index.html`, `renderer-handoff.js`
+  does not mount `HandoffUI`, `main.js` never configures `handoffService` or
+  starts `handoffConnection.js`, and `ipcMain.handle('handoff-action')` refuses
+  every call with `HANDOFF_UNAVAILABLE_MESSAGE`.
+
+Offline LO-RIE-1 routine files and independent timer engines continue to work
+unaffected. Existing unit tests still exercise the underlying handoff identity,
+controller, and loopback TLS connection modules directly.
 
 ## Identity custody
 
@@ -83,19 +97,24 @@ restore an earlier valid protected record. These platforms provide no app-level
 rollback-resistant monotonic counter here. DPAPI/Keystore sealing protects
 confidentiality/integrity at rest, not a fully compromised local authority.
 
-## Visible enrollment and inbox
+## Visible enrollment and inbox (gated OFF until qualified)
 
-Windows Devices and Android Routines contain the same accessible pairing cards:
-explicit identity setup/replacement, a short-lived public QR/link, unverified
-invitation state, authenticated full-fingerprint approval/rejection, local device
-names, saved/connected/revoked state and revocation. Android reuses the camera
-scanner in a separate handoff mode and supports the public enrollment deep link.
-Companion PC-control scanning remains separate. QR contains no address, token,
-private key, routine, execution grant or existing companion secret.
+When `HANDOFF_PAIRING` is enabled in a future qualified release, Windows Devices
+and Android Routines expose the same accessible pairing cards: explicit identity
+setup/replacement, a short-lived public QR/link, unverified invitation state,
+authenticated full-fingerprint approval/rejection, local device names,
+saved/connected/revoked state and revocation. Android reuses the camera scanner
+in a separate handoff mode and supports the public enrollment deep link (whose
+manifest intent-filter is omitted while the release gate is false). Companion
+PC-control scanning remains separate. QR contains no address, token, private
+key, routine, execution grant or existing companion secret.
+
+While `HANDOFF_PAIRING` is `false`, neither surface renders the pairing card or
+mounts `HandoffUI`, and both `HomeActivity` and `main.js` reject all handoff
+operations fail-closed before touching `HandoffController` or `handoffConnection`.
 
 Only a main/native transport can attach an actual authenticated TLS socket.
 Renderer/native bridge messages cannot fabricate a proof or attach a socket.
-There is no production socket factory/listener in these controllers.
 
 Receiving follows distinct steps:
 

@@ -21,6 +21,7 @@ const Module = require('module');
 // Create isolated tmp dir and mock electron before requiring settings.
 let tmpDir;
 let settingsModule;
+let encryptionEnabled = false;
 const origLoad = Module._load;
 const settingsPath = path.resolve(path.join(__dirname, '..', 'settings.js'));
 
@@ -29,14 +30,15 @@ function installMock() {
     if (request === 'electron') {
       return {
         app: { getPath: () => tmpDir },
-        safeStorage: { isEncryptionAvailable: () => false }
+        safeStorage: { isEncryptionAvailable: () => encryptionEnabled, encryptString: text => Buffer.from('fixture:'+text), decryptString: data => data.toString().slice(8) }
       };
     }
     return origLoad.apply(this, arguments);
   };
 }
 
-function freshSetup() {
+function freshSetup(encrypted = false) {
+  encryptionEnabled = encrypted;
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lightsout-def006-'));
   delete require.cache[settingsPath];
   installMock();
@@ -59,6 +61,23 @@ const bakFile = () => path.join(tmpDir, 'settings.json.bak');
 const tmpFile = () => path.join(tmpDir, 'settings.json.tmp');
 
 // --- ORDINARY SAVE/LOAD ---
+
+test('checked calendar save rolls back live state and reports a failed durable write', () => {
+  freshSetup();
+  const rename = fs.renameSync;
+  try {
+    settingsModule.updateSection('calendar', { builtin: { rules: [{ id: 'saved' }] } });
+    const before = settingsModule.getSection('calendar');
+    fs.renameSync = function(from, to) {
+      if (to === settingsFile()) throw new Error('isolated simulated disk failure');
+      return rename.apply(this, arguments);
+    };
+    assert.throws(() => settingsModule.updateSection('calendar', { builtin: { rules: [{ id: 'unsaved' }] } }, { requireSave: true }), /Could not save/);
+    assert.deepEqual(settingsModule.getSection('calendar'), before);
+    fs.renameSync = rename; reloadSettings();
+    assert.deepEqual(settingsModule.getSection('calendar'), before);
+  } finally { fs.renameSync = rename; teardown(); }
+});
 
 test('ordinary save creates settings.json and backup', () => {
   freshSetup();
@@ -192,16 +211,17 @@ test('stale .tmp file from interrupted save is cleaned on load', () => {
 // --- ENCRYPTION PRESERVATION ---
 
 test('secret encryption round-trip preserved through save/load', () => {
-  freshSetup();
+  freshSetup(true);
   try {
     settingsModule.updateSection('wifiGuard', { routerPass: 'mysecret' });
     // In-memory cache should have plaintext.
     const section = settingsModule.getSection('wifiGuard');
     assert.strictEqual(section.routerPass, 'mysecret');
-    // On disk, since safeStorage.isEncryptionAvailable returns false in test,
-    // the value should be stored as plaintext fallback.
+    // The fixture keystore protects the on-disk value; the old plaintext
+    // fallback is explicitly forbidden by the security closeout.
     const disk = JSON.parse(fs.readFileSync(settingsFile(), 'utf8'));
-    assert.strictEqual(disk.wifiGuard.routerPass, 'mysecret', 'plaintext fallback when encryption unavailable');
+    assert.match(disk.wifiGuard.routerPass, /^enc:v1:/);
+    assert.notStrictEqual(disk.wifiGuard.routerPass, 'mysecret');
     // Reload and verify.
     reloadSettings();
     const reloaded = settingsModule.getSection('wifiGuard');
