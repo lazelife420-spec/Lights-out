@@ -28,4 +28,18 @@ function createDelivery({ ready, busy, claim, start, onError, now = () => new Da
   return { request, flush };
 }
 
-module.exports = { createDelivery };
+// The window is ready for First Light once its main frame has stopped
+// loading. Electron (measured on 43.8.4) still reports isLoadingMainFrame()
+// as true inside 'did-finish-load' and turns it false only at
+// 'did-stop-loading', so a request made during a cold launch (the wake task
+// starting the app) must be flushed on 'did-stop-loading'; flushing only on
+// 'did-finish-load' left it pending forever and the sunrise never ran.
+function isWindowReady(win) {
+  return Boolean(win && !win.isDestroyed() && !win.webContents.isLoadingMainFrame());
+}
+
+function flushWhenLoaded(webContents, delivery) {
+  webContents.on('did-stop-loading', () => delivery.flush());
+}
+
+module.exports = { createDelivery, isWindowReady, flushWhenLoaded };

@@ -44,13 +44,53 @@ provenance on the tagged commit before it publishes anything.
   only through fakes and intercepted requests.
 - Real router and Wi-Fi adapter behaviour, including the new Wi-Fi Guard
   recovery record (unit-tested only). Wi-Fi Guard stays opt-in and experimental.
-- Real WiZ and Hue lights, phones, OEM battery management and overnight
-  unattended runs.
+- Real Philips Hue bridges and HTTP light webhooks, more than one WiZ bulb, a
+  bulb going offline mid-run, phones, OEM battery management and overnight
+  unattended runs. (One real WiZ bulb is covered below.)
 - Android on a real phone: First Light wake under Doze, reboot before first
   unlock, edge-to-edge layout on API 35/36 devices, and 16 KB page-size
   compliance. No production-signed APK ships with this release.
 - The interactive Windows desktop gate (`npm run test:e2e:desktop`) needs an
   unlocked, hands-off desktop session and is run by the owner.
+
+## Real WiZ bulb on the owner's network (2026-11-26)
+
+With the owner's approval, one WiZ full-colour bulb (module ESP01_SHRGB1C_31,
+firmware 1.35.0) was driven through the packaged build, whose lights code
+(`smartLights.js`, `wizLights.js`, `lightExperience.js`, `main.js`) is
+byte-identical to the release commit. Each run used a throwaway profile with
+the QA power lock on. The bulb's state was read independently after every step
+and restored to its original setting at the end.
+
+Passed on the real bulb:
+
+- Discovery, Verify (no change to the bulb) and the test button (exact colour
+  and brightness).
+- Gradual dim, warm dim, and the white, scene and colour starting looks.
+- Hourglass, Orbit and Ember.
+- Off at end, and the finish beacon (pulses in the last 6 s), then off.
+- Cancel restores the light. A light switched off mid-run, as a phone app
+  would, stays off, and cancel never turns it back on.
+- Test Mode leaves the lights alone (by design; the Devices card says so).
+- The guided ritual's night scene (19%, 2200K). Cancelling the ritual's
+  countdown leaves that scene in place.
+- First Light: a sunrise from 10% at 2200K to 100% at 4000K over 60 s.
+
+Runs that had to finish used the Lock action. The QA power lock blocked each
+one and recorded it as `blocked`.
+
+Found and fixed during this test: First Light never started when the wake task
+launched Lights Out. It played only if the app was already running. Electron
+43 still reports the page as loading inside `did-finish-load`, so the request
+made at launch was never delivered. This came from this release's
+claim-before-sunrise change and never shipped. Requests are now delivered at
+`did-stop-loading`, covered by `test/first-light-cold-launch.test.js`, and the
+fix was re-verified on the bulb from source with the wake task's exact
+arguments.
+
+`npm run test:wiz-runtime` (packaged build, simulated loopback bulbs) now
+checks both halves: Test Mode leaves the lights alone, and a real run dims
+them.
 
 ## Owner host acceptance (interactive desktop gate)
 

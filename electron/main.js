@@ -281,8 +281,9 @@ let companionFirewallState = { configured: false, error: '', guidance: '' };
 
 const launchOptions = parseLaunchOptions(process.argv);
 let firstLightRunning = false;
-const firstLightDelivery = require('./firstLightDelivery').createDelivery({
-  ready: () => Boolean(mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isLoadingMainFrame()),
+const firstLightModule = require('./firstLightDelivery');
+const firstLightDelivery = firstLightModule.createDelivery({
+  ready: () => firstLightModule.isWindowReady(mainWindow),
   busy: () => firstLightRunning,
   claim: id => {
     const claimed = settingsStore.getSection('app')?.firstLightRequests || [];
@@ -490,6 +491,9 @@ function createWindow() {
   guardAppPageNavigation(mainWindow, 'index.html');
 
   mainWindow.once('ready-to-show', () => applyLaunchPresentation('ready-to-show'));
+  // A First Light request from a cold launch is delivered once the page has
+  // stopped loading (see firstLightDelivery.flushWhenLoaded).
+  firstLightModule.flushWhenLoaded(mainWindow.webContents, firstLightDelivery);
   mainWindow.webContents.once('did-finish-load', () => {
     writeStartupLog('Renderer finished load');
     firstLightDelivery.flush();

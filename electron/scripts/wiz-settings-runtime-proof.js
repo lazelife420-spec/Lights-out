@@ -146,10 +146,21 @@ async function main() {
     const config = await api.getSmartLightConfig(); config.enabled=true;
     state.smartLights=await api.saveSmartLightConfig(config); updateLightsUIFromState();
   })()`);
+  // Test Mode rehearses the countdown and never touches the lights: main.js
+  // starts the dim only for a real run.
   bedside.commands.length = 0;
-  const started = await evaluate(`api.startTimer({durationSeconds:300,action:'sleep',dryRun:true,forceShutdown:false})`);
+  const rehearsal = await evaluate(`api.startTimer({durationSeconds:300,action:'sleep',dryRun:true,forceShutdown:false})`);
+  assert.notEqual(rehearsal?.success, false);
+  await wait(4000);
+  assert.equal(bedside.commands.filter(command => command.method === 'setPilot').length, 0, 'Test Mode wrote to the bulb');
+  await evaluate('api.cancelTimer()'); await wait(1200);
+  passed.push('Test Mode rehearses the countdown without touching the lights');
+  // A real run: the QA power lock blocks every power action, and the run is
+  // cancelled long before its end.
+  bedside.commands.length = 0;
+  const started = await evaluate(`api.startTimer({durationSeconds:300,action:'sleep',dryRun:false,forceShutdown:false})`);
   assert.notEqual(started?.success, false);
-  await until(() => bedside.commands.some(command => command.method === 'setPilot'), 'Actual timer did not dim the mock bulb');
+  await until(() => bedside.commands.some(command => command.method === 'setPilot'), 'Real timer did not dim the mock bulb');
   assert.ok(bedside.commands.filter(command => command.method === 'setPilot').every(command => command.params.state !== true));
   bedside.pilot.state = false; // Phone app off during the actual Electron timer.
   await wait(4000);
@@ -158,7 +169,7 @@ async function main() {
   assert.equal(bedside.pilot.state, false);
   assert.equal(bedside.commands.filter(command => command.method === 'setPilot').length, writesAfterOff);
   assert.equal(kitchen.commands.length, 0);
-  passed.push('Actual timer yields to phone off; cancellation never turns it back on; unselected bulb is untouched');
+  passed.push('Real timer dims, yields to phone off; cancellation never turns it back on; unselected bulb is untouched');
   await evaluate(`document.getElementById('wiz-config').scrollIntoView({block:'start'})`);
   await wait(200);
   const shot = await session.send('Page.captureScreenshot', { format: 'png' });
