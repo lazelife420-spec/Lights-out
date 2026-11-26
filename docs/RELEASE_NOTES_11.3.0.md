@@ -44,7 +44,10 @@ records installer and portable qualification.
 Known limits: physical sleep/hibernate/resume, real router and Wi-Fi adapter
 recovery, and real phone/bulb behaviour are not established by automated
 tests. Moving back to v11.2.0 after running this version cannot decrypt the
-newly protected integration credentials (re-enter them there). Secure device
+newly protected integration credentials (re-enter them there). If you might go
+back, quit Lights Out and copy the `%APPDATA%\lights-out-electron` folder before
+upgrading: restoring that copy on the same Windows account brings v11.2.0's
+settings back. Secure device
 pairing ships gated off. The Android app in this repository is
 debug-qualified only; no production-signed APK ships with this Windows release.
 

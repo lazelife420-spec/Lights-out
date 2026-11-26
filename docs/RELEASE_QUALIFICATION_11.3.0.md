@@ -125,6 +125,48 @@ or real-profile change appears, or cleanup is not verified. A green gate does
 not qualify physical power actions, real lights or routers, overnight
 reliability, signing or publication.
 
+## Upgrade custody: installed v11.2.0 to v11.3.0
+
+Status: **STAGE_ONLY** until the final build passes the gates above; then ready
+for a separate owner decision to upgrade the installed copy. Established from
+the code only: no installed copy or real profile was opened or launched.
+
+What v11.3.0 rewrites in `%APPDATA%\lights-out-electron` on first launch:
+
+- `settings.json`: 11 credential fields that v11.2.0 stored as plain text are
+  saved as Windows-protected (`enc:v1:`) values: the Wi-Fi Guard router user,
+  webhook URL and headers; the calendar iCal URL; the smart-lights HTTP URL,
+  body and headers; and accountability partner URLs, webhooks, tokens and
+  headers. Retired smart-light provider keys are dropped, a legacy single
+  schedule is migrated, and old profile ids are normalized with their
+  references updated.
+- `settings.json.bak` is rebuilt from the previous file with the same
+  protection, so after the first save neither file is readable by v11.2.0 for
+  those fields. When an old smart-lights verification key held the Hue key or
+  webhook in plain text, the backup is replaced outright so that text leaves
+  the disk.
+- `run-receipts.json`: receipts left in flight by a crash are closed as
+  `interrupted` or `outcome_unverified`; new receipts can be `missed` or
+  `blocked`. The 100-receipt limit is unchanged.
+
+Rolling back to v11.2.0 keeps timers, schedules, profiles and receipts (new
+result names show as raw text), but v11.2.0 decrypts only its original 7
+fields: the 11 fields above read as `enc:v1:` text, so iCal sync, HTTP
+lights, Wi-Fi Guard router login and partner webhooks fail until re-entered.
+No pre-upgrade copy survives on disk, so take one first. Run these yourself,
+with Lights Out quit from the tray and no run armed:
+
+```powershell
+$dest = Join-Path $env:LOCALAPPDATA "LightsOut-backups\v11.2.0-$(Get-Date -Format yyyyMMdd-HHmm)"; Copy-Item "$env:APPDATA\lights-out-electron" $dest -Recurse; Get-ChildItem $dest -File | Get-FileHash | Select-Object Hash, Path
+```
+
+The copy restores only on this Windows account (protected values are bound to
+it) and may hold legacy plain-text credentials, so keep it out of synced
+folders and delete it once v11.3.0 has run well. To roll back: quit Lights
+Out, install v11.2.0, replace the profile folder with the copy, then start it.
+The portable ZIP is unaffected: each extracted version keeps its own
+`user-data` folder and never reads another's.
+
 ## Known limits carried into this release
 
 - Moving back to v11.2.0 cannot decrypt the newly protected integration
