@@ -12,7 +12,7 @@ param(
     [string]$OriginalFilename = 'Lights Out.exe',
     [string]$FileVersion = ((Get-Content -LiteralPath (Join-Path $SourceRoot 'package.json') | ConvertFrom-Json).version + '.0'),
     [string]$ProductVersion = (Get-Content -LiteralPath (Join-Path $SourceRoot 'package.json') | ConvertFrom-Json).version,
-    [string]$Copyright = 'Copyright (C) 2026 The Proof Foundry. All rights reserved.',
+    [string]$Copyright = 'Copyright (C) 2026 The Proof Foundry. MIT License.',
     [string]$RceditPath
 )
 

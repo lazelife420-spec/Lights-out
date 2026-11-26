@@ -19,7 +19,10 @@ VIAddVersionKey "CompanyName" "The Proof Foundry"
 VIAddVersionKey "FileDescription" "Lights Out Setup"
 VIAddVersionKey "FileVersion" "${VERSION}.0"
 VIAddVersionKey "ProductVersion" "${VERSION}"
-VIAddVersionKey "LegalCopyright" "Copyright (C) 2026 The Proof Foundry"
+VIAddVersionKey "LegalCopyright" "Copyright (C) 2026 The Proof Foundry. MIT License."
+VIAddVersionKey "Comments" "The bedtime system for Windows"
+; ${U+00B7} is a middle dot; the escape keeps this script ASCII (it has no BOM).
+BrandingText "Lights Out ${VERSION} ${U+00B7} The Proof Foundry"
 
 Var QaMode
 
@@ -40,10 +43,20 @@ Var QaMode
 !define LO_WATCHDOG_TASK_NAME "LightsOut-AutopilotWatchdog"
 !define LO_FIRST_LIGHT_TASK_NAME "LightsOut_FirstLight"
 
+; Welcome text claims: per-user install (RequestExecutionLevel user, HKCU registration); a plain
+; launch opens idle (main.js starts a countdown at launch only for an explicit --timer= argument;
+; Auto-start and Autopilot, both off by default, start runs at their scheduled times); and a run
+; stays cancellable until its power request is dispatched (main.js hasCancellableRun).
+!define MUI_WELCOMEPAGE_TITLE "Welcome to Lights Out"
+!define MUI_WELCOMEPAGE_TEXT "Lights Out is the bedtime system for Windows: one routine to end the night.$\r$\n$\r$\nIt installs for your Windows account only and opens idle. Nothing powers off until you start or schedule a run, and every run can be cancelled until the power request is sent."
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
+; Launches with no arguments, so the app opens idle. Silent (/S) installs, which the QA lanes
+; use, never show this page or run the app.
+!define MUI_FINISHPAGE_RUN "$INSTDIR\Lights Out.exe"
+!define MUI_FINISHPAGE_RUN_TEXT "Open Lights Out"
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
@@ -288,6 +301,9 @@ Section "Lights Out (required)" SecApp
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\LightsOut" "DisplayName" "Lights Out"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\LightsOut" "DisplayVersion" "${VERSION}"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\LightsOut" "Publisher" "The Proof Foundry"
+    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\LightsOut" "URLInfoAbout" "https://theprooffoundry.com/lights-out/"
+    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\LightsOut" "HelpLink" "https://github.com/lazelife420-spec/Lights-out"
+    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\LightsOut" "Comments" "The bedtime system for Windows"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\LightsOut" "InstallLocation" "$INSTDIR"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\LightsOut" "DisplayIcon" "$INSTDIR\Lights Out.exe"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\LightsOut" "UninstallString" '"$INSTDIR\Uninstall.exe"'

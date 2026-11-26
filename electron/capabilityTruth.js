@@ -105,7 +105,7 @@ function sanitizeWifiGuard(input = {}) {
   if (provider === 'adapter') configured = true;
   else if (provider === 'webhook') {
     configured = validHttpUrl(value.webhookUrl);
-    if (!configured) setupError = 'Enter a valid HTTP(S) webhook URL before enabling WiFi Guard.';
+    if (!configured) setupError = 'Enter a valid HTTP(S) webhook URL before enabling Wi-Fi Guard.';
   } else {
     const routerIpRaw = String(value.routerIp || '').trim();
     const routerIpIsIp = net.isIP(routerIpRaw) !== 0;
@@ -113,7 +113,7 @@ function sanitizeWifiGuard(input = {}) {
     configured = Boolean(routerIpValid && (deviceMacs.length || deviceIps.length));
     if (routerIpRaw && !routerIpIsIp) setupError = 'Router address must be a valid IP address (not a hostname). Example: 192.168.0.1';
     else if (routerIpRaw && routerIpIsIp && !routerIpValid) setupError = 'Router address must be a private/local network address (e.g. 192.168.x.x, 10.x.x.x). Public IPs are not accepted.';
-    else if (!configured) setupError = 'Enter the router IP address and select at least one device before enabling WiFi Guard.';
+    else if (!configured) setupError = 'Enter the router IP address and select at least one device before enabling Wi-Fi Guard.';
   }
   return { ...value, provider, deviceMacs, deviceIps, enabled: Boolean(value.enabled && configured), configured, setupError };
 }

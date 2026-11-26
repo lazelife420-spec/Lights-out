@@ -653,9 +653,9 @@ function requestHandler(req, res) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       id: '/',
-      name: 'Lights Out Companion',
+      name: 'Lights Out — Phone controls',
       short_name: 'Lights Out',
-      description: 'Control the Lights Out sleep timer on your PC from your phone.',
+      description: 'Start, pause, snooze or cancel tonight’s Lights Out run on your PC from your phone.',
       start_url: '/',
       scope: '/',
       display: 'standalone',

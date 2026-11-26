@@ -118,7 +118,7 @@ function truthRecord(release, base, version, { publishedAt, verification }) {
   return {
     schemaVersion: 1,
     id: 'lights-out',
-    name: 'Lights Out PC',
+    name: 'Lights Out',
     state: 'available',
     status: 'PUBLIC_RELEASE',
     version,

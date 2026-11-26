@@ -1,6 +1,6 @@
-# Lights Out - Electron Edition
+# Lights Out: Windows desktop app
 
-A native-like Windows desktop application built with Electron. It has a cockpit-style dashboard with its own window controls, a tray menu, and Windows system calls made from the main process.
+The Windows desktop app for Lights Out, the bedtime system for Windows. It is built with Electron: a frameless cockpit window with its own controls, a tray menu, and Windows system calls made from the main process.
 
 ## Agent Handoff
 
@@ -130,4 +130,4 @@ Edit these files to customize:
 
 ## License
 
-Same as original Lights Out project.
+MIT, © 2026 The Proof Foundry. See [`LICENSE`](../LICENSE) in the repository root.

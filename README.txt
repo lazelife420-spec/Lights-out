@@ -1,4 +1,5 @@
-Lights Out
+Lights Out: the bedtime system for Windows (v11.3.0)
+Forged by The Proof Foundry. MIT License.
 
 APP (Electron)
   dist-native\win-unpacked\Lights Out.exe  - native unpacked Windows launcher

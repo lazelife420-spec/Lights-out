@@ -20,7 +20,7 @@ const expected = {
   OriginalFilename: 'Lights Out.exe',
   ProductName: 'Lights Out',
   ProductVersion: pkg.version,
-  LegalCopyright: 'Copyright (C) 2026 The Proof Foundry. All rights reserved.'
+  LegalCopyright: 'Copyright (C) 2026 The Proof Foundry. MIT License.'
 };
 
 function runPowerShell(command) {

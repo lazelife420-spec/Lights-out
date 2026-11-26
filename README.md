@@ -1,11 +1,11 @@
-# Lights Out PC
+# Lights Out
 
-**Bedtime Mode for Windows — a shutdown timer that gets out of your way until it matters.**
-A [Proof Foundry](https://theprooffoundry.com) product.
+**The bedtime system for Windows. One routine to end the night.**
+Forged by [The Proof Foundry](https://theprooffoundry.com).
 
-Set a time. Press START. Lights Out PC walks you through a calm wind-down, then a
-cinematic Last Light final countdown before your PC shuts off. You can cancel
-right up until the power request is sent to Windows. No surprise force-quits.
+Set a time. Press START. Lights Out walks you through a calm wind-down, then
+(if you turn it on) a cinematic Last Light finale before your PC shuts off. You
+can cancel right up until the power request is sent to Windows. No surprise force-quits.
 No cloud account. No drama.
 
 [![Release v11.3.0](https://img.shields.io/badge/Release-v11.3.0-blue?style=for-the-badge)](https://github.com/lazelife420-spec/Lights-out/releases/latest)
@@ -22,7 +22,7 @@ No cloud account. No drama.
 - `Lights-Out-Portable-v11.3.0-win-x64.zip` — extract, then run `Lights Out.exe`; no install needed
 - `SHA256SUMS.txt` — checksums for both artifacts
 
-<img src="docs/assets/lights-out-keyart-hero-ui.png" width="720" alt="Lights Out PC key art showing the glowing lamp, word-mark, tagline, and cockpit dashboard UI">
+<img src="docs/assets/brand/lights-out-social-card.png" width="720" alt="Lights Out lamp wordmark with the tagline The bedtime system for Windows and the line One routine to end the night, beside the Tonight screen">
 
 ### Why I built it
 
@@ -32,8 +32,8 @@ but feels like doing taxes at bedtime. I wanted something that felt like closing
 a book, not launching a missile.
 
 Lights Out opens idle. No auto-start countdown. You pick a time, press START,
-and the app walks you through a wind-down. The Last Light cinematic final
-countdown runs, then the machine shuts down. Emergency cancel is one keystroke
+and the app walks you through a wind-down. If you turned on Last Light, its
+cinematic finale runs; then the machine shuts down. Emergency cancel is one keystroke
 away: `Ctrl+Shift+X` from anywhere. `Esc` also cancels a running or paused
 countdown while the Lights Out window has focus, but it closes an open dialog
 or panel first (or leaves a focused field): at the imminent-action warning, `Esc` only closes the warning
@@ -49,7 +49,7 @@ cancel.
 - **No cloud.** Receipts and settings live in `AppData`, never a server.
 
 The one automatic outbound connection is the update check: an HTTPS request for
-Proof Foundry's public release record
+The Proof Foundry's public release record
 (`https://theprooffoundry.com/truth/products/lights-out.json`) when the app starts
 and every 4 hours while it runs. There is no setting to turn it off, and there is
 no GitHub or other fallback source. If a newer version is listed, the
@@ -84,11 +84,11 @@ main alone does not establish that a release is published.
 
 ## Surface
 
-The app is a single Electron edition under **`electron/`** - a cockpit-style
-dashboard. (A legacy PowerShell / WinForms "classic" app was removed on
-2026-06-29; PowerShell is now invoked only as system calls from the Electron
-main process, not as a separate app.) See [`AGENTS.md`](AGENTS.md) for the full
-contributor handoff.
+Lights Out is a single Windows desktop app, built with Electron, under
+**`electron/`**: a cockpit-style dashboard. (A legacy PowerShell / WinForms
+"classic" app was removed on 2026-06-29; PowerShell is now invoked only as
+system calls from the Electron main process, not as a separate app.) See
+[`AGENTS.md`](AGENTS.md) for the full contributor handoff.
 
 ## Features
 
@@ -259,8 +259,8 @@ for every push.
 
 ## License
 
-[MIT](LICENSE) © 2026 Proof Foundry. Free to use, modify, and distribute.
+[MIT](LICENSE) © 2026 The Proof Foundry. Free to use, modify, and distribute.
 
 ---
 
-<sub>Lights Out™ — a [Proof Foundry](https://theprooffoundry.com) product. Built for Windows 10/11.</sub>
+<sub>Lights Out™ — the bedtime system for Windows. Forged by [The Proof Foundry](https://theprooffoundry.com). Built for Windows 10/11.</sub>

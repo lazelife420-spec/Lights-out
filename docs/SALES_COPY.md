@@ -1,4 +1,4 @@
-# Lights Out™ — A Proof Foundry Product
+# Lights Out, forged by The Proof Foundry
 
 # Sales Page Copy
 
@@ -15,20 +15,20 @@ Windows shutdown, with a spine.
 H1:
 
 ```text
-Lights Out PC™ — Bedtime Mode for Windows
+Lights Out: the bedtime system for Windows
 Make your PC keep the bedtime promise.
 ```
 
 Product Lockup:
 
 ```text
-A Proof Foundry Product
+Lights Out, forged by The Proof Foundry
 ```
 
 Subhead:
 
 ```text
-A Windows wind-down timer with profiles, streaks, proof receipts, and shutdown controls that stay out of your way until it matters.
+One routine to end the night: wind-down rituals, schedules, smart lights and an on-time shutdown, plus profiles, streaks and proof receipts. The controls stay out of your way until it matters.
 ```
 
 Primary CTA:
@@ -101,11 +101,11 @@ Track nights from actual recorded events, not fake wellness guesses. A night cou
 Receipts
 Copy or view proof of completed sessions.
 
-Safer remote control
-Remote control is gated behind a pairing token and stays off by default.
+Safer phone control
+Phone Companion is gated behind a pairing token and stays off by default.
 
 Verified updates
-Release assets include installer, portable build, and checksums. The app checks Proof Foundry's public release record at launch and every 4 hours, and downloads a verified ZIP only when you click Download.
+Release assets include installer, portable build, and checksums. The app checks The Proof Foundry's public release record at launch and every 4 hours, and downloads a verified ZIP only when you click Download.
 
 Honest power actions
 Sleep and Hibernate run only when Windows offers them on this PC; otherwise the action is blocked and nothing runs. Test Mode rehearses the night with no power action and no automatic device changes.
@@ -208,7 +208,7 @@ View Checksums
 Brand Lockup:
 
 ```text
-Forged by The Proof Foundry™ — Build it. Prove it. Ship it.
+Forged by The Proof Foundry — Build it. Prove it. Ship it.
 Proof-first software forged for builders.
 ```
 
@@ -235,9 +235,9 @@ Only when the user explicitly chooses a force-shutdown path. The normal workflow
 
 No. It tracks app events such as timer sessions and streaks. Do not market it as medical sleep tracking.
 
-### Does remote control run by default?
+### Does Phone Companion run by default?
 
-No. Remote control is off by default and requires a pairing token when enabled.
+No. Phone Companion is off by default and requires a pairing token when enabled.
 
 ### Is there a portable version?
 

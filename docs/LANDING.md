@@ -1,9 +1,10 @@
-# Lights Out PC — Bedtime Mode for Windows
+# Lights Out: the bedtime system for Windows
 
-I built a Windows shutdown timer I would actually use every night.
+I built a bedtime system for Windows that I would actually use every night.
 
 Windows commands work, but they are annoying.
-Old shutdown timer apps work, but most feel clunky.
+Old shutdown timer apps work, but most feel clunky and only turn the PC off.
+Lights Out is one routine to end the night.
 
 Lights Out is free:
 No account.
@@ -45,7 +46,7 @@ Installer, portable build, SHA256 checksums, and proof-backed releases are all p
 - Test Mode rehearses the night without the power action or any automatic
   light, network or system change.
 - Until you set up calendar feeds, smart lights, webhooks or Wi-Fi Guard, the
-  only automatic connection is an update check of Proof Foundry's public
+  only automatic connection is an update check of The Proof Foundry's public
   release record at launch and every 4 hours. A verified ZIP downloads only
   when you click Download.
 
@@ -79,7 +80,7 @@ profiles and the clock.
 
 ### Short version (for social / forum posts)
 
-> Lights Out PC - a free Windows bedtime shutdown timer that lives in your tray.
+> Lights Out - a free bedtime system for Windows that lives in your tray.
 > Shows the clock while idle, starts a 28-min or 1-hour timer in one click, winds
 > down with ambient visuals, and never force-shuts-down unless you ask it to.
 > No account, no ads. Installer + portable + SHA256 checksums, all public.

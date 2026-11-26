@@ -1,7 +1,7 @@
 {
   "name": "lights-out-electron",
   "version": "11.3.0",
-  "description": "Lights Out - Sleep Timer (Electron Edition)",
+  "description": "The bedtime system for Windows: wind-down rituals, schedules, smart lights and an on-time shutdown.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -36,7 +36,8 @@
   "engines": {
     "node": ">=22.13.0"
   },
-  "author": "Lights Out",
+  "author": "The Proof Foundry",
+  "homepage": "https://theprooffoundry.com/lights-out/",
   "license": "MIT",
   "build": {
     "appId": "com.lightsout.sleep-timer",
