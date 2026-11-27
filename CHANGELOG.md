@@ -1,5 +1,15 @@
 # Changelog
 
+## v11.3.4 — 2026-11-27
+
+A look-and-feel release; no behaviour change.
+
+- App icon: the broken-O mark returns (night badge, teal O, flicker particle;
+  the lamp leaning in at large sizes), drawn per size for a sharp taskbar.
+- The header wordmark is larger with a brighter beam on taller windows.
+- Night-blue background with lamp spill, a moonlit wash and a floor glow.
+- Narrow windows keep the plan's end time on one line.
+
 ## v11.3.3 — 2026-11-27
 
 - Automatic time format follows the Windows regional format, not the app

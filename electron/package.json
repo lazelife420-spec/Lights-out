@@ -1,6 +1,6 @@
 {
   "name": "lights-out-electron",
-  "version": "11.3.3",
+  "version": "11.3.4",
   "description": "The bedtime system for Windows: wind-down rituals, schedules, smart lights and an on-time shutdown.",
   "main": "main.js",
   "scripts": {

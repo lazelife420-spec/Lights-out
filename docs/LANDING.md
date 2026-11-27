@@ -59,7 +59,10 @@ verify exactly what you downloaded. Builds are produced and published by CI, and
 each release is gated on `node --check`, unit tests, a smoke suite, and a verified package
 step.
 
-**Latest: v11.3.3** - the time format follows your Windows region, Settings never loses a quick edit, and full end-to-end qualification passes ([RELEASE_QUALIFICATION_11.3.3.md](RELEASE_QUALIFICATION_11.3.3.md)).
+**Latest: v11.3.4** - the broken-O icon returns, a larger wordmark hero and a night-blue room ([RELEASE_QUALIFICATION_11.3.4.md](RELEASE_QUALIFICATION_11.3.4.md)).
+Release notes: https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.3.4
+
+**v11.3.3** - the time format follows your Windows region, Settings never loses a quick edit, and full end-to-end qualification passes ([RELEASE_QUALIFICATION_11.3.3.md](RELEASE_QUALIFICATION_11.3.3.md)).
 Release notes: https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.3.3
 
 **v11.3.2** - a design release: calmer Tonight, Schedule, Devices, Night Modes and Proof screens ([RELEASE_QUALIFICATION_11.3.2.md](RELEASE_QUALIFICATION_11.3.2.md)).
