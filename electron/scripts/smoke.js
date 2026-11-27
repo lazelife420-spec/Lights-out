@@ -785,7 +785,7 @@ check('settings: saveSettingsPanel is defined exactly once and Save calls it', (
 
 check('settings: Cancel reloads persisted values before closing', () => {
   assertMatch(rendererSrc, /async function discardSettingsPanelChanges\(\)/, 'discardSettingsPanelChanges must be defined');
-  assertMatch(rendererSrc, /els\.btnCancelOpt\.addEventListener\('click', async \(\) => \{\s*await discardSettingsPanelChanges\(\);\s*closeSettingsPanel\(\);\s*\}\)/, 'Cancel must discard changes before closing');
+  assertMatch(rendererSrc, /els\.btnCancelOpt\.addEventListener\('click', async \(\) => \{\s*await discardSettingsPanelChanges\(\);[\s\S]{0,400}?closeSettingsPanel\(\);\s*\}\)/, 'Cancel must discard changes before closing');
 });
 
 check('settings: Back to Tonight discards edits and does not save', () => {

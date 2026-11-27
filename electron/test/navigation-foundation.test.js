@@ -1179,7 +1179,7 @@ test('closeSettingsPanel() forces focus nowhere -- never BODY as a last resort -
 
 test('Back, Cancel, and Save all close Settings via the same closeSettingsPanel(), sharing its focus restoration (structural)', () => {
   assert.match(rendererSource, /els\.modalClose\.addEventListener\('click', async \(\) => \{\s*await discardSettingsPanelChanges\(\);\s*closeSettingsPanel\(\);\s*\}\)/, 'Back must call closeSettingsPanel()');
-  assert.match(rendererSource, /els\.btnCancelOpt\.addEventListener\('click', async \(\) => \{\s*await discardSettingsPanelChanges\(\);\s*closeSettingsPanel\(\);\s*\}\)/, 'Cancel must call closeSettingsPanel()');
+  assert.match(rendererSource, /els\.btnCancelOpt\.addEventListener\('click', async \(\) => \{\s*await discardSettingsPanelChanges\(\);[\s\S]{0,400}?closeSettingsPanel\(\);\s*\}\)/, 'Cancel must call closeSettingsPanel()');
   assert.match(rendererSource, /if \(await saveSettingsPanel\(\)\) closeSettingsPanel\(\);/, 'Successful Save must call closeSettingsPanel()');
 });
 

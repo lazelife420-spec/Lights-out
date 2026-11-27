@@ -5565,7 +5565,9 @@ document.getElementById('receipts-confirm')?.addEventListener('keydown', (event)
   });
   els.btnCancelOpt.addEventListener('click', async () => {
     await discardSettingsPanelChanges();
-    closeSettingsPanel();
+    // The reload above is async: if the user already moved to another page
+    // meanwhile, closing now would bounce them back to the pre-Settings tab.
+    if (document.body?.dataset.view === 'set') closeSettingsPanel();
   });
   // No backdrop-click-to-close: Settings is an in-flow panel, not an overlay,
   // so clicking its own background is just clicking the page.
