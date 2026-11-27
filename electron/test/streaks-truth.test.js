@@ -93,6 +93,7 @@ function runCompleteTimer({ dryRun, receipt, cancelDuring }) {
     setTimeout,
     AbortController: globalThis.AbortController,
     completionGuardController: null,
+    quitRequested: false,
     // Completion-time helpers added by the v11.3 audit: the run is on time
     // and owns no paused media here.
     windDownChanges: { mediaPause: null },

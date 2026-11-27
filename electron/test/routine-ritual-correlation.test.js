@@ -18,12 +18,12 @@ function runtime({ failStep = false, steps, dryRun = !failStep } = {}) {
   const context = require('../profileRitualContext'); context.clear();
   const receipts = [];
   const sandbox = { console: { error() {} }, Date, Math, Boolean, Number, settingsStore, routineLedger: ledger,
-    timerState: {}, activeReceiptId: null, completionGuardController: null, timerInterval: null, mainWindow: null,
+    timerState: {}, activeReceiptId: null, completionGuardController: null, quitRequested: false, timerInterval: null, mainWindow: null,
     ritualMode: module.exports, profileRitualContext: context,
     windDownChanges: { wifiSession: null },
     wifiLifecycle: require('../wifiGuardLifecycle').createLifecycle({ block: async () => ({ success: true }), unblock: async () => ({ success: true }) }),
     restoreAfterTimer: async () => ({ success: true }),
-    smartLights: { resetSmartLightState() {} },
+    smartLights: { resetSmartLightState() {}, getConfig: () => ({ enabled: false }), isDrivingLights: () => false },
     profiles: { getById: () => ({ id: 'profile', ritualId: 'standard' }) },
     resolveTimerProfileIdentity: () => ({ profileId: 'profile', profileName: 'Night' }), resolveNightModeStart: () => ({}),
     startDecision: { resolveStartDecision: () => ({ useRitualGateway: true }) },

@@ -1181,8 +1181,12 @@ function beginValidatedCountdown(options, identity, nmIdentity) {
   clearTimerInterval();
   // A new run starts with no dim state left by an earlier one (a completion
   // that stopped before its light-off, for example), so its lights are never
-  // switched off a second into the countdown.
-  smartLights.resetSmartLightState();
+  // switched off a second into the countdown. A room an earlier run had
+  // dimmed is restored first, on the provider's own queue, so this run's
+  // snapshot records the restored room rather than the dim floor.
+  const earlier = smartLights.getConfig();
+  if (earlier.enabled && ['wiz', 'hue'].includes(earlier.provider) && smartLights.isDrivingLights(0)) restoreRunLights('replaced');
+  else smartLights.resetSmartLightState();
 
   // Rehearsals do not consume or create debt belonging to real sessions.
   const rehearsal = typeof options.dryRun === 'boolean' ? options.dryRun : Boolean((settingsStore.getSection('app') || {}).dryRun);
@@ -1497,8 +1501,9 @@ async function completeTimer() {
     }) : null;
     if (activeReceiptId === completingReceiptId) activeReceiptId = null;
     windDownChanges.mediaPause = null;
-    // The run is over: its dim state must not leak into the next countdown.
-    if (smartLights.getConfig().enabled) smartLights.resetSmartLightState();
+    // The run is over and nothing will switch the lights off: put a dimmed
+    // room back (each light is read live first, so none is powered on).
+    if (smartLights.getConfig().enabled) restoreRunLights('blocked');
     const message = 'Power action blocked: Wi-Fi Guard restoration is unconfirmed. Use Restore internet before trying again.';
     emitTimerUpdate('action-status', { receiptId: completingReceiptId, actionStatus: 'blocked', proofSaved: receipt?.persistence?.saved === true, message });
     showNativeNotification('Lights Out', message);
@@ -1572,7 +1577,7 @@ async function completeTimer() {
       }) : null;
       if (activeReceiptId === completingReceiptId) activeReceiptId = null;
       windDownChanges.mediaPause = null;
-      if (smartLights.getConfig().enabled) smartLights.resetSmartLightState();
+      if (smartLights.getConfig().enabled) restoreRunLights('blocked');
       writeStartupLog('Power action blocked by unsaved-work guard', { receiptId: completingReceiptId, errorCode: error.code || 'UNKNOWN' });
       emitTimerUpdate('action-status', { receiptId: completingReceiptId, actionStatus: 'blocked', proofSaved: receipt?.persistence?.saved === true, message });
       showNativeNotification('Lights Out', message);
@@ -1607,12 +1612,14 @@ async function completeTimer() {
   // Lights off now, after every still-cancellable step and the stale check,
   // just before the power request. Bounded, so a dead bridge cannot hold the
   // shutdown; a light that did not confirm is recorded, never retried.
+  if (quitRequested) return;
   if (!completionOptions.dryRun && smartLights.getConfig().enabled) {
     const lightsOff = await switchRunLightsOff();
     smartLights.resetSmartLightState();
     if (!lightsOff || lightsOff.success !== true) recordLightsOffShortfall(completingReceiptId, lightsOff);
     if (completingReceiptId && activeReceiptId !== completingReceiptId) return;
   }
+  if (quitRequested) return;
   await executePowerAction({ ...completionOptions, receiptId: completingReceiptId });
 }
 
@@ -3614,7 +3621,10 @@ ipcMain.handle('resume-recoverable-timer', async () => {
 // Smart Lights IPC handlers
 ipcMain.handle('get-smartlight-config', async () => smartLights.getPublicConfig());
 ipcMain.handle('save-smartlight-config', async (event, settings) => {
-  smartLights.loadConfig(settings);
+  // The Hue certificate pin is set only by main's own pairing flow, never by
+  // the renderer (import strips it the same way).
+  const { hueCertFingerprint: _pin, ...fromRenderer } = settings || {};
+  smartLights.loadConfig(fromRenderer);
   const merged = smartLights.getConfig();
   settingsStore.updateSection('smartLights', merged);
   return smartLights.getPublicConfig();
@@ -4397,8 +4407,15 @@ let quitWifiRestoreAttempted = false;
 const QUIT_LIGHT_CUE_STOP_TIMEOUT_MS = 5000;
 const QUIT_LIGHT_RESTORE_TIMEOUT_MS = 3000;
 let quitLightsAttempted = false;
+let quitRequested = false;
 
 app.on('before-quit', (event) => {
+  // Quitting ends a completion that has not dispatched its power request:
+  // abort the unsaved-work scan now (not after the bounded Wi-Fi or light
+  // restores below) and make completeTimer stop before the light-off and the
+  // power action.
+  quitRequested = true;
+  completionGuardController?.abort();
   if (!quitWifiRestoreAttempted && wifiLifecycle.hasUnretainedPending()) {
     quitWifiRestoreAttempted = true;
     event.preventDefault();

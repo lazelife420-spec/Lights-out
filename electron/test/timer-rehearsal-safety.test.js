@@ -49,7 +49,7 @@ function completionContext(restore) {
     runReceipts: { recordActionEvent: (_id, event) => { events.push(event); return {}; }, getReceiptById: () => ({}), updateRunReceipt() {} },
     smartLights: { getConfig: () => ({ enabled: false }) }, emitTimerUpdate() {}, showNativeNotification() {}, formatAction: () => 'Sleep',
     streaks: { recordEvent() {} }, sleepDebt: { estimateSleepHours: () => 0, recordNight() {} }, settingsStore: { getSection: () => ({}) },
-    sendAccountability() {}, unsavedGuard: { scanUnsavedWork: async () => [] }, completionGuardController: null, AbortController: globalThis.AbortController,
+    sendAccountability() {}, unsavedGuard: { scanUnsavedWork: async () => [] }, completionGuardController: null, quitRequested: false, AbortController: globalThis.AbortController,
     windDownChanges: { mediaPause: null }, isCompletionStale: () => false,
     playLastLightRitual: async () => {}, executePowerAction: async options => { calls.push(options); }
   });
@@ -67,4 +67,8 @@ test('unconfirmed Wi-Fi restoration writes a blocked receipt and dispatches no p
 test('cancel during Wi-Fi restoration keeps ownership and prevents late power dispatch', async () => {
   let finish; const gate = new Promise(resolve => { finish = resolve; }), { c, calls } = completionContext(gate);
   const done = c.completeTimer(); c.activeReceiptId = null; finish({ success: true }); await done; assert.equal(calls.length, 0);
+});
+test('quitting during completion stops it before the light-off and the power request', async () => {
+  let finish; const gate = new Promise(resolve => { finish = resolve; }), { c, calls } = completionContext(gate);
+  const done = c.completeTimer(); c.quitRequested = true; finish({ success: true }); await done; assert.equal(calls.length, 0);
 });
