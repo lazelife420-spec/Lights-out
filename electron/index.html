@@ -1257,7 +1257,9 @@
           <input type="number" id="grace-minutes" class="set-num" value="2" min="0" max="10" data-live="1">
           <span>minutes</span>
         </div>
-        <div class="option-group">
+        <!-- Hidden: system mute is intentionally disabled (commit 2520d31); the
+             setting is kept so saved profiles stay valid, but no dead control shows. -->
+        <div class="option-group" hidden>
           <label class="checkbox-label">
             <span class="set-row-text">
               <span class="set-row-title">Mute system <span class="set-live-tag">Applies now</span></span>

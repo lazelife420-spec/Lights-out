@@ -119,7 +119,7 @@ const BUILT_IN_CATALOGUE = Object.freeze([
     subtitle: 'Enforce bedtime with scheduled shutdown and content blocking.',
     artworkId: 'school-night',
     status: 'needs_router_setup',
-    availability: { supported: false, reason: 'Needs router-level Wi-Fi control, which Lights Out does not have yet.' },
+    availability: { supported: false, reason: 'Needs router-level Wi-Fi control that is qualified for whole-house use. Today Wi-Fi Guard is experimental.' },
     timer: {
       durationSeconds: 1800,
       action: 'shutdown',
