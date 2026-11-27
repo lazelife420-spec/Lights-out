@@ -7,6 +7,36 @@ verified audit of the Windows app, its packaging and the Android source: no
 surprise power actions, nothing left behind on the PC, no credentials in files
 that leave it.
 
+### New in this release
+- Drag the Tonight dial up or down (or use the mouse wheel or arrow keys) to
+  set tonight's length while idle; it does nothing while a run is active.
+- Taskbar: a sharper app icon, a badge while a run is active (amber in Test
+  Mode, rose for a real action) and Pause / Snooze / Cancel taskbar buttons.
+- Light cues (Settings › Lighting, all off by default): a warm "wind-down
+  heads-up" when the bedtime reminder fires, a violet "Autopilot starts soon"
+  and a soft pulse when your phone or a family PC pauses, snoozes or cancels.
+  Cues use only lights that are already on, put them back exactly and never
+  switch a light on. Preview buttons show each cue.
+
+### Smart lights
+- Dimming now follows the countdown: pausing or snoozing no longer turns the
+  lights off early.
+- Hue: cancel restores only the lights Lights Out dimmed and never switches a
+  light back on that you turned off; each light dims from its own level; the
+  bridge certificate is pinned on pairing; "Load groups" works; slow bridges
+  can no longer delay the power action.
+- WiZ: lost packets are re-sent; a bulb that never answered is reported.
+- Webhooks: one request at a time, only 2xx counts as success, and the full
+  URL is no longer shown in messages.
+- Lights are restored if you quit during a real run.
+- First Light now plays when the wake task starts Lights Out (it previously
+  played only if the app was already running).
+
+### Phone Companion firewall
+- Leftover "Lights Out Companion" firewall rules from earlier sessions are
+  removed automatically; rules of a copy that is still running are never
+  touched.
+
 ### Safety: power actions
 - A real shutdown, restart, sleep or log-off timer whose deadline passed while
   the PC was asleep or hibernated (lid closed, idle sleep, Modern Standby) now

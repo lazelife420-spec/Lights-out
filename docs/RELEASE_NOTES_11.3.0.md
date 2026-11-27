@@ -30,6 +30,17 @@ webhook addresses to the backup file, and importing a backup keeps the
 credentials already on this PC. More integration credentials are encrypted at
 rest. Dropping a file onto the window is ignored.
 
+**Smarter lights.** Dimming now follows the countdown, so pausing or snoozing
+no longer turns your lights off early. Hue cancel only restores the lights it
+dimmed and never switches a light back on. New, opt-in light cues signal your
+bedtime reminder, an upcoming Autopilot run and changes made from your phone —
+using only lights that are already on. First Light now plays when the wake task
+starts the app.
+
+**Nicer to use.** Drag the Tonight dial to set tonight's length, see a run in
+the taskbar, and use Pause / Snooze / Cancel from the taskbar buttons. Old
+Phone Companion firewall rules are cleaned up automatically.
+
 **Sleep and Hibernate** go through a small native helper that calls the
 documented Windows API and refuses safely when this PC does not offer the
 state; it never falls back to Shutdown. Windows accepting the request is
