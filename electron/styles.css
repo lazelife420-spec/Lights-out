@@ -13113,3 +13113,19 @@ body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib { transition: gri
 @media (max-width: 1000px) {
   :root body:is([data-theme="midnight"], :not([data-theme])) .planner-day { min-height: 38px; padding: 4px 5px; }
 }
+
+/* Night Modes and Proof design pass (2026-11-27).
+   Night Modes: modes that are not available yet read as a footnote, never
+   louder than the four ready modes above them. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .nm-card--later .nm-card-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+/* Proof: before the first receipt, the page says "No runs yet" once (the
+   empty card with Plan tonight). The empty Session History card and the
+   strip's own "No runs recorded" line step out; the 14-night strip and its
+   legend stay so the page still shows what will fill in. A failed read
+   keeps #proof-empty hidden, so its "unavailable" line still shows. */
+:root body:is([data-theme="midnight"], :not([data-theme])) #proof-empty:not([hidden]) ~ .status-section,
+:root body:is([data-theme="midnight"], :not([data-theme])) #proof-empty:not([hidden]) ~ .proof-routine #night-strip-empty { display: none; }
