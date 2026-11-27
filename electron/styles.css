@@ -12993,3 +12993,8 @@ body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib { transition: gri
   :root body:is([data-theme="midnight"], :not([data-theme])) #ns-hero-card .ns-hero-label,
   :root body:is([data-theme="midnight"], :not([data-theme])) #plan-quick-note { display: none; }
 }
+
+/* Night Instrument: the running heading ("Test ends 11:21 PM · today") fits
+   on one line at normal window sizes and wraps as balanced lines otherwise,
+   never leaving the separator or the day on a line by itself. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .session-ends { font-size: clamp(22px, 2.3vw, 32px); text-wrap: balance; }
