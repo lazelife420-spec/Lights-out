@@ -261,7 +261,11 @@ test('the installed-runtime proof in verify-windows-release.ps1 runs under the Q
   assert.equal(proof.length, 1, 'the installed-runtime proof ran once');
   assert.equal(proof[0].qaPowerLock, '1', 'the installed app the proof launches inherits LIGHTS_OUT_QA_POWER_LOCK=1');
   assert.equal(proof[0].installerQa, '1', 'and LIGHTS_OUT_INSTALLER_QA=1');
-  assert.ok(proof[0].packagedExe.startsWith(path.join(root, 'dist-native', 'installer-qa-')), 'the proof targets the QA install only');
+  // CI temp roots can appear as 8.3 short names (RUNNER~1) or long names, in
+  // any case: compare against every spelling of the real root.
+  const roots = new Set([root, fs.realpathSync(root), fs.realpathSync.native(root)].map(r => path.join(r, 'dist-native', 'installer-qa-').toLowerCase()));
+  const exe = String(proof[0].packagedExe || '').toLowerCase();
+  assert.ok([...roots].some(prefix => exe.startsWith(prefix)), `the proof targets the QA install only (${proof[0].packagedExe})`);
   for (const launch of launches.filter(entry => entry.kind === 'install' || entry.kind === 'uninstall')) {
     assert.equal(launch.installerQa, '1', `${launch.kind} runs in installer QA mode`);
   }
