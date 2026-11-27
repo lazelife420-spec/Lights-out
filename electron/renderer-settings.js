@@ -262,7 +262,7 @@ function collectAppSettings() {
     clockFace: state.clockFace || els.czClockFace?.value || 'digital',
     clockStyle: state.clockStyle || els.czClockStyle?.value || 'modern',
     clockDial: state.clockDial || els.czClockDial?.value || 'bars',
-    clockFormat: state.clockFormat || els.czClockFormat?.value || '24h',
+    clockFormat: state.clockFormat || els.czClockFormat?.value || 'auto',
     clockScale: Number.isFinite(Number(state.clockScale)) ? Number(state.clockScale) : Number(els.czClockScale?.value || 1),
     clockShowDate: Boolean(state.clockShowDate),
     clockHandColor: state.clockHandColor || els.czClockHands?.value || '#9b93d6',
@@ -340,7 +340,7 @@ async function applyAppSettings(app, { skipNavigation = false, preserveTonightPl
   if (els.czClockFace) els.czClockFace.value = state.clockFace;
   state.clockStyle = app.clockStyle || 'modern';
   state.clockDial = app.clockDial || 'bars';
-  state.clockFormat = app.clockFormat || '24h';
+  state.clockFormat = ['auto', '12h', '24h'].includes(app.clockFormat) ? app.clockFormat : 'auto';
   state.clockScale = Number.isFinite(Number(app.clockScale)) ? clamp(Number(app.clockScale), 0.8, 1.35) : 1;
   state.clockShowDate = !!app.clockShowDate;
   state.clockHandColor = app.clockHandColor || '#9b93d6';

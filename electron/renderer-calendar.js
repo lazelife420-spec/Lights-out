@@ -142,7 +142,7 @@ function eventEnd(evt) {
 // The user's clock format (Settings › Appearance), split for the hero numerals.
 function schClockParts(date) {
   const minutes = String(date.getMinutes()).padStart(2, '0');
-  if (state.clockFormat !== '12h') return { hm: `${String(date.getHours()).padStart(2, '0')}:${minutes}`, ampm: '' };
+  if (!(typeof uses12HourClock === 'function' ? uses12HourClock() : state.clockFormat === '12h')) return { hm: `${String(date.getHours()).padStart(2, '0')}:${minutes}`, ampm: '' };
   return { hm: `${date.getHours() % 12 || 12}:${minutes}`, ampm: date.getHours() >= 12 ? 'PM' : 'AM' };
 }
 

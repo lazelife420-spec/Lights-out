@@ -124,8 +124,34 @@ function nightKeyShift(key, days) {
 // unless the setting says '12h' (the same fallback as schClockParts), so a
 // sandbox or an early render without state reads 24h. compact = the idle
 // face's '1:08a' form; formatClock never uses it.
+// 'auto' follows the Windows region: 12-hour with AM/PM where the system
+// clock uses it (h11/h12), 24-hour otherwise.
+function systemUses12HourClock() {
+  try {
+    const cycle = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hourCycle;
+    return cycle === 'h11' || cycle === 'h12';
+  } catch { return false; }
+}
+
+// eslint-disable-next-line no-unused-vars -- shared with renderer-calendar.js
+function uses12HourClock() {
+  const format = typeof state !== 'undefined' && state ? state.clockFormat : null;
+  if (format === '12h') return true;
+  if (format === 'auto') return systemUses12HourClock();
+  return false;
+}
+
 function formatIdleClockTime(now, compact = false) {
-  const use12Hour = typeof state !== 'undefined' && state && state.clockFormat === '12h';
+  // Self-contained (tests lift this function alone): '12h' always, 'auto'
+  // when the Windows region uses AM/PM, otherwise 24-hour.
+  const format = typeof state !== 'undefined' && state ? state.clockFormat : null;
+  let use12Hour = format === '12h';
+  if (format === 'auto') {
+    try {
+      const cycle = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hourCycle;
+      use12Hour = cycle === 'h11' || cycle === 'h12';
+    } catch { use12Hour = false; }
+  }
   const minutes = now.getMinutes().toString().padStart(2, '0');
 
   if (!use12Hour) {

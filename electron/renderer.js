@@ -883,7 +883,7 @@ const state = {
   // Analog/hybrid clock customization.
   clockStyle: 'modern',
   clockDial: 'bars',
-  clockFormat: '24h',
+  clockFormat: 'auto',
   clockScale: 1,
   clockShowDate: false,
   clockHandColor: '#9b93d6',
@@ -5744,7 +5744,7 @@ document.getElementById('receipts-confirm')?.addEventListener('keydown', (event)
 
   if (els.czClockFormat) {
     els.czClockFormat.addEventListener('change', () => {
-      state.clockFormat = els.czClockFormat.value || '24h';
+      state.clockFormat = els.czClockFormat.value || 'auto';
       render();
       persistClockPrefs();
     });

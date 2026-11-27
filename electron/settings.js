@@ -360,7 +360,7 @@ const DEFAULTS = {
     // Analog/hybrid clock customization.
     clockStyle: 'modern',          // 'modern' | 'bold' | 'minimal' | 'neon' | 'classic'
     clockDial: 'bars',             // 'bars' | 'minutes' | 'arabic' | 'roman' | 'auto'
-    clockFormat: '24h',            // '24h' | '12h'
+    clockFormat: 'auto',           // 'auto' (Windows region) | '12h' | '24h'
     clockScale: 1,                 // 0.8 - 1.35
     clockShowDate: false,
     clockHandColor: '#9b93d6',     // hand + cap accent color (violet; legacy #76c9ff maps to violet at render time)
