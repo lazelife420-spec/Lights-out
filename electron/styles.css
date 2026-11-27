@@ -13193,3 +13193,10 @@ body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib { transition: gri
   :root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card #plan-out-at { font-size: 18px; white-space: nowrap; }
   :root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .plan-facts { grid-template-columns: minmax(max-content, 1.2fr) 1fr 1fr; }
 }
+/* The other themes (Carbon, Aurora, Ember, Tide, Dawn) keep their own size,
+   but the same "tomorrow" end time used to wrap to two lines at 900x640 and
+   push the readiness strip under the footer. Keep it on one line too. */
+@media (max-width: 1000px) {
+  body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card #plan-out-at { white-space: nowrap; }
+  body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .plan-facts { grid-template-columns: minmax(max-content, 1.2fr) 1fr 1fr; }
+}

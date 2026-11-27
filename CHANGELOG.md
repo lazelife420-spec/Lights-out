@@ -4,6 +4,9 @@
 
 - Narrow windows: an end time after midnight ("12:30 AM · tomorrow") no
   longer runs into "Ends with"; its column widens to fit the one-line time.
+- The same fix now covers the Carbon, Aurora, Ember, Tide and Dawn themes,
+  where a "tomorrow" end time wrapped and pushed the readiness strip under the
+  footer in a 900×640 window.
 
 ## v11.3.4 — 2026-11-27
 

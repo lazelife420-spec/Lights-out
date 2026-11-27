@@ -5525,6 +5525,19 @@ check('v11.3.4 narrow window: the one-line end time widens its column instead of
   assertMatch(block, /#ns-hero-card \.plan-facts \{\s*grid-template-columns:\s*minmax\(max-content,\s*1\.2fr\) 1fr 1fr;/, 'the end-time column never shrinks below its one-line content');
 });
 
+check('narrow window, every theme: a "tomorrow" end time stays on one line so the readiness strip clears the footer', () => {
+  const cssSrc = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  const start = cssSrc.indexOf('/* The other themes (Carbon, Aurora, Ember, Tide, Dawn)');
+  assert(start > 0, 'the all-theme narrow-window end-time block must exist');
+  const block = cssSrc.slice(start, cssSrc.indexOf('\n}', cssSrc.indexOf('@media (max-width: 1000px)', start)) + 2);
+  // Not theme-scoped: Dawn and the colour themes share the base layout, where
+  // "12:05 AM · tomorrow" wrapped to two lines and pushed the strip 10px under
+  // the footer at 900x640 (packaged-truth-smoke --ui-layouts after 23:45).
+  assert(!/data-theme/.test(block), 'the all-theme rule must not be limited to one theme');
+  assertMatch(block, /body:not\(\.mini-mode\):not\(\.fullscreen-clock-mode\) #ns-hero-card #plan-out-at \{[^}]*white-space:\s*nowrap/, 'the end time stays on one line in narrow windows, in every theme');
+  assertMatch(block, /body:not\(\.mini-mode\):not\(\.fullscreen-clock-mode\) #ns-hero-card \.plan-facts \{\s*grid-template-columns:\s*minmax\(max-content,\s*1\.2fr\) 1fr 1fr;/, 'its column widens instead of overlapping Ends with, in every theme');
+});
+
 // Cleanup.
 try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
 
