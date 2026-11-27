@@ -6,6 +6,9 @@ const dgram = require('node:dgram');
 const net = require('node:net');
 const os = require('node:os');
 const PORT = 38899;
+// getPilot, getSystemConfig and setPilot are idempotent, so a request resends
+// the same datagram on this cadence until a matching reply or its timeout.
+const RETRANSMIT_MS = 300;
 
 function isLocalAddress(ip) {
   if (net.isIP(ip) !== 4) return false;
@@ -20,15 +23,17 @@ function normalizeAddresses(value) {
   return [...new Set(parts.map(ip => String(ip).trim()).filter(isLocalAddress))].sort().slice(0, 32);
 }
 
-function request(ip, method, params = {}, { port = PORT, timeoutMs = 1500 } = {}) {
+function request(ip, method, params = {}, { port = PORT, timeoutMs = 1500, retransmitMs = RETRANSMIT_MS } = {}) {
   if (!isLocalAddress(ip)) return Promise.resolve({ success: false, code: 'INVALID_ADDRESS', message: 'Enter a local WiZ light IP address.' });
   if (!['getPilot', 'getSystemConfig', 'setPilot'].includes(method)) return Promise.resolve({ success: false, code: 'INVALID_METHOD' });
   return new Promise(resolve => {
     const socket = dgram.createSocket('udp4');
-    let done = false;
+    const packet = Buffer.from(JSON.stringify({ method, params }));
+    const interval = Number(retransmitMs) > 0 ? Math.max(10, Number(retransmitMs)) : 0;
+    let done = false, resend = null;
     const finish = value => {
       if (done) return;
-      done = true; clearTimeout(timer);
+      done = true; clearTimeout(timer); clearInterval(resend);
       try { socket.close(); } catch { /* bind may have failed */ }
       resolve(value);
     };
@@ -46,14 +51,24 @@ function request(ip, method, params = {}, { port = PORT, timeoutMs = 1500 } = {}
       if (method === 'getPilot' && typeof reply.result.state !== 'boolean') return;
       finish({ success: true, result: reply.result });
     });
-    socket.bind(0, () => {
+    // One lost request or reply must not drop a light from a run: resend the
+    // identical datagram until a matching reply, a rejection or the timeout.
+    // Only the first send failing is fatal; a later one is left to the timeout.
+    const sendFailed = () => finish({ success: false, code: 'NETWORK_ERROR', message: 'Could not send the WiZ request.' });
+    const send = first => {
       if (done) return;
       try {
-        socket.send(Buffer.from(JSON.stringify({ method, params })), port, ip, error => {
-          if (error) finish({ success: false, code: 'NETWORK_ERROR', message: 'Could not send the WiZ request.' });
-        });
+        socket.send(packet, port, ip, error => { if (error && first) sendFailed(); });
       } catch {
-        finish({ success: false, code: 'NETWORK_ERROR', message: 'Could not send the WiZ request.' });
+        if (first) sendFailed();
+      }
+    };
+    socket.bind(0, () => {
+      if (done) return;
+      send(true);
+      if (interval && !done) {
+        resend = setInterval(() => send(false), interval);
+        resend.unref?.();
       }
     });
   });
@@ -169,10 +184,18 @@ async function setLights(addresses, options, requestOptions, { preservePower = f
   return { success, code: success ? 'OK' : 'PARTIAL', message: `${changed} of ${ips.length} WiZ lights confirmed the change.${skipped ? ` ${skipped} left under manual control.` : ''}` };
 }
 
+// A configured light that does not answer at dim start stays in the snapshot
+// as `unreached` rather than being dropped from the run. Its placeholder
+// "assumed on" pilot keeps it a target of the final off, but nothing is ever
+// written from it: each dim tick re-reads the live state first (adopting it
+// as the restore point, or yielding the light if it is off), and restore only
+// touches lights a dim actually changed.
 async function readStates(addresses, requestOptions) {
-  const ips=normalizeAddresses(addresses);
-  const replies=await Promise.all(ips.map(async ip=>({ip,reply:await request(ip,'getPilot',{},requestOptions)})));
-  return replies.filter(item=>item.reply.success).map(item=>({ip:item.ip,pilot:item.reply.result}));
+  const ips = normalizeAddresses(addresses);
+  return Promise.all(ips.map(async ip => {
+    const reply = await request(ip, 'getPilot', {}, requestOptions);
+    return reply.success ? { ip, pilot: reply.result } : { ip, pilot: { state: true }, unreached: true };
+  }));
 }
 
 function restorePilot(pilot) {
@@ -195,6 +218,9 @@ async function dimStates(snapshot,progress,warm,requestOptions, { look, frame, i
     const live = await request(item.ip, 'getPilot', {}, requestOptions);
     if (!isCurrent()) return { success: true };
     if (!live.success) return live;
+    // First answer from a light unreached at dim start: nothing has changed it
+    // yet, so its live state is the owner's state and becomes the restore point.
+    if (item.unreached) { delete item.unreached; item.pilot = live.result; }
     if (!live.result.state) { item.released = true; return { success: true }; }
     const baseline = chosen.mode !== 'current' ? chosen.brightness
       : Number.isFinite(item.pilot.dimming) ? Math.max(10, Math.min(100, item.pilot.dimming)) : 10;
@@ -209,7 +235,10 @@ async function dimStates(snapshot,progress,warm,requestOptions, { look, frame, i
     if (reply.success) { item.changed = true; item.lookApplied = true; if (progress >= 1) item.finished = true; }
     return reply;
   }));
-  return {success:replies.every(reply=>reply.success)};
+  // A configured light that has never answered this run is not done.
+  const unreached = snapshot.filter(item => item.unreached).length;
+  const success = replies.every(reply => reply.success) && !unreached;
+  return { success, code: success ? 'OK' : 'PARTIAL', ...(unreached ? { unreached } : {}) };
 }
 
 async function restoreStates(snapshot,requestOptions) {
@@ -225,4 +254,4 @@ async function restoreStates(snapshot,requestOptions) {
   return {provider:'wiz',success:replies.every(reply=>reply.success),code:replies.every(reply=>reply.success)?'RESTORED':'RESTORE_PARTIAL',message:replies.every(reply=>reply.success)?'WiZ lights restored.':'Some WiZ lights could not be restored.'};
 }
 
-module.exports = { PORT, isLocalAddress, normalizeAddresses, normalizeDevices, normalizeLook, lookPilot, request, discover, pilotState, verify, setLights, readStates, restorePilot, dimStates, restoreStates };
+module.exports = { PORT, RETRANSMIT_MS, isLocalAddress, normalizeAddresses, normalizeDevices, normalizeLook, lookPilot, request, discover, pilotState, verify, setLights, readStates, restorePilot, dimStates, restoreStates };

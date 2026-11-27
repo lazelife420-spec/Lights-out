@@ -394,6 +394,19 @@ check('icon: assets/icon.ico is a valid multi-size ICO', () => {
   assert(ico.length > 1000, 'icon too small');
   assert(ico.readUInt16LE(0) === 0 && ico.readUInt16LE(2) === 1, 'bad ICO header');
   assert(ico.readUInt16LE(4) >= 5, 'expected multiple icon sizes');
+  // A drawn frame for every size Windows asks for (scripts/make-icons.js ICO_SIZES).
+  const sizes = Array.from({ length: ico.readUInt16LE(4) }, (_, i) => ico.readUInt8(6 + i * 16) || 256);
+  assert(sizes.join(',') === '16,20,24,30,32,36,40,48,64,96,128,256', `unexpected icon frames: ${sizes.join(',')}`);
+});
+
+check('taskbar: overlay badges and thumbnail glyphs are committed and packaged', () => {
+  const packaged = new Set(JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).build.files);
+  const files = require(path.join(root, 'taskbarPresence.js')).allTaskbarAssetFiles();
+  assert(files.length === 48, `expected 48 taskbar assets, got ${files.length}`);
+  for (const file of files) {
+    assert(fs.existsSync(path.join(root, file)), `${file} missing`);
+    assert(packaged.has(file), `${file} missing from build.files`);
+  }
 });
 
 // 6. Safe-startup guarantees (guards against AGENTS.md "Do Not Reintroduce").
@@ -540,7 +553,9 @@ check('ipc: shared Start architecture and timer/login handlers remain exposed', 
   assertMatch(mainSrc, /ipcMain\.handle\('pause-timer', async \(\) => pauseTimer\(\)\);/, 'pause-timer IPC missing');
   assertMatch(mainSrc, /ipcMain\.handle\('resume-timer', async \(\) => resumeTimer\(\)\);/, 'resume-timer IPC missing');
   assertMatch(mainSrc, /ipcMain\.handle\('snooze-timer', async \(event, seconds, reason\) => snoozeTimer\(seconds, reason\)\);/, 'snooze-timer IPC missing');
-  assertMatch(mainSrc, /app\.setLoginItemSettings\(\{[\s\S]*openAtLogin: Boolean\(enabled\),[\s\S]*openAsHidden: false,[\s\S]*args: \['--minimized', '--no-auto-start'\]/s, 'run-at-login settings changed');
+  assertMatch(mainSrc, /app\.setLoginItemSettings\(\{[\s\S]*openAtLogin: Boolean\(enabled\),[\s\S]*openAsHidden: false,[\s\S]*args: \[\.\.\.LOGIN_ITEM_ARGS\]/s, 'run-at-login settings changed');
+  assertMatch(mainSrc, /const LOGIN_ITEM_ARGS = Object\.freeze\(\['--minimized', '--no-auto-start'\]\);/, 'Run at login stays minimized and idle');
+  assertMatch(mainSrc, /app\.getLoginItemSettings\(\{ path: process\.execPath, args: \[\.\.\.LOGIN_ITEM_ARGS\] \}\)/, 'Run at login is read back with the args it was written with');
 });
 
 check('calendar: runtime uses the provider API that actually exists', () => {
@@ -590,7 +605,9 @@ check('bedtime-reminder: runtime honors disabled state and avoids duplicate rend
 
 check('settings: save-app-settings persists the auxiliary protection sections', () => {
   assertMatch(mainSrc, /if \(settings\.wifiGuard\) settingsStore\.updateSection\('wifiGuard', capabilityTruth\.sanitizeWifiGuard\(settings\.wifiGuard\)\);/, 'wifiGuard truth-gated save missing');
-  assertMatch(mainSrc, /if \(settings\.contentBlocker\) settingsStore\.updateSection\('contentBlocker', capabilityTruth\.sanitizeContentBlocker\(settings\.contentBlocker\)\);/, 'contentBlocker truth-gated save missing');
+  // Truth-gated on the merged section (a partial save cannot read as "off").
+  assertMatch(mainSrc, /if \(settings\.contentBlocker\) settingsStore\.updateSection\('contentBlocker', mergedContentBlockerSettings\(settings\.contentBlocker\)\);/, 'contentBlocker truth-gated save missing');
+  assertMatch(mainSrc, /return capabilityTruth\.sanitizeContentBlocker\(\{ \.\.\.current, \.\.\.\(patch && typeof patch === 'object' \? patch : \{\}\) \}\);/, 'contentBlocker saves sanitize the merged section');
   assertMatch(mainSrc, /if \(settings\.accountability\) settingsStore\.updateSection\('accountability', capabilityTruth\.sanitizeAccountability\(settings\.accountability\)\);/, 'accountability truth-gated save missing');
 });
 
@@ -1232,8 +1249,9 @@ check('production truth: UI feedback follows observable state', () => {
   assert(!htmlSrc.includes('data-snooze="300"'), 'the duplicate data-snooze="300" chip must be removed (#btn-snooze is +5m)');
   assertMatch(htmlSrc, /<button class="action-btn secondary" id="btn-snooze" aria-label="Snooze 5 minutes">/, '#btn-snooze must be labelled "Snooze 5 minutes"');
   assertMatch(rendererSrc, /function updateReadiness/, 'readiness strip must be populated from real status sources');
-  assertMatch(htmlSrc, /id="chk-graceful"/, 'Graceful Close must have a Settings checkbox (its only toggle was in the removed menu)');
-  assertMatch(rendererSrc, /chkGraceful/, 'chk-graceful must be wired in renderer.js');
+  // Graceful close had no backend (nothing read app.gracefulClose), so the
+  // toggle was removed instead of promising behaviour that never ran.
+  assert(!htmlSrc.includes('id="chk-graceful"') && !/chkGraceful/.test(rendererSrc), 'the unwired Graceful close toggle must stay removed');
   assertMatch(rendererSrc, /if \(event\.defaultPrevented\) return;/, 'global shortcuts must not override handled keyboard navigation');
   const cssSrcForMenus = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
   assert(!/\.menu-item|\.main-menu|\.submenu/.test(cssSrcForMenus), 'top-menu CSS must not remain in styles.css');
@@ -1765,7 +1783,7 @@ check('P02 records: only real completions count; Test Mode never leaves as a suc
   assertMatch(body, /if \(!completionOptions\.dryRun\) \{\s*try \{ streaks\.recordEvent\(null, completionOptions\.action, Boolean\(rec && rec\.snoozeCount > 0\)\)[\s\S]*?sleepDebt\.recordNight\([\s\S]*?\n {2}\}\n/, 'completeTimer guards ritual credit using the frozen completed run and retains its snooze flag');
   assert((body.match(/streaks\.recordEvent\(/g) || []).length === 1 && (body.match(/sleepDebt\.recordNight\(/g) || []).length === 1, 'completeTimer must record streak/deficit exactly once (inside the guard)');
   assertMatch(body, /runReceipts\.getReceiptById\(activeReceiptId\)/, 'completeTimer must read the receipt for the real snooze flag');
-  assertMatch(body, /await playLastLightRitual\(completionOptions\.dryRun\);[\s\S]*?await executePowerAction\(\{ \.\.\.completionOptions, receiptId: completingReceiptId \}\);\s*\}\s*$/, 'Last Light precedes dispatch of the frozen completed run');
+  assertMatch(body, /await playLastLightRitual\(completionOptions\.dryRun, completionOptions\.lastLight\);[\s\S]*?await executePowerAction\(\{ \.\.\.completionOptions, receiptId: completingReceiptId \}\);\s*\}\s*$/, 'Last Light precedes dispatch of the frozen completed run');
   assert(body.indexOf("result: completionOptions.dryRun ? 'dry_run_completed' : 'timer_elapsed'") > body.indexOf('if (!completionOptions.dryRun) {'), 'receipt update stays unconditional after ritual credit');
 
   const overrideSrc = fs.readFileSync(path.join(root, 'emergencyOverride.js'), 'utf8');
@@ -4176,8 +4194,8 @@ check('P13 settings: safety hero, honest saves, smart lights truth, dark fields,
   assert(/<input type="checkbox" id="chk-dryrun"/.test(firstGroup), '#chk-dryrun stays a real checkbox');
   assertMatch(htmlSrc, /id="set-dryrun-desc"/, '#set-dryrun-desc missing');
   const psSection = htmlSrc.slice(psAt, htmlSrc.indexOf('<div class="option-section', psAt + psOpen.length));
-  const order = ['chk-dryrun', 'sel-action', 'grace-minutes', 'chk-graceful', 'chk-mute', 'chk-forceshutdown'].map(id => psSection.indexOf(`id="${id}"`));
-  assert(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), 'Power & Safety order: Test Mode, Action, Grace, Graceful, Mute, Force');
+  const order = ['chk-dryrun', 'sel-action', 'grace-minutes', 'chk-mute', 'chk-forceshutdown'].map(id => psSection.indexOf(`id="${id}"`));
+  assert(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), 'Power & Safety order: Test Mode, Action, Grace, Mute, Force');
   assertMatch(psSection, /id="chk-forceshutdown"[^>]*aria-describedby="set-force-desc"/, 'Force shutdown is described by its consequence');
   assert(!/Mute system[^<]*\(|Graceful close[^<]*\(/.test(psSection), 'Mute and Graceful close carry no behaviour description');
 
@@ -4223,7 +4241,7 @@ check('P13 settings: safety hero, honest saves, smart lights truth, dark fields,
   assert(/No effect for Sleep/.test(truthBox.els.setForceDesc.textContent), 'Force shutdown says it has no effect for Sleep');
 
   // Honest save model: data-live + "Applies now", a dirty note, one delegated listener.
-  const liveIds = ['chk-dryrun', 'chk-forceshutdown', 'chk-mute', 'chk-graceful', 'grace-minutes', 'cz-clockface', 'cz-clock-style', 'cz-clock-dial', 'cz-clock-format', 'cz-clock-scale', 'cz-clock-hands', 'cz-clock-seconds', 'cz-clock-date', 'cz-clock-sweep', 'chk-idle-detect', 'chk-bedtime-reminder', 'chk-calendar-autostart', 'chk-override-tax', 'tax-free-snoozes', 'tax-tighten-min', 'tax-max-tighten', 'tax-reason-after', 'chk-autopilot', 'autopilot-override-time', 'cb-schedules-list'];
+  const liveIds = ['chk-dryrun', 'chk-forceshutdown', 'chk-mute', 'grace-minutes', 'cz-clockface', 'cz-clock-style', 'cz-clock-dial', 'cz-clock-format', 'cz-clock-scale', 'cz-clock-hands', 'cz-clock-seconds', 'cz-clock-date', 'cz-clock-sweep', 'chk-idle-detect', 'chk-bedtime-reminder', 'chk-calendar-autostart', 'chk-override-tax', 'tax-free-snoozes', 'tax-tighten-min', 'tax-max-tighten', 'tax-reason-after', 'chk-autopilot', 'autopilot-override-time', 'cb-schedules-list'];
   for (const id of liveIds) {
     const tag = (htmlSrc.match(new RegExp(`<[a-z]+ [^>]*id="${id}"[^>]*>`)) || [''])[0];
     assert(/data-live="1"/.test(tag), `#${id} must be marked data-live`);
@@ -4234,7 +4252,7 @@ check('P13 settings: safety hero, honest saves, smart lights truth, dark fields,
     const section = htmlSrc.slice(sectionAt, at + 300);
     assert(near.includes('Applies now') || section.includes('<span class="set-live-tag">Applies now</span>'), `#${id} needs an "Applies now" tag`);
   }
-  for (const id of ['chk-dryrun', 'chk-forceshutdown', 'chk-mute', 'chk-graceful', 'grace-minutes']) {
+  for (const id of ['chk-dryrun', 'chk-forceshutdown', 'chk-mute', 'grace-minutes']) {
     const at = htmlSrc.indexOf(`id="${id}"`);
     assert(htmlSrc.slice(htmlSrc.lastIndexOf('<div class="option-group', at), at).includes('<span class="set-live-tag">Applies now</span>'), `#${id} row carries its own Applies now tag`);
   }
@@ -4253,8 +4271,8 @@ check('P13 settings: safety hero, honest saves, smart lights truth, dark fields,
   // Live controls write only their own keys: a live toggle never flushes staged
   // form values (Action, focus blocklist, the wind-down *OnDim switches).
   const liveCalls = [...rendererJs.matchAll(/persistAdvancedOptions\((\{[^)]*\})?\);/g)];
-  assert(liveCalls.length === 5, `five live Power & Safety writes (got ${liveCalls.length})`);
-  const liveAllowed = new Set(['dryRun', 'forceShutdown', 'muteSystem', 'gracefulClose', 'graceMinutes']);
+  assert(liveCalls.length === 4, `four live Power & Safety writes (got ${liveCalls.length})`);
+  const liveAllowed = new Set(['dryRun', 'forceShutdown', 'muteSystem', 'graceMinutes']);
   for (const [call, obj] of liveCalls) {
     const keys = obj ? [...obj.matchAll(/(\w+):/g)].map(m => m[1]) : [];
     assert(keys.length === 1 && liveAllowed.has(keys[0]), `${call} writes exactly one Power & Safety key`);
@@ -4819,7 +4837,10 @@ check('Fire 03 shell', () => {
   assert(header.some(r => /background:\s*transparent/.test(r.body) && /border-bottom-color:\s*transparent/.test(r.body)) && !header.some(r => /border-bottom:\s*0/.test(r.body)), 'the night header is an open frame (transparent background and hairline colour)');
   assert(header.some(r => /-webkit-app-region:\s*drag/.test(r.body)) && all.some(r => r.selector === '.window-buttons' && /-webkit-app-region:\s*no-drag/.test(r.body)), 'the header keeps its drag region and the window buttons stay no-drag');
   const dawnHeader = all.find(r => r.selector === 'body[data-theme="dawn"] .chrome-header');
-  assert(dawnHeader && /background:\s*#0f1821/.test(dawnHeader.body) && /border-bottom-color:\s*#263746/.test(dawnHeader.body), 'Dawn keeps its opaque header and hairline');
+  // The header shares the rail's night colour, so the dark frame has no seam.
+  const dawnRail = all.find(r => r.selector === 'body[data-theme="dawn"] .ns-sidebar');
+  const railBg = ((dawnRail && dawnRail.body.match(/background:\s*(#[0-9a-f]{6})/i)) || [])[1];
+  assert(dawnHeader && railBg && new RegExp(`background:\\s*${railBg}`, 'i').test(dawnHeader.body) && /border-bottom-color:\s*#263746/.test(dawnHeader.body), 'Dawn keeps its opaque header (the rail colour) and hairline');
   const fade = fireRules.find(r => r.selector === 'body:not(.fullscreen-clock-mode):not(.mini-mode) .dashboard');
   assert(fade && /-webkit-mask-image:\s*linear-gradient\(to bottom, transparent 0, #000 10px\)/.test(fade.body) && /(^|;)\s*mask-image:\s*linear-gradient\(to bottom, transparent 0, #000 10px\)/.test(fade.body), 'the scroller fade is 10px and scoped off fullscreen / mini');
 

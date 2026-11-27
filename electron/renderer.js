@@ -387,7 +387,6 @@ const els = {
   graceMinutes: document.getElementById('grace-minutes'),
   chkForceShutdown: document.getElementById('chk-forceshutdown'),
   chkMute: document.getElementById('chk-mute'),
-  chkGraceful: document.getElementById('chk-graceful'),
   testmodePill: document.getElementById('testmode-pill'),
   rdyPhone: document.getElementById('rdy-phone'),
   rdyLights: document.getElementById('rdy-lights'),
@@ -831,7 +830,6 @@ const state = {
   // nothing can start on the in-memory default.
   settingsLoaded: false,
   sound: false,
-  gracefulClose: true,
   forceShutdown: false,
   muteSystem: false,
   graceMinutes: 2,
@@ -1459,6 +1457,56 @@ function updatePlanFacts(now = new Date()) {
   setTextIfChanged(document.getElementById('ns-hero-label'), (hour >= 17 || hour < 5) ? "TONIGHT'S PLAN" : 'NEXT RUN');
 }
 
+// -- The Tonight dial ---------------------------------------------------------
+// Idle, the instrument is a slider for tonight's duration (tonightDial.js).
+// It edits the plan only through the duration stepper's own path
+// (applyTonightDuration in wireEvents) and is live exactly while that editor
+// is in reach: settings loaded, no run or pause, no ritual, not mini mode or
+// the fullscreen clock (both hide the plan editor), no dialog or onboarding
+// up, Tonight on screen, and no One night only time owning the duration
+// (Start would count down to that time, whatever the dial said).
+let tonightDial = null;
+
+function tonightDialInteractive() {
+  if (!state.settingsLoaded || state.running || state.paused) return false;
+  if (state.miniMode || state.fullscreenClock) return false;
+  if (els.ritualOverlay?.classList.contains('active')) return false;
+  if (timerShortcutSurfaceBlocked()) return false;
+  if (scheduleOverrideTarget()) return false;
+  const panel = document.getElementById('ns-panel-lib');
+  return !panel || panel.style.display !== 'none';
+}
+
+function createTonightDial(applyDuration) {
+  const container = document.querySelector('.ring-container');
+  const dial = document.getElementById('tonight-dial');
+  if (!container || !dial || typeof TonightDial === 'undefined') return null;
+  return TonightDial.createController({
+    container,
+    dial,
+    readout: { value: document.getElementById('tonight-dial-value'), ends: document.getElementById('tonight-dial-ends') },
+    win: window,
+    body: document.body,
+    isInteractive: tonightDialInteractive,
+    getSeconds: inputSeconds,
+    // Whole minutes in seconds; the stepper's input takes its own unit.
+    apply: seconds => {
+      releaseOutcomeHold();
+      return applyDuration(state.unit === 'sec' ? seconds : Math.round(seconds / 60));
+    },
+    describe: seconds => {
+      const now = new Date();
+      return { duration: formatDuration(seconds), target: formatClockTarget(new Date(now.getTime() + seconds * 1000), now) };
+    },
+    // A drag, like any setup edit, ends the completion hold; render() then
+    // draws the preview (or the normal face again on release).
+    onDragChange: active => {
+      if (active) releaseOutcomeHold();
+      render();
+    }
+  });
+}
+
 // Session console head: phase (+ origin from the frozen map), then the real
 // end. textContent only.
 // 'Focus' belongs to Focus Sessions only (Fire 02): a session's first phase is Running.
@@ -1720,7 +1768,12 @@ async function saveSettingsPanel() {
   // value (present whenever Dry Run had just been changed through the
   // OTHER editor while Settings stayed open) silently overwrite a newer
   // canonical value on Save.
-  state.runAtLogin = Boolean(els.chkRunLogin?.checked);
+  // Run at login is sent only when the box differs from the state last read
+  // from Windows, so a Save of an unrelated setting can never add or remove
+  // the login entry.
+  const wantRunAtLogin = Boolean(els.chkRunLogin?.checked);
+  const runAtLoginChanged = wantRunAtLogin !== Boolean(state.runAtLogin);
+  state.runAtLogin = wantRunAtLogin;
 
   // Save Smart Lights config. A verification belongs to one exact setup: if
   // any field main's configurationKey() is built from differs from the last
@@ -1773,7 +1826,7 @@ async function saveSettingsPanel() {
   let ok = true;
   try {
     const saved = await api.saveAppSettings({
-      runAtLogin: state.runAtLogin,
+      ...(runAtLoginChanged ? { runAtLogin: state.runAtLogin } : {}),
       app: collectAppSettings(),
       customization: state.customization,
       lastLight: state.lastLight,
@@ -1781,7 +1834,10 @@ async function saveSettingsPanel() {
       contentBlocker: collectContentBlockerSettings(),
       accountability: collectAccountabilitySettings()
     });
-    if (typeof saved?.runAtLogin === 'boolean') state.runAtLogin = saved.runAtLogin;
+    if (typeof saved?.runAtLogin === 'boolean') {
+      state.runAtLogin = saved.runAtLogin;
+      if (els.chkRunLogin) els.chkRunLogin.checked = saved.runAtLogin;
+    }
     applyWifiGuardSettings(saved?.wifiGuard);
     applyContentBlockerSettings(saved?.contentBlocker);
     applyAccountabilitySettings(saved?.accountability);
@@ -1822,6 +1878,40 @@ async function saveSettingsPanel() {
   return ok;
 }
 
+// One mapping from main's public smart-lights config to renderer state, used
+// by startup hydration and Settings Cancel, so a new field (timerBeacon was
+// one) cannot be dropped by one path and then wiped by the next Save.
+function smartLightsStateFromPublicConfig(lightConfig) {
+  const c = lightConfig && typeof lightConfig === 'object' ? lightConfig : {};
+  return {
+    enabled: c.enabled || false,
+    provider: c.provider || 'none',
+    mode: c.mode || 'gradual_dim',
+    timerBeacon: c.timerBeacon === true,
+    dimMinutes: c.dimMinutes || 10,
+    hueBridgeIp: c.hueBridgeIp || '',
+    hueUsername: '',
+    hasHueCredential: Boolean(c.hasHueCredential),
+    hueGroupId: c.hueGroupId || '',
+    hueAllowLegacyHttp: Boolean(c.hueAllowLegacyHttp),
+    httpUrl: c.httpUrl || '',
+    httpMethod: c.httpMethod || 'POST',
+    httpBodyTemplate: c.httpBodyTemplate || '{"brightness": {{BRIGHTNESS}}, "color_temp": {{COLOR_TEMP}}, "on": {{ON}}}',
+    wizAddresses: Array.isArray(c.wizAddresses) ? [...c.wizAddresses] : [],
+    wizDevices: Array.isArray(c.wizDevices) ? c.wizDevices.map(d => ({ ...d })) : [],
+    wizLook: c.wizLook && typeof c.wizLook === 'object' ? { ...c.wizLook } : {},
+    verifiedConfigKey: c.verifiedConfigKey || ''
+  };
+}
+
+// After Import all data: re-read everything the import wrote (the Settings
+// form, modes and streaks) from main instead of asking for a restart.
+async function reloadAfterImport() {
+  await discardSettingsPanelChanges();
+  if (typeof loadProfiles === 'function') await loadProfiles();
+  if (typeof loadStreaks === 'function') await loadStreaks();
+}
+
 // Revert the Settings form to the last persisted values without restarting
 // the renderer or reattaching listeners.
 async function discardSettingsPanelChanges() {
@@ -1846,24 +1936,7 @@ async function discardSettingsPanelChanges() {
     syncCustomizeUI();
     loadRemoteControlState();
     if (lightConfig) {
-      state.smartLights = {
-        enabled: lightConfig.enabled || false,
-        provider: lightConfig.provider || 'none',
-        mode: lightConfig.mode || 'gradual_dim',
-        dimMinutes: lightConfig.dimMinutes || 10,
-        hueBridgeIp: lightConfig.hueBridgeIp || '',
-        hueUsername: '',
-        hasHueCredential: Boolean(lightConfig.hasHueCredential),
-        hueGroupId: lightConfig.hueGroupId || '',
-        hueAllowLegacyHttp: Boolean(lightConfig.hueAllowLegacyHttp),
-        httpUrl: lightConfig.httpUrl || '',
-        httpMethod: lightConfig.httpMethod || 'POST',
-        httpBodyTemplate: lightConfig.httpBodyTemplate || '{"brightness": {{BRIGHTNESS}}, "color_temp": {{COLOR_TEMP}}, "on": {{ON}}}',
-        wizAddresses: Array.isArray(lightConfig.wizAddresses) ? [...lightConfig.wizAddresses] : [],
-        wizDevices: Array.isArray(lightConfig.wizDevices) ? lightConfig.wizDevices.map(d => ({ ...d })) : [],
-        wizLook: lightConfig.wizLook && typeof lightConfig.wizLook === 'object' ? { ...lightConfig.wizLook } : {},
-        verifiedConfigKey: lightConfig.verifiedConfigKey || ''
-      };
+      state.smartLights = smartLightsStateFromPublicConfig(lightConfig);
       updateLightsUIFromState();
       if (typeof renderLightsStatePill === 'function') renderLightsStatePill(lightConfig);
     }
@@ -1871,6 +1944,8 @@ async function discardSettingsPanelChanges() {
     if (cbConfig) applyContentBlockerSettings(cbConfig);
     if (accConfig) applyAccountabilitySettings(accConfig);
     if (typeof hydrateOverrideTaxConfig === 'function') await hydrateOverrideTaxConfig();
+    // The First Light box is UI-only until Set: Cancel shows the real task.
+    if (typeof refreshAlarmStatus === 'function') await refreshAlarmStatus();
     // Fire 02: the Test Mode notes describe the persisted values just read.
     if (typeof setWindDownFacts === 'function' && typeof pickWindDownFacts === 'function') {
       setWindDownFacts(pickWindDownFacts({ app: appSettings.app, contentBlocker: cbConfig, wifiGuard: wifiConfig, lights: lightConfig }));
@@ -3221,6 +3296,12 @@ function render() {
     clearIdleBezel();
     updateRing(displaySeconds, totalSeconds);
   }
+  // The Tonight dial's drag preview on the countdown face: while a drag is in
+  // progress the arc shows the planned duration (TonightDial.previewRatio).
+  // The analog face previews on its bezel, drawn above from the same plan.
+  if (!bezelDrawn && isIdle && typeof tonightDial !== 'undefined' && tonightDial?.isDragging()) {
+    updateRing(TonightDial.previewRatio(tonightDial.previewMinutes()), 1);
+  }
   if (isIdle) updatePlanFacts(now);
   else updateSessionHead(now);
 
@@ -3381,7 +3462,6 @@ function render() {
   if (els.panelSet?.style.display === 'none') {
     if (els.chkForceShutdown) els.chkForceShutdown.checked = state.forceShutdown;
     if (els.chkMute) els.chkMute.checked = state.muteSystem;
-  if (els.chkGraceful) els.chkGraceful.checked = state.gracefulClose;
     if (els.chkRunLogin) els.chkRunLogin.checked = state.runAtLogin;
     if (els.graceMinutes) els.graceMinutes.value = state.graceMinutes;
   }
@@ -3398,6 +3478,8 @@ function render() {
   // inputSeconds() reads; then Schedule's static Test Mode / REAL truth.
   updateScheduleHint();
   if (typeof renderScheduleTruth === 'function') renderScheduleTruth();
+  // The Tonight dial follows the plan and its gate on every render.
+  if (typeof tonightDial !== 'undefined' && tonightDial) tonightDial.sync();
 }
 
 function resolveClockDial() {
@@ -5222,23 +5304,31 @@ document.getElementById('receipts-confirm')?.addEventListener('keydown', (event)
     }, 300);
   }
 
-  els.btnPlus.addEventListener('click', () => {
-    els.timerInput.value = inputValue() + 1;
+  // The one duration edit path (the -/+ stepper and the Tonight dial): write
+  // the input in its unit, re-derive the idle plan from it, re-check the
+  // armed Night Mode / loaded My Mode identity, persist durationSeconds
+  // (debounced) and render. Idle only: it never touches a run.
+  function applyTonightDuration(value) {
+    if (state.running || state.paused) return false;
+    els.timerInput.value = value;
     setInputFromSeconds(inputSeconds());
     checkArmedModeMatch();
     checkProfileMatch(true);
     persistTonightDuration();
     render();
+    return true;
+  }
+
+  els.btnPlus.addEventListener('click', () => {
+    applyTonightDuration(inputValue() + 1);
   });
 
   els.btnMinus.addEventListener('click', () => {
-    els.timerInput.value = Math.max(1, inputValue() - 1);
-    setInputFromSeconds(inputSeconds());
-    checkArmedModeMatch();
-    checkProfileMatch(true);
-    persistTonightDuration();
-    render();
+    applyTonightDuration(Math.max(1, inputValue() - 1));
   });
+
+  // The Tonight dial writes through the same path, never its own.
+  tonightDial = createTonightDial(applyTonightDuration);
 
   els.timerInput.addEventListener('input', () => {
     if (!state.running && !state.paused) {
@@ -5458,11 +5548,6 @@ document.getElementById('receipts-confirm')?.addEventListener('keydown', (event)
     persistAdvancedOptions({ muteSystem: state.muteSystem });
   });
 
-  els.chkGraceful?.addEventListener('change', () => {
-    state.gracefulClose = els.chkGraceful.checked;
-    render();
-    persistAdvancedOptions({ gracefulClose: state.gracefulClose });
-  });
 
   els.graceMinutes?.addEventListener('change', () => {
     state.graceMinutes = clamp(Number(els.graceMinutes.value) || 0, 0, 10);
@@ -6044,7 +6129,10 @@ document.getElementById('receipts-confirm')?.addEventListener('keydown', (event)
       const text = await file.text();
       const result = await api.importAllData(text);
       if (result.success) {
-        notify('Data imported successfully. Restart to see all changes.', 'success');
+        // Show what was imported now, so a later Save cannot write the old
+        // form values back over it.
+        await reloadAfterImport();
+        notify('Data imported. Settings, modes and streaks now show the imported values.', 'success');
       } else {
         notify('Import failed: ' + (result.error || 'Unknown error'), 'error');
       }
@@ -6259,24 +6347,7 @@ async function loadInitialData() {
 
     // Load Smart Lights config
     if (lightConfig) {
-      state.smartLights = {
-        enabled: lightConfig.enabled || false,
-        provider: lightConfig.provider || 'none',
-        wizAddresses: lightConfig.wizAddresses || [],
-        wizDevices: lightConfig.wizDevices || [],
-        wizLook: lightConfig.wizLook || {},
-        mode: lightConfig.mode || 'gradual_dim',
-        dimMinutes: lightConfig.dimMinutes || 10,
-        hueBridgeIp: lightConfig.hueBridgeIp || '',
-        hueUsername: '',
-        hasHueCredential: Boolean(lightConfig.hasHueCredential),
-        hueGroupId: lightConfig.hueGroupId || '',
-        hueAllowLegacyHttp: Boolean(lightConfig.hueAllowLegacyHttp),
-        httpUrl: lightConfig.httpUrl || '',
-        httpMethod: lightConfig.httpMethod || 'POST',
-        httpBodyTemplate: lightConfig.httpBodyTemplate || '{"brightness": {{BRIGHTNESS}}, "color_temp": {{COLOR_TEMP}}, "on": {{ON}}}',
-        verifiedConfigKey: lightConfig.verifiedConfigKey || ''
-      };
+      state.smartLights = smartLightsStateFromPublicConfig(lightConfig);
       updateLightsUIFromState();
       renderLightsStatePill(lightConfig);
     } else if (els.lightsStatePill && !els.lightsStatePill.dataset.loaded) {

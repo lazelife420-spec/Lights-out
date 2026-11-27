@@ -41,12 +41,13 @@ automatic `postinstall` hook.
 ### Window
 - Frameless window with in-page mini mode, minimize, maximize and close-to-tray controls (can be moved and resized)
 - System tray menu: start 28 min / 1 hour, pause, snooze, cancel, quit
+- Taskbar (Windows): progress, plus a badge on the app button while a run is active (amber = Test Mode, rose = a REAL action, the tray dot's colours; a pause sign while paused) and Pause/Resume, Snooze +5 min and Cancel buttons in the window thumbnail. After the countdown ends only Cancel stays, until the power request is sent; idle clears both (`taskbarPresence.js`, images pre-rendered by `npm run icons`)
 - Single instance lock
 - No application menu bar; the tray menu and the sidebar are the navigation
 
 ### Cockpit Dashboard UI
 - **Sidebar pages** - Tonight, Night Modes, Schedule, Devices, Proof, Settings, About
-- **Timer Ring** - Visual countdown with progress ring
+- **Timer Ring** - Visual countdown with progress ring. While idle the ring (or analog face) is also a slider for tonight's duration: drag up for longer and down for shorter (about 1 min per 6 px, `Shift` for 5 min steps), scroll it, or focus it and use the arrow keys, `PageUp`/`PageDown`, `Home`/`End`; pressing Escape during a drag puts the duration back. It writes through the same path as the -/+ stepper (`tonightDial.js`, `applyTonightDuration`), never starts or changes a run, and is inert during a run, a ritual, mini mode, the fullscreen clock, before settings load and while a Schedule › One night only time sets the end
 - **Quick Actions** - Start, pause, resume, snooze, cancel
 - **Status** - Tonight's plan shows the ending and end time; the Devices page shows battery, power plan, lights, Wi-Fi Guard and phone status
 - **Night Modes** - Declarative mode cards and My Modes; choosing one never starts it
@@ -60,7 +61,7 @@ automatic `postinstall` hook.
 
 ### Keyboard shortcuts
 - `Ctrl+Shift+X` cancels from anywhere, including during Last Light, until the power request is sent. `Esc` cancels a running or paused countdown when the window has focus, but it closes an open dialog or panel first, or leaves a focused field (the renderer `keydown` handler): at the imminent-action warning (`#warning-modal`) `Esc` only closes the warning and the countdown keeps going, so use its **Cancel timer** button or `Ctrl+Shift+X`
-- `Ctrl+Shift+Space` pause/resume, `Ctrl+Shift+Z` snooze, `Ctrl+Shift+S` show/hide the window, `Ctrl+Shift+P` preview Last Light, `Ctrl+Shift+W` widget. `Ctrl+Shift+A` only brings the window forward: the `toggle-alarm-focus` message it sends has no renderer listener
+- `Ctrl+Shift+Space` pause/resume, `Ctrl+Shift+Z` snooze, `Ctrl+Shift+S` show/hide the window, `Ctrl+Shift+P` preview Last Light, `Ctrl+Shift+W` widget. There is no global alarm shortcut: set First Light in Settings > Automations
 - The quick-start hotkeys `Ctrl+Shift+L` and `Ctrl+Shift+1`..`4` start real timers from inside other apps, so they are off by default (`app.globalQuickStartShortcuts: false` in settings.json; read at launch). Quit Lights Out (tray > Quit) before editing settings.json, then start it again: the app rewrites the file from memory while it runs, so an edit made while it is open is lost. Portable builds keep it at `<extracted folder>\user-data\settings.json`
 
 ### Data and network safety

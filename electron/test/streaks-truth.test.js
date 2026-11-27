@@ -102,6 +102,7 @@ function runCompleteTimer({ dryRun, receipt, cancelDuring }) {
     mainWindow: null,
     clearTimerInterval: () => {},
     setTaskbarProgress: () => {},
+    refreshShellSurfaces: () => {},
     persistActiveTimer: () => {},
     restoreAfterTimer: () => {},
     smartLights: { getConfig: () => ({ enabled: false }) },

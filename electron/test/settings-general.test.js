@@ -108,7 +108,8 @@ test('the startup note is true to the launch, login, schedule and autopilot code
   assert.match(note, /Schedule auto-start and Autopilot/);
   assert.match(note, /jump list/);
   // Login: minimized, and --no-auto-start blocks any --timer= launch start.
-  assert.match(mainJs, /args: \['--minimized', '--no-auto-start'\]/);
+  assert.match(mainJs, /const LOGIN_ITEM_ARGS = Object\.freeze\(\['--minimized', '--no-auto-start'\]\);/);
+  assert.match(mainJs, /args: \[\.\.\.LOGIN_ITEM_ARGS\]/);
   assert.match(mainJs, /if \(launchOptions\.timerMinutes > 0 && !launchOptions\.noAutoStart\) \{/);
   // The only launch-time start paths are the explicit --timer= jump-list tasks.
   assert.deepEqual([...mainJs.matchAll(/arguments: '(--[^']+)'/g)].map(m => m[1]), ['--timer=5', '--timer=15', '--timer=30']);
@@ -121,7 +122,7 @@ test('the startup note is true to the launch, login, schedule and autopilot code
 });
 
 test('the data note is true: receipts export from Proof › Full ledger', () => {
-  assert.match(html, /id="set-data-note">Settings and run receipts are stored only on this PC\. No account, no cloud sync\. Export your receipts from Proof › Full ledger\.</);
+  assert.match(html, /id="set-data-note">Settings and run receipts are stored only on this PC\. No account, no cloud sync\. Copy your receipts from Proof › Full ledger\.</);
   const stats = html.slice(html.indexOf('id="ns-panel-stats"'), html.indexOf('id="ns-panel-set"'));
   assert.match(stats, /id="btn-stats-view-ledger">Full ledger/);
   assert.match(html, /<div class="modal" id="receipts-modal"[\s\S]*?id="btn-export-receipts"/);

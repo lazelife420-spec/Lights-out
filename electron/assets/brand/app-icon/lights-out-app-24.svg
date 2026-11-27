@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Lights Out app icon, 24px master: the lit teal desk lamp on the night badge.
+     Drawn on its own 24px grid (coordinates snapped to whole/half pixels) so the
+     24px Windows icon frame is drawn rather than shrunk. Rendered into assets/icon.ico
+     by scripts/make-icons.js. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <defs>
+    <radialGradient id="bg" cx="0.42" cy="0.3" r="0.95"><stop offset="0" stop-color="#132634"/><stop offset="0.6" stop-color="#0a131c"/><stop offset="1" stop-color="#05080f"/></radialGradient>
+    <radialGradient id="pool" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#00FFD1" stop-opacity="0.8"/><stop offset="0.55" stop-color="#00FFD1" stop-opacity="0.25"/><stop offset="1" stop-color="#00FFD1" stop-opacity="0"/></radialGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#00FFD1" stop-opacity="0.5"/><stop offset="1" stop-color="#00FFD1" stop-opacity="0"/></linearGradient>
+  </defs>
+  <rect x="0" y="0" width="24" height="24" rx="5" fill="url(#bg)"/>
+  <rect x="0.5" y="0.5" width="23" height="23" rx="4.5" fill="none" stroke="#00FFD1" stroke-opacity="0.3" stroke-width="1"/>
+  <ellipse cx="16" cy="19" rx="6.5" ry="2" fill="url(#pool)"/>
+  <polygon points="14.5,12.5 20,10 22,19 11,19" fill="url(#beam)" opacity="0.75"/>
+  <rect x="4" y="19" width="7" height="2" rx="0" fill="#1fbfa8"/>
+  <polyline points="7.5,19 10.5,11.5 13.5,6.5" fill="none" stroke="#178f80" stroke-width="1" stroke-linejoin="round" stroke-linecap="round"/>
+  <circle cx="10.5" cy="11.5" r="1.01" fill="#1fbfa8"/>
+  <polygon points="12,6 16,3.5 20.5,10 14.5,13" fill="#00FFD1"/>
+  <line x1="14.5" y1="13" x2="20.5" y2="10" stroke="#64FFF0" stroke-width="1" stroke-linecap="round"/>
+</svg>

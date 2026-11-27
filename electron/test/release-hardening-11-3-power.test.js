@@ -49,6 +49,7 @@ function powerSandbox() {
     formatAction: a => a,
     showNativeNotification: (_title, body) => calls.notices.push(body),
     writeStartupLog: message => calls.logs.push(message),
+    refreshShellSurfaces() {},
     clearTimerInterval() {},
     setTaskbarProgress() {},
     persistActiveTimer() {},

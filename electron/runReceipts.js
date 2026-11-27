@@ -93,7 +93,8 @@ function createRunReceipt(timerState) {
     remainingSeconds: null,
     dryRun: !!timerState.dryRun,
     forceShutdown: !!timerState.forceShutdown,
-    gracefulClose: timerState.gracefulClose !== false,
+    // No gracefulClose: no code path implemented it, so a receipt no longer
+    // claims one. A non-forced request already lets Windows ask apps to close.
     result: 'running',
     pauseCount: 0,
     snoozeCount: 0,

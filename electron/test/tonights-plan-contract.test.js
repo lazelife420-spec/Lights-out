@@ -632,7 +632,7 @@ test('a +/- duration edit clears a loaded clock-mode profile', () => {
   const state = baseState({ action: 'lock', currentProfileId: 'clock-1', profiles: [profile] });
   const { checkProfileMatch } = createTonightsPlanSandbox({ state });
 
-  checkProfileMatch(true); // mirrors btnPlus/btnMinus's checkProfileMatch(true) call
+  checkProfileMatch(true); // mirrors applyTonightDuration's (btnPlus/btnMinus) checkProfileMatch(true) call
 
   assert.equal(state.currentProfileId, null);
 });
@@ -691,13 +691,19 @@ test('the manual duration-edit event handlers (+, -, typed input, unit toggle) a
   // real wiring end to end; this locks down that each handler actually
   // passes durationEdited=true, matching the semantic checkProfileMatch()
   // itself expects for a genuine manual duration mutation.
+  // +/- (and the Tonight dial) share one edit path, applyTonightDuration;
+  // that path is what must pass durationEdited=true.
+  const sharedPath = rendererSource.match(/function applyTonightDuration\(value\) \{[\s\S]*?\n {2}\}/);
+  assert.ok(sharedPath, 'applyTonightDuration (the shared +/- duration edit path) not found');
+  assert.match(sharedPath[0], /checkProfileMatch\(true\)/, 'applyTonightDuration must call checkProfileMatch(true)');
+
   const plusHandler = rendererSource.match(/els\.btnPlus\.addEventListener\('click', \(\) => \{[\s\S]*?\}\);/);
   assert.ok(plusHandler, 'els.btnPlus click handler not found');
-  assert.match(plusHandler[0], /checkProfileMatch\(true\)/, 'btnPlus click handler must call checkProfileMatch(true)');
+  assert.match(plusHandler[0], /applyTonightDuration\(/, 'btnPlus click handler must go through applyTonightDuration (checkProfileMatch(true))');
 
   const minusHandler = rendererSource.match(/els\.btnMinus\.addEventListener\('click', \(\) => \{[\s\S]*?\}\);/);
   assert.ok(minusHandler, 'els.btnMinus click handler not found');
-  assert.match(minusHandler[0], /checkProfileMatch\(true\)/, 'btnMinus click handler must call checkProfileMatch(true)');
+  assert.match(minusHandler[0], /applyTonightDuration\(/, 'btnMinus click handler must go through applyTonightDuration (checkProfileMatch(true))');
 
   const timerInputHandler = rendererSource.match(/els\.timerInput\.addEventListener\('input', \(\) => \{[\s\S]*?\}\);/);
   assert.ok(timerInputHandler, 'timerInput input handler not found');

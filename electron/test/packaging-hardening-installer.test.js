@@ -286,3 +286,22 @@ test('the uninstaller\'s task removal deletes a task only when it launches this 
   expectKept(run(watchdogTaskName, { mode: 'unreadable' }), 1, 'a task that cannot be read');
   expectKept(run(watchdogTaskName, { execute: `"${installDir}\\Lights Out.exe"`, checkDir: '' }), 1, 'no install directory handed over');
 });
+
+// MUI2 issues its own Icon/UninstallIcon from MUI_ICON/MUI_UNICON when the first page macro is
+// inserted, so a plain `Icon "${APP_ICON}"` was silently replaced by NSIS's stock art: Setup.exe,
+// Uninstall.exe and the Start-menu Uninstall shortcut showed the Nullsoft icon, not Lights Out's.
+test('Setup.exe and Uninstall.exe are branded with the Lights Out icon, DPI-aware', () => {
+  const firstPage = indexIn(all, /^!insertmacro MUI_(?:UN)?PAGE_/);
+  assert.ok(firstPage > 0, 'the installer has MUI pages');
+  const icon = indexIn(all, /^!define MUI_ICON "\$\{APP_ICON\}"$/);
+  const unicon = indexIn(all, /^!define MUI_UNICON "\$\{APP_ICON\}"$/);
+  assert.ok(icon >= 0 && icon < firstPage, 'MUI_ICON is defined before the first page macro');
+  assert.ok(unicon >= 0 && unicon < firstPage, 'MUI_UNICON is defined before the first page macro');
+  assert.deepEqual(all.filter(line => /^(?:Icon|UninstallIcon)\s/.test(line)), [], 'no plain Icon statement MUI2 would override');
+  assert.ok(all.includes('ManifestDPIAware true'), 'crisp at 125% and above');
+  assert.ok(all.some(line => /^BrandingText "Lights Out /.test(line)), 'the footer names Lights Out, not Nullsoft');
+  // The build hands NSIS the same .ico rcedit stamps on Lights Out.exe.
+  const build = fs.readFileSync(path.join(electronDir, 'scripts', 'package-native-windows.ps1'), 'utf8');
+  assert.match(build, /"\/DAPP_ICON=\$\(Join-Path \$SourceRoot 'assets\\icon\.ico'\)"/);
+  assert.match(build, /-IconPath \(Join-Path \$SourceRoot 'assets\\icon\.ico'\)/);
+});

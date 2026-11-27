@@ -36,7 +36,11 @@ function handler(channel) {
   return mainSource.slice(at, mainSource.indexOf('\n});', at) + 4);
 }
 
+// The args the Run entry is written with (main.js LOGIN_ITEM_ARGS).
+const loginArgsStatement = (mainSource.match(/const LOGIN_ITEM_ARGS = Object\.freeze\(\[[^\]]*\]\);/) || [''])[0];
+
 test('QA, proof and installer-verification launches never add or delete the owner’s login item', () => {
+  assert.ok(loginArgsStatement, 'LOGIN_ITEM_ARGS is declared once');
   for (const [label, env, lock] of [['QA power lock', {}, true], ['installer QA', { LIGHTS_OUT_INSTALLER_QA: '1' }, false]]) {
     const writes = [];
     const context = {
@@ -45,15 +49,46 @@ test('QA, proof and installer-verification launches never add or delete the owne
       app: { setLoginItemSettings: s => writes.push(s), getLoginItemSettings: () => ({ openAtLogin: true }) },
       Boolean
     };
-    vm.runInNewContext(`${liftFunction(mainSource, 'getLoginSettings')}\n${liftFunction(mainSource, 'setRunAtLogin')}\nthis.result = setRunAtLogin(false);`, context);
+    vm.runInNewContext(`${loginArgsStatement}
+${liftFunction(mainSource, 'getLoginSettings')}
+${liftFunction(mainSource, 'setRunAtLogin')}
+this.result = setRunAtLogin(false);`, context);
     assert.deepEqual(writes, [], `${label}: no login-item write`);
     assert.equal(context.result.runAtLogin, true, `${label}: reports the existing state`);
   }
   const writes = [];
   const context = { QA_POWER_LOCK: false, process: { env: {} }, app: { setLoginItemSettings: s => writes.push(s), getLoginItemSettings: () => ({ openAtLogin: false }) }, Boolean };
-  vm.runInNewContext(`${liftFunction(mainSource, 'getLoginSettings')}\n${liftFunction(mainSource, 'setRunAtLogin')}\nsetRunAtLogin(true);`, context);
+  vm.runInNewContext(`${loginArgsStatement}
+${liftFunction(mainSource, 'getLoginSettings')}
+${liftFunction(mainSource, 'setRunAtLogin')}
+setRunAtLogin(true);`, context);
   assert.equal(writes.length, 1, 'a normal launch still writes it');
   assert.deepEqual(JSON.parse(JSON.stringify(writes[0].args)), ['--minimized', '--no-auto-start'], 'Run at login stays minimized and idle');
+});
+
+test('Run at login reads back the entry it wrote: getLoginItemSettings compares the same args', () => {
+  // Windows' openAtLogin is true only for an entry whose args match the
+  // query; asked with none, the entry written with --minimized reads as off
+  // and the next Settings Save deleted it.
+  const entries = [];
+  const app = {
+    setLoginItemSettings: s => { entries.length = 0; if (s.openAtLogin) entries.push(JSON.stringify(s.args || [])); },
+    getLoginItemSettings: (q = {}) => ({ openAtLogin: entries.includes(JSON.stringify(q.args || [])) })
+  };
+  const context = { QA_POWER_LOCK: false, process: { env: {}, execPath: 'C:\\LO\\Lights Out.exe' }, app, Boolean };
+  vm.runInNewContext(`${loginArgsStatement}
+${liftFunction(mainSource, 'getLoginSettings')}
+${liftFunction(mainSource, 'setRunAtLogin')}
+this.on = setRunAtLogin(true); this.read = getLoginSettings();`, context);
+  assert.equal(context.on.runAtLogin, true, 'enabling it reads back as on');
+  assert.equal(context.read.runAtLogin, true, 'and stays on after a restart');
+});
+
+test('Settings Save sends Run at login only when the box changed', () => {
+  const save = liftFunction(rendererSource, 'saveSettingsPanel');
+  assert.match(save, /const runAtLoginChanged = wantRunAtLogin !== Boolean\(state\.runAtLogin\);/);
+  assert.match(save, /\.\.\.\(runAtLoginChanged \? \{ runAtLogin: state\.runAtLogin \} : \{\}\),/);
+  assert.doesNotMatch(save, /^\s*runAtLogin: state\.runAtLogin,$/m, 'never an unconditional runAtLogin');
 });
 
 test('a failed Test Mode / Force write is reported and the toggle shows what is really in force', () => {

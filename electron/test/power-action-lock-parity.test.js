@@ -101,6 +101,8 @@ function createPowerActionSandbox({ desktopUxProof = false, qaPowerLock = deskto
   sandbox.dispatchPowerAction = createDispatcher({ spawn: sandbox.spawn, suspend });
   sandbox.writeStartupLog = () => {};
   sandbox.showNativeNotification = () => {};
+  // Tray/taskbar refresh after the receipt is closed (taskbar-presence.test.js covers it).
+  sandbox.refreshShellSurfaces = () => {};
 
   const context = vm.createContext(sandbox);
   vm.runInContext(

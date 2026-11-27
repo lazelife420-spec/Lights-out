@@ -112,6 +112,12 @@ test('Hue cancel restoration replays the captured snapshot truthfully', async (t
       req.on('end', () => { writes.push({ url: req.url, body: JSON.parse(body) }); res.writeHead(200); res.end('[]'); });
       return;
     }
+    // Restore reads each light live before writing it (both lights still on).
+    if (req.method === 'GET' && /\/lights\/\d+$/.test(req.url)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ name: 'L', state: { on: true, bri: 1, ct: 400 } }));
+      return;
+    }
     res.writeHead(404); res.end();
   });
   const port = await listen(server);
@@ -123,7 +129,8 @@ test('Hue cancel restoration replays the captured snapshot truthfully', async (t
   assert.equal(res.success, true);
   assert.equal(res.code, 'RESTORED');
   assert.equal(writes.length, 2);
-  assert.equal(writes[0].body.on, true);
+  // A restore never switches a light on (it was on when read; an off light is skipped).
+  assert.equal('on' in writes[0].body, false);
   assert.equal(writes[0].body.bri, 180);
   assert.equal(writes[0].body.ct, 320);
   assert.equal(writes[1].body.bri, 90);

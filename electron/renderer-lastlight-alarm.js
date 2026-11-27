@@ -55,9 +55,16 @@ function setupAlarmHandlers() {
   refreshAlarmStatus();
 }
 
+// The First Light box follows the real scheduled task: it opens checked, with
+// its status in view, when an alarm exists, and Settings Cancel puts it back
+// (renderer.js discardSettingsPanelChanges) instead of leaving a tick that
+// scheduled nothing.
 async function refreshAlarmStatus() {
   try {
     const status = await api.getWakeAlarmStatus();
+    const active = Boolean(status && status.active);
+    if (els.chkAlarm) els.chkAlarm.checked = active;
+    if (els.alarmConfig) els.alarmConfig.style.display = active ? 'block' : 'none';
     if (els.alarmStatus) {
       if (status.active) {
         els.alarmStatus.textContent = `First Light at ${status.alarmTime || 'scheduled'}`;

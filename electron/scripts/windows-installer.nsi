@@ -6,12 +6,12 @@ Name "Lights Out"
 OutFile "${OUTPUT_FILE}"
 InstallDir "$LOCALAPPDATA\Programs\Lights Out"
 RequestExecutionLevel user
+; Crisp text and icons at 125% scale and above instead of a bitmap-stretched window.
+ManifestDPIAware true
 SetCompressor /SOLID lzma
 SetDatablockOptimize on
 ShowInstDetails show
 ShowUninstDetails show
-Icon "${APP_ICON}"
-UninstallIcon "${APP_ICON}"
 
 VIProductVersion "${VERSION}.0"
 VIAddVersionKey "ProductName" "Lights Out"
@@ -47,6 +47,11 @@ Var QaMode
 ; launch opens idle (main.js starts a countdown at launch only for an explicit --timer= argument;
 ; Auto-start and Autopilot, both off by default, start runs at their scheduled times); and a run
 ; stays cancellable until its power request is dispatched (main.js hasCancellableRun).
+; Setup.exe, Uninstall.exe and the Start-menu Uninstall shortcut carry the Lights Out icon.
+; MUI2 writes its own Icon/UninstallIcon from MUI_ICON/MUI_UNICON when the first page is
+; inserted (NSIS's stock art unless defined), so a plain Icon statement would be replaced.
+!define MUI_ICON "${APP_ICON}"
+!define MUI_UNICON "${APP_ICON}"
 !define MUI_WELCOMEPAGE_TITLE "Welcome to Lights Out"
 !define MUI_WELCOMEPAGE_TEXT "Lights Out is the bedtime system for Windows: one routine to end the night.$\r$\n$\r$\nIt installs for your Windows account only and opens idle. Nothing powers off until you start or schedule a run, and every run can be cancelled until the power request is sent."
 !insertmacro MUI_PAGE_WELCOME

@@ -173,14 +173,13 @@ test('README does not promise a cancel after the power request is sent', () => {
   assert.match(extractFunction(mainJs, 'isCompletionInFlight'), /activeReceiptId/, 'the cancel window ends when the receipt is released at dispatch');
 });
 
-test('electron/README describes Ctrl+Shift+A as what it does', () => {
-  assert.match(mainJs, /globalShortcut\.register\('Ctrl\+Shift\+A'[\s\S]{0,200}send\('toggle-alarm-focus'\)/);
-  const listened = ['electron/preload.js', 'electron/renderer.js'].some(f => read(f).includes('toggle-alarm-focus'));
-  const line = electronReadme.split('\n').find(l => l.includes('Ctrl+Shift+A')) || '';
-  if (!listened) {
-    assert.doesNotMatch(line, /`Ctrl\+Shift\+A` alarm/);
-    assert.match(line, /only brings the window forward/);
-  }
+test('electron/README names no Ctrl+Shift+A alarm shortcut, and main registers none', () => {
+  // The unlistened 'toggle-alarm-focus' shortcut was removed: it took the key
+  // from every other app and then did nothing.
+  assert.doesNotMatch(mainJs, /globalShortcut\.register\('Ctrl\+Shift\+A'/);
+  assert.doesNotMatch(mainJs, /toggle-alarm-focus/);
+  assert.doesNotMatch(electronReadme, /`Ctrl\+Shift\+A`/);
+  assert.match(electronReadme, /There is no global alarm shortcut: set First Light in Settings > Automations/);
   assert.match(flat(readme), /`Ctrl\+Shift\+W` toggles the desktop widget/);
   assert.match(mainJs, /globalShortcut\.register\('Ctrl\+Shift\+W', \(\) => \{\s*if \(widgetMode\) closeWidgetWindow\(\);/);
 });

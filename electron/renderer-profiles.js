@@ -388,12 +388,9 @@ async function applyProfile(profileId, opts = {}) {
       state.muteSystem = result.timerOptions.muteSystem || false;
       state.graceMinutes = result.timerOptions.gracePeriod ?? 2;
 
-      // Apply Last Light from profile
-      if (result.timerOptions.lastLightEnabled !== undefined) {
-        state.lastLight.enabled = result.timerOptions.lastLightEnabled;
-        if (result.timerOptions.lastLightSequence) state.lastLight.sequence = result.timerOptions.lastLightSequence;
-        if (result.timerOptions.lastLightSound) state.lastLight.sound = result.timerOptions.lastLightSound;
-      }
+      // A profile's Last Light is run-scoped: main applies it to a run
+      // started from this profile (profileLastLight). It is never copied into
+      // state.lastLight, which Settings Save persists as the global setting.
 
       setInputFromSeconds(result.timerOptions.durationSeconds || 1800);
       setAction(state.action);

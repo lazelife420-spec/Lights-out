@@ -58,6 +58,7 @@ function createSandbox({ app = {}, pausedCount = 0, holdPause = false } = {}) {
   const sandbox = {
     console: { warn: () => {}, log: () => {}, error: () => {} },
     Date,
+    miniMode: false,
     settingsStore: {
       getSection: name => (name === 'app' ? app : null)
     },
@@ -85,6 +86,7 @@ function createSandbox({ app = {}, pausedCount = 0, holdPause = false } = {}) {
   vm.createContext(sandbox);
   const code = [
     extractStatement(mainSource, 'const windDownChanges = '),
+    extractFunction(mainSource, 'userWindowOpacity'),
     extractFunction(mainSource, 'applyDimPhase'),
     extractFunction(mainSource, 'restoreAfterTimer'),
     'globalThis.applyDimPhase = applyDimPhase; globalThis.restoreAfterTimer = restoreAfterTimer;'

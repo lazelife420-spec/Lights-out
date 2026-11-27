@@ -364,12 +364,16 @@ function filterAndRankLocalIPs(interfaces) {
   return candidates;
 }
 
+// Logged only when the choice changes: remote-control status polls call this
+// every couple of seconds, even with Phone Companion off.
+let lastLoggedLanChoice = null;
+
 function getLocalIPs() {
   const os = require('os');
   const candidates = filterAndRankLocalIPs(os.networkInterfaces());
-  if (candidates.length) {
-    console.log(`Selected LAN IP: ${candidates[0].ip} (${candidates[0].name})`);
-  }
+  const choice = candidates.length ? `${candidates[0].ip} (${candidates[0].name})` : null;
+  if (choice && choice !== lastLoggedLanChoice) console.log(`Selected LAN IP: ${choice}`);
+  lastLoggedLanChoice = choice;
   return candidates.map((c) => c.ip);
 }
 

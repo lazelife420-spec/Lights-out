@@ -5,7 +5,9 @@
      reliably in every renderer. -->
 <svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <filter id="f-ring" x="-40%" y="-40%" width="180%" height="180%">
+    <!-- userSpaceOnUse: the power notch below is a vertical line (zero-width bounding box),
+         so an objectBoundingBox filter region would be empty and drop the notch entirely. -->
+    <filter id="f-ring" filterUnits="userSpaceOnUse" x="-32" y="-32" width="320" height="320">
       <feGaussianBlur stdDeviation="3.5" result="b"/>
       <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>

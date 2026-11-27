@@ -131,8 +131,12 @@ function hideOnboarding() {
   }
   // Apply selected ritual.
   if (onboardData.sequence) {
-    const custom = { lastLightEnabled: true, lastLightSequence: onboardData.sequence, lastLightSound: onboardData.sound ? 'Soft' : 'Off' };
-    api.saveAppSettings({ lastLight: custom });
+    // The settings section's own keys (what main's playLastLightRitual reads),
+    // not the profile field names.
+    const custom = { enabled: true, sequence: onboardData.sequence, sound: onboardData.sound ? 'Soft' : 'Off' };
+    Promise.resolve(api.saveAppSettings({ lastLight: custom })).catch(error => {
+      if (typeof notify === 'function') notify(`Your Last Light choice was not saved: ${error?.message || error}`, 'warning', 5000);
+    });
     state.lastLight.enabled = true;
     state.lastLight.sequence = onboardData.sequence;
     state.lastLight.sound = onboardData.sound ? 'Soft' : 'Off';

@@ -39,6 +39,13 @@ function updateRitualOverlay(state) {
   els.ritualStepDesc.textContent = RITUAL_DESCS[step.id] || '';
   els.btnRitualSkip.style.display = step.skippable ? '' : 'none';
   els.btnRitualNext.textContent = step.auto ? 'Done' : 'Next';
+  // Once the timer step has run, leaving the ritual keeps that countdown
+  // (main's ritualMode.onCancel restores only an idle run), so the button says
+  // so instead of reading as a cancel of the whole bedtime.
+  if (els.btnRitualCancel) {
+    const countdownStarted = Array.isArray(state.completedSteps) && state.completedSteps.includes('timer');
+    els.btnRitualCancel.textContent = countdownStarted ? 'End ritual · countdown keeps running' : 'Cancel ritual';
+  }
 
   // Progress dots.
   if (els.ritualProgress) {
@@ -85,10 +92,45 @@ function renderFocusSession(fs) {
   }
 }
 
+// The deficit is estimated against a wake time and a target the user sets on
+// the card itself; both persist at once through sleepDebt's own store.
+function hydrateSleepDebtControls(debt) {
+  const wake = document.getElementById('sleep-wake-time');
+  const target = document.getElementById('sleep-target-hours');
+  if (wake && debt && typeof debt.wakeTime === 'string' && document.activeElement !== wake) wake.value = debt.wakeTime;
+  if (target && debt && Number.isFinite(Number(debt.targetHours)) && document.activeElement !== target) target.value = String(debt.targetHours);
+  if (wake && !wake.dataset.bound) {
+    wake.dataset.bound = '1';
+    wake.addEventListener('change', async () => {
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(wake.value)) return;
+      try {
+        wake.value = await api.setWakeTime(wake.value);
+        await loadSleepDebt();
+      } catch (e) {
+        if (typeof notify === 'function') notify(`Wake time was not saved: ${e?.message || e}`, 'warning');
+      }
+    });
+  }
+  if (target && !target.dataset.bound) {
+    target.dataset.bound = '1';
+    target.addEventListener('change', async () => {
+      const hours = Number(target.value);
+      if (!Number.isFinite(hours)) return;
+      try {
+        target.value = String(await api.setSleepTarget(hours));
+        await loadSleepDebt();
+      } catch (e) {
+        if (typeof notify === 'function') notify(`Sleep target was not saved: ${e?.message || e}`, 'warning');
+      }
+    });
+  }
+}
+
 // Load the timer-derived bedtime-deficit estimate on init.
 async function loadSleepDebt() {
   try {
     const debt = await api.getSleepDebt?.();
+    hydrateSleepDebtControls(debt);
     if (debt) renderSleepDebt(debt);
   } catch (e) {
     console.error('Failed to load estimated bedtime deficit:', e);

@@ -570,7 +570,7 @@ body.phase-lastlight .ring-progress {
 .timer-name {
   font-size: 12px;
   font-weight: 700;
-  color: var(--accent-cyan);
+  color: var(--accent-text);
   letter-spacing: 1.8px;
   text-transform: uppercase;
   margin-bottom: 6px;
@@ -881,20 +881,21 @@ input:disabled {
   border-color: var(--accent-cyan);
 }
 
-/* Glass morphism for cards */
+/* Cards: opaque theme surfaces (no backdrop blur: the .status-card rule
+   below paints an opaque base, so a blur only cost a compositing layer).
+   Only the hover cues move; the hover shadow is the theme's own. */
 .status-card {
   flex: 1;
   background: rgba(26, 29, 41, 0.8);
-  backdrop-filter: blur(10px);
   border: 1px solid rgba(42, 48, 64, 0.6);
   border-radius: var(--card-radius);
   padding: 12px;
-  transition: all 0.2s ease;
+  transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
 }
 
 .status-card:hover {
   border-color: rgba(var(--accent-rgb), 0.3);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-md);
 }
 
 /* Status Section */
@@ -906,8 +907,10 @@ input:disabled {
 .status-card {
   flex: 1;
   /* UI-R3 Fire 04: an opaque base under the gradient (Proof › Session
-     History), so no room particle shows through the card. */
-  background: linear-gradient(160deg, var(--bg-card) 0%, rgba(21,25,28,0.85) 100%), var(--bg-card);
+     History), so no room particle shows through the card. The gradient's far
+     stop is the theme's own field mixed in (a fixed night colour turned the
+     Dawn card grey at its bottom-right). */
+  background: linear-gradient(160deg, var(--bg-card) 0%, color-mix(in srgb, var(--bg-card) 88%, var(--bg-primary)) 100%), var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--card-radius);
   padding: 14px 16px;
@@ -5151,7 +5154,7 @@ body.phase-lastlight .night-beam { opacity: 0.08; }
   font: inherit;
   font-size: 12px;
   font-weight: 650;
-  color: var(--accent-cyan);
+  color: var(--accent-text);
   background: none;
   border: none;
   padding: 4px 2px;
@@ -5455,6 +5458,10 @@ body.phase-lastlight .ring-head-particle { fill: #ffd0d9; }
   transition: border-color var(--dur-fast) ease, background var(--dur-fast) ease;
 }
 .settings-categories .checkbox-label:hover { border-color: var(--border-strong); background: rgba(255, 255, 255, 0.035); }
+/* A read-only explanation row styled like its neighbours, without their
+   click affordance. */
+.settings-categories .set-row-static { cursor: default; }
+.settings-categories .set-row-static:hover { border-color: var(--border-color); background: rgba(255, 255, 255, 0.02); }
 .settings-categories .checkbox-label input[type="checkbox"] {
   -webkit-appearance: none;
   appearance: none;
@@ -6010,8 +6017,10 @@ body[data-theme="dawn"][data-ring="midnight"] .time-main {
 body[data-theme="dawn"] .ns-sidebar {
   background: #080c16;
 }
+/* One night colour for the whole L-shaped frame (the rail's), so no
+   two-tone seam shows where the header meets the rail. */
 body[data-theme="dawn"] .chrome-header {
-  background: #0f1821;
+  background: #080c16;
   border-bottom-color: #263746;
 }
 body[data-theme="dawn"] :is(.ns-sidebar, .chrome-header) {
@@ -6148,6 +6157,11 @@ body[data-theme="dawn"] :is(.ns-sidebar, .chrome-header) {
   overflow-y: auto;
   overscroll-behavior: contain;
   background: radial-gradient(120% 90% at 50% 38%, rgba(8, 12, 17, 0.66) 0%, rgba(3, 5, 8, 0.82) 72%);
+}
+/* Dawn: a warm ink scrim (a cool black over cream composited to a dirty
+   grey). Lighter, because the light card already separates from it. */
+body[data-theme="dawn"] .modal {
+  background: radial-gradient(120% 90% at 50% 38%, rgba(47, 38, 28, 0.26) 0%, rgba(30, 22, 14, 0.48) 72%);
 }
 .modal.active { animation: ovFade var(--dur-base) var(--ease-out) both; }
 .modal.active > .modal-content { animation: ovRise var(--dur-slow) var(--ease-out) both; }
@@ -6604,7 +6618,8 @@ body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib > #readiness-stri
     min-height: 0;
     max-height: 100%;
     overflow-y: auto;
-    scrollbar-width: thin;
+    /* No scrollbar-width: it would trade the app's slim ::-webkit-scrollbar
+       thumb for the classic bar with arrow buttons. */
     scroll-padding-block: 12px;
   }
   body.ns-lobby:not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib:has(#plan-finale:not([hidden])) > #readiness-strip {
@@ -7003,7 +7018,7 @@ body.real-action .ns-play-btn {
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--accent-cyan);
+  color: var(--accent-text);
 }
 body.is-paused .session-eyebrow { color: var(--accent-amber); }
 .session-ends {
@@ -8082,6 +8097,10 @@ body.fullscreen-clock-mode .tonight-target-note { display: none; }
 .proof-routine .sleep-debt-section { margin-top: 16px; border-top: 1px solid var(--border-color); }
 .proof-routine .debt-heading { margin: 0 0 4px; font-size: 12px; font-weight: 650; color: var(--text-secondary); }
 .proof-routine .debt-note { margin: 0 0 8px; font-size: 11px; line-height: 1.4; color: var(--text-muted); }
+.proof-routine .debt-config { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0 0 10px; }
+.proof-routine .debt-field { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); }
+.proof-routine .debt-field input { font: inherit; font-size: 12px; }
+.proof-routine .debt-field input[type="number"] { width: 4.5em; }
 .streak-callout-flame { display: inline-flex; color: var(--accent-amber); }
 .streak-callout-flame .chip-glyph { width: 18px; height: 18px; }
 
@@ -8397,7 +8416,7 @@ body.fullscreen-clock-mode .tonight-target-note { display: none; }
 body[data-theme="dawn"] .night-cell[data-outcome="cancel"] .night-bar { background: repeating-linear-gradient(135deg, transparent 0 5px, rgba(47, 38, 28, 0.22) 5px 6px); }
 body[data-theme="dawn"] .night-cell[data-outcome="nodata"] .night-bar { border-color: var(--border-color); }
 .night-dow { font: 10px/1 var(--font-mono); color: var(--text-muted); }
-.night-cell.is-tonight .night-dow { color: var(--accent-cyan); font-weight: 700; }
+.night-cell.is-tonight .night-dow { color: var(--accent-text); font-weight: 700; }
 .night-strip-empty { margin: -2px 0 8px; font-size: 12px; color: var(--text-muted); }
 .night-strip-empty[hidden] { display: none; }
 .routine-legend {
@@ -8433,7 +8452,7 @@ body[data-theme="dawn"] .routine-legend .lg[data-outcome="nodata"] { border-colo
   cursor: pointer;
   font-size: 12px;
   font-weight: 650;
-  color: var(--accent-cyan);
+  color: var(--accent-text);
   border-radius: var(--radius-sm);
 }
 .routine-details > summary::-webkit-details-marker { display: none; }
@@ -9374,6 +9393,19 @@ body[data-theme="dawn"] {
   --danger-fill-hover: #8f0e2e;
   --chip-ink-act: #554a9e;
 }
+/* The accent as TEXT (links, disclosure labels, "today", the session
+   eyebrow, a chosen session name). At night it is the accent itself; on the
+   light Dawn surfaces the raw accent fell to 2.4-2.7:1, so Dawn mixes it
+   40% into the house accent ink. It follows a custom accent and stays
+   >= 4.5:1 on the Dawn card, field and footer for every accent
+   sanitizeAccent() accepts (accent-text-contrast.test.js). Fills, borders,
+   rings and icons keep --accent-cyan. */
+:root {
+  --accent-text: var(--accent-cyan);
+}
+body[data-theme="dawn"] {
+  --accent-text: color-mix(in srgb, var(--accent-cyan) 40%, #14101f);
+}
 
 /* -- Type: the generic eyebrows share one voice (each keeps its colour) -- */
 .page-eyebrow,
@@ -9956,7 +9988,16 @@ body.has-station:is(.phase-dim, .phase-lastlight):not(.bezel):not(.mini-mode):no
    the user chose still shows. Idle, the default is muted but editable. */
 body:is(.is-running, .is-paused) .timer-name.is-default { display: none; }
 body.fullscreen-clock-mode .timer-name.is-default { display: none; }
-.timer-name.is-default:not(:focus):not(:hover):not(:focus-visible) { color: var(--text-muted); opacity: 0.4; }
+/* Muted, but legible (>= 4.5:1; the old .4 opacity made it 1.8:1) and
+   visibly editable: a dotted accent underline says "you can name this". */
+.timer-name.is-default:not(:focus):not(:hover):not(:focus-visible) {
+  color: var(--text-secondary);
+  opacity: 1;
+  text-decoration: underline dotted rgba(var(--accent-rgb), 0.6);
+  text-decoration-thickness: 1px;
+  /* Inside the name's own box: .timer-display > .timer-name clips (overflow: hidden). */
+  text-underline-offset: 2px;
+}
 
 /* The fullscreen clock at real size: no scrollbar, no wrapped labels, no
    beam from an empty corner (display: none also stops the beam's ::after).
@@ -10006,7 +10047,9 @@ body.is-paused #action-bar-running #btn-pause:hover { background: var(--accent-b
 #action-bar-running #btn-stop { background: var(--bg-primary); }
 #action-bar-running #btn-stop:hover { background: linear-gradient(rgba(255, 92, 122, 0.1), rgba(255, 92, 122, 0.1)), var(--bg-primary); }
 .ring-container::before {
-  background: radial-gradient(circle at 50% 38%, rgba(38, 46, 62, 0.55) 0%, rgba(16, 19, 26, 0.35) 70%, transparent 100%), var(--bg-primary);
+  /* Theme surfaces, not a fixed blue-grey: the disc is lit from above in the
+     theme's own card colour and falls back to its field at the rim. */
+  background: radial-gradient(circle at 50% 34%, color-mix(in srgb, var(--bg-card) 88%, transparent) 0%, color-mix(in srgb, var(--bg-secondary) 55%, transparent) 62%, transparent 100%), var(--bg-primary);
   -webkit-mask-image: radial-gradient(circle closest-side, #000 97%, transparent 100%);
   mask-image: radial-gradient(circle closest-side, #000 97%, transparent 100%);
 }
@@ -10030,10 +10073,16 @@ body[data-theme="dawn"] .analog-clock :is(.analog-rim, .analog-numeral, .analog-
 .planner-day { display: flex; flex-direction: column; align-items: stretch; gap: 3px; min-width: 0; min-height: 64px; padding: 7px; text-align: left; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary); font: 11px var(--font-instrument); }
 .planner-day:hover { border-color: var(--accent-cyan); background: rgba(var(--accent-rgb),0.08); }
 .planner-day:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 1px; }
-.planner-day[aria-current="date"] { border-color: rgba(var(--accent-rgb),0.6); }
-.planner-day[aria-current="date"] .planner-day-number { color: var(--accent-cyan); font-weight: 700; }
+/* Today reads at a glance: the full accent border, a faint wash and a soft
+   ring (static). Rule chips are readable violet labels (10.5px; the accent
+   mixed into the text ink at night, the Dawn accent text ink by day), and
+   out-of-month chips drop their fill so the current month leads. */
+.planner-day[aria-current="date"] { border-color: var(--accent-cyan); background: rgba(var(--accent-rgb),0.07); box-shadow: 0 0 0 3px rgba(var(--accent-rgb),0.14); }
+.planner-day[aria-current="date"] .planner-day-number { color: var(--accent-text); font-weight: 700; }
 .planner-day.outside-month { opacity: 0.45; }
-.planner-rule { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 3px 4px; border-radius: 4px; background: rgba(var(--accent-rgb),0.12); color: var(--text-secondary); font-size: 9px; }
+.planner-rule { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 3px 5px; border-radius: 4px; background: rgba(var(--accent-rgb),0.18); color: color-mix(in srgb, var(--accent-cyan) 40%, var(--text-primary)); font-size: var(--fs-micro); font-weight: 600; line-height: 1.25; }
+body[data-theme="dawn"] .planner-rule { color: var(--accent-text); }
+.planner-day.outside-month .planner-rule { background: transparent; }
 .planner-day small { color: var(--text-muted); font-size: 9px; }
 .sch-rule-recurrence { color: var(--text-secondary); font-size: 11px; line-height: 1.5; margin-top: 5px; }
 #schedule-rule-form [hidden] { display: none !important; }
@@ -10113,8 +10162,13 @@ body[data-theme="dawn"] .analog-clock :is(.analog-rim, .analog-numeral, .analog-
   color: var(--text-secondary);
 }
 body.is-paused .timer-readout-label { color: var(--accent-amber); }
+/* Idle, the name, the state and the time read as one stack: the label sits
+   closer to the name above it and leaves the digits room below. */
+.timer-display.clock-idle .timer-readout-label { margin: 2px 0 8px; }
+/* One thin arc, no ticks or extra arcs. The glass face (.ring-container::before,
+   the Fire 04 disc on an opaque field base) stays: it gives the instrument
+   depth in every theme, so the idle dial no longer reads as an empty outline. */
 .timer-section::before,
-.ring-container::before,
 .ring-container::after,
 .timer-section :is(.ring-head, .ring-ticks, .ring-ticks-major, .ring-o, .ring-segments, .ring-station) { display: none; }
 .timer-section .timer-ring { box-shadow: none; }
@@ -10126,12 +10180,45 @@ body[data-theme="dawn"] .ring-container::before {
   -webkit-mask-image: none;
   mask-image: none;
 }
-.timer-section .ring-bg { stroke-width: 3; }
+/* The track is a quiet accent (the #1a2230 track was ~1.3:1 on the field);
+   Dawn draws it in a light ink. Hover, focus and a drag brighten it (the
+   Tonight dial block); the analog bezel and the Midnight ring style keep
+   their own, more specific tracks. */
+.timer-section .ring-bg { stroke-width: 3; stroke: rgba(var(--accent-rgb), 0.16); }
+body[data-theme="dawn"] .timer-section .ring-bg { stroke: rgba(47, 38, 28, 0.14); }
 .timer-section .ring-progress { stroke-width: 3; }
 body[data-ring="glow"] .timer-section .ring-progress { stroke-width: 3; }
 body[data-ring="neon"] .timer-section .timer-ring { box-shadow: 0 0 18px -6px rgba(var(--accent-rgb), 0.3); }
 body:not(.is-running):not(.is-paused) .timer-section .ring-progress { opacity: 0; }
-body.is-paused .timer-section .ring-progress { mask: none; }
+/* A run lights the instrument: one static halo in the phase colour (the
+   accent running, dimmer winding down, amber paused, red / amber in Last
+   Light). It is the outer shadow of a circle exactly on the arc
+   (.ring-container::after at inset 5% = r 90 of 100), painted under the SVG,
+   so it starts at the ring, not at the SVG's square box, and as a shadow it
+   never adds scrollable overflow. It never loops; it fades in on Start and
+   out on Cancel. */
+.ring-container { --run-halo: rgba(var(--accent-rgb), 0.4); }
+body.phase-dim:not(.is-paused) .ring-container { --run-halo: rgba(var(--accent-rgb), 0.18); }
+body.is-paused .ring-container { --run-halo: rgba(var(--amber-rgb), 0.3); }
+body.phase-lastlight .ring-container { --run-halo: rgba(var(--red-rgb), 0.3); }
+body.phase-lastlight.test-mode .ring-container { --run-halo: rgba(var(--amber-rgb), 0.3); }
+body:not(.mini-mode):not(.fullscreen-clock-mode) .ring-container::after {
+  display: block;
+  inset: 5%;
+  z-index: -1;
+  border-radius: 50%;
+  background: none;
+  -webkit-mask-image: none;
+  mask-image: none;
+  box-shadow: 0 0 56px -6px var(--run-halo);
+  opacity: 0;
+  transition: opacity var(--dur-slow) var(--ease-out);
+}
+body:is(.is-running, .is-paused):not(.mini-mode):not(.fullscreen-clock-mode) .ring-container::after { opacity: 1; }
+/* Paused is a broken, held ring: the Fire 04 cut (body.is-paused
+   .ring-progress { mask: url(#ring-cut-mask) }) stays in force, and the track
+   takes the same cut, so the three logo-O gaps are real gaps. */
+body.is-paused .timer-section .ring-bg { mask: url(#ring-cut-mask); }
 body .timer-section .time-main { text-shadow: none; font-weight: 500; }
 .timer-section .timer-display.clock-idle .time-main {
   font-size: min(calc(25cqw * var(--clock-scale, 1)), 29cqw);
@@ -11265,6 +11352,129 @@ body[data-theme="dawn"] .night-cell[data-outcome="nodata"] .night-bar { border-c
   .proof-empty-cta { grid-column: 1 / -1; justify-self: start; }
 }
 
+/* -- UI-R3 · Tonight dial: the idle instrument sets tonight's duration ------ */
+/* Its own package block (the smoke cssBlockEnd convention), so Fire 10's
+   checks end above it. tonightDial.js; renderer.js tonightDialInteractive().
+   .dial-live is set only while the plan editor is in reach (idle, settings
+   loaded, no ritual, not mini or fullscreen); .is-dragging only during a
+   drag. The overlay never
+   takes the pointer: .ring-container does, while the session name and the
+   buttons keep their own. No drag region, no text selection, no touch pan. */
+.tonight-dial {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: 50%;
+  pointer-events: none;
+  outline: none;
+}
+/* Keyboard focus only: a press marks [data-pointer-focus] until a key or blur. */
+.tonight-dial:focus-visible:not([data-pointer-focus]) { outline: 2px solid var(--accent-cyan); outline-offset: 3px; }
+.ring-container.dial-live {
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-app-region: no-drag;
+}
+.ring-container.dial-live .timer-name { -webkit-user-select: text; user-select: text; }
+body.dial-dragging,
+body.dial-dragging * { cursor: grabbing !important; }
+.ring-container .ring-bg { transition: stroke var(--dur-fast) ease; }
+.ring-container.dial-live:hover .ring-bg,
+.ring-container.dial-live:has(.tonight-dial:focus-visible:not([data-pointer-focus])) .ring-bg { stroke: rgba(var(--accent-rgb), 0.3); }
+
+/* The hint: "Drag to set", only on hover or keyboard focus. A tag on the
+   ring at 6 o'clock (the ring is r=90 of 100: 5% in), clear of both faces. */
+.tonight-dial-hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(5% - 10px);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px 3px 6px;
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(rgba(var(--accent-rgb), 0.1), rgba(var(--accent-rgb), 0.1)), var(--bg-primary);
+  color: var(--text-secondary);
+  font: 600 9.5px/1.2 var(--font-instrument);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translate(-50%, 3px);
+  transition: opacity var(--dur-fast) ease, transform var(--dur-fast) var(--ease-out);
+}
+.tonight-dial-hint .chip-glyph { width: 11px; height: 11px; flex: none; }
+.ring-container.dial-live:not(.is-dragging):hover .tonight-dial-hint,
+.ring-container.dial-live:not(.is-dragging) .tonight-dial:focus-visible:not([data-pointer-focus]) .tonight-dial-hint { opacity: 1; transform: translate(-50%, 0); }
+/* The analog face's caption reaches the ring at 6 o'clock: it steps aside
+   for the hint ("Now HH:MM" above it stays). */
+.ring-container .timer-display .time-label { transition: opacity var(--dur-fast) ease; }
+body.bezel .ring-container.dial-live:not(.is-dragging):hover .timer-display .time-label,
+body.bezel .ring-container.dial-live:not(.is-dragging):has(.tonight-dial:focus-visible:not([data-pointer-focus])) .timer-display .time-label { opacity: 0; }
+
+/* While dragging: the planned duration replaces the face, and the arc
+   previews it (the analog face keeps its clock, dimmed, under its bezel). */
+.tonight-dial-readout {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  opacity: 0;
+  transform: scale(0.97);
+  transition: opacity var(--dur-fast) ease, transform var(--dur-fast) var(--ease-out);
+}
+.tdr-eyebrow {
+  font: 600 10.5px/1.3 var(--font-instrument);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.tdr-value {
+  font-family: var(--font-instrument);
+  font-weight: 380;
+  font-size: clamp(34px, 14cqw, 60px);
+  font-variant-numeric: tabular-nums lining-nums;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--text-primary);
+  text-shadow: 0 0 24px rgba(var(--accent-rgb), 0.22);
+}
+.tdr-ends {
+  font: 500 12px/1.4 var(--font-instrument);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: var(--accent-text);
+}
+.ring-container .timer-display { transition: opacity var(--dur-fast) ease; }
+.ring-container.is-dragging .timer-display { opacity: 0; }
+body.bezel .ring-container.is-dragging .timer-display { opacity: 0.14; }
+.ring-container.is-dragging .tonight-dial-readout { opacity: 1; transform: none; }
+body.dial-dragging:not(.is-running):not(.is-paused) .timer-section .ring-progress {
+  opacity: 1;
+  stroke: var(--accent-cyan);
+  filter: drop-shadow(0 0 6px rgba(var(--accent-rgb), 0.45));
+  transition: stroke-dasharray 90ms linear, stroke-dashoffset 90ms linear;
+}
+body.dial-dragging:not(.is-running):not(.is-paused) .timer-section .ring-head {
+  display: inline;
+  opacity: 1;
+  transition: transform 90ms linear;
+}
+body.dial-dragging .ring-head-particle { fill: #c9c4ee; stroke: rgba(var(--accent-rgb), 0.28); }
+body.dial-dragging .timer-section .ring-bg { stroke: rgba(var(--accent-rgb), 0.16); }
+@media (prefers-reduced-motion: reduce) {
+  .tonight-dial-hint,
+  .ring-container.dial-live:not(.is-dragging):hover .tonight-dial-hint { transform: translate(-50%, 0); }
+  .tonight-dial-readout { transform: none; }
+}
+
 /* -- Reduced motion: one global contract ------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -11310,7 +11520,10 @@ body[data-theme="dawn"] .night-cell[data-outcome="nodata"] .night-bar { border-c
 #ns-panel-set .settings-search-results button { min-height: 42px; font: 13px/1.4 var(--font-ui); }
 #ns-panel-set .settings-back { min-height: 38px; border-radius: 9px; font: 600 12px var(--font-ui); }
 #ns-panel-set .modal-body { min-width: 0; min-height: 0; overflow: hidden; }
-#ns-panel-set .settings-rail { flex: 0 0 206px; padding: 16px 12px; gap: 3px; background: var(--bg-primary); scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; overscroll-behavior: contain; }
+/* No scrollbar-width / scrollbar-color on the two Settings scrollers: in
+   Chromium either one switches off the ::-webkit-scrollbar styling and
+   brings back the classic bar with arrow buttons. The slim thumbs are below. */
+#ns-panel-set .settings-rail { flex: 0 0 206px; padding: 16px 12px; gap: 3px; background: var(--bg-primary); overscroll-behavior: contain; }
 #ns-panel-set .settings-nav-group { padding: 10px 11px 7px; font: 600 9px/1.4 var(--font-ui); letter-spacing: .09em; }
 #ns-panel-set .settings-rail-btn { flex-shrink: 0; gap: 11px; min-height: 46px; padding: 7px 11px; font: 550 12px/1.3 var(--font-ui); border-radius: 9px; }
 #ns-panel-set .settings-rail-btn small { margin-top: 3px; font: 400 10px/1.3 var(--font-ui); }
@@ -11318,18 +11531,24 @@ body[data-theme="dawn"] .night-cell[data-outcome="nodata"] .night-bar { border-c
 .settings-nav-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 #ns-panel-set .settings-rail-btn.active { border-color: rgba(var(--accent-rgb), .25); background: rgba(var(--accent-rgb), .09); }
 #ns-panel-set .settings-rail-btn.active .settings-nav-icon { color: var(--accent-cyan); }
-#ns-panel-set .settings-categories { padding: 28px 34px 36px; background: var(--bg-secondary); overscroll-behavior: contain; scroll-padding-block: 20px; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+#ns-panel-set .settings-categories { padding: 28px 34px 36px; background: var(--bg-secondary); overscroll-behavior: contain; scroll-padding-block: 20px; }
 #ns-panel-set .settings-category-intro { max-width: 860px; margin: 0 auto 24px; padding: 0 2px 20px; border-bottom: 1px solid var(--border-color); }
 #ns-panel-set .settings-category-intro h3 { margin: 0 0 5px; font: 650 23px/1.2 var(--font-ui); letter-spacing: -.035em; }
 #ns-panel-set .settings-categories .settings-category-intro h3 { font: 650 23px/1.2 var(--font-ui); margin: 0 0 5px; letter-spacing: -.035em; }
 #ns-panel-set .settings-category-intro p { font: 400 13px/1.5 var(--font-ui); color: var(--text-secondary); }
-#ns-panel-set .settings-categories > .option-section { max-width: 860px; margin: 0 auto 16px; padding: 24px; border-radius: 14px; background: var(--bg-primary); }
+/* Section cards are raised (--bg-card on the --bg-secondary panel), the same
+   elevation as Tonight's plan, Devices and Proof; fields stay --bg-secondary
+   wells inside them. */
+#ns-panel-set .settings-categories > .option-section { max-width: 860px; margin: 0 auto 16px; padding: 24px; border: 1px solid var(--border-color); border-radius: 14px; background: var(--bg-card); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03); }
 #ns-panel-set .settings-categories h3 { font: 650 14px/1.4 var(--font-ui); letter-spacing: -.01em; margin: 0 0 16px; }
 #ns-panel-set .settings-categories > .option-section > h3:not(:first-child) { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--border-color); }
 #ns-panel-set .settings-categories .option-group { margin-bottom: 17px; gap: 8px; min-width: 0; }
 #ns-panel-set .settings-categories .option-group:last-child { margin-bottom: 0; }
 #ns-panel-set .option-group > label:not(.checkbox-label), #ns-panel-set .set-range-head label { margin: 0; font: 550 12px/1.4 var(--font-ui); letter-spacing: 0; text-transform: none; color: var(--text-secondary); }
 #ns-panel-set .settings-categories .help-text { font: 400 12px/1.65 var(--font-ui); color: var(--text-secondary); text-wrap: pretty; }
+/* A field's one-line hint under its control (Clock Face): help-text type,
+   across the whole row when the label and the select sit side by side. */
+#ns-panel-set .settings-categories .set-hint { grid-column: 1 / -1; margin: 6px 0 0; font: 400 12px/1.6 var(--font-ui); color: var(--text-secondary); text-wrap: pretty; }
 #ns-panel-set .settings-categories p:not([class]) { font: 400 12px/1.65 var(--font-ui); color: var(--text-secondary); }
 #ns-panel-set .settings-rail-btn:not(.active):hover { background: var(--bg-secondary); color: var(--text-primary); }
 #ns-panel-set .set-section-head { align-items: center; margin-bottom: 10px; }
@@ -11340,9 +11559,36 @@ body[data-theme="dawn"] .night-cell[data-outcome="nodata"] .night-bar { border-c
 #ns-panel-set .settings-help-details { padding: 9px 12px; border-radius: 7px; background: var(--bg-secondary); }
 #ns-panel-set .settings-help-details summary { cursor: pointer; font: 500 12px/1.5 var(--font-ui); color: var(--text-secondary); }
 #ns-panel-set .settings-help-details[open] summary { margin-bottom: 8px; }
+/* The help disclosures use the app's chevron, not the browser triangle. */
+#ns-panel-set .settings-help-details > summary { display: flex; align-items: center; gap: 8px; list-style: none; border-radius: 5px; }
+#ns-panel-set .settings-help-details > summary::-webkit-details-marker { display: none; }
+#ns-panel-set .settings-help-details > summary::before { content: ''; flex: none; width: 5px; height: 5px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform var(--dur-fast) var(--ease-out); }
+#ns-panel-set .settings-help-details[open] > summary::before { transform: rotate(45deg); }
+#ns-panel-set .settings-help-details > summary:hover { color: var(--text-primary); }
+#ns-panel-set .settings-help-details > summary:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 3px; }
+/* Collapsible groups (Family Mode, WiFi Guard, Content Blocker, Accountability
+   Partner, Override Tax, Autopilot Bedtime): one disclosure row with Proof's
+   Routine-details chevron at its end, a hover wash and a focus ring. A
+   closed group is a compact card, not an 80px box holding a title. */
+#ns-panel-set .advanced-settings-group > summary { display: flex; align-items: center; gap: 10px; list-style: none; cursor: pointer; margin: -8px -10px; padding: 8px 10px; border-radius: 10px; transition: background-color var(--dur-fast) ease; }
+#ns-panel-set .advanced-settings-group > summary::-webkit-details-marker { display: none; }
+#ns-panel-set .advanced-settings-group > summary::after { content: ''; flex: none; margin-left: auto; width: 7px; height: 7px; border-right: 1.5px solid var(--text-secondary); border-bottom: 1.5px solid var(--text-secondary); transform: rotate(-45deg); transition: transform var(--dur-fast) var(--ease-out); }
+#ns-panel-set .advanced-settings-group[open] > summary::after { transform: rotate(45deg); }
+#ns-panel-set .advanced-settings-group > summary:hover { background: rgba(var(--accent-rgb), 0.06); }
+#ns-panel-set .advanced-settings-group > summary:hover::after { border-color: var(--text-primary); }
+#ns-panel-set .advanced-settings-group > summary:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 2px; }
+#ns-panel-set .advanced-settings-group > summary h3 { margin: 0; }
+#ns-panel-set .advanced-settings-group[open] > summary { margin-bottom: 14px; }
+#ns-panel-set .settings-categories > .option-section:has(> details.advanced-settings-group:not([open])) { padding-block: 14px; }
 #ns-panel-set .settings-rail::-webkit-scrollbar { width: 4px; }
 #ns-panel-set .settings-rail::-webkit-scrollbar-track { background: transparent; }
-#ns-panel-set .settings-rail::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+#ns-panel-set .settings-rail::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text-muted) 45%, transparent); border-radius: 4px; }
+/* The content scroller: the app's slim 6px thumb in a theme ink (a fixed
+   slate bar was loud on Dawn's cream). */
+#ns-panel-set .settings-categories::-webkit-scrollbar { width: 6px; }
+#ns-panel-set .settings-categories::-webkit-scrollbar-track { background: transparent; }
+#ns-panel-set .settings-categories::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text-muted) 45%, transparent); border-radius: 3px; }
+#ns-panel-set .settings-categories::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 #ns-panel-set .checkbox-label { min-height: 54px; padding: 13px 0; font: 500 13px/1.5 var(--font-ui); }
 #ns-panel-set .set-safety-hero .checkbox-label { padding: 16px 18px 16px 20px; }
 #ns-panel-set .set-row-title { font: 550 13px/1.4 var(--font-ui); }
@@ -11454,3 +11700,23 @@ body .nm-card-body .nm-card-subtitle, body .device-card .device-off-hint { line-
   body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .plan-ritual-entry { padding-top: 6px; }
   body:not(.mini-mode):not(.fullscreen-clock-mode) #readiness-strip .rdy-row { min-height: 52px; padding-block: 8px; }
 }
+
+/* A run makes the instrument the hero. Idle, the plan card earns the wider
+   column; once a run starts the console is only a pill, a two-line head and
+   three controls, so the ring takes the wider column and grows (the existing
+   .ring-container width transition glides it, and the columns glide with
+   it). Wide windows only: the 760px single column and the short-window
+   (<= 700px tall) ring sizes keep their own rules. */
+body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib { transition: grid-template-columns var(--dur-slow) var(--ease-out); }
+@media (min-width: 761px) {
+  body:not(.mini-mode):not(.fullscreen-clock-mode):is(.is-running, .is-paused) #ns-panel-lib { grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr); }
+}
+@media (min-width: 761px) and (min-height: 701px) {
+  body:not(.mini-mode):not(.fullscreen-clock-mode):is(.is-running, .is-paused) .ring-container { width: clamp(280px, 44vw, 440px); }
+}
+#action-bar-running { max-width: 380px; }
+/* The console's two big moments answer the hand: Pause / Resume presses in
+   (its :hover rule had cancelled the shared .action-btn press), and Cancel's
+   hairline firms up to the red on hover before the press. */
+#action-bar-running #btn-pause:active { transform: scale(0.985); }
+#action-bar-running #btn-stop:hover { border-color: rgba(var(--red-rgb), 0.8); }

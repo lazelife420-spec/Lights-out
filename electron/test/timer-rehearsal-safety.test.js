@@ -45,7 +45,7 @@ function completionContext(restore) {
   const events = [], calls = [];
   const c = load(['completeTimer'], {
     timerState: { running: true, dryRun: false, action: 'sleep' }, activeReceiptId: 'owned',
-    clearTimerInterval() {}, setTaskbarProgress() {}, persistActiveTimer() {}, restoreAfterTimer: () => restore,
+    clearTimerInterval() {}, setTaskbarProgress() {}, refreshShellSurfaces() {}, persistActiveTimer() {}, restoreAfterTimer: () => restore,
     runReceipts: { recordActionEvent: (_id, event) => { events.push(event); return {}; }, getReceiptById: () => ({}), updateRunReceipt() {} },
     smartLights: { getConfig: () => ({ enabled: false }) }, emitTimerUpdate() {}, showNativeNotification() {}, formatAction: () => 'Sleep',
     streaks: { recordEvent() {} }, sleepDebt: { estimateSleepHours: () => 0, recordNight() {} }, settingsStore: { getSection: () => ({}) },

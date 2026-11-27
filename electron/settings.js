@@ -226,6 +226,9 @@ function importableSection(section, value) {
     if (JSON.stringify(patch[destination[1]]) !== JSON.stringify(valueAtPath(ensureLoaded(), destination))) delete patch[destination[1]];
   }
   if (section === 'smartLights') delete patch.verifiedConfigKey;
+  // The armed Autopilot fire time belongs to this PC's schedule; a backup's
+  // value would read as a missed fire here.
+  if (section === 'app') delete patch.autopilotNextFireAt;
   if (section === 'calendar') return migrateLegacyCalendar(patch);
   if (section === 'accountability') delete patch.partners;
   return patch;
@@ -272,9 +275,33 @@ function migrateLegacyCalendar(calendar) {
   };
 }
 
+// Onboarding before 11.3 saved the Last Light choice under the profile field
+// names (lastLightEnabled/Sequence/Sound), which nothing reads. Map them onto
+// the section's own keys when those are absent, and drop the stray keys.
+const LEGACY_LAST_LIGHT_KEYS = { lastLightEnabled: 'enabled', lastLightSequence: 'sequence', lastLightSound: 'sound' };
+function migrateLegacyLastLight(section) {
+  if (!section || typeof section !== 'object' || Array.isArray(section)) return section;
+  if (!Object.keys(LEGACY_LAST_LIGHT_KEYS).some(key => key in section)) return section;
+  const next = { ...section };
+  for (const [legacy, canonical] of Object.entries(LEGACY_LAST_LIGHT_KEYS)) {
+    if (!(legacy in next)) continue;
+    if (!(canonical in next) && next[legacy] !== undefined && next[legacy] !== null) {
+      next[canonical] = canonical === 'enabled' ? next[legacy] === true : String(next[legacy]);
+    }
+    delete next[legacy];
+  }
+  return next;
+}
+
 function migrateLegacySettings(parsed) {
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || !parsed.calendar) return parsed;
-  return { ...parsed, calendar: migrateLegacyCalendar(parsed.calendar) };
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return parsed;
+  let next = parsed;
+  if (parsed.calendar) next = { ...next, calendar: migrateLegacyCalendar(parsed.calendar) };
+  if (parsed.lastLight) {
+    const lastLight = migrateLegacyLastLight(parsed.lastLight);
+    if (lastLight !== parsed.lastLight) next = { ...next, lastLight };
+  }
+  return next;
 }
 
 let configPath = null;
@@ -290,7 +317,6 @@ const DEFAULTS = {
     unit: 'min',
     durationSeconds: 28 * 60,
     sound: true,
-    gracefulClose: true,
     forceShutdown: false,
     // Ctrl+Shift+L / Ctrl+Shift+1..4 start a timer from inside any app. Off by
     // default: they collide with common app shortcuts (main.js).
@@ -909,5 +935,6 @@ module.exports = {
   exportSnapshot,
   importableSection,
   migrateLegacyCalendar,
+  migrateLegacyLastLight,
   remapProfileReferences
 };

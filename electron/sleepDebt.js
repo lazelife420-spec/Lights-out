@@ -192,6 +192,12 @@ function setTargetHours(hours) {
   return data.targetHours;
 }
 
+// The wake time nights are estimated against (set-wake-time).
+function getWakeTime() {
+  const data = load();
+  return isValidTimeHHMM(data.wakeTime) ? data.wakeTime : '07:00';
+}
+
 // Set wake time.
 function setWakeTime(time) {
   const data = load();
@@ -222,6 +228,7 @@ function getDebtLabel(netDebt) {
 }
 
 module.exports = {
+  getWakeTime,
   recordNight,
   getDebtSummary,
   setTargetHours,

@@ -526,6 +526,23 @@
             <div class="time-label" id="timer-label">Local time</div>
             <div class="time-sub" id="timer-sub"></div>
           </div>
+          <!-- The Tonight dial: idle, the instrument is a slider for tonight's
+               duration (tonightDial.js). Pointer and wheel input land on
+               .ring-container; this element carries focus, the keys and the
+               slider semantics, and shows the planned duration while a drag
+               is in progress. It only edits the plan, through the duration
+               stepper's own path: it never starts a run, and render() makes it
+               inert during a run, a ritual, mini mode, the fullscreen clock,
+               before settings load and while One night only sets the end. -->
+          <div class="tonight-dial" id="tonight-dial" role="slider" tabindex="-1" aria-label="Tonight's duration" aria-orientation="vertical" aria-valuemin="1" aria-valuemax="480" aria-valuenow="28" aria-valuetext="28 minutes" aria-disabled="true" aria-describedby="tonight-dial-desc">
+            <div class="tonight-dial-readout" id="tonight-dial-readout" aria-hidden="true">
+              <span class="tdr-eyebrow">If started now</span>
+              <span class="tdr-value" id="tonight-dial-value"></span>
+              <span class="tdr-ends" id="tonight-dial-ends"></span>
+            </div>
+            <span class="tonight-dial-hint" aria-hidden="true"><svg class="chip-glyph" viewBox="0 0 18 18" focusable="false"><path d="M5.8 7.2 9 4l3.2 3.2M5.8 10.8 9 14l3.2-3.2"/></svg>Drag to set</span>
+            <span id="tonight-dial-desc" hidden>Drag up or down, scroll, or use the arrow keys. It sets tonight's duration only and never starts the timer.</span>
+          </div>
           <button class="fullscreen-clock-btn" id="btn-fullscreen-clock" title="Full screen clock" aria-label="Full screen clock" style="display:none"><svg class="chip-glyph" viewBox="0 0 18 18" aria-hidden="true" focusable="false"><path d="M3 7V3h4M11 3h4v4M15 11v4h-4M7 15H3v-4"/></svg><span>Full screen</span></button>
         </div>
         <div class="clock-face-controls" id="clock-face-controls" role="group" aria-label="Idle clock face" hidden>
@@ -1148,7 +1165,7 @@
               <h4>This Week</h4>
               <div class="routine-head-actions">
                 <button type="button" class="btn-secondary btn-compact routine-btn" id="btn-copy-weekly-report"><svg class="chip-glyph" viewBox="0 0 18 18" aria-hidden="true" focusable="false"><rect x="6" y="6" width="9" height="9" rx="1.5"/><path d="M3 12V4.5A1.5 1.5 0 0 1 4.5 3H12"/></svg>Copy report</button>
-                <button type="button" class="btn-secondary btn-compact routine-btn" id="btn-export-streaks"><svg class="chip-glyph" viewBox="0 0 18 18" aria-hidden="true" focusable="false"><path d="M9 3v8.5M5.5 8L9 11.5 12.5 8M3.5 14.5h11"/></svg>Export ledger</button>
+                <button type="button" class="btn-secondary btn-compact routine-btn" id="btn-export-streaks"><svg class="chip-glyph" viewBox="0 0 18 18" aria-hidden="true" focusable="false"><rect x="6" y="6" width="9" height="9" rx="1.5"/><path d="M3 12V4.5A1.5 1.5 0 0 1 4.5 3H12"/></svg>Copy ledger</button>
               </div>
             </div>
             <p class="weekly-report-text" id="weekly-report-text"></p>
@@ -1166,7 +1183,11 @@
           <!-- Bedtime deficit estimate -->
           <div class="sleep-debt-section" id="sleep-debt-section">
             <h4 class="debt-heading">Estimated Bedtime Deficit</h4>
-            <p class="debt-note">Based on timer completion and the configured wake time; this is not measured sleep.</p>
+            <p class="debt-note">Based on timer completion and the wake time below; this is not measured sleep.</p>
+            <div class="debt-config">
+              <label class="debt-field" for="sleep-wake-time"><span>Wake time</span><input type="time" id="sleep-wake-time" value="07:00"></label>
+              <label class="debt-field" for="sleep-target-hours"><span>Target</span><input type="number" id="sleep-target-hours" class="set-num" min="4" max="12" step="0.5" value="8"><span>h</span></label>
+            </div>
             <div class="debt-display" id="debt-display">
               <span class="debt-amount" id="debt-amount">0.0h</span>
               <span class="debt-label" id="debt-label">No debt</span>
@@ -1239,14 +1260,6 @@
         <div class="option-group">
           <label class="checkbox-label">
             <span class="set-row-text">
-              <span class="set-row-title">Graceful close <span class="set-live-tag">Applies now</span></span>
-            </span>
-            <input type="checkbox" id="chk-graceful" data-live="1">
-          </label>
-        </div>
-        <div class="option-group">
-          <label class="checkbox-label">
-            <span class="set-row-text">
               <span class="set-row-title">Mute system <span class="set-live-tag">Applies now</span></span>
             </span>
             <input type="checkbox" id="chk-mute" data-live="1">
@@ -1283,12 +1296,14 @@
 
         <h3>Idle clock</h3>
         <div class="option-group">
-          <label class="checkbox-label">
+          <!-- An explanation, not a control: a div, so it has no pointer cursor,
+               hover border or click target. -->
+          <div class="checkbox-label set-row-static">
             <span class="set-row-text">
               <span class="set-row-title">Idle clock</span>
               <span class="set-row-desc">The ring shows local time until you start. Duration stays in Tonight's Plan. Choose your clock face in Appearance.</span>
             </span>
-          </label>
+          </div>
         </div>
 
         <div class="option-group">
@@ -1314,7 +1329,7 @@
 
         <h3>Your data</h3>
         <div class="option-group">
-          <p class="help-text" id="set-data-note">Settings and run receipts are stored only on this PC. No account, no cloud sync. Export your receipts from Proof › Full ledger.</p>
+          <p class="help-text" id="set-data-note">Settings and run receipts are stored only on this PC. No account, no cloud sync. Copy your receipts from Proof › Full ledger.</p>
         </div>
         </div>
 
@@ -1659,7 +1674,7 @@
 
         <!-- Family Mode Section -->
         <div class="option-section family-section" data-settings-category="phone">
-          <details class="advanced-settings-group"><summary style="cursor:pointer;margin-bottom:8px"><h3>Family Mode</h3></summary>
+          <details class="advanced-settings-group"><summary><h3>Family Mode</h3></summary>
           <p class="help-text">Controls another PC only when that PC is running Lights Out with Family LAN enabled and the same pairing token. Discovery alone does not configure a peer.</p>
           <div class="option-group">
             <button type="button" id="btn-family-scan" class="btn-secondary">Scan for peers</button>
@@ -1671,7 +1686,7 @@
 
         <!-- WiFi Guard Section -->
         <div class="option-section wifi-guard-section" data-settings-category="protection">
-          <details class="advanced-settings-group"><summary style="cursor:pointer;margin-bottom:8px"><h3>WiFi Guard <span class="tag-pill">Experimental</span></h3></summary>
+          <details class="advanced-settings-group"><summary><h3>WiFi Guard <span class="tag-pill">Experimental</span></h3></summary>
           <p class="help-text">Requires a compatible router, your own webhook, or local Wi-Fi adapter control. Windows Firewall on this PC cannot block a different phone or tablet on the LAN. Lights Out saves a recovery note on this PC before each block (nothing is blocked if it cannot) and tries to undo a leftover block when you quit or, after a crash, the next time it opens, unless you chose to keep it.</p>
 
           <div class="option-group">
@@ -1754,7 +1769,7 @@
 
         <!-- Content Blocker Section -->
         <div class="option-section content-blocker-section" data-settings-category="protection">
-          <details class="advanced-settings-group"><summary style="cursor:pointer;margin-bottom:8px"><h3>Content Blocker <span class="tag-pill">Hosts file</span></h3></summary>
+          <details class="advanced-settings-group"><summary><h3>Content Blocker <span class="tag-pill">Hosts file</span></h3></summary>
           <p class="help-text">Edits the Windows hosts file and may require administrator approval. Secure DNS, VPNs, and cached browser connections can bypass it.</p>
 
           <div class="option-group">
@@ -1843,7 +1858,7 @@
 
         <!-- Accountability Partner Section -->
         <div class="option-section accountability-section" data-settings-category="accountability">
-          <details class="advanced-settings-group"><summary style="cursor:pointer;margin-bottom:8px"><h3>Accountability Partner</h3></summary>
+          <details class="advanced-settings-group"><summary><h3>Accountability Partner</h3></summary>
           <p class="help-text">Sends JSON to a webhook you configure and test below. No message is sent until a partner webhook exists.</p>
 
           <div class="option-group">
@@ -1899,7 +1914,7 @@
 
         <!-- Override Tax Section -->
         <div class="option-section override-tax-section" data-settings-category="accountability">
-          <details class="advanced-settings-group"><summary style="cursor:pointer;margin-bottom:8px"><h3>Override Tax <span class="set-live-tag">Applies now</span></h3></summary>
+          <details class="advanced-settings-group"><summary><h3>Override Tax <span class="set-live-tag">Applies now</span></h3></summary>
           <p class="help-text">Escalating cost for hitting snooze. Makes it harder to stay up the more you try.</p>
 
           <div class="option-group">
@@ -1944,7 +1959,7 @@
 
         <!-- Autopilot Bedtime Section -->
         <div class="option-section autopilot-section" data-settings-category="automations">
-          <details class="advanced-settings-group"><summary style="cursor:pointer;margin-bottom:8px"><h3>Autopilot Bedtime <span class="set-live-tag">Applies now</span></h3></summary>
+          <details class="advanced-settings-group"><summary><h3>Autopilot Bedtime <span class="set-live-tag">Applies now</span></h3></summary>
           <p class="help-text">Learns your pattern and auto-starts the timer at your habitual bedtime. You get a 5-minute warning. In an installed or portable copy, Autopilot also keeps a Windows Scheduled Task (LightsOut-AutopilotWatchdog) that reopens Lights Out minimized 15 minutes before bedtime if it is closed. The task never runs a power action, and turning Autopilot off removes this copy's task.</p>
 
           <div class="option-group">
@@ -2224,7 +2239,10 @@
              never toggles the mode itself. #testmode-pill stays the single
              truth live region, so this carries no role=status / aria-live. -->
         <button type="button" class="status-pill" id="status-pill"><span class="status-dot" id="status-dot"></span><span class="status-text" id="status-text">Idle</span><span class="status-time" id="status-time" aria-hidden="true" hidden></span></button>
-        <button type="button" class="footer-branding brand-secret" id="brand-signature" aria-label="The Proof Foundry signature">Forged by The Proof Foundry™</button>
+        <!-- Plain text, not buttons: the multi-tap signatures (renderer-signature.js)
+             do nothing on one activation, so they are not offered to Tab or a
+             screen reader as controls. -->
+        <span class="footer-branding brand-secret" id="brand-signature">Forged by The Proof Foundry™</span>
       </div>
       <div class="footer-right">
         <button class="footer-action" id="btn-notif" title="Open notifications" aria-label="Open notifications" style="position:relative"><svg class="footer-glyph" viewBox="0 0 18 18" aria-hidden="true"><path d="M4.6 12.6V8.4a4.4 4.4 0 0 1 8.8 0v4.2l1.2 1.4H3.4z"/><path d="M7.6 15.6a1.5 1.5 0 0 0 2.8 0"/></svg>
@@ -2233,7 +2251,7 @@
         <button class="footer-action" id="btn-widget" title="Toggle desktop widget" aria-label="Toggle desktop widget"><svg class="footer-glyph" viewBox="0 0 18 18" aria-hidden="true"><rect x="2.4" y="5.4" width="13.2" height="7.2" rx="1.6"/><path d="M5.6 9h3.2"/><circle cx="12.2" cy="9" r=".9"/></svg></button>
         <button class="footer-action" id="btn-companion" title="Open companion setup" aria-label="Open companion setup"><svg class="footer-glyph" viewBox="0 0 18 18" aria-hidden="true"><rect x="5" y="1.8" width="8" height="14.4" rx="1.8"/><path d="M8 13.6h2"/></svg></button>
         <span class="badge update-badge" id="badge-update" style="display:none" title="Update available">UPDATE</span>
-        <button type="button" id="version" class="brand-secret" aria-label="Lights Out version">v11.3.0</button>
+        <span id="version" class="brand-secret">v11.3.0</span>
       </div>
     </footer>
 
@@ -2462,7 +2480,7 @@
         <div class="receipt-stats" id="receipt-stats"></div>
         <div class="receipts-list" id="receipts-list"></div>
         <div class="receipts-actions" id="receipts-actions">
-          <button type="button" class="btn-quiet btn-compact" id="btn-export-receipts"><svg class="chip-glyph" viewBox="0 0 18 18" aria-hidden="true" focusable="false"><path d="M9 3v8.5M5.5 8L9 11.5 12.5 8M3.5 14.5h11"/></svg>Export ledger</button>
+          <button type="button" class="btn-quiet btn-compact" id="btn-export-receipts"><svg class="chip-glyph" viewBox="0 0 18 18" aria-hidden="true" focusable="false"><rect x="6" y="6" width="9" height="9" rx="1.5"/><path d="M3 12V4.5A1.5 1.5 0 0 1 4.5 3H12"/></svg>Copy ledger</button>
           <button type="button" class="btn-quiet btn-quiet--danger btn-compact" id="btn-clear-receipts">Delete all receipts&hellip;</button>
         </div>
         <!-- UI-R3 P11: step two of Delete all. Only #btn-clear-receipts-confirm
@@ -2550,6 +2568,7 @@
           <div><dt><kbd>Ctrl+Shift+Z</kbd></dt><dd>Snooze 5 minutes</dd></div>
           <div><dt><kbd>Ctrl+M</kbd></dt><dd>Mini mode</dd></div>
           <div><dt><kbd>1</kbd>&ndash;<kbd>6</kbd></dt><dd>Start a 5-120 min preset now (idle only)</dd></div>
+          <div><dt><kbd>&uarr;</kbd> <kbd>&darr;</kbd></dt><dd>Tonight's duration, 1 min (idle only); or drag or scroll the dial</dd></div>
           <div><dt><kbd>Ctrl+Shift+S</kbd></dt><dd>Show or hide the window</dd></div>
           <div><dt><kbd>Ctrl+Shift+P</kbd></dt><dd>Preview Last Light</dd></div>
         </dl>
@@ -2650,6 +2669,7 @@
   <script src="renderer-onboarding-updater.js"></script>
   <script src="renderer-night-modes.js"></script>
   <script src="renderer-signature.js"></script>
+  <script src="tonightDial.js"></script>
   <script src="renderer.js"></script>
   <script src="releaseGates.js"></script>
   <script src="handoff-ui.js"></script>

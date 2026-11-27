@@ -61,7 +61,7 @@ function startup(acquired) {
     setInterval: record('interval'), setTimeout: record('timeout')
   };
   for (const name of ['cleanupStalePortableExtracts', 'setupRitualCallbacks', 'createWindow',
-    'createTray', 'setupJumpList', 'registerGlobalShortcuts', 'createWidgetWindow',
+    'createTray', 'setupJumpList', 'watchTaskbarPresenceInputs', 'registerGlobalShortcuts', 'createWidgetWindow',
     'writeStartupLog', 'refreshTrayMenu', 'broadcastCompanionState', 'queueRemoteControlRestart',
     'startCompanionNetworkMonitor', 'checkCalendarAutoStart', 'checkContentBlockerSchedules']) {
     context[name] = record(name);

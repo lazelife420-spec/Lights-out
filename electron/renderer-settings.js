@@ -243,7 +243,6 @@ function collectAppSettings() {
     unit: state.unit,
     durationSeconds: state.remainingSeconds,
     sound: state.sound,
-    gracefulClose: state.gracefulClose,
     forceShutdown: state.forceShutdown,
     muteSystem: state.muteSystem,
     graceMinutes: state.graceMinutes,
@@ -303,7 +302,6 @@ async function applyAppSettings(app, { skipNavigation = false, preserveTonightPl
     if (!preserveTonightPlan && app.unit) state.unit = app.unit;
   }
   if (typeof app.sound === 'boolean') { state.sound = app.sound; SoundSystem.enabled = app.sound; }
-  if (typeof app.gracefulClose === 'boolean') state.gracefulClose = app.gracefulClose;
   if (typeof app.forceShutdown === 'boolean') state.forceShutdown = app.forceShutdown;
   if (typeof app.muteSystem === 'boolean') state.muteSystem = app.muteSystem;
   if (Number.isFinite(Number(app.graceMinutes))) state.graceMinutes = Number(app.graceMinutes);

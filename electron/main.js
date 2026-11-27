@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, globalShortcut, shell, screen, clipboard, session, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, nativeTheme, Notification, globalShortcut, shell, screen, clipboard, session, dialog } = require('electron');
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
@@ -97,6 +97,9 @@ const startInvocationLog = [];
 const realPowerActionLog = [];
 
 const APP_ICON = path.join(__dirname, 'assets', 'icon.ico');
+// Toasts show the app logo at 48-96px; a .ico path hands them the 32px frame
+// to stretch, so notifications get the 256px render of the same mark.
+const NOTIFICATION_ICON = path.join(__dirname, 'assets', 'icon-256.png');
 const TRAY_ICON = path.join(__dirname, 'assets', 'tray-32.png');
 
 // Pre-built tray icon variants (generated on first use).
@@ -314,6 +317,9 @@ const timerState = {
   origin: 'this-pc',   // display only: where the run was started
   profileId: null,
   profileName: null,
+  // This run's Last Light when its profile turns one on; null means the
+  // persisted 'lastLight' setting applies (runLastLightSettings).
+  lastLight: null,
   nightModeId: null,
   nightModeTitle: null,
   nightModeVersion: null
@@ -522,6 +528,11 @@ function createWindow() {
     refreshTrayMenu();
   });
 
+  // Hiding to the tray removes the taskbar button, and Windows drops its
+  // overlay badge and progress with it; the recreated button gets them back.
+  mainWindow.on('show', reapplyTaskbarAfterShow);
+  mainWindow.on('moved', () => applyTaskbarPresence());
+
   // Keep the renderer's fullscreen-clock UI state in sync however fullscreen
   // was exited -- our own Esc/exit-button handler, or an OS-level shortcut
   // (e.g. the taskbar, Alt+Tab away and back) that never went through IPC.
@@ -585,13 +596,7 @@ function refreshTrayMenu() {
         click: () => (timerState.paused ? resumeTimer() : pauseTimer())
       },
       {
-        label: (() => {
-          const cost = overrideTax.assessSnoozeCost();
-          if (cost.level === 0) return 'Snooze +5 min';
-          if (cost.level === 1) return 'Snooze +5 min (logged)';
-          if (cost.level >= 2) return `Snooze +5 min (tightens -${cost.tomorrowDebt + 15}m)`;
-          return 'Snooze +5 min';
-        })(),
+        label: snoozeMenuLabel(),
         click: () => snoozeTimer(300)
       },
       {
@@ -624,6 +629,15 @@ function refreshTrayMenu() {
   tray.setContextMenu(contextMenu);
 }
 
+// The tray menu and the taskbar thumbnail toolbar show the same snooze cost.
+function snoozeMenuLabel() {
+  const cost = overrideTax.assessSnoozeCost();
+  if (cost.level === 0) return 'Snooze +5 min';
+  if (cost.level === 1) return 'Snooze +5 min (logged)';
+  if (cost.level >= 2) return `Snooze +5 min (tightens -${cost.tomorrowDebt + 15}m)`;
+  return 'Snooze +5 min';
+}
+
 function toggleMainWindow() {
   if (!mainWindow) return;
   if (mainWindow.isVisible()) {
@@ -642,7 +656,7 @@ function showNativeNotification(title, body) {
   const notification = new Notification({
     title,
     body,
-    icon: APP_ICON,
+    icon: NOTIFICATION_ICON,
     silent: true,
     timeoutType: 'default'
   });
@@ -660,13 +674,101 @@ function notifyRemoteAction(message) {
   }
 }
 
+let lastTaskbarProgress = null;
+
 function setTaskbarProgress(percent, mode = 'normal') {
+  lastTaskbarProgress = { percent, mode };
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (mode === 'none') {
     mainWindow.setProgressBar(-1);
     return;
   }
   mainWindow.setProgressBar(Math.max(0, Math.min(1, percent / 100)), { mode });
+}
+
+// Taskbar overlay badge (amber = Test Mode, rose = REAL, as the tray dot) and
+// thumbnail toolbar (Pause/Resume, Snooze +5 min, Cancel) for an active run;
+// only Cancel while completion is still cancellable. Windows only, and never
+// throws (see taskbarPresence.js).
+const taskbarPresence = require('./taskbarPresence').createTaskbarPresence({
+  nativeImage,
+  appRoot: __dirname,
+  getWindow: () => mainWindow,
+  getScaleFactor: win => screen.getDisplayMatching(win.getBounds()).scaleFactor,
+  // White glyphs on the dark thumbnail flyout, black on a light system theme.
+  useDarkGlyphs: () => nativeTheme.shouldUseDarkColorsForSystemIntegratedUI === false,
+  handlers: {
+    // The same functions the tray menu calls.
+    pauseOrResume: () => (timerState.paused ? resumeTimer() : pauseTimer()),
+    snooze: () => snoozeTimer(300),
+    cancel: cancelFromTaskbar
+  },
+  log: writeStartupLog
+});
+
+// Called from the timer and power-action paths (some in a finally), so a
+// failure here is logged and never escapes into them.
+function applyTaskbarPresence(options) {
+  try {
+    const active = timerState.running || timerState.paused;
+    taskbarPresence.apply({
+      running: timerState.running,
+      paused: timerState.paused,
+      completing: isCompletionInFlight(),
+      dryRun: timerState.dryRun,
+      actionLabel: formatAction(timerState.action),
+      snoozeLabel: active ? snoozeMenuLabel() : ''
+    }, options);
+  } catch (error) {
+    writeStartupLog('Taskbar presence update failed', { message: error && error.message });
+  }
+}
+
+// Like the tray: Cancel works for a running or paused countdown and for the
+// completion phase until the power request is dispatched.
+function cancelFromTaskbar() {
+  if (!hasCancellableRun()) return;
+  const completing = !timerState.running && !timerState.paused;
+  cancelTimer();
+  if (completing) showNativeNotification('Lights Out', 'Timer cancelled');
+}
+
+// Tray menu and taskbar both read isCompletionInFlight(), whose inputs
+// (activeReceiptId, completionGuardController) are cleared after a
+// transition is emitted. Every path that clears them refreshes both, so
+// neither keeps offering "Cancel pending power action" once the run is over.
+// Some callers are power-action finally blocks: a refresh failure must never
+// replace their result.
+function refreshShellSurfaces() {
+  try {
+    refreshTrayMenu();
+  } catch (error) {
+    writeStartupLog('Tray menu refresh failed', { message: error && error.message });
+  }
+  applyTaskbarPresence();
+}
+
+// Thumbnail glyph ink follows the system theme; badge size follows display scale.
+function watchTaskbarPresenceInputs() {
+  if (process.platform !== 'win32') return;
+  nativeTheme.on('updated', () => applyTaskbarPresence());
+  screen.on('display-metrics-changed', () => applyTaskbarPresence());
+}
+
+let taskbarReapplyTimer = null;
+
+function reapplyTaskbarAfterShow() {
+  const reapply = () => {
+    applyTaskbarPresence({ force: true });
+    if (lastTaskbarProgress) setTaskbarProgress(lastTaskbarProgress.percent, lastTaskbarProgress.mode);
+  };
+  reapply();
+  // Explorer creates the new taskbar button asynchronously after the show.
+  clearTimeout(taskbarReapplyTimer);
+  taskbarReapplyTimer = setTimeout(() => {
+    taskbarReapplyTimer = null;
+    reapply();
+  }, 500);
 }
 
 let companionStateRevision = 0;
@@ -715,6 +817,10 @@ function emitTimerUpdate(type, data = {}) {
   // tick. Replacing the menu every second can drop a click on an open menu
   // (e.g. Pause), leaving the timer running and the menu stuck on "Pause".
   if (type !== 'tick') refreshTrayMenu();
+  // cancelTimer emits 'cancelled' while its receipt is still open and then
+  // refreshes the taskbar itself; applying here would flash the
+  // pending-cancel badge and toolbar for a moment.
+  if (type !== 'tick' && type !== 'cancelled') applyTaskbarPresence();
 }
 
 function updateTrayText() {
@@ -1038,6 +1144,7 @@ function beginValidatedCountdown(options, identity, nmIdentity) {
   timerState.routineOccurrenceKey = options.routineOccurrenceKey || null;
   timerState.profileId = identity.profileId;
   timerState.profileName = identity.profileName;
+  timerState.lastLight = profileLastLight(identity.profileId ? profiles.getById(identity.profileId) : null);
   const nm = nmIdentity || { nightModeId: null, nightModeTitle: null, nightModeVersion: null };
   timerState.nightModeId = nm.nightModeId || null;
   timerState.nightModeTitle = nm.nightModeTitle || null;
@@ -1112,7 +1219,8 @@ function beginValidatedCountdown(options, identity, nmIdentity) {
       const dimFraction = timerState.remainingSeconds / (timerState.totalSeconds * 0.25);
       // Floor 0.88 (was 0.55): the in-app .env-dark layer does the darkening,
       // so the window never goes see-through behind the truth pill or dialogs.
-      const opacity = 0.88 + 0.12 * Math.max(0, Math.min(1, dimFraction));
+      // Scaled by the user's own Appearance opacity, never brighter than it.
+      const opacity = (0.88 + 0.12 * Math.max(0, Math.min(1, dimFraction))) * userWindowOpacity();
       mainWindow.setOpacity(opacity);
     }
 
@@ -1275,6 +1383,8 @@ function cancelTimer({ result = 'cancelled', restoreReason = 'cancel', notes = n
     });
     activeReceiptId = null;
   }
+  // 'cancelled' was emitted while the receipt was still open.
+  refreshShellSurfaces();
   if (accountabilityEvent) sendAccountability(accountabilityEvent);
   return { success: true };
 }
@@ -1291,6 +1401,9 @@ async function completeTimer() {
   timerState.phase = 'idle';
   setTaskbarProgress(0, 'none');
   persistActiveTimer();
+  // The countdown is over, so Pause and Snooze no longer apply; through the
+  // awaited steps below the tray and taskbar offer only Cancel.
+  refreshShellSurfaces();
   const restoration = restoreAfterTimer({ reason: 'complete' });
 
   if (completingReceiptId) {
@@ -1337,10 +1450,12 @@ async function completeTimer() {
     }
     // Record an app-timer estimate only; this is not measured sleep.
     try {
-      const appSettings = settingsStore.getSection('app') || {};
+      // The wake time the Proof card sets (set-wake-time writes sleepDebt's
+      // own store); nothing writes an app.wakeTime.
+      const wakeTime = sleepDebt.getWakeTime();
       const bedTime = new Date().toTimeString().slice(0, 5);
-      const estimated = sleepDebt.estimateSleepHours(bedTime, appSettings.wakeTime || '07:00');
-      sleepDebt.recordNight(bedTime, appSettings.wakeTime || '07:00', estimated);
+      const estimated = sleepDebt.estimateSleepHours(bedTime, wakeTime);
+      sleepDebt.recordNight(bedTime, wakeTime, estimated);
     } catch (e) {
       console.error('Failed to record estimated bedtime deficit:', e);
     }
@@ -1352,7 +1467,7 @@ async function completeTimer() {
       remainingSeconds: 0,
       timerElapsedAt: elapsedAt,
       result: completionOptions.dryRun ? 'dry_run_completed' : 'timer_elapsed',
-      lastLightSequence: settingsStore.getSection('lastLight')?.sequence || null
+      lastLightSequence: (completionOptions.lastLight || settingsStore.getSection('lastLight'))?.sequence || null
     });
   }
   sendAccountability('TIMER_COMPLETE');
@@ -1387,11 +1502,13 @@ async function completeTimer() {
       return;
     } finally {
       if (completionGuardController === guardController) completionGuardController = null;
+      // A cancel during the scan emitted while this guard was still set.
+      refreshShellSurfaces();
     }
   }
 
   if (completingReceiptId && activeReceiptId !== completingReceiptId) return;
-  await playLastLightRitual(completionOptions.dryRun);
+  await playLastLightRitual(completionOptions.dryRun, completionOptions.lastLight);
   if (completingReceiptId && activeReceiptId !== completingReceiptId) return;
   // The run is ending without a cancel: never restart paused media now.
   windDownChanges.mediaPause = null;
@@ -1413,8 +1530,25 @@ async function completeTimer() {
 // Plays the Last Light finale in the renderer before the power action fires.
 // Only delays when enabled and the window is visible, so a hidden/idle app
 // never holds up the shutdown.
-function playLastLightRitual(dryRun) {
-  const cfg = settingsStore.getSection('lastLight') || {};
+// A profile carries its own Last Light only when it turns one on (every
+// stored profile has lastLightEnabled, false by default, so "off" in a
+// profile means "no opinion" and the persisted setting applies). Main is the
+// authority: the renderer never copies a profile's choice into the setting.
+function profileLastLight(profile) {
+  if (!profile || profile.lastLightEnabled !== true) return null;
+  return {
+    enabled: true,
+    sequence: lastLight.normalizeId(profile.lastLightSequence),
+    sound: typeof profile.lastLightSound === 'string' ? profile.lastLightSound : 'Off'
+  };
+}
+
+function runLastLightSettings(runLastLight) {
+  return runLastLight && typeof runLastLight === 'object' ? runLastLight : (settingsStore.getSection('lastLight') || {});
+}
+
+function playLastLightRitual(dryRun, runLastLight = null) {
+  const cfg = runLastLightSettings(runLastLight);
   if (!cfg.enabled) return Promise.resolve();
   if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) return Promise.resolve();
 
@@ -1438,7 +1572,14 @@ function playLastLightRitual(dryRun) {
 // it paused whatever the user was playing. Removing the Night Light value when
 // this app never set it could likewise switch off the user's own Night Light.
 // mediaPause holds this run's pause attempt (resolves to { count }).
-const windDownChanges = { mediaPause: null, nightLightSet: false, wifiSession: null };
+const windDownChanges = { mediaPause: null, nightLightSet: false, wifiSession: null, lockoutApplied: false };
+
+// Appearance > Opacity (customization.opacity), the value a run's end and
+// First Light return the window to, instead of a hard-coded 1.
+function userWindowOpacity() {
+  const v = Number((settingsStore.getSection('customization') || {}).opacity);
+  return Number.isFinite(v) ? Math.max(0.5, Math.min(1, v)) : 1;
+}
 
 // Applies the dim-phase visual wind-down.
 // Enables Windows Night Light (blue-light filter) via registry if the
@@ -1487,6 +1628,7 @@ function applyDimPhase(remainingSeconds, totalSeconds, { dryRun = typeof timerSt
   }
   // Progressive screen lockout: make window always-on-top and hide menu during dim.
   if (appSettings.lockoutOnDim === true && mainWindow && !mainWindow.isDestroyed()) {
+    windDownChanges.lockoutApplied = true;
     mainWindow.setAlwaysOnTop(true, 'floating');
     mainWindow.setMenuBarVisibility(false);
   }
@@ -1517,8 +1659,8 @@ function applyFocusMode(enable) {
 }
 
 function restoreAfterTimer({ reason = 'cancel' } = {}) {
-  // Restore window opacity.
-  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setOpacity(1);
+  // Restore window opacity to the user's own setting.
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setOpacity(userWindowOpacity());
   // Tell renderer to end dim phase.
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('dim-phase-ended');
   // Disable Windows Night Light, only if this run's wind-down turned it on.
@@ -1561,9 +1703,15 @@ function restoreAfterTimer({ reason = 'cancel' } = {}) {
   // Undo progressive lockout: restore normal window behavior. The window is
   // created with autoHideMenuBar:true, so re-show the bar (Alt-accessible) here
   // rather than leaving it force-hidden from the dim-phase lockout.
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.setAlwaysOnTop(false);
-    mainWindow.setMenuBarVisibility(true);
+  // Only when this run's lockout applied them: otherwise mini mode's
+  // always-on-top puck would drop behind other windows after every run.
+  if (windDownChanges.lockoutApplied) {
+    windDownChanges.lockoutApplied = false;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (miniMode) mainWindow.setAlwaysOnTop(true, 'floating');
+      else mainWindow.setAlwaysOnTop(false);
+      mainWindow.setMenuBarVisibility(true);
+    }
   }
   return wifiRestore;
 }
@@ -1627,14 +1775,14 @@ function playFirstLight(requestId) {
     elapsed++;
     const progress = Math.min(1, elapsed / FIRST_LIGHT_DURATION);
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.setOpacity(progress);
+      mainWindow.setOpacity(progress * userWindowOpacity());
       mainWindow.webContents.send('first-light-tick', { progress, elapsed });
     }
     if (elapsed >= FIRST_LIGHT_DURATION) {
       clearInterval(interval);
       firstLightRunning = false;
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.setOpacity(1);
+        mainWindow.setOpacity(userWindowOpacity());
         mainWindow.webContents.send('first-light-ended');
       }
       // Clean up the scheduled task after it fires.
@@ -2511,6 +2659,7 @@ async function executePowerAction(options = {}) {
       });
       activeReceiptId = null;
     }
+    refreshShellSurfaces();
     return { success: true, dryRun: true };
   }
 
@@ -2533,6 +2682,7 @@ async function executePowerAction(options = {}) {
       });
       activeReceiptId = null;
     }
+    refreshShellSurfaces();
     return { success: false, blocked: true, error: 'QA power lock' };
   }
 
@@ -2569,11 +2719,18 @@ async function executePowerAction(options = {}) {
     }
   }); } finally {
     if (powerController && completionGuardController === powerController) completionGuardController = null;
+    refreshShellSurfaces();
   }
 }
 
+// The Run entry is written with these args, and Windows' openAtLogin only
+// matches an entry whose args are the same, so read it back with them too
+// (without them a correctly written entry reads as off and the next Settings
+// Save deletes it).
+const LOGIN_ITEM_ARGS = Object.freeze(['--minimized', '--no-auto-start']);
+
 function getLoginSettings() {
-  const loginSettings = app.getLoginItemSettings();
+  const loginSettings = app.getLoginItemSettings({ path: process.execPath, args: [...LOGIN_ITEM_ARGS] });
   return {
     runAtLogin: Boolean(loginSettings.openAtLogin),
     startupBehavior: 'Starts minimized and idle'
@@ -2589,7 +2746,7 @@ function setRunAtLogin(enabled) {
   app.setLoginItemSettings({
     openAtLogin: Boolean(enabled),
     openAsHidden: false,
-    args: ['--minimized', '--no-auto-start']
+    args: [...LOGIN_ITEM_ARGS]
   });
   return getLoginSettings();
 }
@@ -2664,7 +2821,7 @@ ipcMain.handle('save-app-settings', async (event, settings = {}) => {
   if (settings.lastLight) settingsStore.updateSection('lastLight', settings.lastLight);
   if (settings.calendar) settingsStore.updateSection('calendar', settings.calendar);
   if (settings.wifiGuard) settingsStore.updateSection('wifiGuard', capabilityTruth.sanitizeWifiGuard(settings.wifiGuard));
-  if (settings.contentBlocker) settingsStore.updateSection('contentBlocker', capabilityTruth.sanitizeContentBlocker(settings.contentBlocker));
+  if (settings.contentBlocker) settingsStore.updateSection('contentBlocker', mergedContentBlockerSettings(settings.contentBlocker));
   if (settings.accountability) settingsStore.updateSection('accountability', capabilityTruth.sanitizeAccountability(settings.accountability));
   return {
     ...getLoginSettings(),
@@ -2788,6 +2945,30 @@ ipcMain.handle('export-all-data', async () => {
     return { success: false, error: err.message };
   }
 });
+// After an import, the main-process caches follow the imported settings at
+// once, so a Save before restart cannot write the old values back. This never
+// starts a timer or the phone listener (importableRemoteControl restores only
+// the port), and each step is best-effort so one failure does not undo the
+// import that already landed.
+function rehydrateAfterImport() {
+  const steps = [
+    () => smartLights.loadConfig(settingsStore.getSection('smartLights')),
+    () => lastLight.loadCustomSequences((settingsStore.getSection('lastLight') || {}).customSequences || []),
+    () => {
+      const a = settingsStore.getSection('app') || {};
+      bedtimeReminder.setMinutesBefore(a.bedtimeReminderEnabled === false ? 0 : (a.bedtimeReminderMinutes || 15));
+      idleDetection.setThreshold(a.idleDetectionEnabled === false ? 0 : (a.idleThresholdSeconds || 300));
+    },
+    // schedule() itself cancels when autopilot is off.
+    () => autopilot.schedule(startTimer, mainWindow),
+    () => checkContentBlockerSchedules(),
+    () => { updateTrayText(); refreshTrayMenu(); updateWidget(); }
+  ];
+  for (const step of steps) {
+    try { step(); } catch (error) { writeStartupLog('Import rehydrate step failed', { message: error?.message || String(error) }); }
+  }
+}
+
 ipcMain.handle('import-all-data', async (event, jsonData) => {
   try {
     const parsed = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
@@ -2819,6 +3000,7 @@ ipcMain.handle('import-all-data', async (event, jsonData) => {
       profileIdentity.reconcilePersistedSelection(settingsStore, profiles);
     }
     if (parsed.streaks && typeof parsed.streaks === 'object') streaks.replaceAll(parsed.streaks);
+    rehydrateAfterImport();
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -3047,8 +3229,16 @@ ipcMain.handle('content-unblock', async () => {
 ipcMain.handle('content-block-status', async () => {
   return { blocked: contentBlocker.isBlocked(), sites: contentBlocker.getActiveBlocklist() };
 });
+// A save may carry only part of the section (the Schedules editor sends just
+// { schedules }), so it is merged onto the stored section before sanitizing:
+// sanitizing the bare patch would read enabled as false and the blocklist as
+// empty, switching the blocker off and wiping the custom list.
+function mergedContentBlockerSettings(patch) {
+  const current = settingsStore.getSection('contentBlocker') || {};
+  return capabilityTruth.sanitizeContentBlocker({ ...current, ...(patch && typeof patch === 'object' ? patch : {}) });
+}
 ipcMain.handle('save-content-blocker-settings', async (e, s) => {
-  const sanitized = capabilityTruth.sanitizeContentBlocker(s);
+  const sanitized = mergedContentBlockerSettings(s);
   settingsStore.updateSection('contentBlocker', sanitized);
   checkContentBlockerSchedules(); // re-evaluate immediately, don't wait up to 60s
   return { saved: true, settings: sanitized };
@@ -3440,6 +3630,8 @@ async function createWidgetWindow() {
     skipTaskbar: true,
     hasShadow: false,
     show: false,
+    // Alt+Tab and Task Manager show the brand mark, never Electron's default.
+    icon: APP_ICON,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -3692,14 +3884,10 @@ function registerGlobalShortcuts() {
     else createWidgetWindow();
   });
 
-  // Ctrl+Shift+A: Toggle alarm
-  globalShortcut.register('Ctrl+Shift+A', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.show();
-      mainWindow.focus();
-      mainWindow.webContents.send('toggle-alarm-focus');
-    }
-  });
+  // No Ctrl+Shift+A: it sent a message nothing listened to, and a global
+  // registration takes the key from every other app (browser tab search,
+  // chat apps) for as long as Lights Out runs. First Light is set in
+  // Settings > Automations.
 }
 
 const gotTheLock = app.requestSingleInstanceLock();
@@ -3869,6 +4057,7 @@ app.whenReady().then(async () => {
   createWindow();
   await createTray();
   setupJumpList();
+  watchTaskbarPresenceInputs();
   registerGlobalShortcuts();
 
   if (settingsStore.getSection('app')?.widgetVisible) {

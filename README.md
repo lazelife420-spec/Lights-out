@@ -100,6 +100,9 @@ system calls from the Electron main process, not as a separate app.) See
   Hibernate needs hibernation turned on in Windows (a full hibernation file);
   Lights Out never switches a blocked Hibernate to Sleep or Shutdown.
 - Start, pause, resume, snooze, cancel, mini mode, tray, and taskbar progress.
+  While a run is active the taskbar button carries a badge (amber for Test
+  Mode, rose for a real action) and its thumbnail offers Pause/Resume, Snooze
+  and Cancel.
 - **Keyboard shortcuts** - `Ctrl+Shift+X` cancels from anywhere, including during
   Last Light and the final steps before the power request is sent to Windows
   (the tray menu offers the same cancel). `Ctrl+Shift+Space` pauses or resumes,
