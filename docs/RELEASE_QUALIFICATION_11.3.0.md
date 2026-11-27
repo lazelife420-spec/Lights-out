@@ -37,6 +37,28 @@ Recorded after the local build from the release commit; CI repeats the
 unattended packaged lane, installer and portable verification, and clean
 provenance on the tagged commit before it publishes anything.
 
+Local build of commit b9a7b6c (clean tree, `trackedSourceDirty: false`). The
+installer is `Lights-Out-Setup-v11.3.0.exe`. The portable build is
+`Lights-Out-Portable-v11.3.0-win-x64.zip`. CI builds its own artifacts on
+the tag; because the suspend helper is not built deterministically, their
+hashes will differ from this local build.
+
+- `verify-windows-release.ps1` passed. It covers the installed application
+  runtime proof (24 page, theme and viewport layouts, dry-run timer controls,
+  mini mode and the full-screen clock), install, upgrade and uninstall in
+  isolated QA paths.
+- `release-artifacts.js verify --release` passed: 2 artifacts, 1,421 runtime
+  files.
+- `npm run test:wiz-runtime` passed 8 of 8 with simulated loopback bulbs.
+- The owner's real WiZ bulb, driven through this build with the QA power
+  lock on: every effect was seen. That covers the starting looks, Hourglass,
+  Orbit and Ember, off at end, the finish beacon, Hourglass to the end and
+  the First Light sunrise on a cold launch. Each cancel restored the bulb,
+  and each finished run recorded `blocked`. The guided ritual's night scene
+  was verified separately with a click-through.
+- Not run: the interactive desktop gate (owner choice); physical sleep,
+  hibernate and shutdown.
+
 ## Not established by automated tests
 
 - Physical sleep, hibernate, shutdown and resume. Every receipt states the
