@@ -12998,3 +12998,18 @@ body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib { transition: gri
    on one line at normal window sizes and wraps as balanced lines otherwise,
    never leaving the separator or the day on a line by itself. */
 :root body:is([data-theme="midnight"], :not([data-theme])) .session-ends { font-size: clamp(22px, 2.3vw, 32px); text-wrap: balance; }
+
+/* Design pass (2026-11-27): one statement per fact on Tonight.
+   Test Mode is already said by the truth pill, the Safety strip and the
+   footer pill, so the dial face drops its own Test Mode chip; the red
+   Real action chip stays on the face, where a real power action must be
+   impossible to miss. While running in the normal view the plan column's
+   heading ("Test ends 1:41 AM · today") already names the end, so the dial
+   keeps only the countdown and the wall clock. Paused, mini and the full
+   screen clock (no plan column) keep the dial's label. */
+:root body:is([data-theme="midnight"], :not([data-theme])).test-mode:not(.mini-mode) .timer-display::after { display: none; }
+:root body:is([data-theme="midnight"], :not([data-theme])).is-running:not(.is-paused):not(.mini-mode):not(.fullscreen-clock-mode) .timer-display .time-label { display: none; }
+/* The running column's three controls share one set of edges: Cancel spans
+   the column like Pause and Snooze (it keeps its quiet outline, so Pause
+   stays the primary action). */
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) #action-bar-running > #btn-stop { align-self: stretch; width: 100%; justify-content: center; }
