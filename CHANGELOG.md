@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Narrow windows: an end time after midnight ("12:30 AM · tomorrow") no
+  longer runs into "Ends with"; its column widens to fit the one-line time.
+
 ## v11.3.4 — 2026-11-27
 
 A look-and-feel release; no behaviour change.

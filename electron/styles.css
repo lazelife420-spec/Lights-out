@@ -13186,7 +13186,10 @@ body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib { transition: gri
 :root body:is([data-theme="midnight"], :not([data-theme])) .night-beam {
   filter: brightness(1.35) saturate(1.1);
 }
-/* Narrow windows: the end time ("11:01 AM · today") stays on one line. */
+/* Narrow windows: the end time ("11:01 AM · today") stays on one line. Its
+   column never shrinks below that line, so a longer "12:30 AM · tomorrow"
+   widens it instead of running into Ends with. */
 @media (max-width: 1000px) {
   :root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card #plan-out-at { font-size: 18px; white-space: nowrap; }
+  :root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) #ns-hero-card .plan-facts { grid-template-columns: minmax(max-content, 1.2fr) 1fr 1fr; }
 }

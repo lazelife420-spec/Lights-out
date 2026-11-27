@@ -5514,6 +5514,17 @@ check('LO-SDH-1 release gate: handoff pairing stays disabled on desktop until qu
   assertMatch(rendererHandoffSrc, /ReleaseGates\.HANDOFF_PAIRING === true/, 'renderer-handoff.js must gate HandoffUI mount on ReleaseGates.HANDOFF_PAIRING === true');
 });
 
+check('v11.3.4 narrow window: the one-line end time widens its column instead of overlapping Ends with', () => {
+  const cssSrc = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  const start = cssSrc.indexOf('/* Narrow windows: the end time');
+  assert(start > 0, 'the narrow-window end-time block must exist');
+  const block = cssSrc.slice(start, cssSrc.indexOf('\n}', cssSrc.indexOf('@media (max-width: 1000px)', start)) + 2);
+  assertMatch(block, /#plan-out-at \{[^}]*white-space:\s*nowrap/, 'the end time stays on one line in narrow windows');
+  // "12:30 AM · tomorrow" is wider than the 1.2fr column at 900px; with
+  // nowrap and .plan-fact { min-width: 0 } it would run into Ends with.
+  assertMatch(block, /#ns-hero-card \.plan-facts \{\s*grid-template-columns:\s*minmax\(max-content,\s*1\.2fr\) 1fr 1fr;/, 'the end-time column never shrinks below its one-line content');
+});
+
 // Cleanup.
 try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
 
