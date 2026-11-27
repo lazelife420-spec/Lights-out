@@ -702,21 +702,6 @@
           <p class="sch-next-arm"><span id="sch-arm-hint">Off: rules are listed but never start a countdown.</span><span class="sch-arm-mode" id="sch-arm-mode" hidden></span></p>
         </article>
 
-        <section class="sch-section month-planner" aria-labelledby="month-planner-title">
-          <div class="sch-section-head"><div><h3 class="sch-eyebrow" id="month-planner-title">Plan your nights</h3><p class="planner-hint">Choose any date to add a routine and countdown. Saved rules appear on the calendar.</p></div></div>
-          <div class="planner-toolbar">
-            <button type="button" class="btn-secondary" id="planner-prev" aria-label="Previous month">‹</button>
-            <label class="sr-only" for="planner-month">Month</label><select id="planner-month"></select>
-            <label class="sr-only" for="planner-year">Year</label><input type="number" id="planner-year" min="2000" max="2199">
-            <button type="button" class="btn-secondary" id="planner-next" aria-label="Next month">›</button>
-            <button type="button" class="btn-quiet" id="planner-today">Today</button>
-          </div>
-          <div class="planner-weekdays" aria-hidden="true"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
-          <div class="planner-grid" id="planner-grid" aria-label="Calendar dates"></div>
-          <p class="planner-hint">Planning does not start a timer. Auto-start above must be on for scheduled runs.</p>
-        </section>
-
-        <details class="sch-section routine-transfer" id="routine-transfer"><summary>Import &amp; export routine files</summary><div id="routine-transfer-body"></div></details>
         <!-- Bedtime rules (armed by the hero's Auto-start switch). -->
         <section class="sch-section" id="sch-rules" aria-labelledby="sch-rules-title">
           <div class="sch-section-head">
@@ -800,6 +785,21 @@
           </div>
         </section>
 
+        <section class="sch-section month-planner" aria-labelledby="month-planner-title">
+          <div class="sch-section-head"><div><h3 class="sch-eyebrow" id="month-planner-title">Plan your nights</h3><p class="planner-hint">Choose any date to add a routine and countdown. Saved rules appear on the calendar.</p></div></div>
+          <div class="planner-toolbar">
+            <button type="button" class="btn-secondary" id="planner-prev" aria-label="Previous month">‹</button>
+            <label class="sr-only" for="planner-month">Month</label><select id="planner-month"></select>
+            <label class="sr-only" for="planner-year">Year</label><input type="number" id="planner-year" min="2000" max="2199">
+            <button type="button" class="btn-secondary" id="planner-next" aria-label="Next month">›</button>
+            <button type="button" class="btn-quiet" id="planner-today">Today</button>
+          </div>
+          <div class="planner-weekdays" aria-hidden="true"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+          <div class="planner-grid" id="planner-grid" aria-label="Calendar dates"></div>
+          <p class="planner-hint">Planning does not start a timer. Auto-start above must be on for scheduled runs.</p>
+        </section>
+
+
         <!-- Calendars: external providers only. Built-in rules always show above. -->
         <section class="sch-section" id="sch-calendars" aria-labelledby="sch-cal-title">
           <div class="sch-section-head">
@@ -867,6 +867,7 @@
           <!-- Imported events (next 14 days): rendered by renderCalendarEvents() -->
           <div class="calendar-events" id="calendar-events"></div>
         </section>
+        <details class="sch-section routine-transfer" id="routine-transfer"><summary>Import &amp; export routine files</summary><div id="routine-transfer-body"></div></details>
       </section>
 
       <!-- DEVICES: operational center. Every value is real local status

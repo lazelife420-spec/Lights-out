@@ -13082,3 +13082,34 @@ body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib { transition: gri
 }
 /* Analog face: its own "Now" line names the time, so no eyebrow. */
 :root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .timer-display.clock-idle:has(.analog-clock:not([style*="none"])) .time-label { display: none; }
+
+/* Devices and Schedule design pass (2026-11-27).
+   Devices: every card says its state where the eye lands first, top right
+   of its header (as This PC already does), instead of on a line of its own.
+   A long state wraps inside its own column. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .device-card .device-head { grid-template-columns: auto minmax(0, 1fr) auto; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .device-card .device-head > .device-status {
+  grid-column: 3;
+  grid-row: 1;
+  align-self: start;
+  justify-self: end;
+  max-width: 13rem;
+  white-space: normal;
+  text-align: right;
+}
+
+/* Schedule: with nothing scheduled the hero states that in words instead of
+   a dashed --:-- placeholder. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .sch-next[data-state="none"] .sch-next-time { display: none; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .sch-next[data-state="none"] .sch-next-detail {
+  margin-top: 6px;
+  font: 400 clamp(17px, 1.7vw, 22px)/1.35 var(--font-title);
+  color: var(--text-primary);
+  text-wrap: balance;
+}
+/* The month planner is a map, not a form: compact days, so the whole month
+   and the sections under it fit without a long scroll. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .planner-day { min-height: 44px; padding: 5px 7px; }
+@media (max-width: 1000px) {
+  :root body:is([data-theme="midnight"], :not([data-theme])) .planner-day { min-height: 38px; padding: 4px 5px; }
+}
