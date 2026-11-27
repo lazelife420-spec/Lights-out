@@ -9,7 +9,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const {createIdentity}=require('../handoffIdentityWindows'),trust=require('../handoffTrust');
 function fixture(t){const directory=fs.mkdtempSync(path.join(os.tmpdir(),'lightsout-identity-unit-')),key=crypto.randomBytes(32);t.after(()=>{const p=fs.realpathSync(directory);assert.equal(path.dirname(p),fs.realpathSync(os.tmpdir()));assert.match(path.basename(p),/^lightsout-identity-unit-[A-Za-z0-9]+$/);fs.rmSync(p,{recursive:true,force:true});key.fill(0);});
  const safeStorage={isEncryptionAvailable:()=>true,encryptString(text){const iv=crypto.randomBytes(12),cipher=crypto.createCipheriv('aes-256-gcm',key,iv);return Buffer.concat([iv,cipher.update(text,'utf8'),cipher.final(),cipher.getAuthTag()]);},decryptString(b){const d=crypto.createDecipheriv('aes-256-gcm',key,b.subarray(0,12));d.setAuthTag(b.subarray(-16));return Buffer.concat([d.update(b.subarray(12,-16)),d.final()]).toString('utf8');}};
- return {directory,safeStorage,newIdentity:options=>createIdentity({directory,safeStorage,...options})};
+ return {directory,safeStorage,newIdentity:options=>createIdentity({directory,safeStorage,platform:'win32',...options})};
 }
 test('protected identity survives re-creation without exposing a private key in public state',async t=>{
  const f=fixture(t),a=f.newIdentity();assert.equal(a.status().status,'uninitialized');assert.equal((await a.initialize({confirmed:true})).status,'ready');const state=a.status();

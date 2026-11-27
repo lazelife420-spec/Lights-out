@@ -2,6 +2,8 @@
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+// The alarm is a Windows Scheduled Task: validate Windows paths on any host.
+const winPath = path.win32;
 const { randomUUID } = require('crypto');
 const { runBounded } = require('./boundedProcess');
 const TASK_NAME = 'LightsOut_FirstLight';
@@ -34,8 +36,8 @@ function createAlarm({ executor = spawn, exists = fs.existsSync, now = () => Dat
   async function scheduleWakeAlarm(alarmTime, appExePath, profile) {
     // Validate before replacing an existing registration.
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(alarmTime || '')) return { success: false, error: 'Invalid time format' };
-    if (typeof appExePath !== 'string' || !path.isAbsolute(appExePath) || !/\.exe$/i.test(appExePath) || !exists(appExePath)) return { success: false, error: 'First Light application is missing' };
-    if (profile && (typeof profile !== 'string' || !path.isAbsolute(profile) || !exists(profile) || profile.includes('"'))) return { success: false, error: 'First Light data profile is unavailable' };
+    if (typeof appExePath !== 'string' || !winPath.isAbsolute(appExePath) || !/\.exe$/i.test(appExePath) || !exists(appExePath)) return { success: false, error: 'First Light application is missing' };
+    if (profile && (typeof profile !== 'string' || !winPath.isAbsolute(profile) || !exists(profile) || profile.includes('"'))) return { success: false, error: 'First Light data profile is unavailable' };
     const [hours, minutes] = alarmTime.split(':').map(Number), requestId = randomUUID();
     const args = `--first-light --first-light-request=${requestId}` + (profile ? ` "--user-data-dir=${profile}"` : '');
     try {
@@ -47,7 +49,7 @@ function createAlarm({ executor = spawn, exists = fs.existsSync, now = () => Dat
         `Register-ScheduledTask -TaskName ${quote(taskName)} -Action $Action -Trigger $Trigger -Settings $Settings -Force -Description 'Lights Out First Light wake-up alarm' | Out-Null`
       ].join('; '));
       const status = await getWakeAlarmStatus();
-      if (!status.active || path.resolve(status.executable).toLowerCase() !== path.resolve(appExePath).toLowerCase()) return { success: false, error: status.error || 'First Light task verification failed' };
+      if (!status.active || winPath.resolve(status.executable).toLowerCase() !== winPath.resolve(appExePath).toLowerCase()) return { success: false, error: status.error || 'First Light task verification failed' };
       return { success: true, alarmTime, requestId, nextRunTime: status.nextRunTime };
     } catch (error) { return { success: false, error: error.message }; }
   }
