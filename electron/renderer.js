@@ -1709,6 +1709,7 @@ function switchSettingsCategory(categoryId) {
 const NS_TAB_DISPLAY_NAME = { lib: 'Tonight', modes: 'Night Modes', sch: 'Schedule', devices: 'Devices', stats: 'Proof' };
 
 function openSettingsPanel() {
+  if (typeof settingsDiscardInFlight !== 'undefined' && settingsDiscardInFlight && els.panelSet) els.panelSet.inert = true;
   const activeTab = document.querySelector('.ns-nav-item.active')?.dataset?.nsTab;
   if (activeTab && !['set', 'help'].includes(activeTab)) settingsReturnTab = activeTab;
   syncCustomizeUI();
@@ -2013,7 +2014,14 @@ async function reloadAfterImport() {
 
 // Revert the Settings form to the last persisted values without restarting
 // the renderer or reattaching listeners.
+// Back/Cancel close Settings at once and reload the persisted values after.
+// If Settings is reopened before that reload lands, the panel is inert until
+// it does, so nothing typed there can be overwritten by the late reload.
+// (typeof guards: tests lift these functions into bare sandboxes.)
+let settingsDiscardInFlight = null;
 async function discardSettingsPanelChanges() {
+  const discardToken = {};
+  if (typeof settingsDiscardInFlight !== 'undefined') settingsDiscardInFlight = discardToken;
   try {
     const [appSettings, lightConfig, wifiConfig, cbConfig, accConfig] = await Promise.all([
       api.getAppSettings(),
@@ -2055,6 +2063,11 @@ async function discardSettingsPanelChanges() {
   } catch (error) {
     console.error('discardSettingsPanelChanges failed:', error);
     notify('Could not restore persisted settings', 'warning');
+  } finally {
+    if (typeof settingsDiscardInFlight !== 'undefined' && settingsDiscardInFlight === discardToken) {
+      settingsDiscardInFlight = null;
+      if (els.panelSet) els.panelSet.inert = false;
+    }
   }
 }
 

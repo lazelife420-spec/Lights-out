@@ -473,6 +473,13 @@ function guardAppPageNavigation(win, fileName) {
   });
 }
 
+function regionLocaleArg() {
+  try {
+    const tag = String(app.getSystemLocale() || '');
+    return /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,4}$/.test(tag) ? tag : '';
+  } catch { return ''; }
+}
+
 function createWindow() {
   let startupActionsApplied = false;
   let saveWindowStateTimer = null;
@@ -536,7 +543,11 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      backgroundThrottling: false
+      backgroundThrottling: false,
+      // The Windows regional format (not the app language), so the
+      // Automatic time format follows the user's region clock. A BCP 47 tag
+      // only; anything else is dropped.
+      additionalArguments: [`--lo-region-locale=${regionLocaleArg()}`]
     }
   });
 

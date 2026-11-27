@@ -125,10 +125,12 @@ function nightKeyShift(key, days) {
 // sandbox or an early render without state reads 24h. compact = the idle
 // face's '1:08a' form; formatClock never uses it.
 // 'auto' follows the Windows region: 12-hour with AM/PM where the system
-// clock uses it (h11/h12), 24-hour otherwise.
+// clock uses it (h11/h12), 24-hour otherwise. The region comes from main
+// (app.getSystemLocale(), the regional format), not the app language; the
+// browser preview has none and uses its own locale.
 function systemUses12HourClock() {
   try {
-    const cycle = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hourCycle;
+    const cycle = new Intl.DateTimeFormat((typeof window !== 'undefined' && window.electronAPI && window.electronAPI.regionLocale) || undefined, { hour: 'numeric' }).resolvedOptions().hourCycle;
     return cycle === 'h11' || cycle === 'h12';
   } catch { return false; }
 }
@@ -148,7 +150,7 @@ function formatIdleClockTime(now, compact = false) {
   let use12Hour = format === '12h';
   if (format === 'auto') {
     try {
-      const cycle = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hourCycle;
+      const cycle = new Intl.DateTimeFormat((typeof window !== 'undefined' && window.electronAPI && window.electronAPI.regionLocale) || undefined, { hour: 'numeric' }).resolvedOptions().hourCycle;
       use12Hour = cycle === 'h11' || cycle === 'h12';
     } catch { use12Hour = false; }
   }

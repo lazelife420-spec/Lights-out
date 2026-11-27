@@ -27,3 +27,11 @@ for (const [name, el] of [['Back', 'modalClose'], ['Cancel', 'btnCancelOpt']]) {
     assert.doesNotMatch(body, /await /, 'nothing delays leaving Settings');
   });
 }
+
+// v11.3.3 audit follow-up: reopening Settings while the discard reload is
+// still in flight makes the panel inert until it lands.
+test('a reopened Settings panel is inert until the late discard reload lands', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'renderer.js'), 'utf8');
+  assert.match(src, /function openSettingsPanel\(\) \{\n\s+if \(typeof settingsDiscardInFlight !== 'undefined' && settingsDiscardInFlight && els\.panelSet\) els\.panelSet\.inert = true;/);
+  assert.match(src, /settingsDiscardInFlight === discardToken\) \{\n\s+settingsDiscardInFlight = null;\n\s+if \(els\.panelSet\) els\.panelSet\.inert = false;/);
+});

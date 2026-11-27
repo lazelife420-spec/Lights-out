@@ -4,8 +4,12 @@ const { contextBridge, ipcRenderer } = require('electron');
 // the flag, so the renderer must never act as proof mode on any other value.
 const DESKTOP_UX_PROOF = process.argv.includes('--desktop-ux-proof') || process.env.LIGHTS_OUT_DESKTOP_UX_GATE === '1';
 
+// The Windows regional format main passed in (validated BCP 47, or '').
+const REGION_LOCALE = ((process.argv.find(a => a.startsWith('--lo-region-locale=')) || '').slice('--lo-region-locale='.length).match(/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,4}$/) || [''])[0];
+
 // Secure IPC bridge
 contextBridge.exposeInMainWorld('electronAPI', {
+  regionLocale: REGION_LOCALE,
   // Timer control
   startTimer: (options, action) => ipcRenderer.invoke('start-timer', options, action),
   cancelTimer: () => ipcRenderer.invoke('cancel-timer'),

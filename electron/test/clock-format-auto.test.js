@@ -40,3 +40,26 @@ test('auto is the shipped default and the option is offered', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.match(html, /<option value="auto">Automatic \(Windows region\)<\/option>/);
 });
+
+// v11.3.3 audit follow-up: 'auto' reads the Windows regional format main
+// passes in (app.getSystemLocale()), not the app language.
+test('auto asks Intl for the region locale the preload bridge exposes', () => {
+  const seen = [];
+  const RealDTF = Intl.DateTimeFormat;
+  const SpyIntl = { DateTimeFormat: function (locale, opts) { seen.push(locale); return new RealDTF('en-GB', opts); } };
+  const sandbox = { state: { clockFormat: 'auto' }, Intl: SpyIntl, window: { electronAPI: { regionLocale: 'de-DE' } } };
+  vm.createContext(sandbox);
+  vm.runInContext(`${fnSource}; this.fmt = formatIdleClockTime;`, sandbox);
+  assert.equal(sandbox.fmt(evening), '23:45');
+  assert.deepEqual(seen, ['de-DE']);
+});
+test('main validates the region locale and the preload only accepts a BCP 47 tag', () => {
+  const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+  const preload = fs.readFileSync(path.join(__dirname, '..', 'preload.js'), 'utf8');
+  assert.match(main, /additionalArguments: \[`--lo-region-locale=\$\{regionLocaleArg\(\)\}`\]/);
+  assert.match(main, /app\.getSystemLocale\(\)/);
+  const re = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,4}$/;
+  assert.ok(preload.includes(re.source));
+  for (const ok of ['en-US', 'de-DE', 'zh-Hant-TW']) assert.ok(re.test(ok), ok);
+  for (const bad of ['', 'en_US', 'x', 'en-US;rm', '../../a']) assert.ok(!re.test(bad), bad);
+});
