@@ -11720,3 +11720,1276 @@ body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib { transition: gri
    hairline firms up to the red on hover before the press. */
 #action-bar-running #btn-pause:active { transform: scale(0.985); }
 #action-bar-running #btn-stop:hover { border-color: rgba(var(--red-rgb), 0.8); }
+
+/* == Night Instrument (Midnight) == */
+/* ==========================================================================
+   The default Midnight theme as one dark room lit by the desk lamp in the
+   wordmark. Teal is the lamp's light, violet is your hand, amber is Test
+   Mode, rose is REAL, and as the night runs down the room really does get
+   darker: beam, sheen, rims, bloom and glass shade all read --lights-level
+   (1 idle, .25 at the end of a run, .12 in the completion hold).
+
+   Scope: every selector starts with
+     :root body:is([data-theme="midnight"], :not([data-theme]))
+   (Midnight and the boot frame). Carbon, Aurora, Ember, Tide and Dawn are
+   untouched. Specificity (0,2,1) plus the target beats the late `body .x`
+   blocks without !important.
+   Ring styles (owner decision E4): the instrument's arc, track and halo
+   apply to the default ring style; an explicitly chosen ring style keeps
+   its own stroke. Phase colours (amber paused and Test Last Light, rose
+   REAL Last Light) are the base rules' in every case.
+   CSS only. No markup, no JS, no @keyframes, no loops, no backdrop-filter.
+   Test Mode amber, REAL rose, focus and text colour never read the light
+   level. Sections 0-16 follow the r2 prototype numbering; 17 focus,
+   18 mini, 19 dial drag (inert until #dial-grip lands), 20 reduced
+   transparency and 21 reduced motion (r2 17 and 18). Hooks that stay
+   inert until their markup ships: .dial-grip and the .dial-* classes (19),
+   .ll-sequence-badge[hidden] (E1) and .ll-cancel-hint (E2), both in 15.
+   ========================================================================== */
+
+/* -- 0. Tokens ---------------------------------------------------------------- */
+:root body:is([data-theme="midnight"], :not([data-theme])) {
+  --ni-lamp: 0, 255, 209;               /* lamp teal #00FFD1 */
+  --ni-beam: 100, 255, 240;             /* beam highlight #64FFF0 */
+  --ni-lit: var(--lights-level, 1);
+  --ni-arc: var(--brand-teal-soft);     /* the running filament (#2EE6C9) */
+  --ni-hair: rgba(170, 196, 224, 0.09);
+  --ni-hair-2: rgba(170, 196, 224, 0.16);
+  --ni-hair-3: rgba(170, 196, 224, 0.24);
+  --ni-glass: rgba(11, 16, 23, 0.68);
+  --ni-glass-2: rgba(8, 12, 17, 0.80);
+  --ni-well: rgba(3, 5, 8, 0.62);
+  /* Dimming only ever darkens backgrounds and light. */
+  --ni-shade: rgba(0, 0, 0, calc(0.42 * (1 - var(--ni-lit))));
+  --ni-shade-dial: rgba(0, 0, 0, calc(0.50 * (1 - var(--ni-lit))));
+  --ni-shade-face: rgba(0, 0, 0, calc(0.34 * (1 - var(--ni-lit))));
+  --ni-sheen: radial-gradient(120% 90% at 0% 0%, rgba(var(--ni-beam), calc(0.075 * var(--ni-lit))), rgba(var(--ni-beam), calc(0.022 * var(--ni-lit))) 34%, transparent 62%);
+  --ni-gloss: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.008) 38%, rgba(0, 0, 0, 0.14));
+  /* The lamp-side edge: bright at the corner nearest the lamp, a hairline
+     everywhere else; every stop fades with the light. */
+  --ni-rim: linear-gradient(138deg,
+      rgba(var(--ni-beam), calc(0.50 * var(--ni-lit))) 0%,
+      rgba(var(--ni-beam), calc(0.16 * var(--ni-lit))) 12%,
+      rgba(170, 196, 224, calc(0.05 + 0.05 * var(--ni-lit))) 30%,
+      rgba(170, 196, 224, calc(0.03 + 0.03 * var(--ni-lit))) 64%,
+      rgba(170, 196, 224, calc(0.06 + 0.06 * var(--ni-lit))) 100%);
+  --ni-depth: 0 1px 0 rgba(0, 0, 0, 0.55), 0 34px 70px -36px rgba(0, 0, 0, 1), 0 14px 30px -20px rgba(0, 0, 0, 0.85);
+  --ni-top: inset 0 1px 0 rgba(255, 255, 255, 0.055);
+  --ni-key: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.012) 55%, rgba(0, 0, 0, 0.12));
+  /* Your hand: derived from the accent, so a custom accent follows. */
+  --ni-accent-hi: color-mix(in srgb, rgb(var(--accent-rgb)) 78%, #fff);
+  --ni-accent-hi2: color-mix(in srgb, rgb(var(--accent-rgb)) 72%, #fff);
+  --ni-accent-mid: rgb(var(--accent-rgb));
+  --ni-accent-lo: color-mix(in srgb, rgb(var(--accent-rgb)) 86%, #000);
+  --ni-accent-ink-hi: color-mix(in srgb, rgb(var(--accent-rgb)) 30%, #fff);
+  --ni-focus: color-mix(in srgb, rgb(var(--accent-rgb)) 65%, #fff);
+  --ni-grip: color-mix(in srgb, rgb(var(--accent-rgb)) 70%, #fff);
+  --ni-label: #aab7c3;
+  --ni-r-hero: 24px;
+  --ni-r-card: 20px;
+  --ni-r-panel: 18px;
+  --ni-r-key: 14px;
+  --ni-r-cell: 10px;
+  --ni-dial: clamp(260px, 34vw, 400px);
+  --ni-dial-run: clamp(260px, 35vw, 412px);
+  --font-title: 'Bahnschrift', 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
+
+  /* A deeper, cooler night (solid tokens: popovers and inputs stay opaque). */
+  --bg-primary: #05070a;
+  --bg-secondary: #080b10;
+  --bg-card: #0b1016;
+  --bg-hover: #121923;
+  --bg-elevated: #0f141c;
+  --border-color: #1a2430;
+  --border-strong: #2a3847;
+  --ring-bg: #10161e;
+  --text-primary: #eef5f6;
+  --text-secondary: #a3b1be;
+  --text-muted: #87949f;
+  --ring-tick: rgba(214, 228, 240, 0.22);
+  --ring-tick-major: rgba(232, 242, 250, 0.70);
+}
+
+/* -- 1. The room: near-black, one lamp, grain, vignette ----------------------- */
+:root body:is([data-theme="midnight"], :not([data-theme])) .cockpit {
+  background:
+    radial-gradient(90% 70% at 4% -4%, rgba(var(--ni-lamp), calc(0.055 * var(--ni-lit))), transparent 62%),
+    linear-gradient(180deg, #06080c 0%, #040508 100%);
+}
+/* The beam: a wide haze and a bright core, both from the wordmark's lens,
+   aimed down across the room onto the dial. Opacity is the light level. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .night-env { --beam-from: 108deg; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .night-beam {
+  background:
+    conic-gradient(from calc(var(--beam-from) + 16deg) at var(--beam-x) var(--beam-y),
+      transparent 0deg,
+      rgba(var(--ni-lamp), 0.06) 7deg,
+      rgba(var(--ni-beam), 0.19) 15deg,
+      rgba(var(--ni-beam), 0.24) 19deg,
+      rgba(var(--ni-lamp), 0.13) 25deg,
+      rgba(var(--ni-lamp), 0.04) 33deg,
+      transparent 40deg),
+    conic-gradient(from calc(var(--beam-from) - 4deg) at var(--beam-x) var(--beam-y),
+      transparent 0deg,
+      rgba(var(--ni-beam), 0.030) 12deg,
+      rgba(var(--ni-beam), 0.055) 34deg,
+      rgba(var(--ni-beam), 0.030) 58deg,
+      transparent 72deg);
+  -webkit-mask-image: radial-gradient(circle at var(--beam-x) var(--beam-y), #000 0%, rgba(0, 0, 0, 0.82) 22%, rgba(0, 0, 0, 0.40) 52%, rgba(0, 0, 0, 0.12) 78%, transparent 100%);
+  mask-image: radial-gradient(circle at var(--beam-x) var(--beam-y), #000 0%, rgba(0, 0, 0, 0.82) 22%, rgba(0, 0, 0, 0.40) 52%, rgba(0, 0, 0, 0.12) 78%, transparent 100%);
+  opacity: var(--ni-lit);
+}
+/* Film grain + lens vignette (static, one layer under the dashboard). */
+:root body:is([data-theme="midnight"], :not([data-theme])) .night-env::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.12 0 0 0 -0.04'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    radial-gradient(140% 110% at 30% 28%, transparent 48%, rgba(0, 0, 0, 0.62) 100%);
+  background-size: 240px 240px, 100% 100%;
+}
+/* While a run is active the room behind the glass darkens with it (the
+   app's own capped darkness layer; dim / Last Light keep their stronger cap). */
+:root body:is([data-theme="midnight"], :not([data-theme])):is(.is-running, .is-paused):not(.phase-dim):not(.phase-lastlight) { --env-dark: min(0.36, calc((1 - var(--lights-level)) * 0.48)); }
+
+/* -- 2. Frame: wordmark, rail, footer ----------------------------------------- */
+/* The lamp's lens blooms; it fades with the light. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .brand-wordmark::after {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: -24px;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(var(--ni-beam), 0.62) 0%, rgba(var(--ni-lamp), 0.22) 18%, rgba(var(--ni-lamp), 0.06) 38%, transparent 64%);
+  mix-blend-mode: screen;
+  opacity: var(--ni-lit);
+  pointer-events: none;
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .wm-static { filter: drop-shadow(0 0 1px rgba(var(--ni-lamp), 0.45)) drop-shadow(0 0 10px rgba(var(--ni-lamp), calc(0.34 * var(--ni-lit)))); }
+
+/* The rail: clear glass under the beam band, so the beam crosses its edge
+   with no step. Its dark fill, edge hairline and cast shadow all fade in
+   below the band (the shadow and the inner edge line move to the two
+   pseudo-elements, which can fade; a box-shadow cannot). The lit top edge is
+   brightest at the lamp and fades out before the rounded corner. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-sidebar {
+  background:
+    linear-gradient(90deg, rgba(var(--ni-beam), calc(0.30 * var(--ni-lit))) 0, rgba(var(--ni-beam), calc(0.12 * var(--ni-lit))) 30px, transparent 60px) 0 0 / 100% 1px no-repeat border-box,
+    linear-gradient(180deg, transparent 0, transparent 176px, rgba(6, 9, 13, 0.86) 330px, rgba(5, 7, 11, 0.92) 100%);
+  border-right: 1px solid transparent;
+  border-top: 1px solid transparent;
+  box-shadow: none;
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-sidebar::before {           /* the cast shadow on the room, below the band */
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(100% + 1px);
+  width: 46px;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.34) 0, rgba(0, 0, 0, 0.16) 10px, rgba(0, 0, 0, 0.06) 24px, transparent 46px);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, transparent 176px, #000 330px);
+  mask-image: linear-gradient(180deg, transparent 0, transparent 176px, #000 330px);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-sidebar::after {            /* inner edge line + hairline, fading in below the beam band */
+  content: '';
+  position: absolute;
+  top: 0;
+  right: -1px;
+  bottom: 0;
+  width: 2px;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.4) 0 1px, var(--ni-hair-2) 1px 2px);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, transparent 110px, #000 300px);
+  mask-image: linear-gradient(180deg, transparent 0, transparent 110px, #000 300px);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-nav-item { border-radius: var(--ni-r-key); color: #8f9ba8; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-nav-item .ns-nav-label { font-family: var(--font-title); font-size: 10.5px; font-weight: 500; letter-spacing: 0.05em; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-sidebar .ns-nav-item:not(.active):hover { background: rgba(255, 255, 255, 0.045); color: #d3dbe3; border-radius: var(--ni-r-key); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-nav-item.active {
+  color: #f6f9fa;
+  background:
+    radial-gradient(110% 90% at 50% 0%, rgba(var(--accent-rgb), 0.30), rgba(var(--accent-rgb), 0.06) 72%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.1)),
+    rgba(8, 11, 17, 0.7);
+  border: 1px solid rgba(var(--accent-rgb), 0.40);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), 0 12px 28px -14px rgba(var(--accent-rgb), 0.8), 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-nav-item.active .ns-nav-icon { color: var(--ni-accent-ink-hi); filter: drop-shadow(0 0 6px rgba(var(--accent-rgb), 0.85)); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-nav-item::before { box-shadow: 0 0 12px 1px rgba(var(--accent-rgb), 0.85); }
+
+:root body:is([data-theme="midnight"], :not([data-theme])) .app-footer {
+  background: linear-gradient(180deg, rgba(8, 11, 16, 0.8), rgba(4, 6, 9, 0.95));
+  border-top: 1px solid var(--ni-hair);
+  box-shadow: 0 -1px 0 rgba(0, 0, 0, 0.6), 0 -22px 44px -32px rgba(0, 0, 0, 0.95);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .app-footer #version { color: #8e9aa6; opacity: 0.92; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .footer-branding { font-family: var(--font-title); letter-spacing: 0.08em; color: var(--text-secondary); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .dashboard { -webkit-mask-image: none; mask-image: none; }
+
+/* -- 3. Type: engraved labels, lit titles ------------------------------------- */
+/* Eyebrows: 600 / 11px / .22em caps on the label ink (the ID forms match
+   the base's own ID-scoped Settings and Proof rules; the Proof eyebrow no
+   longer wears the result tone, which lives on the seal, badge and outcome). */
+:root body:is([data-theme="midnight"], :not([data-theme])) .page-eyebrow,
+:root body:is([data-theme="midnight"], :not([data-theme])) .nm-tier-eyebrow,
+:root body:is([data-theme="midnight"], :not([data-theme])) .sch-eyebrow,
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-label,
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-proof-eyebrow,
+:root body:is([data-theme="midnight"], :not([data-theme])) .proof-routine-title,
+:root body:is([data-theme="midnight"], :not([data-theme])) .settings-nav-group,
+:root body:is([data-theme="midnight"], :not([data-theme])) .settings-kicker,
+:root body:is([data-theme="midnight"], :not([data-theme])) #ns-panel-set .settings-kicker,
+:root body:is([data-theme="midnight"], :not([data-theme])) #ns-panel-set .settings-nav-group,
+:root body:is([data-theme="midnight"], :not([data-theme])) #proof-card .ns-proof-eyebrow {
+  font-family: var(--font-title);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ni-label);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .page-eyebrow,
+:root body:is([data-theme="midnight"], :not([data-theme])) .nm-tier-eyebrow,
+:root body:is([data-theme="midnight"], :not([data-theme])) .sch-eyebrow,
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-label,
+:root body:is([data-theme="midnight"], :not([data-theme])) .settings-kicker { display: inline-flex; align-items: center; gap: 10px; }
+/* The engraved lead: a short lit filament, like the beam's core. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .page-eyebrow::before,
+:root body:is([data-theme="midnight"], :not([data-theme])) .nm-tier-eyebrow::before,
+:root body:is([data-theme="midnight"], :not([data-theme])) .sch-eyebrow::before,
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-label::before,
+:root body:is([data-theme="midnight"], :not([data-theme])) .settings-kicker::before {
+  content: '';
+  display: block;
+  flex: none;
+  width: 22px;
+  height: 1.5px;
+  margin: 0;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(var(--ni-beam), 0.95), rgba(var(--ni-lamp), 0));
+  box-shadow: 0 0 9px rgba(var(--ni-lamp), calc(0.75 * var(--ni-lit)));
+  opacity: calc(0.4 + 0.6 * var(--ni-lit));
+}
+/* Micro-labels: 600 / 11px / .12em caps on the label ink (the ID forms
+   match the base's own ID-scoped label rules). */
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card .plan-facts dt,
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card .plan-field-label,
+:root body:is([data-theme="midnight"], :not([data-theme])) #ns-hero-card .plan-facts dt,
+:root body:is([data-theme="midnight"], :not([data-theme])) #ns-hero-card .plan-field-label,
+:root body:is([data-theme="midnight"], :not([data-theme])) .rdy-label,
+:root body:is([data-theme="midnight"], :not([data-theme])) .status-row > span:first-child,
+:root body:is([data-theme="midnight"], :not([data-theme])) #device-card-pc .device-rows .status-row > span:first-child,
+:root body:is([data-theme="midnight"], :not([data-theme])) .planner-weekdays span,
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-pill-label,
+:root body:is([data-theme="midnight"], :not([data-theme])) #proof-card .ns-pill-label,
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-facts dt {
+  font-family: var(--font-title);
+  font-weight: 600;
+  font-size: 11px;
+  line-height: 1.25;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ni-label);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-main-panel .page-title {
+  font-family: var(--font-title);
+  font-weight: 300;
+  font-size: 36px;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: #f4f9fa;
+  text-shadow: 0 0 40px rgba(var(--ni-beam), calc(0.14 * var(--ni-lit)));
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-main-panel .page-sub { color: var(--text-secondary); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .page-head { margin-bottom: 10px; }
+:root body:is([data-theme="midnight"], :not([data-theme])) :is(.btn-quiet, .btn-secondary, .ns-proof-btn-secondary, .settings-back) {
+  background: var(--ni-key), rgba(10, 14, 20, 0.72);
+  border-color: var(--ni-hair-2);
+  box-shadow: var(--ni-top), 0 8px 18px -12px rgba(0, 0, 0, 0.9);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) :is(.btn-quiet, .btn-secondary, .ns-proof-btn-secondary, .settings-back):hover {
+  border-color: rgba(var(--accent-rgb), 0.5);
+  background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.14), rgba(var(--accent-rgb), 0.04)), rgba(10, 14, 20, 0.72);
+}
+
+/* -- 4. Smoked glass, lit from the lamp side, dimming with the night ----------- */
+/* The shade is the first padding-box layer, so a dimmed card stays dimmed
+   (hover and selected restate it) while its text is never touched. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card,
+:root body:is([data-theme="midnight"], :not([data-theme])) .readiness-strip,
+:root body:is([data-theme="midnight"], :not([data-theme])) .sch-next,
+:root body:is([data-theme="midnight"], :not([data-theme])) .month-planner,
+:root body:is([data-theme="midnight"], :not([data-theme])) #ns-panel-stats .status-card,
+:root body:is([data-theme="midnight"], :not([data-theme])) .proof-routine,
+:root body:is([data-theme="midnight"], :not([data-theme])) #ns-panel-set .settings-panel,
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib > #action-bar-running,
+:root body:is([data-theme="midnight"], :not([data-theme])) .nm-card:not(.nm-card--later),
+:root body:is([data-theme="midnight"], :not([data-theme])) .profile-card:not(.profile-card--create):not(.active):not(.has-profile-accent),
+:root body:is([data-theme="midnight"], :not([data-theme])) #proof-card.ns-proof-hero {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--ni-shade), var(--ni-shade)) padding-box,
+    var(--ni-sheen) padding-box,
+    var(--ni-gloss) padding-box,
+    linear-gradient(var(--ni-glass), var(--ni-glass)) padding-box,
+    var(--ni-rim) border-box;
+  box-shadow: var(--ni-top), var(--ni-depth);
+}
+/* Radii: hero 24, card 20, panel 18, key 14, cell 10. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card,
+:root body:is([data-theme="midnight"], :not([data-theme])) .sch-next,
+:root body:is([data-theme="midnight"], :not([data-theme])) #proof-card,
+:root body:is([data-theme="midnight"], :not([data-theme])) #ns-panel-set .settings-panel,
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib > #action-bar-running { border-radius: var(--ni-r-hero); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .nm-card:not(.nm-card--later),
+:root body:is([data-theme="midnight"], :not([data-theme])) .device-card,
+:root body:is([data-theme="midnight"], :not([data-theme])) #ns-panel-stats .status-card,
+:root body:is([data-theme="midnight"], :not([data-theme])) .proof-routine,
+:root body:is([data-theme="midnight"], :not([data-theme])) .month-planner { border-radius: var(--ni-r-card); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .readiness-strip,
+:root body:is([data-theme="midnight"], :not([data-theme])) .profile-card,
+:root body:is([data-theme="midnight"], :not([data-theme])) .settings-categories > .option-section { border-radius: var(--ni-r-panel); }
+/* Grid cards keep their state borders (live / error / warn): no gradient
+   rim, the lamp-side edge is an inner highlight instead. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .device-card {
+  background: linear-gradient(var(--ni-shade), var(--ni-shade)), var(--ni-sheen), var(--ni-gloss), var(--ni-glass);
+  border-color: var(--ni-hair-2);
+  box-shadow:
+    inset 1px 1px 0 rgba(var(--ni-beam), calc(0.16 * var(--ni-lit))),
+    var(--ni-top), var(--ni-depth);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .device-card:not(#device-card-pc)[data-state="off"]:hover { background: linear-gradient(var(--ni-shade), var(--ni-shade)), linear-gradient(rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.025)), var(--ni-sheen), var(--ni-gloss), var(--ni-glass); border-color: var(--ni-hair-3); }
+
+/* -- 5. The Tonight instrument -------------------------------------------------
+   Radii (of the dial's half-width): knurled edge 100-93, bezel 93-81,
+   arc channel 81-71 (the arc at 75.6), face 71-0 with the engraved scale
+   at 67. The SVG is scaled to .84 so its r=90 arc lands in the channel. */
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .ring-container { width: var(--ni-dial); }
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode):is(.is-running, .is-paused) .ring-container { width: var(--ni-dial-run); }
+@media (max-height: 700px) {
+  :root body:is([data-theme="midnight"], :not([data-theme])) { --ni-dial: clamp(236px, 30vw, 300px); --ni-dial-run: clamp(248px, 33vw, 316px); }
+}
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .ring-container { isolation: isolate; }
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .timer-ring {
+  position: relative;
+  z-index: 1;
+  transform: rotate(-90deg) scale(0.84);
+  overflow: visible;
+}
+
+/* A pool of lamp light on the desk around the instrument (one lamp only). */
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .timer-section::before {
+  display: block;
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: calc(var(--ni-dial) / 2);
+  width: calc(var(--ni-dial) * 1.9);
+  height: calc(var(--ni-dial) * 1.9);
+  aspect-ratio: auto;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle at 40% 36%, rgba(var(--ni-beam), calc(0.13 * var(--ni-lit))) 0%, rgba(var(--ni-lamp), calc(0.05 * var(--ni-lit))) 22%, transparent 48%);
+  pointer-events: none;
+  z-index: 0;
+}
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode):is(.is-running, .is-paused) .timer-section::before {
+  top: calc(var(--ni-dial-run) / 2);
+  background: radial-gradient(circle at 40% 36%, rgba(var(--ni-beam), calc(0.12 * var(--ni-lit))) 0%, rgba(var(--ni-lamp), calc(0.045 * var(--ni-lit))) 22%, transparent 48%);
+}
+
+/* The instrument body: a knurled coin edge (the container itself), a
+   brushed dark-metal bezel stepping down into the arc channel (::before),
+   a recessed engraved face under glass (::after). Each takes the shade as
+   its first layer, so the instrument darkens and the numerals do not. */
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .ring-container {
+  border-radius: 50%;
+  background:
+    linear-gradient(var(--ni-shade-dial), var(--ni-shade-dial)),
+    radial-gradient(circle at 26% 14%, rgba(var(--ni-beam), calc(0.15 * var(--ni-lit))), transparent 40%),
+    repeating-conic-gradient(from 0deg, rgba(255, 255, 255, 0.075) 0deg 0.55deg, rgba(0, 0, 0, 0.32) 0.85deg 1.7deg, rgba(255, 255, 255, 0.075) 2deg),
+    conic-gradient(from 205deg, #10161e, #1f2834 9%, #0c1016 23%, #18202a 40%, #0a0d12 57%, #1a222d 75%, #0d1117 90%, #10161e);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.14),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(0, 0, 0, 0.75),
+    0 0 0 2px rgba(255, 255, 255, 0.03),
+    0 3px 0 rgba(0, 0, 0, 0.6),
+    0 64px 96px -42px rgba(0, 0, 0, 1),
+    0 0 110px -28px rgba(var(--ni-lamp), calc(0.26 * var(--ni-lit)));
+}
+/* The knurl is an honest grip: full strength only while turning it would
+   do something (idle); it retracts during a run. */
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode):is(.is-running, .is-paused) .ring-container {
+  background:
+    linear-gradient(var(--ni-shade-dial), var(--ni-shade-dial)),
+    radial-gradient(circle at 26% 14%, rgba(var(--ni-beam), calc(0.15 * var(--ni-lit))), transparent 40%),
+    repeating-conic-gradient(from 0deg, rgba(255, 255, 255, 0.04) 0deg 0.55deg, rgba(0, 0, 0, 0.22) 0.85deg 1.7deg, rgba(255, 255, 255, 0.04) 2deg),
+    conic-gradient(from 205deg, #10161e, #1f2834 9%, #0c1016 23%, #18202a 40%, #0a0d12 57%, #1a222d 75%, #0d1117 90%, #10161e);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .ring-container::before {
+  display: block;
+  content: '';
+  position: absolute;
+  inset: 3.5%;
+  border-radius: 50%;
+  z-index: 0;
+  -webkit-mask-image: none;
+  mask-image: none;
+  background:
+    linear-gradient(var(--ni-shade-dial), var(--ni-shade-dial)),
+    /* lamp specular on the bezel (upper left), tight */
+    radial-gradient(circle at 27% 16%, rgba(var(--ni-beam), calc(0.18 * var(--ni-lit))), rgba(var(--ni-beam), calc(0.04 * var(--ni-lit))) 18%, transparent 32%),
+    /* the channel (76-87%), its lit step, the bezel's outer lip */
+    radial-gradient(circle closest-side, transparent 0 75.8%, rgba(0, 0, 0, 0.92) 76.4%, rgba(1, 2, 4, 0.97) 78%, rgba(4, 6, 9, 0.96) 85.6%, rgba(255, 255, 255, 0.18) 86.8%, rgba(255, 255, 255, 0.04) 88.4%, transparent 89.6%, transparent 97.6%, rgba(255, 255, 255, 0.12) 98.6%, rgba(0, 0, 0, 0.55) 99.4%, rgba(0, 0, 0, 0.7) 100%),
+    /* brushed metal */
+    conic-gradient(from 205deg, #0e131a, #1c242f 9%, #0b0f15 23%, #161d27 40%, #090c11 57%, #18202a 75%, #0c1016 90%, #0e131a);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 2px 6px rgba(0, 0, 0, 0.7),
+    inset 10px 12px 20px -14px rgba(var(--ni-beam), calc(0.26 * var(--ni-lit)));
+}
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .ring-container::after {
+  display: block;
+  content: '';
+  position: absolute;
+  inset: 14.5%;
+  border-radius: 50%;
+  z-index: 0;
+  -webkit-mask-image: none;
+  mask-image: none;
+  background:
+    linear-gradient(var(--ni-shade-face), var(--ni-shade-face)),
+    /* the lens pool: the lamp lands on the glass where the beam arrives */
+    radial-gradient(34% 24% at 31% 23%, rgba(var(--ni-beam), calc(0.16 * var(--ni-lit))), rgba(var(--ni-beam), calc(0.05 * var(--ni-lit))) 45%, transparent 72%),
+    /* crystal reflection: a soft streak where the lamp hits the glass */
+    linear-gradient(126deg, transparent 22%, rgba(255, 255, 255, calc(0.015 + 0.03 * var(--ni-lit))) 31%, rgba(255, 255, 255, 0.004) 40%, transparent 46%),
+    radial-gradient(ellipse 70% 32% at 50% 4%, rgba(255, 255, 255, 0.06), transparent 72%),
+    /* guilloche: fine concentric engraving, under the light */
+    repeating-radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 3.5px),
+    radial-gradient(circle at 50% 40%, #0e141c 0%, #080b10 62%, #05070a 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+    inset 0 22px 40px -18px rgba(0, 0, 0, 0.95),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 0 60px -30px rgba(var(--ni-lamp), calc(0.14 * var(--ni-lit)));
+}
+
+/* The channel and the filament (default ring style; E4). */
+:root body:is([data-theme="midnight"], :not([data-theme])):is([data-ring="glow"], :not([data-ring])):not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .ring-bg { stroke: rgba(0, 0, 0, 0.6); stroke-width: 5.5; }
+:root body:is([data-theme="midnight"], :not([data-theme])):is([data-ring="glow"], :not([data-ring])):not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .ring-progress { stroke-width: 3.6; stroke-linecap: round; }
+:root body:is([data-theme="midnight"], :not([data-theme])):is([data-ring="glow"], :not([data-ring])):not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .timer-ring {
+  --ring-halo: rgba(var(--ni-lamp), calc(0.10 + 0.20 * var(--ni-lit)));
+  box-shadow: 0 0 54px -16px var(--ring-halo), inset 0 0 40px -24px var(--ring-halo);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])):is([data-ring="glow"], :not([data-ring])):not(.mini-mode):not(.fullscreen-clock-mode):not(.is-running):not(.is-paused) .timer-section .timer-ring { --ring-halo: rgba(var(--ni-lamp), calc(0.16 * var(--ni-lit))); }
+:root body:is([data-theme="midnight"], :not([data-theme])).is-paused:not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .timer-ring { --ring-halo: rgba(var(--amber-rgb), 0.34); }
+:root body:is([data-theme="midnight"], :not([data-theme])).phase-lastlight.real-action:not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .timer-ring { --ring-halo: rgba(var(--red-rgb), 0.34); }
+:root body:is([data-theme="midnight"], :not([data-theme])).phase-lastlight.test-mode:not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .timer-ring { --ring-halo: rgba(var(--amber-rgb), 0.30); }
+/* Teal owns the light: the running arc is the lamp's filament. It never
+   matches paused or Last Light, so amber / rose stay the base rules'. */
+:root body:is([data-theme="midnight"], :not([data-theme])):is([data-ring="glow"], :not([data-ring])).is-running:not(.is-paused):not(.phase-dim):not(.phase-lastlight):not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .ring-progress { stroke: var(--ni-arc); }
+:root body:is([data-theme="midnight"], :not([data-theme])):is([data-ring="glow"], :not([data-ring])).is-running.phase-dim:not(.is-paused):not(.phase-lastlight):not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .ring-progress { stroke: rgba(46, 230, 201, calc(0.55 + 0.45 * var(--ni-lit))); }
+/* The engraved scale (a proportional scale of the run, unlabelled): 60 fine
+   marks and 12 strong marks; the analog face keeps drawing its own. */
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode):not(.bezel) .timer-section :is(.ring-ticks, .ring-ticks-major) { display: inline; }
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .ring-ticks { stroke-width: 3.4; stroke-dasharray: 0.4 7.9776; stroke-dashoffset: 0.2; }
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .ring-ticks-major { stroke-width: 6.4; stroke-dasharray: 1.15 40.738; stroke-dashoffset: 0.575; }
+/* The logo's broken O: a faint track while idle (it must not read as a
+   countdown); the outer O is an engraved mark, never a second lit ring. */
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .timer-section :is(.ring-segments, .ring-o, .ring-station) { display: inline; }
+:root body:is([data-theme="midnight"], :not([data-theme])):is(.is-running, .is-paused):not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .ring-head { display: inline; }
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .ring-segments { stroke: rgba(var(--ni-lamp), calc(0.12 * var(--ni-lit))); stroke-width: 1; }
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .ring-o { stroke: rgba(var(--ni-beam), calc(0.06 + 0.10 * var(--ni-lit))); stroke-width: 0.8; }
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .ring-head-particle { stroke-width: 3.5; }
+/* The run-head is the lamp's filament while running (static). */
+:root body:is([data-theme="midnight"], :not([data-theme])):is([data-ring="glow"], :not([data-ring])).is-running:not(.is-paused):not(.phase-lastlight):not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .ring-head-particle { fill: #f2fffd; stroke: rgba(var(--ni-lamp), 0.55); stroke-width: 3; }
+:root body:is([data-theme="midnight"], :not([data-theme])):is([data-ring="glow"], :not([data-ring])).is-running:not(.is-paused):not(.phase-lastlight):not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .ring-head { filter: drop-shadow(0 0 3px rgba(var(--ni-beam), 0.95)) drop-shadow(0 0 10px rgba(var(--ni-lamp), calc(0.25 + 0.45 * var(--ni-lit)))); }
+
+/* The readout: thin lining numerals lit from within. */
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .time-main {
+  font-family: var(--font-title);
+  font-weight: 300;
+  font-size: clamp(54px, 21.5cqw, 92px);
+  letter-spacing: 0.01em;
+  color: #f4fbfb;
+  text-shadow: 0 0 1px rgba(255, 255, 255, 0.45), 0 0 26px rgba(var(--ni-beam), calc(0.26 * var(--ni-lit))), 0 0 70px rgba(var(--ni-beam), calc(0.10 * var(--ni-lit)));
+}
+/* Idle: a lit clock, quieter than a running readout. */
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .timer-display.clock-idle .time-main {
+  font-size: min(calc(18.5cqw * var(--clock-scale, 1)), 21cqw);
+  color: #dbe5eb;
+  text-shadow: 0 0 22px rgba(var(--ni-beam), calc(0.16 * var(--ni-lit)));
+}
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .timer-display.clock-idle .time-main.tm-clock-long { font-size: min(calc(13.5cqw * var(--clock-scale, 1)), 15cqw); }
+:root body:is([data-theme="midnight"], :not([data-theme])).is-running:not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .time-main { text-shadow: 0 0 1px rgba(255, 255, 255, 0.45), 0 0 28px rgba(var(--ni-beam), calc(0.10 + 0.22 * var(--ni-lit))); }
+:root body:is([data-theme="midnight"], :not([data-theme])).is-paused:not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .time-main { text-shadow: 0 0 1px rgba(255, 255, 255, 0.45), 0 0 26px rgba(var(--amber-rgb), 0.22); }
+/* An explicitly chosen Midnight ring style keeps its violet ink (E4). */
+:root body:is([data-theme="midnight"], :not([data-theme]))[data-ring="midnight"]:not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .timer-display .time-main { color: #c9c4ee; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .timer-readout-label { font-family: var(--font-title); letter-spacing: 0.28em; color: #a9b6c3; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .timer-wall-clock { font-family: var(--font-title); font-weight: 400; letter-spacing: 0.08em; color: #d3dde6; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .timer-section .time-label { font-family: var(--font-title); letter-spacing: 0.1em; color: #a6b3c0; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .timer-display > .timer-name { font-family: var(--font-title); letter-spacing: 0.32em; }
+/* The default session name reads as a placeholder, not an alarm banner. Its
+   type holds in every state (hover never shifts layout); a name the user
+   typed keeps the tracked caps. Mini and the full screen clock keep r2. */
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .timer-display > .timer-name.is-default { text-transform: none; letter-spacing: 0.06em; font: 400 12px/1.3 var(--font-title); }
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .timer-name.is-default:not(:focus):not(:hover) { color: var(--text-muted); opacity: 1; }
+:root body:is([data-theme="midnight"], :not([data-theme])):is(.mini-mode, .fullscreen-clock-mode) .timer-name.is-default:not(:focus):not(:hover):not(:focus-visible) { color: var(--text-secondary); opacity: 0.82; }
+/* The dial's own annunciator: the same truth as the pill (body.test-mode /
+   body.real-action are set by render() from the loaded setting), engraved
+   on the face. Never animated or dimmed; hidden from assistive tech (the
+   pill speaks). */
+:root body:is([data-theme="midnight"], :not([data-theme])).test-mode:not(.mini-mode) .timer-display::after,
+:root body:is([data-theme="midnight"], :not([data-theme])).real-action:not(.mini-mode) .timer-display::after {
+  display: block;
+  width: fit-content;
+  margin: 12px auto 0;
+  padding: 3px 10px 3px 9px;
+  border-radius: 999px;
+  font: 700 9.5px/1.3 var(--font-title);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  transition: none;
+  animation: none;
+}
+:root body:is([data-theme="midnight"], :not([data-theme])).test-mode:not(.mini-mode) .timer-display::after {
+  content: '\25CF\2002 Test Mode' / '';
+  color: var(--accent-amber);
+  background: rgba(var(--amber-rgb), 0.08);
+  border: 1px solid rgba(var(--amber-rgb), 0.42);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])).real-action:not(.mini-mode) .timer-display::after {
+  content: '\25CF\2002 Real action' / '';
+  color: var(--accent-red);
+  background: rgba(var(--red-rgb), 0.09);
+  border: 1px solid rgba(var(--red-rgb), 0.5);
+}
+
+/* A small dial (the 900x640 minimum, ~270px): the scale keeps only its four
+   cardinal marks and the face chip steps out (the pill keeps the mode). */
+@container (max-width: 330px) {
+  :root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .ring-ticks { display: none; }
+  :root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .ring-ticks-major { stroke-dasharray: 1.15 124.51; }
+  :root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode) .timer-section .timer-display::after { display: none; }
+  :root body:is([data-theme="midnight"], :not([data-theme])) .timer-section .timer-readout-label { letter-spacing: 0.2em; }
+}
+
+/* The analog face (body.bezel): its clock and labels fit inside the face;
+   the pill above the console carries the mode there. */
+:root body:is([data-theme="midnight"], :not([data-theme])).bezel:not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .timer-display.clock-idle .analog-clock { width: 44cqw; height: 44cqw; }
+:root body:is([data-theme="midnight"], :not([data-theme])).bezel:not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .timer-display::after { display: none; }
+:root body:is([data-theme="midnight"], :not([data-theme])).bezel:not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .timer-readout-label { margin: 2px 0 6px; }
+:root body:is([data-theme="midnight"], :not([data-theme])).bezel:not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .timer-wall-clock { margin-top: 2px; }
+:root body:is([data-theme="midnight"], :not([data-theme])).bezel:not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .time-label { margin-top: 2px; }
+
+/* Below the dial. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .clock-face-controls {
+  margin-top: 30px;
+  background: var(--ni-key), rgba(6, 9, 13, 0.78);
+  border-color: var(--ni-hair-2);
+  box-shadow: var(--ni-top), 0 16px 30px -18px rgba(0, 0, 0, 0.95);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .clock-face-choice { font-family: var(--font-title); letter-spacing: 0.05em; color: #a9b5c1; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .clock-face-choice[aria-pressed="true"] { color: #fff; background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.32), rgba(var(--accent-rgb), 0.14)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 0 1px rgba(var(--accent-rgb), 0.45); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .fullscreen-clock-btn { font-family: var(--font-title); letter-spacing: 0.2em; color: #95a2ae; }
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .fullscreen-clock-btn { bottom: -34px; }
+
+/* -- 6. Truth: annunciators, never animated, never dimmed --------------------- */
+/* (Mini mode keeps its own compact pill, section 18.) */
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode) #testmode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 15px 8px 12px;
+  font: 700 10.5px/1.2 var(--font-title);
+  letter-spacing: 0.17em;
+  color: var(--accent-amber);
+  background: linear-gradient(180deg, rgba(var(--amber-rgb), 0.16), rgba(var(--amber-rgb), 0.06)), #0a0a08;
+  border: 1px solid rgba(var(--amber-rgb), 0.62);
+  box-shadow: inset 0 1px 0 rgba(255, 236, 190, 0.10), 0 0 0 3px rgba(var(--amber-rgb), 0.06), 0 0 28px -8px rgba(var(--amber-rgb), 0.5);
+  transition: none;
+  animation: none;
+}
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode) #testmode-pill::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 2px rgba(var(--amber-rgb), 0.18), 0 0 10px currentColor;
+}
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode) #testmode-pill.real {
+  color: var(--accent-red);
+  background: linear-gradient(180deg, rgba(var(--red-rgb), 0.18), rgba(var(--red-rgb), 0.07)), #0d0709;
+  border-color: rgba(var(--red-rgb), 0.75);
+  box-shadow: inset 0 1px 0 rgba(255, 210, 220, 0.10), 0 0 0 3px rgba(var(--red-rgb), 0.08), 0 0 30px -8px rgba(var(--red-rgb), 0.6);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode) #testmode-pill.real::before { box-shadow: 0 0 0 2px rgba(var(--red-rgb), 0.2), 0 0 10px currentColor; }
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode) #testmode-pill.checking { color: var(--text-secondary); background: rgba(10, 13, 18, 0.9); border-color: var(--border-strong); box-shadow: none; }
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode) #testmode-pill.checking::before { box-shadow: none; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .app-footer .status-pill { font-family: var(--font-title); letter-spacing: 0.13em; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .app-footer .status-pill[data-truth="test"] { background: linear-gradient(180deg, rgba(var(--amber-rgb), 0.14), rgba(var(--amber-rgb), 0.05)), #0a0a08; border-color: rgba(var(--amber-rgb), 0.58); box-shadow: inset 0 1px 0 rgba(255, 236, 190, 0.08), 0 0 20px -8px rgba(var(--amber-rgb), 0.5); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .app-footer .status-pill[data-truth="real"] { background: linear-gradient(180deg, rgba(var(--red-rgb), 0.16), rgba(var(--red-rgb), 0.06)), #0d0709; border-color: rgba(var(--red-rgb), 0.7); box-shadow: inset 0 1px 0 rgba(255, 210, 220, 0.08), 0 0 22px -8px rgba(var(--red-rgb), 0.55); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .app-footer .status-pill .status-dot { box-shadow: 0 0 8px currentColor; }
+
+/* -- 7. Tonight's plan: the console --------------------------------------------- */
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card::before { background: none; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card .ns-hero-title {
+  font-family: var(--font-title);
+  font-weight: 300;
+  font-size: 38px;
+  letter-spacing: -0.01em;
+  color: #f4f9fa;
+  text-shadow: 0 0 34px rgba(var(--ni-beam), calc(0.12 * var(--ni-lit)));
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card .plan-facts { border-color: var(--ni-hair-2); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card .plan-facts dd { font-family: var(--font-title); font-weight: 400; color: #eef5f6; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card #plan-out-at {
+  font-family: var(--font-title);
+  font-weight: 300;
+  font-size: clamp(20px, 2.2vw, 30px);
+  color: #f6fbfb;
+  text-shadow: 0 0 24px rgba(var(--ni-beam), calc(0.18 * var(--ni-lit)));
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card .plan-field-label .plan-duration,
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card .plan-field-hint { font-size: 12px; font-weight: 500; letter-spacing: 0.04em; text-transform: none; color: var(--text-secondary); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card .plan-field-label .plan-duration { color: #eef5f6; font-weight: 600; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card :is(.plan-field, .plan-field + .plan-field, .plan-ritual-entry) { border-color: var(--ni-hair); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card .plan-help { color: var(--text-muted); }
+/* Machined keys and recessed wells. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card :is(.num-btn, .chip),
+:root body:is([data-theme="midnight"], :not([data-theme])) .btn-ritual {
+  background: var(--ni-key), rgba(9, 13, 19, 0.86);
+  border-color: var(--ni-hair-2);
+  color: #c3ced8;
+  box-shadow: var(--ni-top), 0 1px 0 rgba(0, 0, 0, 0.6), 0 8px 16px -12px rgba(0, 0, 0, 0.95);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card .chip { font-family: var(--font-title); font-weight: 500; letter-spacing: 0.05em; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card :is(.num-btn, .chip):hover,
+:root body:is([data-theme="midnight"], :not([data-theme])) .btn-ritual:hover {
+  border-color: rgba(var(--accent-rgb), 0.55);
+  color: #fff;
+  background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.20), rgba(var(--accent-rgb), 0.06)), rgba(9, 13, 19, 0.86);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) #timer-input,
+:root body:is([data-theme="midnight"], :not([data-theme])) .action-chips-row,
+:root body:is([data-theme="midnight"], :not([data-theme])) .unit-selector {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.1)), var(--ni-well);
+  border-color: var(--ni-hair-2);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(0, 0, 0, 0.3), 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) #timer-input { font-family: var(--font-title); font-weight: 300; font-size: 22px; color: #f4fafa; text-shadow: 0 0 16px rgba(var(--ni-beam), calc(0.18 * var(--ni-lit))); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .action-chip,
+:root body:is([data-theme="midnight"], :not([data-theme])) .unit-btn { font-family: var(--font-title); letter-spacing: 0.03em; color: #a9b6c2; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .action-chip:hover,
+:root body:is([data-theme="midnight"], :not([data-theme])) .unit-btn:hover { color: #eef5f6; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .action-chip.selected,
+:root body:is([data-theme="midnight"], :not([data-theme])) .action-chip[aria-pressed="true"],
+:root body:is([data-theme="midnight"], :not([data-theme])) .unit-btn.active {
+  color: #fff;
+  background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.40), rgba(var(--accent-rgb), 0.18));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 0 0 1px rgba(var(--accent-rgb), 0.6), 0 6px 18px -6px rgba(var(--accent-rgb), 0.75);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])).real-action #action-chips-row .action-chip.selected { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 0 0 2px rgba(var(--red-rgb), 0.85), 0 6px 18px -6px rgba(var(--red-rgb), 0.55); }
+/* The one primary: a lit key with a glass top, in your hand's colour. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-play-btn {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.30), rgba(255, 255, 255, 0) 48%),
+    linear-gradient(180deg, var(--ni-accent-hi) 0%, var(--ni-accent-mid) 52%, var(--ni-accent-lo) 100%);
+  color: var(--accent-ink, #14101f);
+  background-color: var(--ni-accent-mid);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -2px 0 rgba(20, 16, 31, 0.22),
+    0 0 0 1px rgba(0, 0, 0, 0.5),
+    0 18px 40px -16px rgba(var(--accent-rgb), 0.85),
+    0 0 60px -20px rgba(var(--accent-rgb), 0.55);
+  font-family: var(--font-title);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card .ns-play-btn { border-radius: var(--ni-r-key); height: 52px; font-size: 15px; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-play-btn:hover {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0) 48%),
+    linear-gradient(180deg, var(--ni-accent-hi2) 0%, color-mix(in srgb, rgb(var(--accent-rgb)) 88%, #fff) 52%, color-mix(in srgb, rgb(var(--accent-rgb)) 95%, #000) 100%);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])).real-action .ns-play-btn {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -2px 0 rgba(20, 16, 31, 0.22),
+    0 0 0 2px rgba(var(--red-rgb), 0.85),
+    0 18px 40px -16px rgba(var(--red-rgb), 0.55);
+}
+@media (max-height: 800px) {
+  :root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card .ns-hero-title { font-size: 26px; }
+  :root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card #plan-out-at { font-size: 20px; }
+  :root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card .ns-play-btn { height: 46px; }
+}
+@media (max-height: 700px) {
+  :root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card .ns-hero-title { font-size: 22px; }
+  :root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card .ns-play-btn { height: 42px; }
+  /* the side-by-side labels give the Ending row its full width back */
+  :root body:is([data-theme="midnight"], :not([data-theme])) #ns-hero-card .plan-field-label { text-transform: none; letter-spacing: 0.02em; font-size: 12px; font-weight: 500; }
+  :root body:is([data-theme="midnight"], :not([data-theme])) .action-chip,
+  :root body:is([data-theme="midnight"], :not([data-theme])) .unit-btn { letter-spacing: 0; }
+}
+
+/* -- 8. The session console (running / paused) --------------------------------- */
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib > #action-bar-running {
+  max-width: 440px;
+  padding: 24px 24px 26px;
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .session-eyebrow { font-family: var(--font-title); letter-spacing: 0.3em; }
+/* A live run is stated in the live teal (the base's own "teal running, amber
+   paused" grammar, as on the rail icon); violet is the hand, never status. */
+:root body:is([data-theme="midnight"], :not([data-theme])).is-running:not(.is-paused) .session-eyebrow { color: rgb(var(--teal-rgb)); }
+/* The readout is light; the keys are the hand. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .session-ends { font-family: var(--font-title); font-weight: 300; font-size: 32px; letter-spacing: -0.005em; color: #f4f9fa; text-shadow: 0 0 30px rgba(var(--ni-beam), calc(0.08 + 0.14 * var(--ni-lit))); }
+:root body:is([data-theme="midnight"], :not([data-theme])) #action-bar-running #btn-pause {
+  background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.26), rgba(var(--accent-rgb), 0.08)), rgba(8, 10, 16, 0.85);
+  border: 1px solid rgba(var(--accent-rgb), 0.6);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 18px 40px -18px rgba(var(--accent-rgb), 0.8);
+  font-family: var(--font-title);
+  letter-spacing: 0.1em;
+}
+:root body:is([data-theme="midnight"], :not([data-theme])).is-paused #action-bar-running #btn-pause { background: linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 48%), linear-gradient(180deg, var(--ni-accent-hi), var(--ni-accent-lo)); color: var(--accent-ink, #14101f); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .snooze-group {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.08)), var(--ni-well);
+  border-color: var(--ni-hair-2);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) #action-bar-running :is(#btn-snooze, .snooze-chip) { font-family: var(--font-title); letter-spacing: 0.05em; }
+:root body:is([data-theme="midnight"], :not([data-theme])) #action-bar-running #btn-stop {
+  background: linear-gradient(180deg, rgba(var(--red-rgb), 0.10), rgba(var(--red-rgb), 0.03)), rgba(9, 6, 8, 0.85);
+  border-color: rgba(var(--red-rgb), 0.55);
+  font-family: var(--font-title);
+  letter-spacing: 0.05em;
+}
+
+/* -- 9. Readiness: a status bus with indicator lamps ----------------------------- */
+:root body:is([data-theme="midnight"], :not([data-theme])) .rdy-row + .rdy-row { border-left-color: var(--ni-hair); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .rdy-row:not(:disabled):hover { background: rgba(255, 255, 255, 0.03); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .rdy-value { font-family: var(--font-title); font-size: 14.5px; color: #e3eaf0; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .rdy-value::before { width: 7px; height: 7px; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.03); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .rdy-value.ok::before { box-shadow: 0 0 10px rgba(var(--teal-rgb), 0.85); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .rdy-value.warn::before { box-shadow: 0 0 10px rgba(var(--amber-rgb), 0.9); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .rdy-value.real::before { box-shadow: 0 0 10px rgba(var(--red-rgb), 0.9); }
+
+/* -- 10. Night Modes ---------------------------------------------------------- */
+:root body:is([data-theme="midnight"], :not([data-theme])) .nm-card:not(.nm-card--later) { overflow: hidden; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .nm-card-scene {
+  background:
+    radial-gradient(130% 150% at 0% 0%, rgba(var(--ni-beam), calc(0.10 * var(--ni-lit))), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(0, 0, 0, 0.2)),
+    rgba(3, 5, 8, 0.7);
+  border-bottom: 1px solid var(--ni-hair);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .nm-card-body .nm-card-title { font-family: var(--font-title); font-weight: 500; font-size: 18px; letter-spacing: 0.005em; color: #f2f7f8; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .nm-card-subtitle { color: var(--text-secondary); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .nm-card:not(.nm-card--later):hover,
+:root body:is([data-theme="midnight"], :not([data-theme])) .profile-card:not(.profile-card--create):not(.active):not(.has-profile-accent):hover {
+  background:
+    linear-gradient(var(--ni-shade), var(--ni-shade)) padding-box,
+    linear-gradient(rgba(var(--accent-rgb), 0.07), rgba(var(--accent-rgb), 0.07)) padding-box,
+    var(--ni-sheen) padding-box,
+    var(--ni-gloss) padding-box,
+    linear-gradient(var(--ni-glass), var(--ni-glass)) padding-box,
+    linear-gradient(138deg, rgba(var(--accent-rgb), 0.8), rgba(var(--accent-rgb), 0.3) 40%, rgba(var(--accent-rgb), 0.5)) border-box;
+  box-shadow: var(--ni-top), 0 26px 50px -24px rgba(0, 0, 0, 1), 0 0 40px -18px rgba(var(--accent-rgb), 0.5);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .nm-card.selected {
+  background:
+    linear-gradient(var(--ni-shade), var(--ni-shade)) padding-box,
+    linear-gradient(rgba(var(--accent-rgb), 0.12), rgba(var(--accent-rgb), 0.12)) padding-box,
+    var(--ni-gloss) padding-box,
+    linear-gradient(var(--ni-glass), var(--ni-glass)) padding-box,
+    linear-gradient(138deg, rgba(var(--accent-rgb), 0.9), rgba(var(--accent-rgb), 0.45)) border-box;
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .nm-card--later {
+  background: var(--ni-key), rgba(8, 11, 16, 0.6);
+  border-color: var(--ni-hair-2);
+  border-style: dashed;
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .nm-tier-count { font-family: var(--font-title); letter-spacing: 0.04em; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .profile-mono {
+  font-family: var(--font-title);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.015)), #121823;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 6px 14px -8px rgba(0, 0, 0, 0.9);
+}
+
+/* -- 11. Schedule -------------------------------------------------------------- */
+:root body:is([data-theme="midnight"], :not([data-theme])) .sch-next-when { font-family: var(--font-title); font-weight: 300; letter-spacing: 0; color: #f4f9fa; text-shadow: 0 0 36px rgba(var(--ni-beam), calc(0.16 * var(--ni-lit))); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .sch-next-day { font-family: var(--font-title); letter-spacing: 0.18em; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .sch-next-span { font-family: var(--font-title); letter-spacing: 0.04em; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .sch-next-in { font-family: var(--font-title); font-weight: 300; font-size: 22px; letter-spacing: 0.02em; font-variant-numeric: tabular-nums; color: #e8eff3; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .sch-next-ring {
+  border-radius: 50%;
+  background:
+    linear-gradient(var(--ni-shade-dial), var(--ni-shade-dial)),
+    radial-gradient(circle at 28% 20%, rgba(var(--ni-beam), calc(0.12 * var(--ni-lit))), transparent 44%),
+    radial-gradient(circle closest-side, #0c1219 0 71%, rgba(255, 255, 255, 0.12) 72%, rgba(0, 0, 0, 0.6) 73.5%, transparent 74.5%),
+    repeating-conic-gradient(from 0deg, rgba(255, 255, 255, 0.07) 0deg 1.2deg, rgba(0, 0, 0, 0.25) 1.8deg 3.6deg, rgba(255, 255, 255, 0.07) 4.2deg),
+    conic-gradient(from 205deg, #0e131a, #1c242f 9%, #0b0f15 23%, #161d27 40%, #090c11 57%, #18202a 75%, #0c1016 90%, #0e131a);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1), inset 8px 9px 14px -9px rgba(var(--ni-beam), calc(0.4 * var(--ni-lit))), 0 0 0 1px rgba(0, 0, 0, 0.6), 0 26px 44px -22px rgba(0, 0, 0, 1), 0 0 40px -14px rgba(var(--ni-lamp), calc(0.18 * var(--ni-lit)));
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .sch-next-track { stroke: rgba(0, 0, 0, 0.55); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .sch-next-glyph path { stroke: #d2dbe4; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .planner-hint { color: var(--text-secondary); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .planner-day {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.004)), rgba(4, 6, 9, 0.66);
+  border-color: rgba(170, 196, 224, 0.075);
+  border-radius: var(--ni-r-cell);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  font-family: var(--font-title);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .planner-day:hover { border-color: rgba(var(--accent-rgb), 0.5); background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.12), rgba(var(--accent-rgb), 0.02)), rgba(4, 6, 9, 0.7); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .planner-day-number { font-size: 12px; color: #d6dfe7; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .planner-day[aria-current="date"] {
+  border-color: rgba(var(--accent-rgb), 0.75);
+  background: radial-gradient(110% 100% at 50% 0%, rgba(var(--accent-rgb), 0.24), transparent 72%), rgba(4, 6, 9, 0.8);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 26px -6px rgba(var(--accent-rgb), 0.65);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .planner-rule {
+  position: relative;
+  padding-left: 13px;
+  background: rgba(var(--accent-rgb), 0.09);
+  color: #b9c4cf;
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.14);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .planner-rule::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 50%;
+  background: var(--ni-accent-hi);
+  box-shadow: 0 0 6px rgba(var(--accent-rgb), 0.9);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .planner-toolbar :is(select, input) { background-color: rgba(3, 5, 8, 0.9); border-color: var(--ni-hair-2); font-family: var(--font-title); box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.5); }
+
+/* -- 12. Devices: the host strip carries the lamp's filament -------------------- */
+:root body:is([data-theme="midnight"], :not([data-theme])) #device-card-pc {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--ni-shade), var(--ni-shade)) padding-box,
+    radial-gradient(70% 140% at 0% 0%, rgba(var(--teal-rgb), calc(0.10 * var(--ni-lit))), transparent 60%) padding-box,
+    var(--ni-gloss) padding-box,
+    linear-gradient(var(--ni-glass), var(--ni-glass)) padding-box,
+    var(--ni-rim) border-box;
+  box-shadow: var(--ni-top), var(--ni-depth);
+  border-radius: 22px;
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) #device-card-pc::before {
+  left: 22px;
+  right: 38%;
+  top: -1px;
+  height: 1.5px;
+  opacity: 1;
+  background: linear-gradient(90deg, rgba(var(--ni-beam), calc(0.95 * var(--ni-lit))), rgba(var(--ni-lamp), calc(0.35 * var(--ni-lit))) 45%, transparent);
+  box-shadow: 0 0 12px rgba(var(--ni-lamp), calc(0.45 * var(--ni-lit)));
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .device-title { font-family: var(--font-title); font-weight: 500; font-size: 17px; letter-spacing: 0.005em; }
+:root body:is([data-theme="midnight"], :not([data-theme])) #device-card-pc .device-title { font-size: 22px; font-weight: 400; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .device-icon {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.01)), rgba(5, 8, 12, 0.8);
+  border: 1px solid var(--ni-hair-2);
+  border-style: solid;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 6px 14px -8px rgba(0, 0, 0, 0.9);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .status-row > span:last-child { font-family: var(--font-title); font-size: 15px; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .device-status { font-family: var(--font-title); letter-spacing: 0.06em; }
+:root body:is([data-theme="midnight"], :not([data-theme])) #ns-panel-devices .device-card .device-link { font-family: var(--font-title); letter-spacing: 0.04em; background: var(--ni-key), rgba(10, 14, 20, 0.7); border-color: var(--ni-hair-2); box-shadow: var(--ni-top); }
+
+/* -- 13. Proof: amber keeps meaning Test Mode -------------------------------------
+   The hero wears the standard lamp glass for every result (section 4); the
+   tone lives where the base puts it (seal ring, badge, outcome text) plus a
+   small corner wash. In the history a hollow dot is a rehearsal (Test), a
+   filled dot is something real (including an amber "unverified"). */
+:root body:is([data-theme="midnight"], :not([data-theme])) #proof-card .ns-proof-bg { background: radial-gradient(ellipse 30% 90% at 0% 0%, rgba(var(--tone-rgb), 0.07), transparent 60%); }
+:root body:is([data-theme="midnight"], :not([data-theme])) #btn-proof-again.ns-proof-btn-primary {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.30), rgba(255, 255, 255, 0) 48%),
+    linear-gradient(180deg, var(--ni-accent-hi) 0%, var(--ni-accent-mid) 52%, var(--ni-accent-lo) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), inset 0 -2px 0 rgba(20, 16, 31, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.5), 0 16px 34px -16px rgba(var(--accent-rgb), 0.8);
+  font-family: var(--font-title);
+  letter-spacing: 0.05em;
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-proof-title { font-family: var(--font-title); font-weight: 400; font-size: 26px; letter-spacing: 0; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-proof-pill { background: linear-gradient(180deg, rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.1)), var(--ni-well); border-color: var(--ni-hair-2); box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-pill-value { font-family: var(--font-title); font-weight: 300; font-size: 24px; }
+:root body:is([data-theme="midnight"], :not([data-theme])) #proof-card .ns-proof-pill { background: linear-gradient(180deg, rgba(0, 0, 0, 0.36), rgba(0, 0, 0, 0.16)), rgba(3, 5, 8, 0.7); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-proof-sub { color: #aab6c1; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-proof-sub .mono { color: #b4bfc9; }
+:root body:is([data-theme="midnight"], :not([data-theme])) #ns-panel-stats .status-card .card-header { font-family: var(--font-title); letter-spacing: 0.24em; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .proof-row { border-color: var(--ni-hair); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .proof-row:hover { background: rgba(255, 255, 255, 0.03); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .proof-when b,
+:root body:is([data-theme="midnight"], :not([data-theme])) .proof-when small { font-family: var(--font-title); letter-spacing: 0.04em; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .proof-name { font-family: var(--font-title); font-size: 15px; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .proof-dot { box-shadow: 0 0 8px rgba(var(--tone-rgb, 145, 160, 175), 0.8); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .proof-row[data-tone="test"] .proof-dot { background: transparent; box-shadow: none; border: 1.5px solid var(--accent-amber); box-sizing: border-box; width: 9px; height: 9px; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .proof-tag { font-family: var(--font-title); letter-spacing: 0.16em; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .night-bar { border-radius: 9px; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .page-meta { font-family: var(--font-title); background: var(--ni-key), rgba(10, 14, 20, 0.7); border-color: var(--ni-hair-2); }
+
+/* -- 14. Settings: the category intro's divider is the lamp's filament ---------- */
+:root body:is([data-theme="midnight"], :not([data-theme])) #ns-panel-set .settings-panel > .modal-header { background: transparent; border-bottom: 1px solid var(--ni-hair); }
+:root body:is([data-theme="midnight"], :not([data-theme])) #ns-panel-set .settings-heading h2 { font-family: var(--font-title); font-weight: 300; font-size: 34px; letter-spacing: -0.01em; text-shadow: 0 0 34px rgba(var(--ni-beam), calc(0.12 * var(--ni-lit))); }
+:root body:is([data-theme="midnight"], :not([data-theme])) #settings-search { background: var(--ni-well); border-color: var(--ni-hair-2); box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .settings-rail { background: rgba(3, 5, 8, 0.42); border-right: 1px solid var(--ni-hair); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .settings-categories { background: transparent; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .settings-panel .modal-footer { background: rgba(3, 5, 8, 0.5); border-top: 1px solid var(--ni-hair); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .settings-rail-btn { border-radius: 12px; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .settings-rail-btn.active {
+  background: radial-gradient(130% 130% at 0% 50%, rgba(var(--accent-rgb), 0.26), rgba(var(--accent-rgb), 0.05) 72%), rgba(8, 11, 17, 0.6);
+  border-color: rgba(var(--accent-rgb), 0.42);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 12px 28px -16px rgba(var(--accent-rgb), 0.8);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .settings-category-intro h3 { font-family: var(--font-title); font-weight: 300; font-size: 28px; letter-spacing: -0.005em; }
+:root body:is([data-theme="midnight"], :not([data-theme])) #ns-panel-set .settings-category-intro {
+  border-bottom-color: transparent;
+  background: linear-gradient(90deg, rgba(var(--ni-beam), calc(0.70 * var(--ni-lit))), rgba(var(--ni-lamp), calc(0.18 * var(--ni-lit))) 24%, rgba(170, 196, 224, 0.10) 46%, rgba(170, 196, 224, 0.10) 100%) left bottom / 100% 1px no-repeat;
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .settings-categories > .option-section {
+  background: linear-gradient(var(--ni-shade), var(--ni-shade)), var(--ni-gloss), rgba(9, 13, 19, 0.82);
+  border-color: var(--ni-hair-2);
+  box-shadow: inset 1px 1px 0 rgba(var(--ni-beam), calc(0.12 * var(--ni-lit))), var(--ni-top), 0 20px 40px -28px rgba(0, 0, 0, 0.95);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .settings-categories :is(select, input[type="number"], input.set-num) { background-color: rgba(3, 5, 8, 0.9); border-color: var(--ni-hair-2); box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.5); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .settings-categories .set-safety-hero .checkbox-label { box-shadow: 0 0 34px -14px rgba(var(--amber-rgb), 0.45); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .btn-primary { font-family: var(--font-title); letter-spacing: 0.05em; }
+
+/* -- 15. Last Light: the same instrument, the lamp going out ------------------- */
+/* --ll-light (1 -> 0, written by playLastLight) dims the beam, the bezel light
+   and the title glow only; #ll-truth and the stamp never read it, never move. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-bg-layer::after {
+  content: '';
+  display: block;
+  position: absolute;
+  inset: 0;
+  height: auto;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.12 0 0 0 -0.04'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    radial-gradient(120% 95% at 50% 46%, transparent 42%, rgba(0, 0, 0, 0.75) 100%);
+  background-size: 240px 240px, 100% 100%;
+  pointer-events: none;
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-beam {
+  background:
+    conic-gradient(from 128deg at 16% -6%, transparent 0deg, rgba(var(--ni-lamp), 0.05) 7deg, rgba(var(--ni-beam), 0.17) 16deg, rgba(var(--ni-beam), 0.20) 19deg, rgba(var(--ni-lamp), 0.06) 30deg, transparent 38deg),
+    radial-gradient(38% 32% at 52% 56%, rgba(var(--ni-lamp), 0.08), transparent 70%);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-cinematic-title {
+  font-family: var(--font-title);
+  font-weight: 300;
+  font-size: clamp(36px, 5.4vw, 62px);
+  letter-spacing: 0.5em;
+  padding-left: 0.5em;
+  color: #f4f9fa;
+  text-shadow: 0 0 40px rgba(var(--ni-beam), calc(0.3 * var(--ll-light, 1)));
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-ring-wrap {
+  width: 252px;
+  height: 252px;
+  border-radius: 50%;
+  background:
+    repeating-conic-gradient(from 0deg, rgba(255, 255, 255, 0.075) 0deg 0.7deg, rgba(0, 0, 0, 0.32) 1.1deg 2.2deg, rgba(255, 255, 255, 0.075) 2.6deg),
+    conic-gradient(from 205deg, #10161e, #1f2834 9%, #0c1016 23%, #18202a 40%, #0a0d12 57%, #1a222d 75%, #0d1117 90%, #10161e);
+  box-shadow: 0 0 90px -20px rgba(var(--ni-lamp), calc(0.45 * var(--ll-light, 1))), 0 50px 90px -40px rgba(0, 0, 0, 1);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-ring-wrap::before,
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-ring-wrap::after { content: ''; position: absolute; border-radius: 50%; pointer-events: none; z-index: 0; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-ring-wrap::before {
+  inset: 4.5%;
+  background:
+    radial-gradient(circle at 26% 14%, rgba(var(--ni-beam), calc(0.16 * var(--ll-light, 1))), transparent 40%),
+    radial-gradient(circle closest-side, transparent 0 97.4%, rgba(255, 255, 255, 0.12) 98.4%, rgba(0, 0, 0, 0.6) 100%),
+    conic-gradient(from 205deg, #0e131a, #1c242f 9%, #0b0f15 23%, #161d27 40%, #090c11 57%, #18202a 75%, #0c1016 90%, #0e131a);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.12), inset 10px 12px 20px -14px rgba(var(--ni-beam), calc(0.3 * var(--ll-light, 1))), 0 0 0 1px rgba(0, 0, 0, 0.7), 0 2px 6px rgba(0, 0, 0, 0.7);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-ring-wrap::after {
+  inset: 13%;
+  background:
+    linear-gradient(126deg, transparent 22%, rgba(255, 255, 255, 0.03) 31%, transparent 46%),
+    repeating-radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 3.5px),
+    radial-gradient(circle at 50% 40%, #0e141c 0%, #080b10 62%, #05070a 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05), inset 0 22px 40px -18px rgba(0, 0, 0, 0.95);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-ring-svg { position: relative; z-index: 1; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-ring-inner { z-index: 2; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-ring-bg { stroke: rgba(0, 0, 0, 0.6); stroke-dasharray: none; stroke-width: 5.5; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-ring-arc { stroke-width: 3.6; stroke-linecap: round; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-ring-time { font-family: var(--font-title); font-weight: 300; font-size: 42px; letter-spacing: 0.02em; color: #f4fbfb; text-shadow: 0 0 22px rgba(var(--ni-beam), calc(0.25 * var(--ll-light, 1))); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-ring-sub { font-family: var(--font-title); letter-spacing: 0.3em; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-truth { display: inline-flex; align-items: center; gap: 10px; font-family: var(--font-title); letter-spacing: 0.17em; padding: 8px 15px 8px 12px; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-truth::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 10px currentColor; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-truth[data-mode="test"] { background: linear-gradient(180deg, rgba(var(--amber-rgb), 0.16), rgba(var(--amber-rgb), 0.06)), #0a0a08; border-color: rgba(var(--amber-rgb), 0.62); box-shadow: 0 0 0 3px rgba(var(--amber-rgb), 0.06), 0 0 28px -8px rgba(var(--amber-rgb), 0.5); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-truth[data-mode="real"] { background: linear-gradient(180deg, rgba(var(--red-rgb), 0.18), rgba(var(--red-rgb), 0.07)), #0d0709; border-color: rgba(var(--red-rgb), 0.75); box-shadow: 0 0 0 3px rgba(var(--red-rgb), 0.08), 0 0 30px -8px rgba(var(--red-rgb), 0.6); }
+/* Two roles, not one style twice: the sequence name is a metadata plate,
+   the step headline is the live line. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-sequence-badge::before { width: 22px; height: 1.5px; background: linear-gradient(90deg, rgba(var(--ni-beam), 0.95), rgba(var(--ni-lamp), 0)); box-shadow: 0 0 9px rgba(var(--ni-lamp), calc(0.75 * var(--ll-light, 1))); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-sequence-label { color: var(--ni-label); font: 600 11px/1.2 var(--font-title); letter-spacing: 0.22em; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-flavor-headline { color: var(--text-primary); font: 300 22px/1.2 var(--font-title); letter-spacing: 0.12em; margin-top: 10px; }
+/* E1 hook: the renderer may hide the badge when it repeats the title. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-sequence-badge[hidden] { display: none; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-facts dd { font-family: var(--font-title); font-weight: 400; font-size: 16px; }
+/* UNPLUG is a status plate (disabled, informational), not a key. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-unplug-btn,
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-unplug-btn:hover { background: var(--ni-key), rgba(7, 10, 15, 0.82); border-color: var(--ni-hair-2); box-shadow: var(--ni-top); font-family: var(--font-title); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-unplug-btn:disabled,
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-unplug-btn:disabled:hover {
+  opacity: 1;
+  cursor: default;
+  background: transparent;
+  box-shadow: none;
+  border: 1px dashed var(--ni-hair-3);
+  color: var(--ni-label);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-stamp { font-family: var(--font-title); letter-spacing: 0.42em; }
+/* E2 hook (inert until the owner-approved caption ships as
+   <p class="ll-cancel-hint" id="ll-cancel-hint"> inside .ll-stage): safety
+   copy naming the cancel path, static and undimmed. It never reads
+   --ll-light, never transitions, and keeps 7:1 on the darkest finale. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-cancel-hint {
+  margin: 14px auto 0;
+  max-width: 34em;
+  font: 500 12px/1.45 var(--font-title);
+  letter-spacing: 0.04em;
+  text-align: center;
+  color: var(--text-secondary);
+  opacity: 1;
+  transition: none;
+  animation: none;
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .ll-cancel-hint kbd {
+  display: inline-block;
+  margin: 0 1px;
+  padding: 1px 6px;
+  border: 1px solid var(--ni-hair-3);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  font: 600 11px/1.3 var(--font-title);
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+}
+
+/* -- 16. Scrollbars: a thin lit groove ------------------------------------------ */
+:root body:is([data-theme="midnight"], :not([data-theme])) ::-webkit-scrollbar-thumb { background: rgba(170, 196, 224, 0.18); border-radius: 99px; }
+:root body:is([data-theme="midnight"], :not([data-theme])) ::-webkit-scrollbar-thumb:hover { background-color: rgba(var(--accent-rgb), 0.5); }
+:root body:is([data-theme="midnight"], :not([data-theme])) ::-webkit-scrollbar-track { background: transparent; }
+
+/* -- 17. Keyboard focus: your hand's colour, lifted to read on lit rims --------
+   Never amber or rose, never animated, never dimmed. The 3px offset keeps
+   it clear of the REAL Start key's rose ring; wells use 2px. */
+:root body:is([data-theme="midnight"], :not([data-theme])) :is(button, a[href], [role="button"], [role="slider"], [tabindex]:not([tabindex="-1"]), .rdy-row, .nm-card, .profile-card, .planner-day):focus-visible {
+  outline: 2px solid var(--ni-focus);
+  outline-offset: 3px;
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) :is(.action-chips-row .action-chip, .unit-selector .unit-btn, .snooze-group :is(#btn-snooze, .snooze-chip), .clock-face-choice):focus-visible { outline-offset: 2px; }
+:root body:is([data-theme="midnight"], :not([data-theme])) :is(#timer-input, #settings-search, .settings-categories :is(select, input), .planner-toolbar :is(select, input)):focus-visible {
+  outline: 2px solid var(--ni-focus);
+  outline-offset: 2px;
+  border-color: var(--ni-focus);
+}
+/* Editable text: an underline, not a box. */
+:root body:is([data-theme="midnight"], :not([data-theme])) #timer-name:focus-visible { outline: none; box-shadow: 0 1.5px 0 var(--ni-focus); }
+/* The base's ID-scoped rings (session console, Settings footer, schedule
+   rules, profiles, copy URL) take the same lifted ring. */
+:root body:is([data-theme="midnight"], :not([data-theme])) #action-bar-running :is(#btn-pause, #btn-stop):focus-visible { outline: 2px solid var(--ni-focus); outline-offset: 3px; }
+:root body:is([data-theme="midnight"], :not([data-theme])) #action-bar-running .snooze-group :is(#btn-snooze, .snooze-chip):focus-visible { outline: 2px solid var(--ni-focus); outline-offset: 2px; }
+:root body:is([data-theme="midnight"], :not([data-theme])) #ns-panel-set .set-footer :is(#btn-cancel-opt, #btn-save-opt):focus-visible,
+:root body:is([data-theme="midnight"], :not([data-theme])) :is(#sch-rules .sch-rule-icon, #sch-rules .day-toggle, #btn-copy-url, #profiles-modal .filter-btn, #profiles-modal .profile-item-btn):focus-visible { outline: 2px solid var(--ni-focus); outline-offset: 3px; }
+/* The readiness strip clips its cells (overflow hidden), so its ring sits
+   inside the cell, concentric with the strip's corners. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .readiness-strip .rdy-row:focus-visible { outline-offset: -4px; border-radius: var(--ni-r-panel); }
+/* Rail keys sit 4px apart: a 1px offset keeps the ring off the neighbour. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .ns-sidebar .ns-nav-item:focus-visible { outline-offset: 1px; }
+/* A selected key inside a well drops its cast glow while focused, so the
+   ring reads against the well, not against the key's own light. */
+:root body:is([data-theme="midnight"], :not([data-theme])) :is(.unit-selector .unit-btn.active, .action-chips-row .action-chip:is(.selected, [aria-pressed="true"])):focus-visible { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 0 0 1px rgba(var(--accent-rgb), 0.6); }
+/* REAL: the Start key's and the selected Ending chip's 2px rose rings stay;
+   focus steps clear outside them (a 3px offset snaps to ~2.4px at 125%). */
+:root body:is([data-theme="midnight"], :not([data-theme])).real-action .ns-play-btn:focus-visible { outline-offset: 5px; }
+:root body:is([data-theme="midnight"], :not([data-theme])).real-action #action-chips-row .action-chip.selected:focus-visible { outline-offset: 4px; }
+
+/* -- 18. Mini (260x320): a small lit instrument and a one-line truth --------- */
+:root body:is([data-theme="midnight"], :not([data-theme])).mini-mode .ring-container {
+  border-radius: 50%;
+  background:
+    linear-gradient(var(--ni-shade-dial), var(--ni-shade-dial)),
+    radial-gradient(circle at 28% 18%, rgba(var(--ni-beam), calc(0.14 * var(--ni-lit))), transparent 42%),
+    conic-gradient(from 205deg, #10161e, #1c2530 12%, #0b0f15 30%, #161d27 50%, #0a0d12 68%, #18202a 84%, #10161e);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.7),
+              0 24px 40px -22px #000, 0 0 60px -18px rgba(var(--ni-lamp), calc(0.30 * var(--ni-lit)));
+}
+/* The face: the base hides it in mini, so it is re-enabled here. */
+:root body:is([data-theme="midnight"], :not([data-theme])).mini-mode .ring-container::after {
+  display: block;
+  content: '';
+  position: absolute;
+  inset: 9%;
+  border-radius: 50%;
+  z-index: 0;
+  -webkit-mask-image: none;
+  mask-image: none;
+  background:
+    radial-gradient(34% 24% at 31% 23%, rgba(var(--ni-beam), calc(0.14 * var(--ni-lit))), transparent 72%),
+    radial-gradient(circle at 50% 40%, #0e141c 0%, #080b10 62%, #05070a 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05), inset 0 14px 26px -14px rgba(0, 0, 0, 0.95);
+}
+:root body:is([data-theme="midnight"], :not([data-theme])).mini-mode .timer-section .timer-ring { position: relative; z-index: 1; }
+:root body:is([data-theme="midnight"], :not([data-theme])):is([data-ring="glow"], :not([data-ring])).mini-mode .timer-section .ring-bg { stroke: rgba(0, 0, 0, 0.55); stroke-width: 5; }
+:root body:is([data-theme="midnight"], :not([data-theme])):is([data-ring="glow"], :not([data-ring])).mini-mode.is-running:not(.is-paused):not(.phase-lastlight) .timer-section .ring-progress { stroke: var(--ni-arc); stroke-width: 5; }
+/* The light pool where the beam lands, centred on the dial. */
+:root body:is([data-theme="midnight"], :not([data-theme])).mini-mode .timer-section::before {
+  display: block;
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 150%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(circle at 40% 36%, rgba(var(--ni-beam), calc(0.12 * var(--ni-lit))) 0%, rgba(var(--ni-lamp), calc(0.04 * var(--ni-lit))) 24%, transparent 50%);
+}
+/* One line, the full sentence, never truncated. Bahnschrift's condensed
+   cut fits the Test string and every real REAL string (Hibernate is the
+   longest) on one line inside a width that stays clear of the round exit
+   button (top right); anything longer wraps, balanced, and never clips. */
+:root body:is([data-theme="midnight"], :not([data-theme])).mini-mode #testmode-pill {
+  max-width: calc(100% - 36px);
+  padding: 4px 8px;
+  font: 700 9.5px/1.25 var(--font-title);
+  font-stretch: condensed;
+  letter-spacing: 0.02em;
+  white-space: normal;
+  text-wrap: balance;
+  overflow: visible;
+  text-overflow: clip;
+  transition: none;
+  animation: none;
+}
+
+/* -- 19. Dial drag (brief 6.2): INERT until #dial-grip ships with the drag JS --
+   Hooks the drag JS sets: .dial-adjustable / .dial-at-min / .dial-at-max and
+   --dial-frac (0-1) on .ring-container; .dial-dragging on .ring-container and
+   body; data-readout on .dial-grip. No element carries them today, so none
+   of these rules match. Stacking: SVG z1, grip z2, display z2 (later in the
+   DOM), the full screen button z3. Violet is the hand (triangles, focus);
+   the preview is a beam-teal pencil line: planned, not live. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .ring-container.dial-adjustable .timer-display { pointer-events: none; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ring-container.dial-adjustable .timer-display .timer-name { pointer-events: auto; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ring-container.dial-adjustable .fullscreen-clock-btn { z-index: 3; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .dial-grip {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: 50%;
+  cursor: ns-resize;
+  touch-action: none;
+  transition: box-shadow var(--dur-fast) var(--ease-out);
+}
+/* (1) affordance: up at 12 o'clock, down at 6, on the bezel step */
+:root body:is([data-theme="midnight"], :not([data-theme])) .ring-container.dial-adjustable :is(.dial-grip:hover, .dial-grip:focus-visible),
+:root body:is([data-theme="midnight"], :not([data-theme])) .ring-container.dial-dragging .dial-grip {
+  background:
+    conic-gradient(from 150deg at 50% 0%, var(--ni-grip) 0 60deg, transparent 0) 50% 6% / 10px 7px no-repeat,
+    conic-gradient(from -30deg at 50% 100%, var(--ni-grip) 0 60deg, transparent 0) 50% 94% / 10px 7px no-repeat;
+}
+/* (2) preview arc: a thin pencil line in the arc channel */
+:root body:is([data-theme="midnight"], :not([data-theme])) .dial-grip::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  background: conic-gradient(from 0deg, rgba(var(--ni-beam), 0.9) 0turn calc(var(--dial-frac, 0) * 1turn), transparent 0);
+  -webkit-mask: radial-gradient(closest-side, transparent 74.9%, #000 75.1% 76.1%, transparent 76.3%);
+  mask: radial-gradient(closest-side, transparent 74.9%, #000 75.1% 76.1%, transparent 76.3%);
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+/* (3) readout during adjustment */
+:root body:is([data-theme="midnight"], :not([data-theme])) .dial-grip::after {
+  content: attr(data-readout);
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: 300 16cqw/1 var(--font-title);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  color: #f4fbfb;
+  text-shadow: 0 0 1px rgba(255, 255, 255, 0.45), 0 0 26px rgba(var(--ni-beam), 0.26);
+  visibility: hidden;
+  pointer-events: none;
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .dial-grip:focus-visible { outline: none; box-shadow: 0 0 0 2px #05070a, 0 0 0 4px var(--ni-focus), 0 0 24px -4px rgba(var(--accent-rgb), 0.55); }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ring-container.dial-adjustable .dial-grip:hover::before { opacity: 0.4; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ring-container.dial-adjustable .dial-grip:focus-visible::before { opacity: 0.6; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ring-container.dial-dragging .dial-grip::before { opacity: 1; transition: none; }
+:root body:is([data-theme="midnight"], :not([data-theme])) :is(.ring-container.dial-dragging, .ring-container:has(.dial-grip:focus-visible)) .dial-grip::after { visibility: visible; }
+:root body:is([data-theme="midnight"], :not([data-theme])) :is(.ring-container.dial-dragging, .ring-container:has(.dial-grip:focus-visible)) .timer-display > :is(.timer-readout-label, .time-main, .timer-wall-clock, .time-label, .time-sub) { visibility: hidden; }
+:root body:is([data-theme="midnight"], :not([data-theme])) .ring-container.dial-dragging .dial-grip:not(:focus-visible) { box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.45), 0 0 36px -10px rgba(var(--accent-rgb), 0.55); }
+/* must out-specify the idle track rule in section 5 */
+:root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .timer-section .ring-container.dial-adjustable:has(.dial-grip:hover) .ring-segments { stroke: rgba(var(--ni-lamp), 0.30); }
+:root body:is([data-theme="midnight"], :not([data-theme])).dial-dragging,
+:root body:is([data-theme="midnight"], :not([data-theme])).dial-dragging * { cursor: ns-resize; user-select: none; }
+/* clamped: the blocked triangle drops to 25%, only while engaged */
+:root body:is([data-theme="midnight"], :not([data-theme])) .ring-container.dial-adjustable.dial-at-max:is(.dial-dragging, :has(.dial-grip:hover), :has(.dial-grip:focus-visible)) .dial-grip {
+  background:
+    conic-gradient(from 150deg at 50% 0%, color-mix(in srgb, var(--ni-grip) 25%, transparent) 0 60deg, transparent 0) 50% 6% / 10px 7px no-repeat,
+    conic-gradient(from -30deg at 50% 100%, var(--ni-grip) 0 60deg, transparent 0) 50% 94% / 10px 7px no-repeat;
+}
+:root body:is([data-theme="midnight"], :not([data-theme])) .ring-container.dial-adjustable.dial-at-min:is(.dial-dragging, :has(.dial-grip:hover), :has(.dial-grip:focus-visible)) .dial-grip {
+  background:
+    conic-gradient(from 150deg at 50% 0%, var(--ni-grip) 0 60deg, transparent 0) 50% 6% / 10px 7px no-repeat,
+    conic-gradient(from -30deg at 50% 100%, color-mix(in srgb, var(--ni-grip) 25%, transparent) 0 60deg, transparent 0) 50% 94% / 10px 7px no-repeat;
+}
+/* Analog face: the bezel arc already sweeps the plan and a readout would
+   cover the hands; only the triangles and focus show. */
+:root body:is([data-theme="midnight"], :not([data-theme])).bezel .dial-grip::before,
+:root body:is([data-theme="midnight"], :not([data-theme])).bezel .dial-grip::after { display: none; }
+@container (max-width: 330px) {
+  :root body:is([data-theme="midnight"], :not([data-theme])) .ring-container.dial-adjustable :is(.dial-grip:hover, .dial-grip:focus-visible),
+  :root body:is([data-theme="midnight"], :not([data-theme])) .ring-container.dial-dragging .dial-grip { background-size: 8px 6px, 8px 6px; }
+}
+
+/* -- 20. Reduced transparency: the same room, solid glass ------------------------- */
+/* (This layer adds no backdrop blur: the room behind the glass is smooth light,
+   so translucency, gloss and the lit rim carry the glass at no GPU cost.) */
+@media (prefers-reduced-transparency: reduce) {
+  :root body:is([data-theme="midnight"], :not([data-theme])) { --ni-glass: rgba(11, 16, 23, 0.97); --ni-glass-2: rgba(8, 12, 17, 0.98); }
+}
+
+/* -- 21. Reduced motion: this layer adds no loops; its hover feedback collapses -- */
+@media (prefers-reduced-motion: reduce) {
+  :root body:is([data-theme="midnight"], :not([data-theme])) :is(.ns-play-btn, .ns-nav-item, .nm-card, .profile-card, .device-card, .planner-day, .chip, .num-btn, .action-chip, .btn-ritual, .ring-container, .dial-grip) { transition: none !important; }
+  :root body:is([data-theme="midnight"], :not([data-theme])) .dial-grip::before { transition: none !important; }
+}
+
+/* Night Instrument: at the minimum window height the Settings rail must fit
+   without clipping its last category (settings-layout proof, 900x640). */
+@media (max-height: 700px) {
+  :root body:is([data-theme="midnight"], :not([data-theme])) .settings-rail { padding-top: 2px !important; padding-bottom: 2px !important; gap: 1px !important; }
+  /* Tonight must keep Start, readiness and mode status on screen above the
+     footer: drop the decorative eyebrow and the quick-start hint here only. */
+  :root body:is([data-theme="midnight"], :not([data-theme])) #ns-hero-card .ns-hero-label,
+  :root body:is([data-theme="midnight"], :not([data-theme])) #plan-quick-note { display: none; }
+}
