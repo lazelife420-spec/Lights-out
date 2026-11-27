@@ -62,16 +62,18 @@ test('icon.ico has a frame for every Windows icon size (16/20/24/30/32/36/40/48/
   for (const frame of frames) decodeDib(frame); // every frame a 32bpp DIB (pinned NSIS + rcedit)
 });
 
-test('the small taskbar frames show the lit teal lamp shade, not a bare ring', () => {
+// Owner direction 2026-11-27: the small frames carry the logo's broken O (the
+// mark people recognised), not a shrunken lamp.
+test('the small taskbar frames show the lit broken O with a dark centre', () => {
   const frames = readIco(path.join(assets, 'icon.ico'));
-  for (const size of [16, 20, 24, 32]) {
+  for (const size of [16, 20, 24, 32, 48]) {
     const { width, rgba } = decodeDib(frames.find(frame => frame.size === size));
-    let shade = 0;
-    // The shade sits in the upper-right of the badge (x 50-90%, y 10-55%).
-    for (let y = Math.floor(width * 0.1); y < Math.ceil(width * 0.55); y++) {
-      for (let x = Math.floor(width * 0.5); x < Math.ceil(width * 0.9); x++) if (isBrandTeal(rgba, (y * width + x) * 4)) shade++;
-    }
-    assert.ok(shade >= Math.round(width * width * 0.04), `${size}px: lamp shade present (${shade} teal px)`);
+    let ring = 0;
+    for (let y = 0; y < width; y++) for (let x = 0; x < width; x++) if (isBrandTeal(rgba, (y * width + x) * 4)) ring++;
+    assert.ok(ring >= Math.round(width * width * 0.12), `${size}px: bright ring present (${ring} teal px)`);
+    // The centre of the O is the night badge, not teal.
+    const c = Math.floor(width / 2), ci = (c * width + c) * 4;
+    assert.ok(!isBrandTeal(rgba, ci), `${size}px: dark centre`);
     // Rounded badge: the outermost corner pixel is not opaque.
     assert.ok(rgba[3] < 200, `${size}px: rounded corner`);
   }

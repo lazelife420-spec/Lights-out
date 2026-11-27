@@ -1,69 +1,67 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Lights Out app icon, large master (64px and up, icon-512.png): the lit teal desk lamp
-     on the night badge. Same composition as the pixel-snapped small masters
-     (lights-out-app-16/20/24/32/48.svg), with depth and glow. Every filter uses
-     userSpaceOnUse regions: an objectBoundingBox region on a zero-width shape is empty
-     and the shape disappears. Rendered by scripts/make-icons.js. -->
+<!-- Lights Out app icon, 256px master (64px and up): the night badge, the dark desk
+     lamp leaning in, and the logo's broken "O" lit in teal with its flicker particle.
+     The same O drawn on the Tonight dial and in the wordmark. Rendered into
+     assets/icon.ico and the app PNGs by scripts/make-icons.js. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
   <defs>
-    <radialGradient id="bg" cx="0.42" cy="0.3" r="0.95">
-      <stop offset="0" stop-color="#14293a"/>
-      <stop offset="0.6" stop-color="#0a131c"/>
-      <stop offset="1" stop-color="#05080f"/>
+    <radialGradient id="bg" cx="0.62" cy="0.56" r="0.8">
+      <stop offset="0" stop-color="#0f2430"/>
+      <stop offset="0.45" stop-color="#0a141d"/>
+      <stop offset="1" stop-color="#04070c"/>
     </radialGradient>
-    <radialGradient id="pool" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#00FFD1" stop-opacity="0.7"/>
-      <stop offset="0.45" stop-color="#00FFD1" stop-opacity="0.22"/>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#00FFD1" stop-opacity="0.28"/>
+      <stop offset="0.55" stop-color="#00FFD1" stop-opacity="0.08"/>
       <stop offset="1" stop-color="#00FFD1" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="beam" gradientUnits="userSpaceOnUse" x1="186" y1="124" x2="196" y2="206">
-      <stop offset="0" stop-color="#00FFD1" stop-opacity="0.42"/>
+    <linearGradient id="ring" x1="0.15" y1="0.05" x2="0.85" y2="0.95">
+      <stop offset="0" stop-color="#7DFFF2"/>
+      <stop offset="0.45" stop-color="#19F2CF"/>
+      <stop offset="1" stop-color="#00B89C"/>
+    </linearGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#9BFFF4" stop-opacity="0.55"/>
+      <stop offset="0.6" stop-color="#00FFD1" stop-opacity="0.14"/>
       <stop offset="1" stop-color="#00FFD1" stop-opacity="0"/>
     </linearGradient>
-    <linearGradient id="shade" gradientUnits="userSpaceOnUse" x1="140" y1="44" x2="196" y2="132">
-      <stop offset="0" stop-color="#7affee"/>
-      <stop offset="0.45" stop-color="#00FFD1"/>
-      <stop offset="1" stop-color="#00c9a7"/>
-    </linearGradient>
-    <linearGradient id="arm" gradientUnits="userSpaceOnUse" x1="84" y1="198" x2="148" y2="74">
-      <stop offset="0" stop-color="#127065"/>
-      <stop offset="1" stop-color="#1aa894"/>
-    </linearGradient>
-    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2fd6bd"/>
-      <stop offset="1" stop-color="#15897a"/>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3a4654"/>
+      <stop offset="1" stop-color="#161c25"/>
     </linearGradient>
     <filter id="glow" filterUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
-      <feGaussianBlur stdDeviation="6"/>
+      <feGaussianBlur stdDeviation="5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="soft" filterUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.55"/>
     </filter>
   </defs>
 
-  <!-- Night badge with a teal keyline so it separates from a dark taskbar -->
-  <rect x="8" y="8" width="240" height="240" rx="52" fill="url(#bg)"/>
-  <rect x="9" y="9" width="238" height="238" rx="51" fill="none" stroke="#00FFD1" stroke-opacity="0.2" stroke-width="2"/>
+  <!-- Night badge -->
+  <rect x="8" y="8" width="240" height="240" rx="54" fill="url(#bg)"/>
+  <rect x="8.75" y="8.75" width="238.5" height="238.5" rx="53.25" fill="none" stroke="#7DFFF2" stroke-opacity="0.16" stroke-width="1.5"/>
 
-  <!-- Light pool and beam -->
-  <ellipse cx="172" cy="204" rx="68" ry="22" fill="url(#pool)"/>
-  <polygon points="156,136 218,108 232,204 116,204" fill="url(#beam)"/>
+  <!-- The light the lamp casts: a halo inside the O and a beam into it -->
+  <circle cx="146" cy="144" r="92" fill="url(#halo)"/>
+  <polygon points="108,92 136,80 190,176 118,196" fill="url(#beam)"/>
 
-  <!-- Base -->
-  <rect x="44" y="198" width="76" height="20" rx="5" fill="url(#base)"/>
-  <rect x="48" y="199" width="68" height="3" rx="1.5" fill="#7affee" opacity="0.35"/>
+  <!-- The broken O: three gaps, as in the wordmark and on the dial -->
+  <circle cx="146" cy="144" r="64" fill="none" stroke="url(#ring)" stroke-width="15" stroke-linecap="butt"
+          pathLength="100" stroke-dasharray="31 5 36 5 17 6" stroke-dashoffset="-2"
+          transform="rotate(-62 146 144)" filter="url(#glow)"/>
 
-  <!-- Arms with a lit edge -->
-  <polyline points="84,200 110,124 148,74" fill="none" stroke="url(#arm)" stroke-width="15" stroke-linejoin="round" stroke-linecap="round"/>
-  <polyline points="80,196 106,122 143,73" fill="none" stroke="#5ff3dc" stroke-opacity="0.32" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-  <!-- Elbow joint -->
-  <circle cx="110" cy="124" r="11" fill="#1fbfa8"/>
-  <circle cx="110" cy="124" r="4.5" fill="#0a1a22"/>
+  <!-- Lamp: dark metal, leaning in over the O, its rim lit -->
+  <g filter="url(#soft)">
+    <rect x="34" y="208" width="58" height="12" rx="3" fill="url(#metal)"/>
+    <path d="M63 210 L84 146 L104 100" fill="none" stroke="#1a212b" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M63 210 L84 146 L104 100" fill="none" stroke="#3a4654" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="84" cy="146" r="8" fill="#1a212b" stroke="#4a5868" stroke-width="2.5"/>
+    <polygon points="92,72 124,60 144,104 108,118" fill="url(#metal)" stroke="#0b0f15" stroke-width="2" stroke-linejoin="round"/>
+    <polygon points="98,76 120,68 134,100 110,108" fill="#4a5868" opacity="0.55"/>
+  </g>
+  <line x1="108" y1="118" x2="144" y2="104" stroke="#BFFFF8" stroke-width="5" stroke-linecap="round" filter="url(#glow)"/>
 
-  <!-- Shade: a cone pointing down-right -->
-  <polygon points="130,64 168,38 218,108 156,136" fill="url(#shade)"/>
-  <!-- Back-edge highlight and inner fold -->
-  <line x1="132" y1="63" x2="166" y2="40" stroke="#d2fff8" stroke-opacity="0.7" stroke-width="4" stroke-linecap="round"/>
-  <polygon points="149,61 168,48 206,104 162,124" fill="#ffffff" opacity="0.09"/>
-
-  <!-- Lit rim: glow, then the bright opening -->
-  <line x1="156" y1="136" x2="218" y2="108" stroke="#64FFF0" stroke-width="16" stroke-linecap="round" filter="url(#glow)" opacity="0.85"/>
-  <line x1="156" y1="136" x2="218" y2="108" stroke="#b8fff6" stroke-width="10" stroke-linecap="round"/>
+  <!-- Flicker particle at the O's top gap -->
+  <rect x="196" y="86" width="11" height="11" rx="1.5" fill="#7DFFF2" transform="rotate(45 201.5 91.5)" filter="url(#glow)"/>
 </svg>

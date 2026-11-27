@@ -13143,3 +13143,50 @@ body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib { transition: gri
 }
 #ritual-overlay #btn-ritual-cancel:hover { border-color: rgba(var(--red-rgb), 0.45); background: rgba(var(--red-rgb), 0.08); }
 #ritual-overlay #btn-ritual-cancel:focus-visible { outline: 2px solid var(--accent-red); outline-offset: 2px; }
+
+/* Hero and room pass (2026-11-27).
+   The wordmark is the app's hero: on windows 720px tall or more the header
+   grows to 64px and the living wordmark to 232x48 (the art box's 4.806:1).
+   The beam keeps leaving the lens: lens at (165,146) of viewBox 44 88 556
+   116 = 21.76% across, 50% down the mark, so beam-x = 12 + 0.2176 * 232 and
+   beam-y = (64 - 48.3) / 2 + 48.3 / 2. The 900x640 minimum keeps the 48px
+   header and its fit. */
+@media (min-height: 720px) {
+  :root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) {
+    --header-height: 64px;
+  }
+  :root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .brand-wordmark {
+    width: 232px;
+    height: 48.3px;
+  }
+  :root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .night-env {
+    --beam-x: 62.5px;
+    --beam-y: 32px;
+  }
+  :root body:is([data-theme="midnight"], :not([data-theme])):not(.mini-mode):not(.fullscreen-clock-mode) .brand-wordmark::after {
+    left: -4px;
+    top: -34px;
+    width: 116px;
+    height: 116px;
+  }
+}
+
+/* The room: a deep night-blue space instead of flat black. The lamp spills
+   warm-teal from the top left, a cool moonlit wash comes in from the right,
+   and a soft floor glow sits under the dial. All of it follows the light
+   level (--ni-lit), so the room still darkens with the run. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .cockpit {
+  background:
+    radial-gradient(70% 60% at 6% 0%, rgba(var(--ni-lamp), calc(0.10 * var(--ni-lit))), transparent 64%),
+    radial-gradient(60% 55% at 100% 8%, rgba(70, 96, 170, calc(0.10 + 0.05 * var(--ni-lit))), transparent 70%),
+    radial-gradient(55% 40% at 28% 96%, rgba(var(--ni-lamp), calc(0.045 * var(--ni-lit))), transparent 72%),
+    linear-gradient(170deg, #0a0f18 0%, #070a11 46%, #04060a 100%);
+}
+/* A brighter, longer beam: the hero's light reaches the dial. */
+:root body:is([data-theme="midnight"], :not([data-theme])) .night-beam {
+  filter: brightness(1.35) saturate(1.1);
+}
+/* Narrow windows: the end time ("11:01 AM · today") stays on one line. */
+@media (max-width: 1000px) {
+  :root body:is([data-theme="midnight"], :not([data-theme])) .ns-hero-card #plan-out-at { font-size: 18px; white-space: nowrap; }
+}
