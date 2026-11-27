@@ -59,7 +59,10 @@ verify exactly what you downloaded. Builds are produced and published by CI, and
 each release is gated on `node --check`, unit tests, a smoke suite, and a verified package
 step.
 
-**Latest: v11.3.0** - a production-audit release: a slept-through bedtime never
+**Latest: v11.3.1** - audit follow-ups: quitting during a run's ending stops it, and a blocked ending restores your dimmed lights ([RELEASE_QUALIFICATION_11.3.1.md](RELEASE_QUALIFICATION_11.3.1.md)).
+Release notes: https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.3.1
+
+**v11.3.0** - a production-audit release: a slept-through bedtime never
 fires on wake, cancel works until the power request is sent, Test Mode skips every
 automatic effect, Wi-Fi Guard recovers after a crash, and backups never carry
 credentials ([RELEASE_QUALIFICATION_11.3.0.md](RELEASE_QUALIFICATION_11.3.0.md)).

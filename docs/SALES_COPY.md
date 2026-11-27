@@ -46,7 +46,7 @@ View release proof
 Microcopy:
 
 ```text
-Latest: v11.3.0. Installer, portable ZIP, and SHA256 checksums available.
+Latest: v11.3.1. Installer, portable ZIP, and SHA256 checksums available.
 ```
 
 ## Problem Section

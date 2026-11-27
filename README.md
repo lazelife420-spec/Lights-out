@@ -8,7 +8,7 @@ Set a time. Press START. Lights Out walks you through a calm wind-down, then
 can cancel right up until the power request is sent to Windows. No surprise force-quits.
 No cloud account. No drama.
 
-[![Release v11.3.0](https://img.shields.io/badge/Release-v11.3.0-blue?style=for-the-badge)](https://github.com/lazelife420-spec/Lights-out/releases/latest)
+[![Release v11.3.0](https://img.shields.io/badge/Release-v11.3.1-blue?style=for-the-badge)](https://github.com/lazelife420-spec/Lights-out/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?style=for-the-badge)](https://theprooffoundry.com/lights-out/)
 
@@ -18,8 +18,8 @@ No cloud account. No drama.
 
 **[→ Lights Out releases — installer, portable ZIP, SHA256 checksums](https://github.com/lazelife420-spec/Lights-out/releases/latest)**
 
-- `Lights-Out-Setup-v11.3.0.exe` — NSIS installer, standard Windows install
-- `Lights-Out-Portable-v11.3.0-win-x64.zip` — extract, then run `Lights Out.exe`; no install needed
+- `Lights-Out-Setup-v11.3.1.exe` — NSIS installer, standard Windows install
+- `Lights-Out-Portable-v11.3.1-win-x64.zip` — extract, then run `Lights Out.exe`; no install needed
 - `SHA256SUMS.txt` — checksums for both artifacts
 
 <img src="docs/assets/brand/lights-out-social-card.png" width="720" alt="Lights Out lamp wordmark with the tagline The bedtime system for Windows and the line One routine to end the night, beside the Tonight screen">
@@ -75,7 +75,9 @@ runtime checks and installer/portable verification before publication. Source on
 main alone does not establish that a release is published.
 
 - Latest release: https://github.com/lazelife420-spec/Lights-out/releases/latest
-- v11.3.0 release target: https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.3.0
+- v11.3.1 release target: https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.3.1
+  ([release notes](docs/RELEASE_NOTES_11.3.1.md), [qualification record](docs/RELEASE_QUALIFICATION_11.3.1.md)).
+- v11.3.0: https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.3.0
   ([release notes](docs/RELEASE_NOTES_11.3.0.md), [qualification record](docs/RELEASE_QUALIFICATION_11.3.0.md)).
 - v11.2.0 qualification: 1,046 unit tests and 299 smoke checks, recorded in
   [docs/RELEASE_QUALIFICATION_11.2.0.md](docs/RELEASE_QUALIFICATION_11.2.0.md).

@@ -1,5 +1,18 @@
 # Changelog
 
+## v11.3.1 — 2026-11-27
+
+Follow-up fixes from the v11.3.0 engineering audit.
+
+- Quitting during the last moments of a real run (while the unsaved-work check
+  runs) now stops the ending: no light-off, no power request.
+- A blocked ending (Wi-Fi Guard restore unconfirmed, unsaved-work check
+  unavailable) restores the room it dimmed instead of leaving it dim.
+- A new run started over an earlier run's dimmed room restores the room first.
+- Only Lights Out's own Hue pairing can set the bridge certificate pin.
+- Tonight: the dial no longer repeats Test Mode or the end time; Cancel lines
+  up with Pause and Snooze, and the running heading fits on one line.
+
 ## v11.3.0 — 2026-11-26
 
 A production audit release. Every change below came out of an adversarially
