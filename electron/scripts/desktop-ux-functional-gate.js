@@ -1387,6 +1387,21 @@ async function armAndStartMode(s, modeId, phase) {
   addShot(phase, await s.screenshot(`${phase}-${modeId}-projection.png`));
   await clearStarts(s);
   await s.click('#ns-play-btn');
+  // Standard-ritual modes must reach the timer step before a receipt exists,
+  // and the overlay itself only closes once every distinct visible step has
+  // been acknowledged through its own native click -- `auto` steps only
+  // relabel the same #btn-ritual-next control ("Done" vs "Next"), they don't
+  // auto-advance, and the backend receipt can go 'running' one step before
+  // the ritual's actual last step. Track a fingerprint per step so the same
+  // step is never clicked twice, and bound the loop by the ritual's own
+  // reported step count (ritualState().totalSteps) plus a small safety
+  // margin, not an arbitrary large number.
+  const progression = await progressVisibleRitualOverlay(s, { modeId, phase, screenshotPrefix: `${phase}-${modeId}` });
+  let receipt = progression.receipt;
+  results.ritualTrace = progression.ritualTrace;
+  results.ritualStepLog = progression.ritualStepLog;
+  // The countdown starts at the ritual's timer step, so a standard-ritual
+  // mode is running only after the overlay above has been walked through.
   await s.condition(`state.running`, 3000, `${modeId} enters running ritual state`);
   const invocations = await getStarts(s);
   results.startCount = invocations.length;
@@ -1408,19 +1423,6 @@ async function armAndStartMode(s, modeId, phase) {
   requireGate(results.active.modeTitle === expected.title && results.active.dryRun === true, `${modeId} active-run title/safety state drifted`, results.active);
   requireGate(results.active.controls.pause !== 'none' && !results.active.controls.snoozeDisabled && results.active.controls.cancel !== 'none', `${modeId} active-run controls are not visible`, results.active);
   addShot(phase, await s.screenshot(`${phase}-${modeId}-running.png`));
-  // Standard-ritual modes must reach the timer step before a receipt exists,
-  // and the overlay itself only closes once every distinct visible step has
-  // been acknowledged through its own native click -- `auto` steps only
-  // relabel the same #btn-ritual-next control ("Done" vs "Next"), they don't
-  // auto-advance, and the backend receipt can go 'running' one step before
-  // the ritual's actual last step. Track a fingerprint per step so the same
-  // step is never clicked twice, and bound the loop by the ritual's own
-  // reported step count (ritualState().totalSteps) plus a small safety
-  // margin, not an arbitrary large number.
-  const progression = await progressVisibleRitualOverlay(s, { modeId, phase, screenshotPrefix: `${phase}-${modeId}` });
-  let receipt = progression.receipt;
-  results.ritualTrace = progression.ritualTrace;
-  results.ritualStepLog = progression.ritualStepLog;
   requireGate(receipt && receipt.result === 'running', `${modeId} did not create a running receipt at the ritual timer step`, progression.ritualTrace);
   await s.click('#btn-stop');
   await s.condition(`!state.running && !state.paused`, 3000, `${modeId} native Cancel stops active run`);
@@ -1562,6 +1564,9 @@ async function runActiveRunGate() {
     await s.click('#nm-btn-use-tonight');
     await WAIT(300);
     await s.click('#ns-play-btn');
+    // Movie Wind-Down is a standard-ritual mode: its countdown starts at the
+    // ritual's timer step, after the overlay has been walked through.
+    await progressVisibleRitualOverlay(s, { modeId: 'movie-wind-down', phase, screenshotPrefix: `${phase}-movie-wind-down` });
     await s.condition(`state.running`, 3000);
 
     const sizes = [

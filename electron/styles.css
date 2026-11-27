@@ -13129,3 +13129,17 @@ body:not(.mini-mode):not(.fullscreen-clock-mode) #ns-panel-lib { transition: gri
    keeps #proof-empty hidden, so its "unavailable" line still shows. */
 :root body:is([data-theme="midnight"], :not([data-theme])) #proof-empty:not([hidden]) ~ .status-section,
 :root body:is([data-theme="midnight"], :not([data-theme])) #proof-empty:not([hidden]) ~ .proof-routine #night-strip-empty { display: none; }
+
+/* Ritual dialog: room under its controls, and Cancel as a quiet red text
+   button under Skip / Next rather than a filled chip on the dialog's edge. */
+#ritual-overlay .modal-content { padding-bottom: 18px; }
+#ritual-overlay #btn-ritual-cancel {
+  margin-top: 14px !important;
+  padding: 6px 12px;
+  font-size: 12px !important;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--accent-red);
+}
+#ritual-overlay #btn-ritual-cancel:hover { border-color: rgba(var(--red-rgb), 0.45); background: rgba(var(--red-rgb), 0.08); }
+#ritual-overlay #btn-ritual-cancel:focus-visible { outline: 2px solid var(--accent-red); outline-offset: 2px; }

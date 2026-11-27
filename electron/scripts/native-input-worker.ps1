@@ -83,7 +83,7 @@ public static class LightsOutNativeWorker {
     }, IntPtr.Zero); return found;
   }
   public static uint GetProcessId(IntPtr hWnd) { uint id; GetWindowThreadProcessId(hWnd, out id); return id; }
-  public static string GetTitle(IntPtr hWnd) { var s = new StringBuilder(512); GetWindowText(hWnd, s, s.Capacity); return s.ToString(); }
+  public static string GetTitle(IntPtr hWnd) { var s = new StringBuilder(512); GetWindowText(hWnd, s, s.Capacity); var t = new StringBuilder(s.Length); foreach (var ch in s.ToString()) t.Append(char.IsControl(ch) ? ' ' : ch); return t.ToString(); } // control characters in another app's title would break the JSON protocol line
   public static uint SendLeftClickBatch(out int error) {
     var inputs = new INPUT[2];
     inputs[0] = new INPUT { type = 0, union = new INPUTUNION { mi = new MOUSEINPUT { dwFlags = 0x0002 } } };

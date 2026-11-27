@@ -70,9 +70,18 @@ class NativeInputWorker {
   handleLine(line) {
     let message;
     try {
-      message = JSON.parse(line);
+      // The worker writes compressed single-line JSON, so a raw control
+      // character can only sit inside a string (another app's window title,
+      // e.g. a bell in a title): escape it rather than fail the gate.
+      message = JSON.parse(line.replace(/[\u0000-\u001f]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`));
     } catch (error) {
-      this.protocolFailure(`invalid JSON: ${error.message}`);
+      // Name where it broke: the text just before the first raw control
+      // character, with control characters shown as \uXXXX escapes.
+      const at = line.search(/[\u0000-\u001f]/);
+      const near = at >= 0
+        ? line.slice(Math.max(0, at - 80), at + 8).replace(/[\u0000-\u001f]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)
+        : '';
+      this.protocolFailure(`invalid JSON: ${error.message}${near ? ` near: ${near}` : ''}`);
       return;
     }
 
