@@ -60,7 +60,10 @@ test('dim progress follows the countdown: a pause freezes it, a snooze lowers it
   assert.equal(await tick(900, 1_000), 0, 'a long snooze never goes past the starting level');
   const lastSecond = await tick(1, 899_000);
   assert.ok(lastSecond > 0.99 && lastSecond < 1, `1 s left must not complete the dim (got ${lastSecond})`);
-  assert.equal(await tick(0, 1_000), 1, 'the dim completes only when no time remains');
+  // The WiZ tick stops at its lowest level and never sends state:false: the
+  // off is the final command (invokeSmartLightOff, just before the power
+  // request), so a cancel during the completion steps can still restore.
+  assert.equal(await tick(0, 1_000), 0.999, 'the dim reaches its lowest level only when no time remains');
 });
 
 test('the webhook level follows the countdown and stays on while time remains', async t => {

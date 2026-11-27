@@ -208,7 +208,17 @@ function restorePilot(pilot) {
   return result;
 }
 
-async function dimStates(snapshot,progress,warm,requestOptions, { look, frame, isCurrent = () => true } = {}) {
+// The bulb's own look (scene, white or colour) without power or level.
+function ownLook(pilot) {
+  const params = restorePilot(pilot || {});
+  delete params.state; delete params.dimming;
+  return params;
+}
+
+// overlay(index, count, level): an optional short frame on top of the dim
+// (the imminent-action beacon). It receives the level the dim would write and
+// may never exceed it; once it ends, the next write puts the look back.
+async function dimStates(snapshot,progress,warm,requestOptions, { look, frame, overlay, isCurrent = () => true } = {}) {
   progress=Math.max(0,Math.min(1,Number(progress)||0));
   const chosen = normalizeLook(look);
   const replies=await Promise.all(snapshot.filter(item=>item.pilot.state===true && !item.released && !item.finished).map(async item=>{
@@ -228,11 +238,24 @@ async function dimStates(snapshot,progress,warm,requestOptions, { look, frame, i
     // Never include state:true in an automatic dim, even between read/write.
     const params=progress>=1?{state:false}:{dimming:Math.max(10,Math.round(baseline*(1-progress)))};
     if (progress < 1 && frame) Object.assign(params, frame(snapshot.indexOf(item),snapshot.length));
+    else if (progress < 1 && item.overlaid) Object.assign(params, chosen.mode === 'current' ? ownLook(item.pilot) : lookPilot(chosen));
     else if (progress < 1 && !item.lookApplied) Object.assign(params, lookPilot(chosen));
     if(warm&&progress<1)params.temp=Math.max(2200,Math.round((chosen.mode === 'white' ? chosen.temperature : Number(item.pilot.temp)||2700)*(1-progress)+2200*progress));
     if (warm) { delete params.sceneId; delete params.r; delete params.g; delete params.b; }
+    let overlaid = false;
+    if (progress < 1 && typeof overlay === 'function') {
+      const level = Number.isFinite(params.dimming) ? params.dimming : 10;
+      const top = overlay(snapshot.indexOf(item), snapshot.length, level);
+      if (top && [top.r, top.g, top.b].every(Number.isInteger)) {
+        delete params.temp; delete params.sceneId; delete params.c; delete params.w;
+        Object.assign(params, { r: top.r, g: top.g, b: top.b,
+          dimming: Math.max(10, Math.min(level, Math.round(Number(top.dimming) || 10))) });
+        // Marked before sending: a lost reply may still have changed the bulb.
+        overlaid = item.overlaid = true;
+      }
+    }
     const reply = await request(item.ip,'setPilot',params,requestOptions);
-    if (reply.success) { item.changed = true; item.lookApplied = true; if (progress >= 1) item.finished = true; }
+    if (reply.success) { item.changed = true; item.lookApplied = true; if (!overlaid) item.overlaid = false; if (progress >= 1) item.finished = true; }
     return reply;
   }));
   // A configured light that has never answered this run is not done.

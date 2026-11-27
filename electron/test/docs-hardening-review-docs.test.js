@@ -115,7 +115,7 @@ test('POWER_ACTION_TRUTH splits the tick and pre-dispatch missed paths', () => {
   const row = flat(powerTruth.split('\n').find(l => l.startsWith('| `missed` |')) || '');
   assert.match(row, /Caught on the tick, the run ends like a cancel: smart lights are restored, Wi-Fi Guard's block is undone/);
   assert.match(row, /paused media is not restarted, and no partner message is sent/);
-  assert.match(row, /Caught just before dispatch, the completion side effects have already happened \(smart lights off, the streak and bedtime-estimate events, the completion partner message and, if enabled, the Last Light finale\) and only the power request is skipped/);
+  assert.match(row, /Caught just before dispatch, the completion side effects have already happened \(the streak and bedtime-estimate events, the completion partner message and, if enabled, the Last Light finale\) and only the power request is skipped; the smart lights are switched off only after this check, just before the power request, so here the lights the countdown dimmed are restored instead/);
   assert.doesNotMatch(row, /the run ends like a cancel and no power action is requested/);
 
   // Tick path: a cancel with no partner message and the 'missed' restore.
@@ -126,10 +126,15 @@ test('POWER_ACTION_TRUTH splits the tick and pre-dispatch missed paths', () => {
   const complete = extractFunction(mainJs, 'completeTimer');
   const stale = complete.indexOf('isCompletionStale(completionOptions.endsAt)');
   assert.ok(stale > 0 && stale < complete.indexOf('await executePowerAction('));
-  for (const effect of ['smartLights.invokeSmartLightOff()', 'streaks.recordEvent(', 'sleepDebt.recordNight(', "sendAccountability('TIMER_COMPLETE')", 'await playLastLightRitual(']) {
+  for (const effect of ['streaks.recordEvent(', 'sleepDebt.recordNight(', "sendAccountability('TIMER_COMPLETE')", 'await playLastLightRitual(']) {
     const at = complete.indexOf(effect);
     assert.ok(at > 0 && at < stale, `${effect} has already run when the pre-dispatch check finds the deadline missed`);
   }
+  // The lights go off only after the stale check, just before dispatch; a
+  // missed completion restores them instead.
+  const off = complete.indexOf('await switchRunLightsOff()');
+  assert.ok(off > stale && off < complete.indexOf('await executePowerAction('), 'lights off after the stale check, before dispatch');
+  assert.match(complete.slice(stale, off), /restoreRunLights\('missed'\)/);
 });
 
 // ------------------------------------------------ 5. settings.json edits

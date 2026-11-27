@@ -1455,7 +1455,7 @@
               <div id="wiz-color-field" class="option-group" hidden><label for="wiz-color">Color</label><div class="wiz-color-control"><input type="color" id="wiz-color" value="#ff9f43"><output id="wiz-color-value" for="wiz-color">#FF9F43</output></div></div>
               <div id="wiz-scene-field" class="option-group" hidden><label for="wiz-scene">WiZ preset</label><select id="wiz-scene"><option value="14">Night light</option><option value="16">Relax</option><option value="10">Bedtime</option><option value="6">Cozy</option><option value="3">Sunset</option><option value="5">Fireplace</option><option value="1">Ocean</option><option value="2">Romance</option><option value="8">Pastel colors</option><option value="11">Warm white</option><option value="12">Daylight</option><option value="13">Cool white</option><option value="15">Focus</option><option value="18">TV time</option></select></div>
               </div>
-              <div class="lighting-beacon-card"><div class="lighting-step-title"><span class="lighting-step-number">03</span><h4>A gentle heads-up</h4></div><div class="option-group"><label class="checkbox-label" for="chk-wiz-timer-beacon"><span class="set-row-text"><span class="set-row-title">Soft blue finish beacon</span><span class="set-row-desc">A gentle pulse in the final six seconds. Uses selected lights that are already on.</span></span><input type="checkbox" id="chk-wiz-timer-beacon"></label></div><p class="help-text">Phone-app beacons have their own controls in the Android app.</p></div>
+              <div class="lighting-beacon-card"><div class="lighting-step-title"><span class="lighting-step-number">03</span><h4>A gentle heads-up</h4></div><div class="option-group"><label class="checkbox-label" for="chk-wiz-timer-beacon"><span class="set-row-text"><span class="set-row-title">Soft blue finish beacon</span><span class="set-row-desc">A gentle pulse in the final six seconds. Uses selected lights that are already on.</span></span><input type="checkbox" id="chk-wiz-timer-beacon"></label></div><div class="option-group"><label class="checkbox-label" for="chk-wiz-imminent-beacon"><span class="set-row-text"><span class="set-row-title">Soft blue warning beacon</span><span class="set-row-desc">A short pulse when the power-off warning appears, on lights the timer is already dimming. Never brighter than the dimmed level, never in Test Mode.</span></span><input type="checkbox" id="chk-wiz-imminent-beacon"></label></div><p class="help-text">Phone-app beacons have their own controls in the Android app.</p></div>
               <p class="help-text">During dimming, a chosen look starts at your brightness on lights that are already on. “Keep current” dims from their existing brightness. Warm Shift uses warm white; Off at End leaves the look unchanged. Presets and color support depend on your light.</p>
               <p class="help-text">Switch a light off in WiZ at any time to leave it off. Lights Out stops dimming that light for the rest of the run and leaves it alone if you cancel.</p>
             </div>
@@ -1506,6 +1506,19 @@
                 <textarea id="http-template" rows="3">{"brightness": {{BRIGHTNESS}}, "color_temp": {{COLOR_TEMP}}, "on": {{ON}}}</textarea>
                 <small class="help-text">Use {{BRIGHTNESS}}, {{COLOR_TEMP}}, {{ON}}</small>
               </div>
+            </div>
+
+            <!-- Light cues: outside every provider panel, so Hue users can use
+                 them and webhook users see why they cannot. Off by default. -->
+            <div class="lighting-beacon-card" id="light-cues-card">
+              <div class="lighting-step-title"><span class="lighting-step-number">04</span><h4>Light cues</h4></div>
+              <p class="help-text" id="light-cues-provider-note">Colours and slow breaths on WiZ lights that are already on.</p>
+              <div class="option-group"><label class="checkbox-label" for="chk-light-cue-bedtime"><span class="set-row-text"><span class="set-row-title">Wind-down heads-up</span><span class="set-row-desc">Three slow warm breaths when your bedtime reminder fires.</span></span><input type="checkbox" id="chk-light-cue-bedtime"></label><button type="button" class="btn-small" id="btn-preview-cue-bedtime" data-cue-preview="bedtime" disabled>Preview</button></div>
+              <div class="option-group"><label class="checkbox-label" for="chk-light-cue-autopilot"><span class="set-row-text"><span class="set-row-title">Autopilot starts soon</span><span class="set-row-desc">Two slow violet breaths five minutes before Autopilot starts a run.</span></span><input type="checkbox" id="chk-light-cue-autopilot"></label><button type="button" class="btn-small" id="btn-preview-cue-autopilot" data-cue-preview="autopilotSoon" disabled>Preview</button></div>
+              <div class="option-group"><label class="checkbox-label" for="chk-light-cue-remote"><span class="set-row-text"><span class="set-row-title">Phone or family changes tonight's run</span><span class="set-row-desc">One soft double pulse when your phone or a family PC pauses, snoozes or cancels: amber pause, violet snooze, teal cancel.</span></span><input type="checkbox" id="chk-light-cue-remote"></label><button type="button" class="btn-small" data-cue-preview="remote" data-cue-action="pause" disabled>Preview pause</button><button type="button" class="btn-small" data-cue-preview="remote" data-cue-action="snooze" disabled>Preview snooze</button><button type="button" class="btn-small" data-cue-preview="remote" data-cue-action="cancel" disabled>Preview cancel</button></div>
+              <p class="help-text">Uses lights that are already on, and puts them back exactly. Never switches a light on. Change or switch off a light during a cue and it stays the way you set it. A countdown that is dimming your lights always wins; during Hourglass, Orbit and Ember only pause and cancel can show a cue. Preview uses your saved, verified lights.</p>
+              <p class="help-text" id="light-cues-test-mode-note" hidden>Skipped in Test Mode. Preview still plays once.</p>
+              <span id="light-cues-preview-result" class="help-text" role="status" aria-live="polite"></span>
             </div>
 
             <!-- Verify: passive, never changes a light. -->
@@ -1708,7 +1721,7 @@
                 <option value="webhook">Custom Webhook</option>
               </select>
               <small class="help-text">
-                Router integrations are model-dependent and experimental. Webhook is the most explicit integration. Adapter disables this PC's Wi-Fi entirely.
+                Router integrations are model-dependent and experimental. Webhook is the most explicit integration. Adapter disables this PC's Wi-Fi entirely, which also cuts off smart lights this PC reaches over its Wi-Fi (WiZ, Hue, a webhook) until the block is undone.
               </small>
             </div>
 

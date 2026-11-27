@@ -104,6 +104,8 @@ const fallbackApi = (() => {
     getHueGroups: async () => ({ success: false, groups: [], message: 'Preview mode' }),
     testSmartLightConnection: async () => ({ success: false, message: 'Preview mode' }),
     testSmartLightAction: async () => ({ success: false, message: 'Preview mode' }),
+    // The static preview never touches lights.
+    previewLightCue: async name => ({ cue: name, code: 'SKIPPED_NOT_CONFIGURED', preview: true, touched: 0, skippedOff: 0, restored: 0 }),
     discoverWizLights: async () => [],
     getOverrideTaxConfig: async () => ({ enabled: false, freeSnoozes: 1, tightenMinutes: 15, maxTighten: 45, requireReasonAfter: 2 }),
     getOverrideTaxStats: async () => ({ sessionSnoozeCount: 0, tomorrowDebt: 0, weeklySnoozeCount: 0 }),
@@ -1787,6 +1789,12 @@ async function saveSettingsPanel() {
     ...collectWizSettings(),
     mode: els.selLightMode?.value || 'gradual_dim',
     timerBeacon: document.getElementById('chk-wiz-timer-beacon')?.checked === true,
+    imminentBeacon: document.getElementById('chk-wiz-imminent-beacon')?.checked === true,
+    cues: {
+      bedtime: document.getElementById('chk-light-cue-bedtime')?.checked === true,
+      autopilotSoon: document.getElementById('chk-light-cue-autopilot')?.checked === true,
+      remote: document.getElementById('chk-light-cue-remote')?.checked === true
+    },
     dimMinutes: clamp(Number(els.lightDimMinutes?.value) || 10, 1, 60),
     hueBridgeIp: els.hueBridgeIp?.value || '',
     // Blank means "keep the stored credential" — the renderer never sees the
@@ -1878,6 +1886,90 @@ async function saveSettingsPanel() {
   return ok;
 }
 
+// ── Light cues (Settings › Lighting › 04) ──────────────────────────────────
+// Opt-in, all off by default. Preview plays the SAVED, verified setup once
+// (including in Test Mode); automatic cues are skipped in Test Mode.
+const LIGHT_CUE_CHECKBOXES = { bedtime: 'chk-light-cue-bedtime', autopilotSoon: 'chk-light-cue-autopilot', remote: 'chk-light-cue-remote' };
+let lightCuePreviewBusy = false;
+
+function collectLightCueSettings() {
+  const out = {};
+  for (const [name, id] of Object.entries(LIGHT_CUE_CHECKBOXES)) out[name] = document.getElementById(id)?.checked === true;
+  return out;
+}
+
+function lightCuePreviewMessage(res) {
+  const r = res && typeof res === 'object' ? res : {};
+  const n = Number(r.touched) || 0;
+  const lights = count => `${count} light${count === 1 ? '' : 's'}`;
+  switch (r.code) {
+    case 'OK':
+      return Number(r.takenOver) > 0
+        ? `Played; you changed ${lights(Number(r.takenOver))}, so they were left as you set them.`
+        : `Played on ${lights(n)} and put back.`;
+    case 'PARTIAL': return `Played on ${lights(n)}; some lights did not answer.`;
+    case 'RESTORE_PARTIAL': return `${lights(Number(r.restoreFailed) || 1)} could not be put back.`;
+    case 'SKIPPED_NO_LIGHTS_ON': return 'Turn a light on to preview. Cues never switch lights on.';
+    case 'SKIPPED_TOO_DIM': return 'Your lights are already at their lowest level, so this cue wouldn\'t show.';
+    case 'SKIPPED_NOT_CONFIGURED': return 'Verify your lights first.';
+    case 'SKIPPED_RUN_ACTIVE':
+    case 'INTERRUPTED_RUN_ACTIVE': return 'Your countdown is dimming the lights right now.';
+    case 'SKIPPED_BUSY': return 'A cue is already playing.';
+    case 'SKIPPED_UNSUPPORTED_PROVIDER': return 'Webhooks can\'t show cues.';
+    case 'SKIPPED_UNREACHABLE': return 'Your lights did not answer. Check Wi-Fi and try again.';
+    default: return 'The cue did not play.';
+  }
+}
+
+// Toggle availability, provider note and Test Mode note from the saved setup.
+function renderLightCuesCard() {
+  const card = document.getElementById('light-cues-card');
+  if (!card) return;
+  const saved = state.smartLights || {};
+  const staged = els.selLightProvider?.value || saved.provider || 'none';
+  const webhook = staged === 'http';
+  const none = !['wiz', 'hue', 'http'].includes(staged);
+  for (const id of Object.values(LIGHT_CUE_CHECKBOXES)) {
+    const box = document.getElementById(id);
+    if (box) box.disabled = webhook || none;
+  }
+  // Preview uses the saved, verified setup, never unsaved form edits.
+  const ready = Boolean(saved.enabled && saved.verifiedForSetup && ['wiz', 'hue'].includes(saved.provider) && saved.provider === staged);
+  card.querySelectorAll('[data-cue-preview]').forEach(btn => { btn.disabled = !ready || lightCuePreviewBusy; });
+  const note = document.getElementById('light-cues-provider-note');
+  if (note) {
+    note.textContent = webhook ? 'Webhooks can\'t show cues.'
+      : staged === 'hue' ? 'Hue uses its own gentle breathe on lights that are already on (up to 7 lights for the phone pulse, 16 for the others).'
+      : staged === 'wiz' ? 'Colours and slow breaths on WiZ lights that are already on.'
+      : 'Choose and verify your lights to use cues.';
+  }
+  const testNote = document.getElementById('light-cues-test-mode-note');
+  if (testNote) testNote.hidden = state.dryRun !== true;
+}
+
+function wireLightCuePreviews() {
+  const card = document.getElementById('light-cues-card');
+  if (!card || card.dataset.wired === '1') return;
+  card.dataset.wired = '1';
+  card.addEventListener('click', async event => {
+    const btn = event.target.closest?.('[data-cue-preview]');
+    if (!btn || btn.disabled || lightCuePreviewBusy) return;
+    const status = document.getElementById('light-cues-preview-result');
+    lightCuePreviewBusy = true;
+    renderLightCuesCard();
+    if (status) status.textContent = 'Playing…';
+    try {
+      const res = await api.previewLightCue?.(btn.dataset.cuePreview, btn.dataset.cueAction || undefined);
+      if (status) status.textContent = lightCuePreviewMessage(res);
+    } catch {
+      if (status) status.textContent = 'The cue did not play.';
+    } finally {
+      lightCuePreviewBusy = false;
+      renderLightCuesCard();
+    }
+  });
+}
+
 // One mapping from main's public smart-lights config to renderer state, used
 // by startup hydration and Settings Cancel, so a new field (timerBeacon was
 // one) cannot be dropped by one path and then wiped by the next Save.
@@ -1888,6 +1980,13 @@ function smartLightsStateFromPublicConfig(lightConfig) {
     provider: c.provider || 'none',
     mode: c.mode || 'gradual_dim',
     timerBeacon: c.timerBeacon === true,
+    imminentBeacon: c.imminentBeacon === true,
+    cues: {
+      bedtime: c.cues?.bedtime === true,
+      autopilotSoon: c.cues?.autopilotSoon === true,
+      remote: c.cues?.remote === true
+    },
+    verifiedForSetup: c.verifiedForSetup === true,
     dimMinutes: c.dimMinutes || 10,
     hueBridgeIp: c.hueBridgeIp || '',
     hueUsername: '',
@@ -2123,7 +2222,16 @@ async function renderStatusPanel() {
 // off | error.
 const DEVICE_CARD_STATES = ['live', 'ok', 'warn', 'off', 'error'];
 const WIFI_GUARD_METHOD_LABEL = { adapter: 'Wi-Fi adapter', tplink: 'TP-Link router', asus: 'ASUS router', netgear: 'Netgear router', webhook: 'Custom webhook', firewall: 'Unavailable' };
-const LIGHTS_BEHAVIOR_LABEL = { gradual_dim: 'Gradual dim', warm_dim: 'Warm shift + dim', off_at_end: 'Off at end only' };
+const LIGHTS_BEHAVIOR_LABEL = { gradual_dim: 'Gradual dim', warm_dim: 'Warm shift + dim', off_at_end: 'Off at end only',
+  hourglass: 'Room Hourglass', orbit: 'Orbit', ember: 'Ember trail' };
+// The WiZ experiences follow the whole countdown; Off at End dims nothing, so
+// neither shows a dim duration.
+function lightsBehaviorText(lights) {
+  const label = LIGHTS_BEHAVIOR_LABEL[lights?.mode] || 'Dim';
+  if (['hourglass', 'orbit', 'ember'].includes(lights?.mode)) return `${label} · full countdown`;
+  if (lights?.mode === 'off_at_end') return label;
+  return `${label} · ${lights?.dimMinutes || 10} min`;
+}
 
 // One lights-readiness reading for every surface (Tonight readiness strip,
 // the Last Light facts cache, the Devices card; Night Modes reuses it). It
@@ -2255,7 +2363,7 @@ async function renderDevicesPanel() {
   }
   if (els.deviceLightsBehavior) {
     els.deviceLightsBehavior.textContent = !lights?.enabled ? '—'
-      : `${LIGHTS_BEHAVIOR_LABEL[lights.mode] || 'Dim'} · ${lights.dimMinutes || 10} min`;
+      : lightsBehaviorText(lights);
   }
   if (els.deviceLightsLegacy) els.deviceLightsLegacy.style.display = lights?.enabled && lights.provider === 'hue' && lights.hueAllowLegacyHttp ? '' : 'none';
   applyLightsCheckVisibility(Boolean(lights?.enabled && ['hue','wiz'].includes(lights.provider)));
@@ -4974,7 +5082,8 @@ if (els.chkAutopilot) {
 }
 
 api.onAutopilotWarning?.((data) => {
-  const mins = Number(data?.minutes) || 5;
+  // autopilot.js sends minutesUntil (older builds' field name was minutes).
+  const mins = Number(data?.minutesUntil ?? data?.minutes) || 5;
   notify(`Autopilot will start your bedtime timer in ${mins} min.`, 'warning', 5000);
 });
 
@@ -5533,6 +5642,7 @@ document.getElementById('receipts-confirm')?.addEventListener('keydown', (event)
   els.chkDryRun?.addEventListener('change', () => {
     state.dryRun = els.chkDryRun.checked;
     render();
+    renderLightCuesCard();
     persistAdvancedOptions({ dryRun: state.dryRun });
   });
 
@@ -5921,15 +6031,10 @@ document.getElementById('receipts-confirm')?.addEventListener('keydown', (event)
         return;
       }
       try {
-        // Save staged credentials when provided so main's get-hue-groups uses them.
-        if (username || bridgeIp !== state.smartLights.hueBridgeIp) {
-          await api.saveSmartLightConfig?.({
-            ...collectSmartLightForm(),
-            hueBridgeIp: bridgeIp,
-            ...(username ? { hueUsername: username } : {})
-          });
-        }
-        const res = await api.getHueGroups?.();
+        // Nothing is saved here (a pre-save used to switch the lights off).
+        // Main uses the typed address and key, or the saved ones; the saved
+        // key only ever goes to the saved bridge address.
+        const res = await api.getHueGroups?.(bridgeIp, username || undefined);
         const groups = Array.isArray(res?.groups) ? res.groups : [];
         if (!res?.success) {
           notify(`Could not load Hue groups: ${res?.message || res?.error || 'Bridge unreachable'}`, 'error');
@@ -5957,6 +6062,8 @@ document.getElementById('receipts-confirm')?.addEventListener('keydown', (event)
     ...collectWizSettings(),
     mode: els.selLightMode.value,
     timerBeacon: document.getElementById('chk-wiz-timer-beacon')?.checked === true,
+    imminentBeacon: document.getElementById('chk-wiz-imminent-beacon')?.checked === true,
+    cues: collectLightCueSettings(),
     dimMinutes: Number(els.lightDimMinutes.value) || 10,
     hueBridgeIp: els.hueBridgeIp.value,
     hueUsername: els.hueUsername.value,
@@ -6201,6 +6308,7 @@ function updateLightsUI() {
     els.lightsConfig.style.display = 'block';
   }
   if (els.wizConfig) els.wizConfig.style.display = provider === 'wiz' ? 'block' : 'none';
+  renderLightCuesCard();
   const wizTargets = document.getElementById('wiz-targets');
   if (wizTargets) wizTargets.hidden = provider !== 'wiz';
   if (els.hueConfig) {
@@ -6417,6 +6525,14 @@ function updateLightsUIFromState() {
   applyWizSettings(state.smartLights);
   if (els.selLightMode) els.selLightMode.value = state.smartLights.mode;
   const beacon=document.getElementById('chk-wiz-timer-beacon');if(beacon)beacon.checked=state.smartLights.timerBeacon===true;
+  const imminent = document.getElementById('chk-wiz-imminent-beacon');
+  if (imminent) imminent.checked = state.smartLights.imminentBeacon === true;
+  for (const [name, id] of Object.entries(LIGHT_CUE_CHECKBOXES)) {
+    const box = document.getElementById(id);
+    if (box) box.checked = state.smartLights.cues?.[name] === true;
+  }
+  wireLightCuePreviews();
+  renderLightCuesCard();
   if (els.lightDimMinutes) els.lightDimMinutes.value = state.smartLights.dimMinutes;
   if (els.hueBridgeIp) els.hueBridgeIp.value = state.smartLights.hueBridgeIp;
   if (els.hueUsername) {

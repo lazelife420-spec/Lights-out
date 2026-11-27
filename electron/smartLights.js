@@ -15,6 +15,8 @@ const crypto = require('crypto');
 const wizLights = require('./wizLights');
 const { isPrivateOrLocal } = require('./capabilityTruth');
 const lightExperience = require('./lightExperience');
+// lightCues requires nothing, so this cannot form a cycle.
+const lightCues = require('./lightCues');
 const isExperience = mode => ['hourglass','orbit','ember'].includes(mode);
 
 const SHIPPED_PROVIDERS = ['none', 'wiz', 'hue', 'http'];
@@ -30,6 +32,13 @@ let config = {
   wizDevices: [],
   wizLook: wizLights.normalizeLook(),
   timerBeacon: false,
+  // Opt-in light cues (lightCues.js); never part of configurationKey, so a
+  // toggle cannot cost the user their verification.
+  cues: { ...lightCues.DEFAULT_CUE_SETTINGS },
+  // Cue D: a short beacon on the already-dimmed WiZ lights when the grace
+  // warning fires. Opt-in, never brighter than the dim level, never in Test
+  // Mode (main does not tick the lights for a Test Mode run).
+  imminentBeacon: false,
   // Hue settings
   hueBridgeIp: '',         // private/local IP literal, optionally with :port
   hueUsername: '',
@@ -734,9 +743,14 @@ function hueLightFromApi(id, light) {
 
 // Hue read helpers return { success, ... } — transport failures are truthful,
 // never silently converted into an empty list that looks like "no lights".
-async function getHueLights(bridgeIp, username) {
+function hueTimeout(options, fallback = 5000) {
+  const value = Number(options && options.timeoutMs);
+  return Number.isFinite(value) && value > 0 ? Math.min(fallback, Math.round(value)) : fallback;
+}
+
+async function getHueLights(bridgeIp, username, options = {}) {
   try {
-    const r = await hueApi(bridgeIp, username, 'GET', '/lights', null);
+    const r = await hueApi(bridgeIp, username, 'GET', '/lights', null, hueTimeout(options));
     const bridgeError = hueBridgeFailure(r.data, 'Bridge rejected the request');
     if (bridgeError) return bridgeError;
     if (!r.ok) return failure('hue', 'HTTP_' + r.status, `Bridge returned HTTP ${r.status}`);
@@ -771,9 +785,9 @@ async function getHueLight(bridgeIp, username, lightId) {
   }
 }
 
-async function getHueGroups(bridgeIp, username) {
+async function getHueGroups(bridgeIp, username, options = {}) {
   try {
-    const r = await hueApi(bridgeIp, username, 'GET', '/groups', null);
+    const r = await hueApi(bridgeIp, username, 'GET', '/groups', null, hueTimeout(options));
     const bridgeError = hueBridgeFailure(r.data, 'Bridge rejected the request');
     if (bridgeError) return bridgeError;
     if (!r.ok) return failure('hue', 'HTTP_' + r.status, `Bridge returned HTTP ${r.status}`);
@@ -806,10 +820,10 @@ async function getHueGroupMembers(bridgeIp, username, groupId) {
   }
 }
 
-async function setHueLightState(bridgeIp, username, lightId, lightState) {
+async function setHueLightState(bridgeIp, username, lightId, lightState, options = {}) {
   try {
     const safeLight = safeHueSegment(lightId, 'light ID');
-    const r = await hueApi(bridgeIp, username, 'PUT', `/lights/${safeLight}/state`, lightState);
+    const r = await hueApi(bridgeIp, username, 'PUT', `/lights/${safeLight}/state`, lightState, hueTimeout(options));
     const bridgeError = hueBridgeFailure(r.data, 'Bridge rejected the state');
     if (bridgeError) return bridgeError;
     if (!r.ok) return failure('hue', 'HTTP_' + r.status, `Light ${lightId} returned HTTP ${r.status}`);
@@ -1195,6 +1209,40 @@ function dimProgress(remainingSeconds) {
   return Math.min(1, Math.max(0, 1 - remaining * 1000 / durationMs));
 }
 
+// Just under 1: the dim reaches its lowest level (WiZ floors at 10) but a
+// tick never sends state:false.
+const WIZ_TICK_MAX_PROGRESS = 0.999;
+const IMMINENT_BEACON_SECONDS = 6;
+
+// Cue D: the grace warning fired for a real run. Only WiZ lights the countdown
+// is already dimming take part; nothing happens before the dim has begun, in
+// Off at End (nothing is dimmed) or for another provider. main never calls
+// this for a Test Mode run, and smartLights is never ticked for one.
+function signalImminentAction(remainingSeconds) {
+  const remaining = Number(remainingSeconds);
+  if (!config.enabled || config.imminentBeacon !== true || config.provider !== 'wiz'
+      || config.mode === 'off_at_end' || !state.dimStarted || !state.wizOriginalState
+      || !Number.isFinite(remaining) || remaining <= 0) {
+    return false;
+  }
+  state.imminentAt = remaining;
+  return true;
+}
+
+// A six-second soft blue beacon from the moment the grace warning fired. Each
+// frame is capped at the level the dim (or the experience) shows this tick,
+// so it never makes a light brighter.
+function imminentOverlay(remaining) {
+  if (config.imminentBeacon !== true || !Number.isFinite(state.imminentAt)) return undefined;
+  const elapsed = state.imminentAt - remaining;
+  if (elapsed < 0 || elapsed >= IMMINENT_BEACON_SECONDS) return undefined;
+  return (index, count, level) => {
+    const cap = Math.max(10, Math.min(100, Math.round(Number(level) || 10)));
+    const frame = lightExperience.beacon({ elapsedSeconds: elapsed, index, count, brightness: cap });
+    return frame ? { r: frame.r, g: frame.g, b: frame.b, dimming: Math.min(cap, frame.dimming) } : null;
+  };
+}
+
 function updateSmartLightTick(remainingSeconds) {
   if (!config.enabled || !state.dimStarted) return;
   const remaining = Number(remainingSeconds);
@@ -1209,14 +1257,20 @@ function updateSmartLightTick(remainingSeconds) {
         wizBatchBusy = true;
         const generation = wizGeneration;
         const snapshot = state.wizOriginalState;
+        const finishBeacon = config.timerBeacon && remaining<=6 && remaining>0;
+        const overlay = finishBeacon ? undefined : imminentOverlay(remaining);
         const warm = config.mode === 'warm_dim' && !(config.timerBeacon&&remaining<=6);
         const look = config.wizLook;
         const seconds=state.dimDurationMs/1000-remaining;
-        const frame = config.timerBeacon && remaining<=6 && remaining>0
+        const frame = finishBeacon
           ? (index,count)=>lightExperience.beacon({elapsedSeconds:6-remaining,index,count,brightness:look.brightness})
           : isExperience(config.mode) ? (index,count)=>lightExperience.frame(config.mode,{progress,elapsedSeconds:seconds,index,count,brightness:look.brightness}) : undefined;
-        queueWizOperation(() => generation === wizGeneration ? wizLights.dimStates(snapshot, progress, warm, undefined,
-          { look, frame, isCurrent: () => generation === wizGeneration && config.enabled }) : null)
+        // The countdown's own ticks never switch a WiZ light off: the final
+        // off is invokeSmartLightOff, sent just before the power request, so
+        // a cancel during the completion steps can still restore the room.
+        const wizProgress = Math.min(progress, WIZ_TICK_MAX_PROGRESS);
+        queueWizOperation(() => generation === wizGeneration ? wizLights.dimStates(snapshot, wizProgress, warm, undefined,
+          { look, frame, overlay, isCurrent: () => generation === wizGeneration && config.enabled }) : null)
           .catch(() => {})
           .finally(() => { wizBatchBusy = false; });
       }
@@ -1445,6 +1499,68 @@ function resetSmartLightState() {
   state.hueSnapshotAttemptAt = 0;
   state.dimStartTime = null;
   state.dimDurationMs = 0;
+  state.imminentAt = null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Light cues (lightCues.js) wiring helpers. main.js builds the engine from
+// these; the engine never sees the bridge address or key.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// True only while the countdown is actually changing the lights. dimStarted
+// alone is not enough: Off at End sets it for the last dimMinutes but writes
+// nothing until the finish beacon's final seconds.
+function isDrivingLights(remainingSeconds) {
+  if (!config.enabled || state.dimStarted !== true) return false;
+  if (config.mode !== 'off_at_end') return true;
+  return config.provider === 'wiz' && config.timerBeacon === true && Number(remainingSeconds) <= 15;
+}
+
+function isVerifiedForSetup() {
+  return Boolean(config.verifiedConfigKey && config.verifiedConfigKey === configurationKey(config));
+}
+
+// The provider's own operation queue, so a cue never interleaves with a dim
+// snapshot, a cancel restore or the final off. Returns the task's promise.
+function runExclusive(provider, task) {
+  if (provider === 'wiz') return queueWizOperation(task);
+  if (provider === 'hue') return queueHueOperation(task);
+  return Promise.resolve().then(task);
+}
+
+let hueCueScope = { key: null, ids: null, at: 0 };
+const HUE_CUE_SCOPE_TTL_MS = 60000;
+
+// Lights in the configured scope with their live on/off state: one bridge GET
+// per round, group membership cached for a minute.
+async function listHueCueLights({ timeoutMs } = {}) {
+  if (!config.hueBridgeIp || !config.hueUsername) return failure('hue', 'NOT_CONFIGURED', 'Hue not configured');
+  const opts = { timeoutMs: Math.min(Number(timeoutMs) || 1900, 1900) };
+  let scope = null;
+  if (config.hueGroupId) {
+    const key = `${config.hueBridgeIp}|${config.hueGroupId}`;
+    if (hueCueScope.key !== key || Date.now() - hueCueScope.at > HUE_CUE_SCOPE_TTL_MS) {
+      const groups = await getHueGroups(config.hueBridgeIp, config.hueUsername, opts);
+      if (!groups.success) return groups;
+      const group = groups.groups.find(g => String(g.id) === String(config.hueGroupId));
+      hueCueScope = { key, ids: new Set(((group && group.lights) || []).map(String)), at: Date.now() };
+    }
+    scope = hueCueScope.ids;
+  } else if (config.hueLightIds.length) {
+    scope = new Set(config.hueLightIds.map(String));
+  }
+  const res = await getHueLights(config.hueBridgeIp, config.hueUsername, opts);
+  if (!res.success) return res;
+  return result('hue', true, 'OK', 'lights', {
+    lights: res.lights.filter(l => !scope || scope.has(String(l.id))).map(l => ({ id: String(l.id), on: l.on === true }))
+  });
+}
+
+// Only ever the bridge's native breathe: whatever state is passed, exactly
+// { alert: 'select' } is sent, which changes no light state.
+function setHueCueAlert(id, _state, { timeoutMs } = {}) {
+  return setHueLightState(config.hueBridgeIp, config.hueUsername, id, { ...lightCues.HUE_ALERT },
+    { timeoutMs: Math.min(Number(timeoutMs) || 900, 900) });
 }
 
 // Resolves once every queued light operation and the in-flight webhook
@@ -1570,6 +1686,9 @@ function loadConfig(newConfig) {
     wizDevices: wizLights.normalizeDevices(newConfig.wizDevices ?? config.wizDevices, newConfig.wizAddresses ?? config.wizAddresses),
     wizLook: wizLights.normalizeLook(newConfig.wizLook ?? config.wizLook),
     timerBeacon: newConfig.timerBeacon !== undefined ? newConfig.timerBeacon === true : config.timerBeacon,
+    // Not part of configurationKey: toggling a cue never costs the verification.
+    cues: lightCues.normalizeCueSettings(newConfig.cues !== undefined ? newConfig.cues : config.cues),
+    imminentBeacon: newConfig.imminentBeacon !== undefined ? newConfig.imminentBeacon === true : config.imminentBeacon,
     hueBridgeIp: nextHueIp,
     hueAllowLegacyHttp: newConfig.hueAllowLegacyHttp !== undefined ? Boolean(newConfig.hueAllowLegacyHttp) : config.hueAllowLegacyHttp,
     // Empty string means "keep existing" so a redacted (blanked) renderer field
@@ -1622,12 +1741,12 @@ function loadConfig(newConfig) {
 
 // Full config — main-process only. Never send to the renderer.
 function getConfig() {
-  return { ...config };
+  return { ...config, cues: { ...config.cues } };
 }
 
 // Renderer-safe config: secret fields are replaced by presence indicators.
 function getPublicConfig() {
-  const publicConfig = { ...config };
+  const publicConfig = { ...config, cues: { ...config.cues } };
   for (const [field, indicator] of Object.entries(SECRET_INDICATORS)) {
     const value = publicConfig[field];
     const present = typeof value === 'string' ? value.length > 0
@@ -1683,6 +1802,14 @@ module.exports = {
   resetSmartLightState,
   shouldStartDim,
   whenIdle,
+  signalImminentAction,
+
+  // Light cues wiring (lightCues.js)
+  isDrivingLights,
+  isVerifiedForSetup,
+  runExclusive,
+  listHueCueLights,
+  setHueCueAlert,
 
   // Verification (passive) vs actuation (explicit)
   verifySmartLightConnection,

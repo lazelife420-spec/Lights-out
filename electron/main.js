@@ -15,6 +15,8 @@ const dispatchPowerAction = require('./powerActionDispatcher').createDispatcher(
   suspend: require('./windowsSuspend').createSuspendDispatcher({ spawn,
     helperPath: path.join(__dirname, 'native', 'WindowsSuspend.exe') }) });
 const smartLights = require('./smartLights');
+const lightCues = require('./lightCues');
+const wizLights = require('./wizLights');
 const profiles = require('./profiles');
 const profileIdentity = require('./profileIdentity');
 const calendar = require('./calendar');
@@ -324,6 +326,75 @@ const timerState = {
   nightModeTitle: null,
   nightModeVersion: null
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Light cues (lightCues.js). Opt-in (every cue defaults off), skipped in Test
+// Mode, only on lights that are already on, restored exactly, and never while
+// the countdown is dimming. Created once at startup after the lights config
+// loads; every caller guards with lightCueEngine?. and never awaits a cue.
+// ─────────────────────────────────────────────────────────────────────────────
+let lightCueEngine = null;
+// The adapter gives up (and wizLights stops retransmitting) before the
+// engine's own 1000 ms call timeout, so a late resend cannot land after the
+// restore.
+const LIGHT_CUE_WIZ_TIMEOUT_MS = 900;
+
+function createLightCueEngine() {
+  return lightCues.createLightCues({
+    // Only what the engine needs: never the Hue key or webhook secrets, and
+    // never getPublicConfig (it replaces secrets with indicators).
+    getConfig: () => {
+      const c = smartLights.getConfig();
+      return { provider: c.provider, enabled: c.enabled, wizAddresses: c.wizAddresses, cues: c.cues,
+        verifiedForSetup: smartLights.isVerifiedForSetup() };
+    },
+    getAppSettings: () => settingsStore.getSection('app') || {},
+    isDimActive: () => lightCues.isRunDimming({ running: timerState.running, paused: timerState.paused,
+      dryRun: timerState.dryRun, dimStarted: smartLights.isDrivingLights(timerState.remainingSeconds) }),
+    wiz: {
+      request: (ip, method, params, opts) => wizLights.request(ip, method, params,
+        { timeoutMs: Math.min(Number(opts && opts.timeoutMs) || LIGHT_CUE_WIZ_TIMEOUT_MS, LIGHT_CUE_WIZ_TIMEOUT_MS) }),
+      restorePilot: wizLights.restorePilot
+    },
+    hue: {
+      listLightStates: opts => smartLights.listHueCueLights(opts),
+      setLightState: (id, state, opts) => smartLights.setHueCueAlert(id, state, opts)
+    },
+    serialize: (provider, task) => smartLights.runExclusive(provider, task),
+    log: (event, r) => writeStartupLog(event === 'light-cue-late' ? 'Light cue finished after its deadline' : 'Light cue', {
+      cue: r.cue, provider: r.provider, code: r.code, touched: r.touched, skippedOff: r.skippedOff,
+      restored: r.restored, released: r.released, failed: r.failed, restoreFailed: r.restoreFailed,
+      preview: r.preview, action: r.action, source: r.source
+    })
+  });
+}
+
+// A phone or family PC paused, snoozed or cancelled tonight's run. Called only
+// after the action applied; desktop actions are never a source.
+function cueRemoteLight(action, source, dryRun) {
+  lightCueEngine?.cue('remote', { action, source, dryRun: dryRun === true });
+}
+
+// The same refusal startTimer applies to an Autopilot start (running, paused,
+// or an unattended start while a ritual awaits its countdown), so "starts
+// soon" never plays for a start that would be refused. Kept textually in
+// step with startTimer's guard (smoke-checked).
+function autopilotStartWouldBeRefused() {
+  return Boolean(timerState.running || timerState.paused
+    || (UNATTENDED_RUN_ORIGINS.includes('autopilot') && ritualAwaitingCountdown()));
+}
+
+// The countdown's lights are off only just before the power request; this
+// bounds that await so a dead bridge cannot hold the shutdown.
+const LIGHT_OFF_TIMEOUT_MS = 8000;
+
+// Whether a quit now would leave the room dimmed by a real run that has not
+// switched its lights off yet.
+function runLightsNeedRestore() {
+  const c = smartLights.getConfig();
+  return Boolean(!timerState.dryRun && hasCancellableRun() && c.enabled && ['wiz', 'hue'].includes(c.provider)
+    && smartLights.isDrivingLights(timerState.remainingSeconds));
+}
 
 // Whether a Content Blocker recurring schedule currently has sites blocked --
 // tracked so checkContentBlockerSchedules() only calls block/unblock on an
@@ -1108,6 +1179,10 @@ function startQuickTimer({ minutes, action = 'shutdown', origin }) {
 function beginValidatedCountdown(options, identity, nmIdentity) {
   completionGuardController?.abort();
   clearTimerInterval();
+  // A new run starts with no dim state left by an earlier one (a completion
+  // that stopped before its light-off, for example), so its lights are never
+  // switched off a second into the countdown.
+  smartLights.resetSmartLightState();
 
   // Rehearsals do not consume or create debt belonging to real sessions.
   const rehearsal = typeof options.dryRun === 'boolean' ? options.dryRun : Boolean((settingsStore.getSection('app') || {}).dryRun);
@@ -1248,6 +1323,9 @@ function beginValidatedCountdown(options, identity, nmIdentity) {
       emitTimerUpdate('warning', {
         message: warningMessage
       });
+      // Cue D (opt-in): a short beacon on the already-dimmed WiZ lights. A
+      // Test Mode run never touches the lights.
+      if (!timerState.dryRun) smartLights.signalImminentAction(timerState.remainingSeconds);
       // Record warning in receipt.
       if (activeReceiptId) runReceipts.receiptWarning(activeReceiptId);
       // Fire-and-forget browser awareness check.
@@ -1419,19 +1497,17 @@ async function completeTimer() {
     }) : null;
     if (activeReceiptId === completingReceiptId) activeReceiptId = null;
     windDownChanges.mediaPause = null;
+    // The run is over: its dim state must not leak into the next countdown.
+    if (smartLights.getConfig().enabled) smartLights.resetSmartLightState();
     const message = 'Power action blocked: Wi-Fi Guard restoration is unconfirmed. Use Restore internet before trying again.';
     emitTimerUpdate('action-status', { receiptId: completingReceiptId, actionStatus: 'blocked', proofSaved: receipt?.persistence?.saved === true, message });
     showNativeNotification('Lights Out', message);
     return;
   }
 
-  // Test Mode rehearses only the in-app scene.
-  if (!completionOptions.dryRun && smartLights.getConfig().enabled) {
-    await smartLights.invokeSmartLightOff();
-    smartLights.resetSmartLightState();
-  }
-
   // A cancel or replacement during an awaited completion step owns the result.
+  // (The smart lights stay as the countdown left them until just before the
+  // power request, so a cancel during the steps below still restores them.)
   if (completingReceiptId && activeReceiptId !== completingReceiptId) return;
   emitTimerUpdate('complete', { message: 'Timer complete' });
   showNativeNotification('Lights Out', completionOptions.dryRun
@@ -1496,6 +1572,7 @@ async function completeTimer() {
       }) : null;
       if (activeReceiptId === completingReceiptId) activeReceiptId = null;
       windDownChanges.mediaPause = null;
+      if (smartLights.getConfig().enabled) smartLights.resetSmartLightState();
       writeStartupLog('Power action blocked by unsaved-work guard', { receiptId: completingReceiptId, errorCode: error.code || 'UNKNOWN' });
       emitTimerUpdate('action-status', { receiptId: completingReceiptId, actionStatus: 'blocked', proofSaved: receipt?.persistence?.saved === true, message });
       showNativeNotification('Lights Out', message);
@@ -1520,11 +1597,68 @@ async function completeTimer() {
     }
     if (activeReceiptId === completingReceiptId) activeReceiptId = null;
     writeStartupLog('Power action skipped: completion resumed after the deadline', { receiptId: completingReceiptId });
+    // The user is waking the PC, not going to bed: put the dimmed lights back
+    // (like a cancel; a light switched off by hand stays off).
+    if (smartLights.getConfig().enabled) restoreRunLights('missed');
     emitTimerUpdate('action-status', { receiptId: completingReceiptId, actionStatus: 'missed', message });
     showNativeNotification('Lights Out', message);
     return;
   }
+  // Lights off now, after every still-cancellable step and the stale check,
+  // just before the power request. Bounded, so a dead bridge cannot hold the
+  // shutdown; a light that did not confirm is recorded, never retried.
+  if (!completionOptions.dryRun && smartLights.getConfig().enabled) {
+    const lightsOff = await switchRunLightsOff();
+    smartLights.resetSmartLightState();
+    if (!lightsOff || lightsOff.success !== true) recordLightsOffShortfall(completingReceiptId, lightsOff);
+    if (completingReceiptId && activeReceiptId !== completingReceiptId) return;
+  }
   await executePowerAction({ ...completionOptions, receiptId: completingReceiptId });
+}
+
+// The final light-off, bounded by LIGHT_OFF_TIMEOUT_MS. Never rejects.
+function switchRunLightsOff() {
+  let timer = null;
+  const timeout = new Promise(resolve => {
+    timer = setTimeout(() => resolve({ success: false, code: 'TIMEOUT', timedOut: true,
+      message: `The lights did not confirm off within ${LIGHT_OFF_TIMEOUT_MS / 1000} s.` }), LIGHT_OFF_TIMEOUT_MS);
+  });
+  const off = Promise.resolve().then(() => smartLights.invokeSmartLightOff())
+    .catch(error => ({ success: false, code: 'ERROR', message: error && error.message ? String(error.message) : 'Light-off failed.' }));
+  return Promise.race([off, timeout]).finally(() => clearTimeout(timer));
+}
+
+// A light-off that did not fully confirm (PARTIAL, timeout, bridge error) is
+// written to startup.log and the run receipt. It never blocks or delays the
+// power request beyond the bound above. Messages carry counts, never
+// addresses or credentials.
+function recordLightsOffShortfall(receiptId, res) {
+  const r = res && typeof res === 'object' ? res : {};
+  const code = typeof r.code === 'string' ? r.code.slice(0, 40) : 'UNKNOWN';
+  const detail = typeof r.message === 'string' ? r.message.replace(/\s+/g, ' ').slice(0, 160) : '';
+  const note = `Lights: not every light confirmed off (${code}${detail ? `: ${detail}` : ''}).`;
+  writeStartupLog('Smart lights off not fully confirmed', { receiptId, provider: r.provider || smartLights.getConfig().provider, code, timedOut: r.timedOut === true });
+  if (!receiptId) return;
+  try {
+    const receipt = runReceipts.getReceiptById(receiptId);
+    runReceipts.updateRunReceipt(receiptId, {
+      lightsOff: { confirmed: false, code },
+      notes: [receipt && receipt.notes, note].filter(Boolean).join(' ')
+    });
+  } catch { /* best-effort: the receipt never blocks the power request */ }
+}
+
+// Restore the lights a run dimmed, from its snapshot (cancel semantics: a
+// light switched off by hand is left off), then forget the run's light state.
+function restoreRunLights(reason) {
+  const c = smartLights.getConfig();
+  const restore = c.provider === 'wiz' ? smartLights.restoreWizOriginalState()
+    : c.provider === 'hue' ? smartLights.restoreHueOriginalState() : Promise.resolve(null);
+  smartLights.resetSmartLightState();
+  return Promise.resolve(restore).then(res => {
+    if (res && res.success === false) writeStartupLog('Smart lights restore incomplete', { reason, code: res.code || 'UNKNOWN' });
+    return res;
+  }).catch(() => { writeStartupLog('Smart lights restore failed', { reason }); return null; });
 }
 
 // Plays the Last Light finale in the renderer before the power action fires.
@@ -2179,6 +2313,7 @@ function handleCompanionMessage(msg, client, v3Context = null) {
           resolveV3Rejected(REASON.ALREADY_PAUSED);
         } else if (pauseTimer().success) {
           notifyRemoteAction('Timer paused from your phone');
+          cueRemoteLight('pause', 'phone', timerState.dryRun);
           resolveV3Completed();
         } else {
           resolveV3Rejected(REASON.INTERNAL_ERROR);
@@ -2209,6 +2344,7 @@ function handleCompanionMessage(msg, client, v3Context = null) {
         } else if (timerState.running) {
           if (pauseTimer().success) {
             notifyRemoteAction('Timer paused from your phone');
+            cueRemoteLight('pause', 'phone', timerState.dryRun);
             resolveV3Completed();
           } else {
             resolveV3Rejected(REASON.INTERNAL_ERROR);
@@ -2223,6 +2359,7 @@ function handleCompanionMessage(msg, client, v3Context = null) {
         const seconds = msg.seconds || 300;
         if (snoozeTimer(seconds).success) {
           notifyRemoteAction(`Timer snoozed from your phone (+${Math.round(seconds / 60)} min)`);
+          cueRemoteLight('snooze', 'phone', timerState.dryRun);
           resolveV3Completed();
         } else {
           resolveV3Rejected(REASON.NO_ACTIVE_TIMER);
@@ -2231,9 +2368,14 @@ function handleCompanionMessage(msg, client, v3Context = null) {
       }
       case 'cancel': {
         const wasActive = hasCancellableRun();
+        // Read before the cancel resets the run.
+        const cancelledDryRun = timerState.dryRun;
         cancelTimer();
         if (wasActive) {
           notifyRemoteAction('Timer cancelled from your phone');
+          // Queued behind the cancel's own light restore, so it plays on the
+          // restored room.
+          cueRemoteLight('cancel', 'phone', cancelledDryRun);
           resolveV3Completed();
         } else {
           resolveV3Rejected(REASON.NO_ACTIVE_TIMER);
@@ -2345,7 +2487,8 @@ function familyCommandHandler(cmd) {
     }
     case 'pause':
       if (!timerState.running || timerState.paused) return { success: false, code: 'NOT_RUNNING', error: 'No running timer to pause' };
-      pauseTimer();
+      if (!pauseTimer().success) return { success: false, code: 'NOT_RUNNING', error: 'No running timer to pause' };
+      cueRemoteLight('pause', 'family', timerState.dryRun);
       return { success: true, code: 'PAUSED' };
     case 'resume':
       if (!timerState.running || !timerState.paused) return { success: false, code: 'NOT_PAUSED', error: 'No paused timer to resume' };
@@ -2353,11 +2496,15 @@ function familyCommandHandler(cmd) {
       return { success: true, code: 'RESUMED' };
     case 'snooze':
       if (!timerState.running) return { success: false, code: 'NOT_RUNNING', error: 'No running timer to snooze' };
-      snoozeTimer(cmd.seconds || 300);
+      if (!snoozeTimer(cmd.seconds || 300).success) return { success: false, code: 'NOT_RUNNING', error: 'No running timer to snooze' };
+      cueRemoteLight('snooze', 'family', timerState.dryRun);
       return { success: true, code: 'SNOOZED' };
     case 'cancel':
       if (!hasCancellableRun()) return { success: false, code: 'NOT_RUNNING', error: 'No running timer to cancel' };
       cancelTimer();
+      // cancelTimer keeps timerState.dryRun; the cue queues behind the
+      // cancel's own light restore.
+      cueRemoteLight('cancel', 'family', timerState.dryRun);
       return { success: true, code: 'CANCELLED' };
     default:
       return { success: false, code: 'UNKNOWN_COMMAND', error: `Unsupported command: ${cmd.command}` };
@@ -3477,8 +3624,33 @@ ipcMain.handle('test-smartlight-action', async () => smartLights.testSmartLightA
 ipcMain.handle('discover-hue-bridge', async () => smartLights.findHueBridge());
 ipcMain.handle('discover-wiz-lights', async () => smartLights.discoverWizLights());
 ipcMain.handle('register-hue-bridge', async (event, bridgeIp) => smartLights.registerHueBridge(bridgeIp));
-ipcMain.handle('get-hue-lights', async (event, bridgeIp, username) => smartLights.getHueLights(bridgeIp, username));
-ipcMain.handle('get-hue-groups', async (event, bridgeIp, username) => smartLights.getHueGroups(bridgeIp, username));
+// The renderer never holds the saved Hue key, so a blank argument falls back
+// to the saved setup. The saved key is only ever sent to the bridge address
+// it was saved with, never to a different address typed in the form.
+function hueLookupTarget(bridgeIp, username) {
+  const c = smartLights.getConfig();
+  const typedIp = typeof bridgeIp === 'string' ? bridgeIp.trim() : '';
+  const ip = typedIp || c.hueBridgeIp || '';
+  const typedKey = typeof username === 'string' ? username.trim() : '';
+  const key = typedKey || (ip && ip === c.hueBridgeIp ? c.hueUsername : '');
+  return { ip, key };
+}
+function hueLookup(bridgeIp, username, read) {
+  const { ip, key } = hueLookupTarget(bridgeIp, username);
+  if (!ip) return { success: false, code: 'NOT_CONFIGURED', message: 'Enter the Hue Bridge IP first.' };
+  if (!key) return { success: false, code: 'NOT_CONFIGURED', message: 'Register the Hue Bridge first (or save it), then try again.' };
+  return read(ip, key);
+}
+ipcMain.handle('get-hue-lights', async (event, bridgeIp, username) => hueLookup(bridgeIp, username, smartLights.getHueLights));
+ipcMain.handle('get-hue-groups', async (event, bridgeIp, username) => hueLookup(bridgeIp, username, smartLights.getHueGroups));
+// Settings › Lighting › Preview: an explicit action, so it plays in Test Mode
+// and is not rate limited, but it is still single-flight, never wakes a dark
+// light, always restores and yields to a countdown that is dimming.
+ipcMain.handle('preview-light-cue', async (event, name, action) => {
+  if (!lightCues.CUE_NAMES.includes(name)) return { cue: String(name).slice(0, 40), code: 'SKIPPED_UNKNOWN_CUE', preview: true };
+  const context = name === 'remote' ? { action: lightCues.REMOTE_ACTIONS.includes(action) ? action : 'pause', source: 'phone' } : undefined;
+  return lightCueEngine ? lightCueEngine.preview(name, context) : { cue: name, code: 'SKIPPED_NOT_CONFIGURED', preview: true };
+});
 
 // Profiles IPC handlers
 ipcMain.handle('profiles-get-all', async () => profiles.getAll());
@@ -4020,6 +4192,14 @@ app.whenReady().then(async () => {
     try { settingsStore.updateSection('smartLights', { verifiedConfigKey: smartLights.getConfig().verifiedConfigKey }, { replaceBackup: true }); }
     catch (error) { writeStartupLog('Smart-lights key migration save failed', { message: error && error.message }); }
   }
+  // A Hue certificate pinned on first use (a setup verified before pinning
+  // existed) is saved at once, not only on the next Settings save. The patch
+  // only ever carries { hueCertFingerprint }.
+  smartLights.setConfigPersistence(patch => {
+    try { settingsStore.updateSection('smartLights', patch); }
+    catch (error) { writeStartupLog('Hue pin save failed', { message: error && error.message }); }
+  });
+  lightCueEngine = createLightCueEngine();
   writeTimerLifecycle('Runtime ready');
 
   // Finalize any run receipt left at result:'running' by a process that
@@ -4167,7 +4347,18 @@ app.whenReady().then(async () => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('bedtime-reminder', data);
       }
+      // A run or a ritual already under way owns the evening: no heads-up on
+      // top of it. Opt-in, never awaited.
+      if (!isRunActive() && !ritualMode.getState().active) lightCueEngine?.cue('bedtime', { minutesUntil: data && data.minutesUntil });
     }
+  });
+
+  // "Autopilot starts soon" light cue, once per armed fire time (a disarmed
+  // autopilot clears its warning, so it never cues). Never for a start
+  // startTimer would refuse.
+  autopilot.onWarning(({ fireAt }) => {
+    if (autopilotStartWouldBeRefused()) return;
+    lightCueEngine?.cue('autopilotSoon', { fireAt });
   });
 
   // Autopilot Bedtime: schedule learned bedtime auto-start.
@@ -4200,6 +4391,12 @@ app.on('window-all-closed', () => {
 // (bounded, once); a block the user chose to keep stays recorded instead.
 const QUIT_WIFI_RESTORE_TIMEOUT_MS = 8000;
 let quitWifiRestoreAttempted = false;
+// A running cue's stop() restores within one frame plus two bounded
+// read/write attempts per bulb (about 4.5 s worst case); a run's dim restore
+// gets 3 s, like a cancel that the quit cuts short.
+const QUIT_LIGHT_CUE_STOP_TIMEOUT_MS = 5000;
+const QUIT_LIGHT_RESTORE_TIMEOUT_MS = 3000;
+let quitLightsAttempted = false;
 
 app.on('before-quit', (event) => {
   if (!quitWifiRestoreAttempted && wifiLifecycle.hasUnretainedPending()) {
@@ -4212,6 +4409,29 @@ app.on('before-quit', (event) => {
     ]).then(result => {
       if (!result || !result.success) writeStartupLog('Wi-Fi Guard restore before quit unconfirmed; the next launch will retry', { timedOut: Boolean(result && result.timedOut) });
     }).catch(() => {}).finally(() => app.quit());
+    return;
+  }
+  // Never leave a bulb in a cue colour, or a room dimmed by a real run that
+  // had not switched its lights off yet. Bounded, once.
+  if (!quitLightsAttempted && (lightCueEngine?.isBusy() || runLightsNeedRestore())) {
+    quitLightsAttempted = true;
+    event.preventDefault();
+    const bounded = (work, ms) => Promise.race([
+      Promise.resolve().then(work).catch(() => null),
+      new Promise(resolve => setTimeout(() => resolve({ success: false, timedOut: true }), ms))
+    ]);
+    const restoreRun = runLightsNeedRestore();
+    // The app is quitting: no further tick may dim the room again while the
+    // restore runs (the persisted timer is still offered on the next launch).
+    if (restoreRun) clearTimerInterval();
+    (async () => {
+      if (lightCueEngine?.isBusy()) await bounded(() => lightCueEngine.stop(), QUIT_LIGHT_CUE_STOP_TIMEOUT_MS);
+      if (restoreRun) {
+        writeStartupLog('Restoring smart lights before quit');
+        const res = await bounded(() => restoreRunLights('quit'), QUIT_LIGHT_RESTORE_TIMEOUT_MS);
+        if (res && res.timedOut) writeStartupLog('Smart lights restore before quit timed out');
+      }
+    })().catch(() => {}).finally(() => app.quit());
     return;
   }
   completionGuardController?.abort();

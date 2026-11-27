@@ -185,7 +185,12 @@ function exportSnapshot() {
   });
   // A lights verification is proof of a live test on this PC (and a key saved
   // by an earlier build embeds the Hue key / webhook URL), so it stays here.
-  if (tree.smartLights && typeof tree.smartLights === 'object') delete tree.smartLights.verifiedConfigKey;
+  // The Hue certificate pin is this PC's trust-on-first-use record of its own
+  // bridge; it is not a secret, but it is never carried to another PC.
+  if (tree.smartLights && typeof tree.smartLights === 'object') {
+    delete tree.smartLights.verifiedConfigKey;
+    delete tree.smartLights.hueCertFingerprint;
+  }
   return { settings: tree, redactedCredentials };
 }
 
@@ -225,7 +230,14 @@ function importableSection(section, value) {
     if (destination[0] !== section || !Object.prototype.hasOwnProperty.call(patch, destination[1])) continue;
     if (JSON.stringify(patch[destination[1]]) !== JSON.stringify(valueAtPath(ensureLoaded(), destination))) delete patch[destination[1]];
   }
-  if (section === 'smartLights') delete patch.verifiedConfigKey;
+  if (section === 'smartLights') {
+    delete patch.verifiedConfigKey;
+    // A pin imported from another PC must never replace this PC's pin.
+    delete patch.hueCertFingerprint;
+    // A backup never opts this PC into light cues: consent stays local.
+    delete patch.cues;
+    delete patch.imminentBeacon;
+  }
   // The armed Autopilot fire time belongs to this PC's schedule; a backup's
   // value would read as a missed fire here.
   if (section === 'app') delete patch.autopilotNextFireAt;
@@ -388,6 +400,9 @@ const DEFAULTS = {
     wizDevices: [],
     wizLook: { mode: 'current', brightness: 50, temperature: 2700, color: '#ff9f43', sceneId: 14 },
     timerBeacon: false,
+    // Opt-in light cues; every one is off until the user turns it on here.
+    cues: { bedtime: false, autopilotSoon: false, remote: false },
+    imminentBeacon: false,
     mode: 'gradual_dim',
     dimMinutes: 10,
     hueBridgeIp: '',
@@ -395,6 +410,9 @@ const DEFAULTS = {
     hueLightIds: [],
     hueGroupId: '',
     hueAllowLegacyHttp: false,
+    // Kept on load (pruneSmartLightsSection drops keys missing here), so the
+    // Hue certificate pin survives a restart instead of re-pinning each launch.
+    hueCertFingerprint: '',
     httpUrl: '',
     httpMethod: 'POST',
     httpHeaders: {},

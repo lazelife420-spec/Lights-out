@@ -90,6 +90,7 @@
       "renderer-handoff.js",
       "routine-transfer-ui.js",
       "lightExperience.js",
+      "lightCues.js",
       "light-experience.css",
       "renderer-light-experience.js",
       "wizLights.js",

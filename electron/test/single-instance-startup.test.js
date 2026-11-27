@@ -41,7 +41,7 @@ function startup(acquired) {
     settingsStore: { load: record('settings'), remapProfileReferences: record('profileRemap'), getSection: () => ({
       widgetVisible: false, idleDetectionEnabled: false, bedtimeReminderEnabled: false
     }) },
-    smartLights: { loadConfig: record('lightsConfig') },
+    smartLights: { loadConfig: record('lightsConfig'), setConfigPersistence: record('lightsPersistence') },
     getRecoverableTimer: () => null,
     runReceipts: { reconcileOrphanedRunningReceipts: record('receiptReconcile') },
     routineLedger: { interruptPending: record('routineReconcile') },
@@ -53,7 +53,7 @@ function startup(acquired) {
       onComplete: record('listener:focusComplete') },
     idleDetection: { startMonitoring: record('idle') },
     bedtimeReminder: { startReminder: record('bedtime') },
-    autopilot: { schedule: record('autopilot') },
+    autopilot: { schedule: record('autopilot'), onWarning: record('listener:autopilotWarning') },
     BrowserWindow: { getAllWindows: () => [window] },
     startTimer: record('timerStart'),
     // v11.3: startup hands a Wi-Fi block left by a crashed session to recovery.
@@ -62,7 +62,7 @@ function startup(acquired) {
   };
   for (const name of ['cleanupStalePortableExtracts', 'setupRitualCallbacks', 'createWindow',
     'createTray', 'setupJumpList', 'watchTaskbarPresenceInputs', 'registerGlobalShortcuts', 'createWidgetWindow',
-    'writeStartupLog', 'refreshTrayMenu', 'broadcastCompanionState', 'queueRemoteControlRestart',
+    'writeStartupLog', 'refreshTrayMenu', 'createLightCueEngine', 'broadcastCompanionState', 'queueRemoteControlRestart',
     'startCompanionNetworkMonitor', 'checkCalendarAutoStart', 'checkContentBlockerSchedules']) {
     context[name] = record(name);
   }

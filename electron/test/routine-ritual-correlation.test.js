@@ -23,6 +23,7 @@ function runtime({ failStep = false, steps, dryRun = !failStep } = {}) {
     windDownChanges: { wifiSession: null },
     wifiLifecycle: require('../wifiGuardLifecycle').createLifecycle({ block: async () => ({ success: true }), unblock: async () => ({ success: true }) }),
     restoreAfterTimer: async () => ({ success: true }),
+    smartLights: { resetSmartLightState() {} },
     profiles: { getById: () => ({ id: 'profile', ritualId: 'standard' }) },
     resolveTimerProfileIdentity: () => ({ profileId: 'profile', profileName: 'Night' }), resolveNightModeStart: () => ({}),
     startDecision: { resolveStartDecision: () => ({ useRitualGateway: true }) },

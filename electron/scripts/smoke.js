@@ -444,7 +444,7 @@ check('tray: initialization and cleanup', () => {
   assertMatch(mainSrc, /tray = new Tray\(trayIcons\.idle\);/, 'tray creation missing');
   // v11.3: before-quit first restores an unretained Wi-Fi Guard block (bounded,
   // once), then runs the existing cleanup.
-  assertMatch(mainSrc, /app\.on\('before-quit', \(event\) => \{[\s\S]{0,1600}tray\.destroy\(\);[\s\S]{0,100}tray = null;/, 'quit must explicitly destroy the tray icon');
+  assertMatch(mainSrc, /app\.on\('before-quit', \(event\) => \{[\s\S]{0,2600}tray\.destroy\(\);[\s\S]{0,100}tray = null;/, 'quit must explicitly destroy the tray icon');
   for (const runner of [
     'desktop-ux-functional-gate.js',
     'settings-native-proof.js',

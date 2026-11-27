@@ -11,6 +11,13 @@ const watchdog = require('./watchdog');
 let autopilotTimeout = null;
 let warningTimeout = null;
 let mainWindowRef = null;
+// Module-level (not a schedule() argument): the internal re-arms pass only
+// the window. Called once per armed warning with { fireAt, bedtime }.
+let warningListener = null;
+
+function onWarning(fn) {
+  warningListener = typeof fn === 'function' ? fn : null;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Learn the user's bedtime from history
@@ -153,6 +160,7 @@ function schedule(startTimerFn, win) {
         learned: learned?.confidence || 'manual'
       });
     }
+    try { if (warningListener) warningListener({ fireAt: targetIso, bedtime: targetBedtime }); } catch { /* never breaks the arm */ }
   }, warningMs);
 
   // Auto-start timer.
@@ -235,5 +243,6 @@ module.exports = {
   schedule,
   cancel,
   getStatus,
+  onWarning,
   MAX_FIRE_LATENESS_MS
 };
