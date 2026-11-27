@@ -6,6 +6,9 @@ const { execFileSync } = require('node:child_process');
 const { appSourceFiles } = require('./app-source-files');
 const defaultApp = path.resolve(__dirname, '..');
 const sha256 = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+// The Windows packaging runner checks out text with CRLF and the Linux publish
+// runner with LF, so the lockfile hash ignores line endings.
+const textSha256 = file => crypto.createHash('sha256').update(fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n')).digest('hex');
 // GIT_OPTIONAL_LOCKS=0 keeps these read-only queries from refreshing (writing) the index.
 const gitIn = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024,
   env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' } });
@@ -128,7 +131,7 @@ function create(output, { appDir = defaultApp } = {}) {
     uncommittedAppSourceFiles: uncommittedApp,
     uncommittedBuildInputFiles: uncommittedBuild,
     electronVersion: JSON.parse(fs.readFileSync(path.join(app, 'package-lock.json'), 'utf8')).packages['node_modules/electron'].version,
-    packageLockSha256: sha256(path.join(app, 'package-lock.json')), artifacts, runtime: fileInventory(path.join(output, 'win-unpacked')) };
+    packageLockSha256: textSha256(path.join(app, 'package-lock.json')), artifacts, runtime: fileInventory(path.join(output, 'win-unpacked')) };
   fs.writeFileSync(path.join(output, 'BUILD-MANIFEST.json'), JSON.stringify(manifest, null, 2) + '\n');
   fs.writeFileSync(path.join(output, 'SHA256SUMS.txt'), artifacts.map(a => a.sha256 + '  ' + a.name).join('\n') + '\n');
   console.log(JSON.stringify({ version: pkg.version, artifacts, runtimeFiles: manifest.runtime.length }));
@@ -159,7 +162,7 @@ function verify(output, strict = false, assetsOnly = false, { appDir = defaultAp
       refuseUncommitted('build scripts', uncommitted(buildInputFiles(app)));
     }
     if (manifest.version !== pkg.version) throw new Error(`Manifest version mismatch: expected ${pkg.version}, got ${manifest.version}`);
-    const lockSha = sha256(path.join(app, 'package-lock.json'));
+    const lockSha = textSha256(path.join(app, 'package-lock.json'));
     if (manifest.packageLockSha256 !== lockSha) throw new Error('Manifest package-lock.json SHA-256 mismatch');
   }
 
