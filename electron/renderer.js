@@ -3326,8 +3326,12 @@ function render() {
   document.querySelectorAll('[data-clock-choice]').forEach(button => {
     button.setAttribute('aria-pressed', button.dataset.clockChoice === state.clockFace ? 'true' : 'false');
   });
-  setTextIfChanged(document.getElementById('timer-readout-label'), state.paused ? 'Paused'
+  const readoutLabel = document.getElementById('timer-readout-label');
+  setTextIfChanged(readoutLabel, state.paused ? 'Paused'
     : state.running ? 'Time remaining' : outcomeHold ? 'Complete' : 'Ready · not started');
+  // The idle "Ready" line is spoken, not drawn: the face leads with the time
+  // (styles.css, Tonight design pass). Paused / running / Complete still show.
+  readoutLabel?.classList?.toggle('is-ready', !state.paused && !state.running && !outcomeHold);
   updateWallClock(now, idleClockVisible);
 
   // Clock Mode: show current time when idle instead of countdown input.
