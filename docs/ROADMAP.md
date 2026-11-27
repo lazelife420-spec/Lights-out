@@ -4,8 +4,8 @@
 
 ## Current Truth
 
-**v11.3.1** is the current source release (audit follow-ups on the published
-v11.3.0; see [RELEASE_QUALIFICATION_11.3.1.md](RELEASE_QUALIFICATION_11.3.1.md)); it is
+**v11.3.2** is the current source release (a design release on the published
+v11.3.1; see [RELEASE_QUALIFICATION_11.3.2.md](RELEASE_QUALIFICATION_11.3.2.md)); it is
 public only once its GitHub release is published.
 
 The **v11.2.0 release scope is qualified**. The five original product

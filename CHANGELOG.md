@@ -1,5 +1,20 @@
 # Changelog
 
+## v11.3.2 — 2026-11-27
+
+A design release; no behaviour change.
+
+- Tonight: the idle dial leads with the time (Local time above, session name
+  below); the plan card leads with the end time; Duration and Ending share one
+  label column; the running dial drops the repeated end line and the Test Mode
+  chip; Cancel lines up with Pause and Snooze.
+- Schedule: Bedtime rules and One night only follow Next bedtime; the month
+  planner, Calendars and import/export follow; an empty schedule says so in
+  words; compact calendar days.
+- Devices: each card's state sits top right of its header.
+- Night Modes: unavailable modes read as a footnote.
+- Proof: before the first receipt the page says "No runs yet" once.
+
 ## v11.3.1 — 2026-11-27
 
 Follow-up fixes from the v11.3.0 engineering audit.
