@@ -59,10 +59,10 @@ The important behavior is:
 - force shutdown is never the default launcher behavior; it must be chosen explicitly
 - "Run at login" means "start minimized and idle" — login startup never silently
   implies a force shutdown or an active countdown
-- the current source version is `v11.3.2` (the last published release before it is
-  `v11.3.1`); verify GitHub Releases before claiming publication — CI publishes
-  only when the `v11.3.2` tag is pushed. `docs/RELEASE_QUALIFICATION_11.3.2.md`
-  records the qualified scope and evidence (`docs/RELEASE_QUALIFICATION_11.3.1.md`
+- the current source version is `v11.3.3` (the last published release before it is
+  `v11.3.2`); verify GitHub Releases before claiming publication — CI publishes
+  only when the `v11.3.3` tag is pushed. `docs/RELEASE_QUALIFICATION_11.3.3.md`
+  records the qualified scope and evidence (`docs/RELEASE_QUALIFICATION_11.3.2.md`
   for the previous release). `electron/scripts/build-proof-foundry-kit.js` builds the
   Proof Foundry upload kit (product page, truth record) from the published release. Windows installer/portable publication and Android debug-source
   qualification remain separate from Android production signing and physical QA

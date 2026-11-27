@@ -1,5 +1,16 @@
 # Changelog
 
+## v11.3.3 — 2026-11-27
+
+- Automatic time format follows the Windows regional format, not the app
+  language.
+- Reopening Settings right after Back/Cancel can no longer lose edits to a
+  late reload.
+- Ritual dialog: Cancel is a quiet red text button with room under Skip/Next.
+- QA: the desktop gate walks a standard ritual before expecting a run, and
+  its native input worker survives control characters in window titles. Full
+  e2e passes.
+
 ## v11.3.2 — 2026-11-27
 
 A design release; no behaviour change.
