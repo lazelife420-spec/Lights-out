@@ -785,11 +785,11 @@ check('settings: saveSettingsPanel is defined exactly once and Save calls it', (
 
 check('settings: Cancel reloads persisted values before closing', () => {
   assertMatch(rendererSrc, /async function discardSettingsPanelChanges\(\)/, 'discardSettingsPanelChanges must be defined');
-  assertMatch(rendererSrc, /els\.btnCancelOpt\.addEventListener\('click', async \(\) => \{\s*await discardSettingsPanelChanges\(\);[\s\S]{0,400}?closeSettingsPanel\(\);\s*\}\)/, 'Cancel must discard changes before closing');
+  assertMatch(rendererSrc, /els\.btnCancelOpt\.addEventListener\('click', \(\) => \{\s*closeSettingsPanel\(\);\s*void discardSettingsPanelChanges\(\);\s*\}\)/, 'Cancel must discard changes before closing');
 });
 
 check('settings: Back to Tonight discards edits and does not save', () => {
-  assertMatch(rendererSrc, /els\.modalClose\.addEventListener\('click', async \(\) => \{\s*await discardSettingsPanelChanges\(\);\s*closeSettingsPanel\(\);\s*\}\)/, 'Back (modalClose) must discard changes, not call saveSettingsPanel');
+  assertMatch(rendererSrc, /els\.modalClose\.addEventListener\('click', \(\) => \{\s*closeSettingsPanel\(\);\s*void discardSettingsPanelChanges\(\);\s*\}\)/, 'Back (modalClose) must discard changes, not call saveSettingsPanel');
   assert(!/els\.modalClose\.addEventListener\('click', async \(\) => \{[^}]*saveSettingsPanel/.test(rendererSrc), 'Back button listener body must not invoke saveSettingsPanel');
 });
 

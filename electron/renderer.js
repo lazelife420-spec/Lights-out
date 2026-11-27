@@ -5559,15 +5559,16 @@ document.getElementById('receipts-confirm')?.addEventListener('keydown', (event)
   // prefs, Override Tax, Autopilot, blocking schedules, ...) persist the moment
   // they change and are tagged "Applies now", so Cancel does not revert them.
   // data-action-scoped controls apply only through their own buttons.
-  els.modalClose.addEventListener('click', async () => {
-    await discardSettingsPanelChanges();
+  // Back and Cancel leave Settings at once, then put the (now hidden) form
+  // back to the saved values. Waiting for that reload first made Back lag
+  // and could bounce a user who had already moved to another page.
+  els.modalClose.addEventListener('click', () => {
     closeSettingsPanel();
+    void discardSettingsPanelChanges();
   });
-  els.btnCancelOpt.addEventListener('click', async () => {
-    await discardSettingsPanelChanges();
-    // The reload above is async: if the user already moved to another page
-    // meanwhile, closing now would bounce them back to the pre-Settings tab.
-    if (document.body?.dataset.view === 'set') closeSettingsPanel();
+  els.btnCancelOpt.addEventListener('click', () => {
+    closeSettingsPanel();
+    void discardSettingsPanelChanges();
   });
   // No backdrop-click-to-close: Settings is an in-flow panel, not an overlay,
   // so clicking its own background is just clicking the page.
