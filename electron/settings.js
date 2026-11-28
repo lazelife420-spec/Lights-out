@@ -221,6 +221,19 @@ function stripSecretPaths(section, patch) {
   for (const segments of SECRET_PATHS) if (segments[0] === section) visit(patch, segments.slice(1));
 }
 
+// Import may only set these to their safe value (see importableSection).
+const IMPORT_SAFE_ONLY = Object.freeze({
+  app: [
+    ['forceShutdown', false],             // forced /f shutdowns
+    ['autopilotEnabled', false],          // unattended nightly starts
+    ['globalQuickStartShortcuts', false], // system-wide start hotkeys
+    ['dryRun', true]                      // Test Mode off = real actions
+  ],
+  calendar: [
+    ['autoStartFromEvents', false]        // unattended calendar starts
+  ]
+});
+
 function importableSection(section, value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
   const patch = clone(value);
@@ -241,6 +254,13 @@ function importableSection(section, value) {
   // The armed Autopilot fire time belongs to this PC's schedule; a backup's
   // value would read as a missed fire here.
   if (section === 'app') delete patch.autopilotNextFireAt;
+  // A backup may make power behaviour safer, never stronger: like Companion
+  // exposure, anything that arms or escalates an unattended real action is
+  // chosen on this PC, in its UI. These keep this PC's value unless the file
+  // holds the safe one.
+  for (const [key, safeValue] of IMPORT_SAFE_ONLY[section] || []) {
+    if (Object.prototype.hasOwnProperty.call(patch, key) && patch[key] !== safeValue) delete patch[key];
+  }
   if (section === 'calendar') return migrateLegacyCalendar(patch);
   if (section === 'accountability') delete patch.partners;
   return patch;

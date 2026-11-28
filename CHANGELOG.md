@@ -28,6 +28,10 @@
 - Quitting now waits (up to 8 s) for this PC's Companion firewall rules to be
   removed. Before, Lights Out exited first and left a rule pair behind on
   every quit.
+- Importing a backup can no longer switch on forced shutdowns, Autopilot,
+  the system-wide quick-start shortcuts or calendar auto-start, or switch
+  Test Mode off. A backup may still turn those off; turning them on stays a
+  choice made on this PC.
 
 ## v11.3.4 — 2026-11-27
 
