@@ -443,8 +443,9 @@ check('tray: initialization and cleanup', () => {
   assertMatch(mainSrc, /if \(tray && !tray\.isDestroyed\(\)\) return;/, 'tray creation must be idempotent within one app process');
   assertMatch(mainSrc, /tray = new Tray\(trayIcons\.idle\);/, 'tray creation missing');
   // v11.3: before-quit first restores an unretained Wi-Fi Guard block (bounded,
-  // once), then runs the existing cleanup.
-  assertMatch(mainSrc, /app\.on\('before-quit', \(event\) => \{[\s\S]{0,2600}tray\.destroy\(\);[\s\S]{0,100}tray = null;/, 'quit must explicitly destroy the tray icon');
+  // once), then runs the existing cleanup. 2026-11-27: a bounded firewall-pair
+  // removal hold sits before the teardown too, hence the wider window.
+  assertMatch(mainSrc, /app\.on\('before-quit', \(event\) => \{[\s\S]{0,3800}tray\.destroy\(\);[\s\S]{0,100}tray = null;/, 'quit must explicitly destroy the tray icon');
   for (const runner of [
     'desktop-ux-functional-gate.js',
     'settings-native-proof.js',

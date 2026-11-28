@@ -2430,20 +2430,38 @@ function handleCompanionMessage(msg, client, v3Context = null) {
   }
 }
 
-function updateSystemInfoCacheAsync() {
+// One shared refresh: concurrent callers (the 2 s companion broadcast and the
+// renderer's get-system-info) wait on the same two queries instead of each
+// spawning their own. A failure is cached for the TTL too, so a broken WMI is
+// retried every 15 s, not every tick.
+let systemInfoRefresh = null;
+function refreshSystemInfo() {
   if (systemInfoCache && Date.now() - systemInfoCachedAt < SYSTEM_INFO_TTL_MS) {
-    return;
+    return Promise.resolve(systemInfoCache);
   }
-  (async () => {
+  if (systemInfoRefresh) return systemInfoRefresh;
+  systemInfoRefresh = (async () => {
+    let info;
     try {
-      const battery = await executePowerShell('(Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue).EstimatedChargeRemaining');
-      const powerPlan = await executePowerShell('(Get-CimInstance -Namespace "root\\cimv2\\power" -ClassName Win32_PowerPlan | Where-Object { $_.IsActive }).ElementName');
-      systemInfoCache = { battery: battery || 'N/A', powerPlan: powerPlan || 'Unknown' };
-      systemInfoCachedAt = Date.now();
+      const battery = await executePowerShell('(Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue).EstimatedChargeRemaining', { timeoutMs: 10000 });
+      const powerPlan = await executePowerShell('(Get-CimInstance -Namespace "root\\cimv2\\power" -ClassName Win32_PowerPlan | Where-Object { $_.IsActive }).ElementName', { timeoutMs: 10000 });
+      info = { battery: battery || 'N/A', powerPlan: powerPlan || 'Unknown' };
     } catch {
-      // ignore
+      info = { battery: 'N/A', powerPlan: 'Unknown' };
     }
-  })();
+    systemInfoCache = info;
+    systemInfoCachedAt = Date.now();
+    return info;
+  })().finally(() => { systemInfoRefresh = null; });
+  return systemInfoRefresh;
+}
+
+// The companion broadcast only needs battery/power plan while a phone is
+// actually connected; with Companion off or no phone, nothing is spawned.
+function updateSystemInfoCacheAsync() {
+  const companionStatus = companion.getStatus ? companion.getStatus() : null;
+  if (!companionStatus || !(companionStatus.clients > 0)) return;
+  void refreshSystemInfo();
 }
 
 function broadcastCompanionState() {
@@ -2768,26 +2786,61 @@ function formatTime(totalSeconds) {
   return `${minutes}:${String(secs).padStart(2, '0')}`;
 }
 
-async function executePowerShell(command) {
+// Every ad-hoc PowerShell call is bounded: a hidden window, a deadline that
+// kills the child, and an output cap. A stalled WMI or firewall query used to
+// hang its caller forever (and, for the companion restart queue, everything
+// queued behind it). The rejection keeps PowerShell's own error text.
+const POWERSHELL_TIMEOUT_MS = 20000;
+const POWERSHELL_MAX_OUTPUT = 1024 * 1024;
+async function executePowerShell(command, { timeoutMs = POWERSHELL_TIMEOUT_MS } = {}) {
   return new Promise((resolve, reject) => {
-    const ps = spawn('powershell.exe', [
-      '-NoProfile',
-      '-ExecutionPolicy', 'Bypass',
-      '-Command', command
-    ], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let settled = false;
+    let deadline = null;
+    let ps = null;
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadline);
+      if (error) reject(error); else resolve(value);
+    };
+    const kill = () => { try { ps?.kill(); } catch { /* settling never waits on teardown */ } };
+    try {
+      ps = spawn('powershell.exe', [
+        '-NoProfile',
+        '-ExecutionPolicy', 'Bypass',
+        '-Command', command
+      ], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (error) {
+      finish(error);
+      return;
+    }
+    deadline = setTimeout(() => {
+      finish(Object.assign(new Error(`PowerShell did not finish within ${Math.round(timeoutMs / 1000)} s`), { code: 'POWERSHELL_TIMEOUT' }));
+      kill();
+    }, timeoutMs);
 
     let output = '';
     let error = '';
+    const capped = () => {
+      if (output.length + error.length <= POWERSHELL_MAX_OUTPUT) return false;
+      finish(Object.assign(new Error('PowerShell output exceeded its limit'), { code: 'POWERSHELL_OUTPUT_LIMIT' }));
+      kill();
+      return true;
+    };
     ps.stdout.on('data', data => {
+      if (settled) return;
       output += data.toString();
+      capped();
     });
     ps.stderr.on('data', data => {
+      if (settled) return;
       error += data.toString();
+      capped();
     });
-    ps.on('error', reject);
+    ps.on('error', finish);
     ps.on('close', code => {
-      if (code === 0) resolve(output.trim());
-      else reject(new Error(error.trim() || `PowerShell exited with code ${code}`));
+      if (code === 0) finish(null, output.trim());
+      else finish(new Error(error.trim() || `PowerShell exited with code ${code}`));
     });
   });
 }
@@ -2956,20 +3009,7 @@ let systemInfoCache = null;
 let systemInfoCachedAt = 0;
 const SYSTEM_INFO_TTL_MS = 15000;
 
-ipcMain.handle('get-system-info', async () => {
-  if (systemInfoCache && Date.now() - systemInfoCachedAt < SYSTEM_INFO_TTL_MS) {
-    return systemInfoCache;
-  }
-  try {
-    const battery = await executePowerShell('(Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue).EstimatedChargeRemaining');
-    const powerPlan = await executePowerShell('(Get-CimInstance -Namespace "root\\cimv2\\power" -ClassName Win32_PowerPlan | Where-Object { $_.IsActive }).ElementName');
-    systemInfoCache = { battery: battery || 'N/A', powerPlan: powerPlan || 'Unknown' };
-    systemInfoCachedAt = Date.now();
-    return systemInfoCache;
-  } catch {
-    return { battery: 'N/A', powerPlan: 'Unknown' };
-  }
-});
+ipcMain.handle('get-system-info', () => refreshSystemInfo());
 
 ipcMain.on('set-window-opacity', (event, value) => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -4434,6 +4474,9 @@ let quitWifiRestoreAttempted = false;
 const QUIT_LIGHT_CUE_STOP_TIMEOUT_MS = 5000;
 const QUIT_LIGHT_RESTORE_TIMEOUT_MS = 3000;
 let quitLightsAttempted = false;
+// Removing this process's firewall pair is one PowerShell call (seconds).
+const QUIT_FIREWALL_CLEANUP_TIMEOUT_MS = 8000;
+let quitFirewallCleanupAttempted = false;
 let quitRequested = false;
 
 app.on('before-quit', (event) => {
@@ -4476,6 +4519,21 @@ app.on('before-quit', (event) => {
         if (res && res.timedOut) writeStartupLog('Smart lights restore before quit timed out');
       }
     })().catch(() => {}).finally(() => app.quit());
+    return;
+  }
+  // This process's own firewall rule pair is removed only by this process.
+  // stopRemoteControl() awaits the server close before the removal starts, so
+  // an un-awaited call below let Electron exit first and leak the pair on
+  // every quit. Hold the quit for it, bounded and once.
+  if (!quitFirewallCleanupAttempted && firewallRulesOpenedByThisProcess) {
+    quitFirewallCleanupAttempted = true;
+    event.preventDefault();
+    Promise.race([
+      stopRemoteControl().then(() => ({ success: !firewallRulesOpenedByThisProcess })),
+      new Promise(resolve => setTimeout(() => resolve({ success: false, timedOut: true }), QUIT_FIREWALL_CLEANUP_TIMEOUT_MS))
+    ]).then(result => {
+      if (!result || !result.success) writeStartupLog('Companion firewall rules not removed before quit; the next Same Wi-Fi start sweeps them', { timedOut: Boolean(result && result.timedOut) });
+    }).catch(() => {}).finally(() => app.quit());
     return;
   }
   completionGuardController?.abort();

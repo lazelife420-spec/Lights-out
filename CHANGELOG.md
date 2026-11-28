@@ -20,6 +20,14 @@
   what is next. Emergency Override also cancels during the Sleep/Hibernate
   preparation, and the "PC slept through it" check runs again right before
   the power request.
+- Background PowerShell is bounded: every call has a hidden window, a time
+  limit that stops it, and an output cap. The battery/power-plan check for the
+  phone now runs only while a phone is connected, never stacks, and backs off
+  for 15 s after a failure. Before, it started two PowerShell processes every
+  15 s all day, even with Companion off, and a stalled one was never stopped.
+- Quitting now waits (up to 8 s) for this PC's Companion firewall rules to be
+  removed. Before, Lights Out exited first and left a rule pair behind on
+  every quit.
 
 ## v11.3.4 — 2026-11-27
 
