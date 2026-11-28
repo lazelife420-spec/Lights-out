@@ -1,10 +1,10 @@
-Lights Out: the bedtime system for Windows (v11.3.0)
+Lights Out: the bedtime system for Windows (v11.3.5)
 Forged by The Proof Foundry. MIT License.
 
 APP (Electron)
   dist-native\win-unpacked\Lights Out.exe  - native unpacked Windows launcher
-  dist-native\Lights-Out-Setup-v11.3.0.exe - NSIS installer
-  dist-native\Lights-Out-Portable-v11.3.0-win-x64.zip - portable ZIP
+  dist-native\Lights-Out-Setup-v11.3.5.exe - NSIS installer
+  dist-native\Lights-Out-Portable-v11.3.5-win-x64.zip - portable ZIP
   Build from source: cd electron && npm ci && npm run electron:provision && npm run build
 
 OTHER FILES

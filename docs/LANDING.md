@@ -59,7 +59,10 @@ verify exactly what you downloaded. Builds are produced and published by CI, and
 each release is gated on `node --check`, unit tests, a smoke suite, and a verified package
 step.
 
-**Latest: v11.3.4** - the broken-O icon returns, a larger wordmark hero and a night-blue room ([RELEASE_QUALIFICATION_11.3.4.md](RELEASE_QUALIFICATION_11.3.4.md)).
+**Latest: v11.3.5** - safety and reliability fixes: a "tomorrow" end time fits in every theme, Family remote no longer shares the phone pairing code, and the last seconds before a shutdown stay cancellable ([RELEASE_QUALIFICATION_11.3.5.md](RELEASE_QUALIFICATION_11.3.5.md)).
+Release notes: https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.3.5
+
+**v11.3.4** - the broken-O icon returns, a larger wordmark hero and a night-blue room ([RELEASE_QUALIFICATION_11.3.4.md](RELEASE_QUALIFICATION_11.3.4.md)).
 Release notes: https://github.com/lazelife420-spec/Lights-out/releases/tag/v11.3.4
 
 **v11.3.3** - the time format follows your Windows region, Settings never loses a quick edit, and full end-to-end qualification passes ([RELEASE_QUALIFICATION_11.3.3.md](RELEASE_QUALIFICATION_11.3.3.md)).
