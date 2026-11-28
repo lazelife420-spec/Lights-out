@@ -1083,7 +1083,11 @@ function startTimer(input, legacyAction, routineOccurrenceKey = null) {
   // still supersedes a ritual that has no countdown yet (see below).
   // (Ritual timer steps never come through here: they call
   // beginValidatedCountdown directly, so every caller of startTimer is refused.)
-  if (timerState.running || timerState.paused
+  // A countdown that reached zero is still finishing (unsaved-work scan, Last
+  // Light, light-off, Sleep/Hibernate prepare) until Windows is asked to act.
+  // No start of any origin (window, phone, family, ritual, routine, autopilot)
+  // may silently abort that and replace the bedtime action; cancel it first.
+  if (timerState.running || timerState.paused || isCompletionInFlight()
     || (UNATTENDED_RUN_ORIGINS.includes(options.origin) && ritualAwaitingCountdown())) {
     return { success: false, code: 'RUN_ACTIVE', error: 'A Lights Out run is already active. Stop it before starting another.' };
   }
@@ -1525,7 +1529,10 @@ async function completeTimer() {
   // (The smart lights stay as the countdown left them until just before the
   // power request, so a cancel during the steps below still restores them.)
   if (completingReceiptId && activeReceiptId !== completingReceiptId) return;
-  emitTimerUpdate('complete', { message: 'Timer complete' });
+  // finishing: a real action still has cancellable steps (Last Light, light-off,
+  // Sleep/Hibernate prepare) before dispatch. The window keeps Cancel until an
+  // action-status, cancelled or started event ends it.
+  emitTimerUpdate('complete', { message: 'Timer complete', finishing: !completionOptions.dryRun });
   showNativeNotification('Lights Out', completionOptions.dryRun
     ? `Test Mode complete: ${formatAction(completionOptions.action)} skipped.`
     : `Timer finished. Preparing ${formatAction(completionOptions.action)} request; Windows outcome is unverified.`);
@@ -1605,7 +1612,10 @@ async function completeTimer() {
   if (completingReceiptId && activeReceiptId !== completingReceiptId) return;
   // The run is ending without a cancel: never restart paused media now.
   windDownChanges.mediaPause = null;
-  if (!completionOptions.dryRun && isCompletionStale(completionOptions.endsAt)) {
+  // A real action whose deadline passed more than the grace period ago (the PC
+  // slept through a final step) ends as `missed` and never fires on wake.
+  const endIfStale = () => {
+    if (completionOptions.dryRun || !isCompletionStale(completionOptions.endsAt)) return false;
     const message = missedRunMessage(completionOptions.action);
     if (completingReceiptId) {
       runReceipts.updateRunReceipt(completingReceiptId, { result: 'missed',
@@ -1618,8 +1628,9 @@ async function completeTimer() {
     if (smartLights.getConfig().enabled) restoreRunLights('missed');
     emitTimerUpdate('action-status', { receiptId: completingReceiptId, actionStatus: 'missed', message });
     showNativeNotification('Lights Out', message);
-    return;
-  }
+    return true;
+  };
+  if (endIfStale()) return;
   // Lights off now, after every still-cancellable step and the stale check,
   // just before the power request. Bounded, so a dead bridge cannot hold the
   // shutdown; a light that did not confirm is recorded, never retried.
@@ -1631,6 +1642,9 @@ async function completeTimer() {
     if (completingReceiptId && activeReceiptId !== completingReceiptId) return;
   }
   if (quitRequested) return;
+  // Re-checked right before dispatch: the light-off above can wait up to
+  // LIGHT_OFF_TIMEOUT_MS, and the PC may have slept inside that wait.
+  if (endIfStale()) return;
   await executePowerAction({ ...completionOptions, receiptId: completingReceiptId });
 }
 
@@ -3474,7 +3488,9 @@ ipcMain.handle('execute-override', async (e, reason) => {
   // power action while they are in flight. The pre-cancel snapshot drives the
   // override record and is returned so the UI can show what was overridden.
   const overridden = { ...timerState };
-  if (timerState.running || timerState.paused || activeReceiptId) cancelTimer();
+  // hasCancellableRun() also covers the Sleep/Hibernate prepare step, where the
+  // receipt id is already cleared but the native pre-commit can still abort.
+  if (hasCancellableRun()) cancelTimer();
   const result = await emergencyOverride.executeOverride(reason, overridden);
   return { ...result, timerState: overridden };
 });

@@ -971,7 +971,7 @@ test("handleSidebarNavigation('stats') refreshes Proof › Routine when loaded, 
 // that precisely: the branch order and the running-timer fallback are
 // byte-for-byte identical; only that one line differs.
 
-function createEscapeSandbox({ fullscreenClock = false, running = false, paused = false, activeModalIds = [] } = {}) {
+function createEscapeSandbox({ fullscreenClock = false, running = false, paused = false, finishing = false, activeModalIds = [] } = {}) {
   const modalEls = buildModalElements();
   for (const id of activeModalIds) modalEls[id].classList.add('active');
 
@@ -995,7 +995,7 @@ function createEscapeSandbox({ fullscreenClock = false, running = false, paused 
   const fakeDocument = createFakeDocument({ elementsById, navItems: [] });
 
   const calls = { exitFullscreenClock: 0, discardSettingsPanelChanges: 0, closeSettingsPanel: 0, ritualCancel: 0, hideRitualOverlay: 0, cancelTimer: 0, closeHelpPanel: 0 };
-  const state = { fullscreenClock, running, paused };
+  const state = { fullscreenClock, running, paused, finishing };
   const els = { panelSet: settingsPanel, profilesModal: modalEls['profiles-modal'], receiptsModal: modalEls['receipts-modal'], aboutModal: modalEls['about-modal'] };
 
   const sandbox = {
@@ -1029,7 +1029,9 @@ test('Escape handler is unchanged except the single, intentional closeHelpPanel(
   // Escape's existing, working precedence (especially
   // Escape-cancels-a-running-timer).
   const branch = extractMainEscapeBranch(rendererSource);
-  assert.match(branch, /else if \(state\.running \|\| state\.paused\) \{\s*cancelTimer\(\);\s*\}/, 'the running-timer-cancel fallback must still be the last branch, unchanged');
+  // 2026-11-27: the fallback also covers a real run still finishing after zero
+  // (before dispatch), so Esc can cancel it like the tray and Ctrl+Shift+X.
+  assert.match(branch, /else if \(state\.running \|\| state\.paused \|\| state\.finishing === true\) \{\s*cancelTimer\(\);\s*\}/, 'the run-cancel fallback must still be the last branch');
   assert.match(branch, /else if \(els\.aboutModal\?\.classList\.contains\('active'\)\) \{\s*closeHelpPanel\(\);\s*\}/, 'the about-modal branch must be at the same position, now calling closeHelpPanel()');
   // Every other modal branch keeps its original raw close, unmodified.
   assert.match(branch, /els\.profilesModal\.classList\.remove\('active'\)/);
@@ -1050,6 +1052,18 @@ test('Escape on the snooze-tax modal clicks its "Go to sleep" cancel, resolving 
   assert.equal(sandbox.calls.cancelTimer, 0, 'Escape on the snooze-tax modal must not cancel the running timer');
   const branch = extractMainEscapeBranch(rendererSource);
   assert.match(branch, /getElementById\('snooze-tax-modal'\)\?\.classList\.contains\('active'\)\) \{\s*document\.getElementById\('btn-snooze-tax-cancel'\)\?\.click\(\);\s*\}/);
+});
+
+test('Escape cancels a finished real run that is still finishing (before dispatch), with no dialog open', async () => {
+  const sandbox = createEscapeSandbox({ finishing: true });
+  await sandbox.handleEscape({ key: 'Escape', preventDefault: () => {} });
+  assert.equal(sandbox.calls.cancelTimer, 1, 'Esc cancels during the finishing window, like the tray and Ctrl+Shift+X');
+});
+
+test('Escape cancels nothing when no run is active or finishing', async () => {
+  const sandbox = createEscapeSandbox();
+  await sandbox.handleEscape({ key: 'Escape', preventDefault: () => {} });
+  assert.equal(sandbox.calls.cancelTimer, 0);
 });
 
 test('Escape closes an ordinary modal (about-modal) when nothing higher-priority is active', async () => {

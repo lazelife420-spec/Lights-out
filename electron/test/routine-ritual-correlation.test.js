@@ -35,7 +35,7 @@ function runtime({ failStep = false, steps, dryRun = !failStep } = {}) {
     contentBlocker: { DEFAULT_BLOCKLIST: [], blockSites: () => { throw Error('isolated adapter failure'); } }
   };
   const functions = ['normalizeTimerOptions', 'ritualAwaitingCountdown', 'startTimer', 'beginValidatedCountdown', 'profileLastLight', 'setupRitualCallbacks'];
-  vm.runInNewContext("const UNATTENDED_RUN_ORIGINS=['calendar'];\n" + functions.map(name => source.match(new RegExp('function '+name+'\\([^]*?\\n\\}'))[0]).join('\n') + '\nsetupRitualCallbacks();globalThis.start=startTimer;', sandbox);
+  vm.runInNewContext("const UNATTENDED_RUN_ORIGINS=['calendar'];\nfunction isCompletionInFlight() { return false; }\n" + functions.map(name => source.match(new RegExp('function '+name+'\\([^]*?\\n\\}'))[0]).join('\n') + '\nsetupRitualCallbacks();globalThis.start=startTimer;', sandbox);
   const start = () => { const result = sandbox.start({ origin: 'calendar', startOrigin: 'calendar', profileId: 'profile', dryRun, durationSeconds: 300 }, undefined, key); ledger.dispatchResult(key, result); return result; };
   return { key, ledger, start, sandbox, receipts, scheduled, timerCallback: () => timerCallback };
 }

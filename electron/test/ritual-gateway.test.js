@@ -76,6 +76,7 @@ function sandboxFor(opts = {}) {
   vm.runInContext([
     extractConstLine(mainSource, 'UNATTENDED_RUN_ORIGINS'),
     extractFunction(mainSource, 'ritualAwaitingCountdown'),
+    'function isCompletionInFlight() { return globalThis.__completionInFlight === true; }',
     extractFunction(mainSource, 'normalizeTimerOptions'),
     extractFunction(mainSource, 'startTimer'),
     'this.startTimer = startTimer;'
@@ -234,6 +235,7 @@ function integrated({ ritualEnabled }) {
   vm.runInContext([
     extractConstLine(mainSource, 'UNATTENDED_RUN_ORIGINS'),
     extractFunction(mainSource, 'ritualAwaitingCountdown'),
+    'function isCompletionInFlight() { return globalThis.__completionInFlight === true; }',
     extractFunction(mainSource, 'normalizeTimerOptions'),
     extractFunction(mainSource, 'startTimer'),
     extractFunction(mainSource, 'setupRitualCallbacks'),

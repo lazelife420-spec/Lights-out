@@ -738,7 +738,12 @@ check('renderer: running-state controls still swap stop-pause visibility and lab
   // Start is no longer a separate setup-controls button toggled here -- the
   // hero CTA (#ns-play-btn) is shown/hidden by the isIdle ns-hero-card
   // visibility logic instead (see the "focused active-run screen" check).
-  assertMatch(rendererSrc, /els\.btnStop\.style\.display = state\.running \|\| state\.paused \? 'flex' : 'none';/, 'renderer stop visibility changed');
+  // Stop also stays while a finished real run is still finishing (before dispatch).
+  assertMatch(rendererSrc, /const runControlsShown = state\.running \|\| state\.paused \|\| state\.finishing === true;/, 'run controls follow running, paused and finishing');
+  assertMatch(rendererSrc, /els\.btnStop\.style\.display = runControlsShown \? 'flex' : 'none';/, 'renderer stop visibility changed');
+  // While finishing, Cancel is the only control: no snooze, no next-run card.
+  assertMatch(rendererSrc, /if \(snoozeGroup\) snoozeGroup\.style\.display = finishingOnly \? 'none' : '';/, 'snooze hides while finishing');
+  assertMatch(rendererSrc, /if \(nsHero\) nsHero\.style\.display = isIdle && !finishingOnly \? '' : 'none';/, 'the next-run card steps aside while finishing');
   assertMatch(rendererSrc, /els\.btnPause\.style\.display = state\.running \|\| state\.paused \? 'flex' : 'none';/, 'renderer pause visibility changed');
   assertMatch(rendererSrc, /els\.btnPause\.querySelector\('span:last-child'\)\.textContent = state\.paused \? 'Resume' : 'Pause';/, 'renderer pause/resume label changed');
   // P03: the running/paused footer names the mode in words both ways
@@ -752,7 +757,7 @@ check('renderer: keyboard shortcuts - Space (Start/Pause)', () => {
 });
 
 check('renderer: keyboard shortcuts - Escape (Cancel/Modals)', () => {
-  assertMatch(rendererSrc, /if \(event\.key === 'Escape'\) \{[\s\S]*else if \(state\.running \|\| state\.paused\) \{[\s\S]*cancelTimer\(\);/s, 'escape cancel shortcut changed');
+  assertMatch(rendererSrc, /if \(event\.key === 'Escape'\) \{[\s\S]*else if \(state\.running \|\| state\.paused \|\| state\.finishing === true\) \{[\s\S]*cancelTimer\(\);/s, 'escape cancel shortcut changed');
 });
 
 check('renderer: keyboard shortcuts - Ctrl+M (Mini Mode)', () => {

@@ -55,7 +55,7 @@ test('Esc closes an open dialog (the grace warning included) before it cancels',
   assert.ok(start > 0, 'the renderer Escape handler is where the docs say');
   const block = rendererJs.slice(start, rendererJs.indexOf('return;', rendererJs.indexOf('cancelTimer();', start)));
   const warning = block.indexOf("getElementById('warning-modal')?.classList.contains('active')");
-  const cancel = block.indexOf('} else if (state.running || state.paused) {\n        cancelTimer();');
+  const cancel = block.indexOf('} else if (state.running || state.paused || state.finishing === true) {\n        cancelTimer();');
   assert.ok(warning > 0 && cancel > warning, 'the warning dialog is closed before the cancel branch is reached');
   assert.match(indexHtml, /<dt><kbd>Esc<\/kbd><\/dt><dd>Cancel the timer \(closes an open dialog first\)<\/dd>/);
   assert.match(indexHtml, /<button class="btn-danger" id="warning-cancel">Cancel timer<\/button>/);

@@ -147,9 +147,10 @@ test('when startTimer returns success:false, nothing says "started"', () => {
 
 // --- startTimer RUN_ACTIVE guard --------------------------------------------
 
-function startSandbox({ timerState = baseTimerState(), ritualActive = false, ritualStep } = {}) {
+function startSandbox({ timerState = baseTimerState(), ritualActive = false, ritualStep, completionInFlight = false } = {}) {
   const calls = { begin: [], cancelRitual: 0, clear: 0, startRitual: 0 };
   const sandbox = {
+    __completionInFlight: completionInFlight,
     timerState,
     settingsStore: { getSection: section => (section === 'app' ? { dryRun: true } : null) },
     ritualMode: {
@@ -168,6 +169,7 @@ function startSandbox({ timerState = baseTimerState(), ritualActive = false, rit
   vm.runInContext([
     extractConstLine(mainSource, 'UNATTENDED_RUN_ORIGINS'),
     extractFunction(mainSource, 'ritualAwaitingCountdown'),
+    'function isCompletionInFlight() { return globalThis.__completionInFlight === true; }',
     extractFunction(mainSource, 'normalizeTimerOptions'),
     extractFunction(mainSource, 'startTimer'),
     'this.startTimer = startTimer;'
@@ -187,6 +189,40 @@ test('startTimer returns RUN_ACTIVE while a countdown is paused', () => {
   const { calls, startTimer } = startSandbox({ timerState: baseTimerState({ running: true, paused: true }) });
   assert.equal(startTimer({ durationSeconds: 600, origin: 'calendar' }).code, 'RUN_ACTIVE');
   assert.equal(calls.begin.length, 0);
+});
+
+// After zero, a real run still has cancellable steps before Windows is asked
+// to act. No start of any origin may abort that and replace the bedtime action.
+test('startTimer refuses every origin while a finished run is completing, and replaces nothing', () => {
+  for (const origin of [undefined, 'remote', 'family', 'ritual', 'routine', 'autopilot', 'calendar', 'shortcut', 'tray', 'launch']) {
+    const { calls, startTimer } = startSandbox({ completionInFlight: true });
+    const result = startTimer({ durationSeconds: 600, action: 'shutdown', dryRun: true, origin });
+    assert.equal(result.success, false, String(origin));
+    assert.equal(result.code, 'RUN_ACTIVE', String(origin));
+    assert.equal(calls.begin.length, 0, `${origin}: the completing run must not be replaced`);
+  }
+});
+
+test('the real isCompletionInFlight covers the Sleep/Hibernate prepare step (receipt already cleared)', () => {
+  const sandbox = { timerState: baseTimerState(), activeReceiptId: null, completionGuardController: null };
+  const context = vm.createContext(sandbox);
+  vm.runInContext([
+    extractFunction(mainSource, 'isCompletionInFlight'),
+    'this.isCompletionInFlight = isCompletionInFlight;'
+  ].join('\n'), context);
+  assert.equal(context.isCompletionInFlight(), false, 'idle');
+  context.activeReceiptId = 'run-1';
+  assert.equal(context.isCompletionInFlight(), true, 'after zero, before dispatch');
+  context.activeReceiptId = null;
+  context.completionGuardController = {};
+  assert.equal(context.isCompletionInFlight(), true, 'native prepare step: receipt cleared, guard armed');
+});
+
+test('startTimer and Emergency Override both use the completion-aware checks', () => {
+  const start = extractFunction(mainSource, 'startTimer');
+  assert.match(start, /if \(timerState\.running \|\| timerState\.paused \|\| isCompletionInFlight\(\)/, 'startTimer refuses during completion');
+  const override = mainSource.slice(mainSource.indexOf("ipcMain.handle('execute-override'"), mainSource.indexOf("ipcMain.handle('execute-override'") + 1500);
+  assert.match(override, /if \(hasCancellableRun\(\)\) cancelTimer\(\);/, 'override cancels whatever hasCancellableRun covers, including the prepare step');
 });
 
 test('startTimer refuses an unattended (autopilot) start while a ritual is active, and leaves the ritual alone', () => {

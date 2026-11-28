@@ -161,10 +161,13 @@ function sendRemoteCommand(peerIp, command, payload = {}) {
       port: COMMAND_PORT, // Family command port (separate from PWA)
       path: '/command',
       method: 'POST',
+      // Never send this PC's own token: it is the PHONE pairing secret, and a
+      // peer is only "known" because it broadcast an unauthenticated beacon.
+      // Sending it would hand phone-level control of this PC to any LAN device
+      // that announces itself. PC-to-PC pairing does not exist yet.
       headers: {
         'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(data),
-        [TOKEN_HEADER]: localToken // peer must share the same pairing token
+        'Content-Length': Buffer.byteLength(data)
       },
       // One fresh connection per command: a pooled keep-alive socket to a peer
       // that restarted would fail with a reset instead of reaching it.
@@ -192,24 +195,31 @@ function sendRemoteCommand(peerIp, command, payload = {}) {
   });
 }
 
-async function remoteStart(peerIp, durationSeconds, action = 'shutdown') {
-  return sendRemoteCommand(peerIp, 'start', { durationSeconds, action });
+// Controlling another PC needs a secret both PCs share. Each PC only has its
+// own random phone-pairing token (never exported, imported or shown in full),
+// so no peer could ever accept a command, and the old path leaked that token
+// to whichever LAN device claimed to be a peer. Until real PC-to-PC pairing
+// exists, every outbound command is refused here, before any network traffic.
+const PAIRING_REQUIRED = Object.freeze({ success: false, code: 'PAIRING_REQUIRED', error: 'pairing required' });
+
+async function remoteStart() {
+  return { ...PAIRING_REQUIRED };
 }
 
-async function remotePause(peerIp) {
-  return sendRemoteCommand(peerIp, 'pause');
+async function remotePause() {
+  return { ...PAIRING_REQUIRED };
 }
 
-async function remoteResume(peerIp) {
-  return sendRemoteCommand(peerIp, 'resume');
+async function remoteResume() {
+  return { ...PAIRING_REQUIRED };
 }
 
-async function remoteCancel(peerIp) {
-  return sendRemoteCommand(peerIp, 'cancel');
+async function remoteCancel() {
+  return { ...PAIRING_REQUIRED };
 }
 
-async function remoteSnooze(peerIp, seconds = 300) {
-  return sendRemoteCommand(peerIp, 'snooze', { seconds });
+async function remoteSnooze() {
+  return { ...PAIRING_REQUIRED };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

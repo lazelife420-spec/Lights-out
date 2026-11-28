@@ -7,6 +7,19 @@
 - The same fix now covers the Carbon, Aurora, Ember, Tide and Dawn themes,
   where a "tomorrow" end time wrapped and pushed the readiness strip under the
   footer in a 900×640 window.
+- Security: Family remote no longer sends this PC's phone pairing token to
+  other PCs. A "peer" was only an unauthenticated network announcement, so any
+  device on the LAN could collect the token and control this PC like a paired
+  phone. Each PC has its own token, so Family commands could never succeed;
+  they are now refused on this PC ("needs PC-to-PC pairing") and nothing is
+  sent. Discovery still lists other PCs.
+- After a real countdown reaches zero, its remaining steps (Last Light,
+  lights off, Sleep/Hibernate preparation) can no longer be silently replaced
+  by a new start from the window, phone, a ritual, a routine or autopilot.
+  The window now keeps "Cancel session" (and Esc) during those steps and says
+  what is next. Emergency Override also cancels during the Sleep/Hibernate
+  preparation, and the "PC slept through it" check runs again right before
+  the power request.
 
 ## v11.3.4 — 2026-11-27
 

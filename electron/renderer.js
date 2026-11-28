@@ -3430,7 +3430,10 @@ function render() {
   if (isIdle) updatePlanFacts(now);
   else updateSessionHead(now);
 
-  els.btnStop.style.display = state.running || state.paused ? 'flex' : 'none';
+  // While a finished real run is still finishing (before dispatch), only Stop
+  // is offered: no Pause or Snooze, and no Start that main would refuse.
+  const runControlsShown = state.running || state.paused || state.finishing === true;
+  els.btnStop.style.display = runControlsShown ? 'flex' : 'none';
   els.btnPause.style.display = state.running || state.paused ? 'flex' : 'none';
   els.btnSnooze.disabled = !(state.running || state.paused);
   els.btnPause.querySelector('span:last-child').textContent = state.paused ? 'Resume' : 'Pause';
@@ -3438,15 +3441,25 @@ function render() {
   // Toggle between setup controls and running action bar.
   const setupEl = document.getElementById('setup-controls');
   const runEl = document.getElementById('action-bar-running');
-  if (setupEl) setupEl.style.display = (state.running || state.paused) ? 'none' : '';
-  if (runEl) runEl.style.display = (state.running || state.paused) ? '' : 'none';
+  if (setupEl) setupEl.style.display = runControlsShown ? 'none' : '';
+  if (runEl) runEl.style.display = runControlsShown ? '' : 'none';
+  // Finishing (after zero, before dispatch): Cancel is the only control, and
+  // the head says plainly what is about to happen.
+  const finishingOnly = state.finishing === true && !state.running && !state.paused;
+  const snoozeGroup = runEl?.querySelector('.snooze-group');
+  if (snoozeGroup) snoozeGroup.style.display = finishingOnly ? 'none' : '';
+  if (finishingOnly) {
+    setTextIfChanged(document.getElementById('session-phase'), 'Finishing');
+    setTextIfChanged(document.getElementById('session-ends'), `${actionLabel()} is next. Cancel stops it.`);
+  }
 
   // Northstar lobby elements: show on idle, hide while running/paused.
   // body.ns-lobby means "idle lobby content" only. UI-R3 Fire 03: the nav
   // rail no longer keys off it -- the rail stays through a session (mini
   // mode and the fullscreen clock stay rail-less).
   const nsHero = document.getElementById('ns-hero-card');
-  if (nsHero) nsHero.style.display = isIdle ? '' : 'none';
+  // The next-run card steps aside while a finished real run is finishing.
+  if (nsHero) nsHero.style.display = isIdle && !finishingOnly ? '' : 'none';
   document.body.classList.toggle('ns-lobby', isIdle);
   renderTonightHero();
   renderArmedModeBanner();
@@ -3990,6 +4003,7 @@ async function cancelTimer() {
   try {
     SoundSystem.playCancel();
     await api.cancelTimer();
+    setRunFinishing(false);
     state.running = false;
     state.paused = false;
     state.remainingSeconds = inputSeconds();
@@ -4370,6 +4384,19 @@ function moveSessionFocus(id) {
   if (isSensibleFocusTarget(target)) target.focus({ preventScroll: true });
 }
 
+// The finishing window is bounded on this side too: if no outcome event
+// arrives (the app is quitting, say), Cancel does not linger.
+const RUN_FINISHING_MAX_MS = 60000;
+let runFinishingTimer = null;
+function setRunFinishing(on) {
+  clearTimeout(runFinishingTimer);
+  runFinishingTimer = null;
+  state.finishing = Boolean(on);
+  if (state.finishing) {
+    runFinishingTimer = setTimeout(() => { runFinishingTimer = null; state.finishing = false; render(); }, RUN_FINISHING_MAX_MS);
+  }
+}
+
 function applyTimerPayload(data) {
   if (!data || typeof data !== 'object') return;
 
@@ -4390,6 +4417,11 @@ function applyTimerPayload(data) {
   if (data.gracePeriod !== undefined) {
     state.runGraceMinutes = data.gracePeriod !== null && Number.isFinite(Number(data.gracePeriod)) && Number(data.gracePeriod) >= 0 ? Number(data.gracePeriod) : null;
   }
+
+  // A real countdown that reached zero is still cancellable until Windows is
+  // asked to act: keep Cancel (and Escape) until main reports the outcome.
+  if (data.type === 'complete') setRunFinishing(data.finishing === true);
+  else if (data.type === 'action-status' || data.type === 'cancelled' || data.type === 'started') setRunFinishing(false);
 
   if (data.type === 'action-status') {
     if (['blocked', 'spawn_failed', 'command_returned_failure'].includes(data.actionStatus)) dropOutcomeHold();
@@ -4485,8 +4517,11 @@ function applyTimerPayload(data) {
   // Deferred one task: a dialog this event just closed (heads-up) first
   // releases .cockpit (renderer-utils dialog layers, a microtask) and gets
   // its own focus restore.
+  // A real run still finishing keeps focus on Stop, so Enter cancels it rather
+  // than reaching for a Start that main refuses until the outcome is known.
   const focusTarget = data.type === 'started' ? 'btn-pause'
-    : (data.type === 'cancelled' || data.type === 'complete') ? 'ns-play-btn' : null;
+    : (data.type === 'complete' && state.finishing === true) ? 'btn-stop'
+      : (data.type === 'cancelled' || data.type === 'complete') ? 'ns-play-btn' : null;
   if (focusTarget) setTimeout(() => moveSessionFocus(focusTarget), 0);
   // UI-R3 P11: a run that ended wrote its receipt; Proof re-reads it (never
   // assumes the result).
@@ -5883,7 +5918,7 @@ document.getElementById('receipts-confirm')?.addEventListener('keydown', (event)
         document.getElementById('btn-lan-warning-cancel')?.click();
       } else if (document.getElementById('streak-celebration-modal')?.classList.contains('active')) {
         document.getElementById('streak-celebration-modal').classList.remove('active');
-      } else if (state.running || state.paused) {
+      } else if (state.running || state.paused || state.finishing === true) {
         cancelTimer();
       }
       return;

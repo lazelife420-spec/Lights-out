@@ -186,9 +186,60 @@ describe('family sendRemoteCommand truthfulness (P08)', () => {
     t.after(() => family.stop());
     assert.equal(started, true);
     await new Promise(r => setTimeout(r, 150));
-    const r = await family.sendRemoteCommand('127.0.0.1', 'status');
+    const http = require('node:http');
+    const data = JSON.stringify({ command: 'status' });
+    const r = await new Promise((resolve, reject) => {
+      const req = http.request({ hostname: '127.0.0.1', port: 58734, path: '/command', method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data), 'x-lightsout-token': 'test-tok' }, timeout: 3000 },
+      res => { let b = ''; res.on('data', c => b += c); res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(b || '{}') })); });
+      req.on('error', reject); req.write(data); req.end();
+    });
+    assert.equal(r.status, 400);
+    assert.equal(r.body.error, 'unknown command');
+  });
+
+  // H1 (2026-11-27 audit): a "peer" is only an unauthenticated UDP beacon, and
+  // the token is this PC's PHONE pairing secret. It must never leave this PC.
+  test('outbound commands never carry this PC\'s pairing token', async (t) => {
+    const http = require('node:http');
+    family.stop();
+    let seenHeaders = null;
+    const peer = http.createServer((req, res) => {
+      seenHeaders = req.headers;
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: 'unauthorized' }));
+    });
+    await new Promise(r => peer.listen(58734, '127.0.0.1', r));
+    t.after(() => new Promise(r => peer.close(r)));
+    // Load a token into the module the way main does, without binding its own server.
+    const started = family.start({ enabled: true, token: 'phone-secret-token', peerName: 'test', bindHost: '127.0.0.2' }, () => ({ success: true }));
+    t.after(() => family.stop());
+    const r = await family.sendRemoteCommand('127.0.0.1', 'pause');
+    assert.ok(seenHeaders, 'the fake peer was reached');
+    assert.equal(seenHeaders['x-lightsout-token'], undefined, 'no token header is sent');
+    assert.equal(JSON.stringify(seenHeaders).includes('phone-secret-token'), false, 'the token appears nowhere in the request');
     assert.equal(r.success, false);
-    assert.equal(r.statusCode, 400);
-    assert.equal(r.error, 'unknown command');
+    assert.equal(typeof started, 'boolean');
+  });
+
+  test('every family remote action is refused locally with PAIRING_REQUIRED, before any network traffic', async (t) => {
+    const http = require('node:http');
+    family.stop();
+    let hits = 0;
+    const peer = http.createServer((req, res) => { hits++; res.end('{}'); });
+    await new Promise(r => peer.listen(58734, '127.0.0.1', r));
+    t.after(() => new Promise(r => peer.close(r)));
+    const answers = await Promise.all([
+      family.remoteStart('127.0.0.1', 1800, 'shutdown'),
+      family.remotePause('127.0.0.1'),
+      family.remoteResume('127.0.0.1'),
+      family.remoteCancel('127.0.0.1'),
+      family.remoteSnooze('127.0.0.1', 300)
+    ]);
+    for (const a of answers) {
+      assert.deepEqual(a, { success: false, code: 'PAIRING_REQUIRED', error: 'pairing required' });
+    }
+    await new Promise(r => setTimeout(r, 100));
+    assert.equal(hits, 0, 'nothing reached the network');
   });
 });

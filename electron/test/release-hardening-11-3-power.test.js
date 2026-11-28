@@ -104,9 +104,17 @@ test('the tick and completion both refuse a stale real run before any power step
   assert.ok(staleAt < tick.indexOf('computePhase('), 'before phase transitions and dim side effects');
   assert.ok(staleAt < tick.indexOf('completeTimer('), 'before completion');
   const complete = liftFunction(mainSource, 'completeTimer');
-  const recheck = complete.indexOf('if (!completionOptions.dryRun && isCompletionStale(completionOptions.endsAt))');
-  assert.ok(recheck > complete.indexOf('await playLastLightRitual('), 'suspend during the final steps is re-checked after Last Light');
-  assert.ok(recheck < complete.indexOf('await executePowerAction('), 'and before dispatch');
+  assert.match(complete, /const endIfStale = \(\) => \{\s*if \(completionOptions\.dryRun \|\| !isCompletionStale\(completionOptions\.endsAt\)\) return false;/, 'one stale check for real runs');
+  const lastLight = complete.indexOf('await playLastLightRitual(');
+  const lightsOff = complete.indexOf('await switchRunLightsOff()');
+  const dispatch = complete.indexOf('await executePowerAction(');
+  const first = complete.indexOf('if (endIfStale()) return;');
+  const second = complete.indexOf('if (endIfStale()) return;', first + 1);
+  assert.ok(first > lastLight, 'suspend during the final steps is re-checked after Last Light');
+  assert.ok(first < lightsOff, 'and before the lights go off');
+  assert.ok(second > lightsOff, 're-checked again after the bounded light-off wait');
+  assert.ok(second < dispatch, 'right before dispatch');
+  assert.equal(complete.slice(second, dispatch).includes('await '), false, 'nothing awaited between the last check and dispatch');
 });
 
 test('a plain cancel keeps its existing receipt, restore reason and partner message', () => {

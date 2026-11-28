@@ -241,7 +241,8 @@ const PEER_RESULT = Object.freeze({
   START_REJECTED: 'That PC refused the start',
   STATUS: 'State read',
   INVALID: 'That PC refused the request',
-  UNKNOWN_COMMAND: 'Not supported there'
+  UNKNOWN_COMMAND: 'Not supported there',
+  PAIRING_REQUIRED: 'Needs PC-to-PC pairing, which is not available yet. Nothing was sent'
 });
 const PEER_ERROR = Object.freeze({
   unauthorized: { text: 'Pairing code differs on that PC', tone: 'bad' },
