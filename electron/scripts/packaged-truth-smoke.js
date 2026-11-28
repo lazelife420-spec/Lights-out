@@ -142,7 +142,10 @@ async function proveUiLayouts(cdp) {
     }))()`);
     fs.writeFileSync(path.join(proofDir, 'ui-native-readiness.json'), JSON.stringify(nativeReadiness, null, 2));
     assert.ok(nativeReadiness.every(label => label.fits), 'readiness labels must fit at native display scaling');
-    for (const theme of ['midnight', 'dawn']) {
+    // Every theme the user can pick (read from the app's own picker), not a
+    // hard-coded pair: v11.3.4 shipped a layout fault in four unchecked themes.
+    const themes = await uiThemes(cdp);
+    for (const theme of themes) {
       await cdp.evaluate(`document.body.dataset.theme = ${JSON.stringify(theme)}`);
       for (const size of [{ width: 900, height: 640 }, { width: 900, height: 800 }, { width: 1280, height: 800 }]) {
         await cdp.command('Emulation.setDeviceMetricsOverride', { ...size, deviceScaleFactor: 1, mobile: false });
@@ -194,6 +197,46 @@ async function proveUiLayouts(cdp) {
         }
       }
     }
+    // After midnight: a plan that ends "· tomorrow" is the longest end-time
+    // string, and a daytime CI run never renders it. Only the renderer page's
+    // Date is shifted (to 23:50, so the default plan crosses midnight); the
+    // app's main process, the system clock and the shipped code are untouched.
+    await cdp.command('Emulation.setDeviceMetricsOverride', { width: 900, height: 640, deviceScaleFactor: 1, mobile: false });
+    await cdp.click('#nav-lib');
+    await cdp.evaluate(RENDERER_CLOCK_AFTER_MIDNIGHT);
+    try {
+      for (const theme of themes) {
+        await cdp.evaluate(`document.body.dataset.theme = ${JSON.stringify(theme)}; typeof render === 'function' && render();`);
+        await new Promise(resolve => setTimeout(resolve, 900));
+        const late = await cdp.evaluate(`(() => {
+          const panel = document.getElementById('ns-panel-lib');
+          const out = document.getElementById('plan-out-at');
+          const fact = out && out.closest('.plan-fact');
+          const next = fact && fact.nextElementSibling;
+          const range = document.createRange(); if (out) range.selectNodeContents(out);
+          const ink = out ? range.getBoundingClientRect() : null;
+          const rail = panel.querySelector('.readiness-strip');
+          const footerTop = document.querySelector('.app-footer').getBoundingClientRect().top;
+          const dashboard = document.querySelector('.dashboard');
+          return { text: out ? out.textContent : '',
+            gapToNext: ink && next ? next.getBoundingClientRect().left - ink.right : null,
+            factOverflow: [...panel.querySelectorAll('.plan-facts dd')].some(el => el.scrollWidth > el.clientWidth + 1),
+            railFits: !rail || rail.getBoundingClientRect().bottom <= footerTop + 1,
+            horizontalOverflow: dashboard.scrollWidth > dashboard.clientWidth + 1 };
+        })()`);
+        const label = `${theme} 900x640 after midnight`;
+        assert.match(late.text, /tomorrow/, `${label}: the plan must end tomorrow (renderer clock shift took effect)`);
+        assert.equal(late.factOverflow, false, `${label}: plan facts must fit their columns`);
+        assert.ok(late.gapToNext === null || late.gapToNext >= 0, `${label}: the end time must not run into Ends with`);
+        assert.equal(late.railFits, true, `${label}: the readiness strip must fit above the footer`);
+        assert.equal(late.horizontalOverflow, false, `${label}: dashboard overflow`);
+        const name = `ui-${theme}-900x640-lib-after-midnight.png`;
+        await cdp.screenshot(name);
+        layouts.push({ theme, width: 900, height: 640, route: 'lib', clock: 'after-midnight', screenshot: name, ...late });
+      }
+    } finally {
+      await cdp.evaluate(RENDERER_CLOCK_RESTORE);
+    }
   } finally {
     await cdp.command('Emulation.clearDeviceMetricsOverride');
     await cdp.evaluate(`document.body.dataset.theme = ${JSON.stringify(originalTheme)}`);
@@ -201,6 +244,33 @@ async function proveUiLayouts(cdp) {
   }
   return layouts;
 }
+
+// The theme picker's own option values; falls back to the two original themes
+// if the picker cannot be read, and never accepts an unexpected value.
+async function uiThemes(cdp) {
+  const values = await cdp.evaluate(`[...document.querySelectorAll('#cz-theme option')].map(o => o.value)`);
+  const themes = [...new Set((Array.isArray(values) ? values : []).filter(v => /^[a-z]{2,20}$/.test(v)))];
+  assert.ok(themes.length >= 2, 'the theme picker must list at least two themes');
+  assert.ok(themes.includes('midnight') && themes.includes('dawn'), 'midnight and dawn stay covered');
+  return themes;
+}
+
+// Renderer-page-only clock shift for layout proofs. Never shipped to users:
+// it is evaluated over CDP by this proof script alone.
+const RENDERER_CLOCK_AFTER_MIDNIGHT = `(() => {
+  if (!window.__loRealDate) window.__loRealDate = Date;
+  const Real = window.__loRealDate;
+  const now = new Real();
+  const offset = new Real(now.getFullYear(), now.getMonth(), now.getDate(), 23, 50, 0) - now;
+  class ShiftedDate extends Real {
+    constructor(...args) { if (args.length === 0) super(Real.now() + offset); else super(...args); }
+    static now() { return Real.now() + offset; }
+  }
+  window.Date = ShiftedDate;
+  if (typeof render === 'function') render();
+  return true;
+})()`;
+const RENDERER_CLOCK_RESTORE = `(() => { if (window.__loRealDate) window.Date = window.__loRealDate; if (typeof render === 'function') render(); return true; })()`;
 
 class CdpClient {
   constructor(url) {

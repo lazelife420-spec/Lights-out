@@ -70,9 +70,11 @@ function main() {
     );
   }
 
+  // --ui-layouts: every theme at three window sizes, plus an after-midnight
+  // ("· tomorrow") pass, so release qualification measures real layouts.
   results.packagedTruth = runLane(
     'packaged-truth-smoke.js',
-    [],
+    ['--ui-layouts'],
     'packaged-truth-smoke',
     true
   );
