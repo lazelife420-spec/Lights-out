@@ -48,7 +48,36 @@ networking ports or to the Android app.
 
 ## Packaged candidate of this release
 
-Recorded after the release commit was built.
+Built from a clean `--no-hardlinks` clone of the release commit `a895583`
+(`npm ci --ignore-scripts`, `electron:provision`, `package-native-windows.ps1`).
+The commit adding this section changes documentation only: `electron/` is
+identical in both commits.
+
+- `BUILD-MANIFEST.json`: version 11.3.5, `sourceCommit` `a895583`,
+  `trackedSourceDirty` false, Electron 43.8.4, 1,421 runtime files.
+- `Lights-Out-Setup-v11.3.5.exe`
+  `dcd5de23fb99186842d13c03e88e63929a46ac819c67209cd83a5acf0bcf9cbf`
+- `Lights-Out-Portable-v11.3.5-win-x64.zip`
+  `0a8a40baa65da9acd0291aadac33a01a9859fcf068d38bb2bb995e1f20c4278b`
+- `sha256sum -c SHA256SUMS.txt`: both OK.
+- `release-artifacts.js verify ../dist-native --release`: passed (2 artifacts,
+  1,421 runtime files, source pin `a895583`).
+- Windows Sandbox (offline, read-only inputs), hashes re-checked inside:
+  - `packaged-truth-smoke --local-only --ui-layouts` on the portable ZIP:
+    exit 0 in 137 s: 42 layouts across all 6 themes, 6 after-midnight checks
+    ("12:05 AM · tomorrow"), timer start/pause/+5 min/resume/cancel, 0 power
+    actions, 0 console or page errors, clean teardown.
+  - `verify-windows-release.ps1` from the clean clone, as CI runs it: passed
+    in 63 s: installer files matched 1,421, portable entries 1,421, installed
+    runtime passed 60 settings layout checks, QA install uninstalled,
+    production registration not touched.
+- Host unchanged before and after: Lights Out firewall rules 0, total
+  firewall rules 1,865, watchdog task present, one uninstall entry, no app
+  process.
+
+These packaged builds are local qualification candidates. CI builds and
+publishes its own assets from the tag; their hashes will differ only where
+the build is not deterministic (`WindowsSuspend.exe`).
 
 ## Gates run by CI on the tag
 
